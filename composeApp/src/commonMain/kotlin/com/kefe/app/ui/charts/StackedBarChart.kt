@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -53,7 +52,8 @@ fun KefeStackedBarChart(
         return
     }
 
-    val microStyle = type.micro
+    // Ay etiketleri tasarimda 10px.
+    val labelStyle = type.nano
     val positiveSums = months.map { m -> m.segments.filter { it.value > 0.0 }.sumOf { it.value } }
     val negativeSums = months.map { m -> m.segments.filter { it.value < 0.0 }.sumOf { -it.value } }
     val maxUp = positiveSums.maxOrNull() ?: 0.0
@@ -62,7 +62,7 @@ fun KefeStackedBarChart(
     Canvas(modifier.fillMaxWidth().height(height)) {
         val stepPx = step.toPx()
         val barPx = barWidth.toPx()
-        val labelBand = 16.dp.toPx()
+        val labelBand = 18.dp.toPx()
         val plotTop = 4.dp.toPx()
         val plotBottom = size.height - labelBand
         val plotHeight = max(1f, plotBottom - plotTop)
@@ -81,7 +81,6 @@ fun KefeStackedBarChart(
             if (maxDown <= 0.0) 0f else (value / maxDown).toFloat() * downHeight
 
         val startX = 0f
-        val radius = CornerRadius(2.dp.toPx())
 
         months.forEachIndexed { index, month ->
             val cx = startX + stepPx * index + barPx / 2f
@@ -89,12 +88,11 @@ fun KefeStackedBarChart(
             val barLeft = cx - barPx / 2f
 
             if (month.segments.isEmpty()) {
-                // Katkisiz ay: bar yok, yerinde notr taban cizgisi.
-                drawRoundRect(
-                    color = colors.surfaceSunken,
-                    topLeft = Offset(barLeft, zeroY - 1.dp.toPx()),
-                    size = Size(barPx, 2.dp.toPx()),
-                    cornerRadius = CornerRadius(1.dp.toPx()),
+                // Katkisiz ay: bar yok, yerinde notr 4px taban dilimi.
+                drawRect(
+                    color = colors.outline,
+                    topLeft = Offset(barLeft, zeroY - 4.dp.toPx()),
+                    size = Size(barPx, 4.dp.toPx()),
                 )
             } else {
                 var topCursor = zeroY
@@ -102,11 +100,10 @@ fun KefeStackedBarChart(
                     val h = upPx(seg.value)
                     if (h > 0f) {
                         topCursor -= h
-                        drawRoundRect(
+                        drawRect(
                             color = colors.assetClass(seg.colorKey),
                             topLeft = Offset(barLeft, topCursor),
                             size = Size(barPx, h),
-                            cornerRadius = radius,
                         )
                     }
                 }
@@ -114,11 +111,10 @@ fun KefeStackedBarChart(
                 month.segments.filter { it.value < 0.0 }.forEach { seg ->
                     val h = downPx(abs(seg.value))
                     if (h > 0f) {
-                        drawRoundRect(
+                        drawRect(
                             color = colors.assetClass(seg.colorKey),
                             topLeft = Offset(barLeft, bottomCursor),
                             size = Size(barPx, h),
-                            cornerRadius = radius,
                         )
                         bottomCursor += h
                     }
@@ -131,7 +127,7 @@ fun KefeStackedBarChart(
                 drawChartText(
                     measurer = measurer,
                     text = month.label,
-                    style = microStyle.copy(
+                    style = labelStyle.copy(
                         color = colors.onSurfaceMuted.copy(
                             alpha = if (month.segments.isEmpty()) 0.6f else 1f,
                         ),

@@ -1,5 +1,6 @@
 package com.kefe.app
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,9 +50,12 @@ import com.kefe.app.ui.screens.account.LoginScreen
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.OnboardingPageCount
 import com.kefe.app.ui.screens.account.OnboardingScreen
+import com.kefe.app.ui.screens.account.SettingsIntent
 import com.kefe.app.ui.screens.account.SettingsScreen
+import com.kefe.app.ui.screens.account.SettingsUiState
 import com.kefe.app.ui.screens.account.SettingsViewModel
 import com.kefe.app.ui.screens.account.ShareScreen
+import com.kefe.app.ui.screens.account.ThemeMode
 import com.kefe.app.ui.screens.account.ShareViewModel
 import com.kefe.app.ui.screens.assets.AssetDetailScreen
 import com.kefe.app.ui.screens.assets.AssetDetailViewModel
@@ -79,19 +83,29 @@ import org.koin.dsl.koinConfiguration
 
 @Composable
 fun App(darkTheme: Boolean = true) {
-    // Tema durumu kabukta tutulur: bilesen katalogu ve Ayarlar'daki tema
-    // secimi ayni anahtari cevirir.
-    var dark by remember { mutableStateOf(darkTheme) }
-
     KoinApplication(
         configuration = koinConfiguration(declaration = { modules(appModule) }),
     ) {
+        // Tema Ayarlar'dan yonetilir. SettingsViewModel kabukta tutulur ki
+        // secim hem temayi cevirsin hem de Ayarlar ekranina geri yansisin -
+        // onceden secim ekranin icinde kalip hicbir seyi degistirmiyordu.
+        val settingsVm = koinViewModel<SettingsViewModel>()
+        val settings by settingsVm.state.collectAsState()
+
+        val systemDark = isSystemInDarkTheme()
+        val dark = when (settings.themeMode) {
+            ThemeMode.Dark -> true
+            ThemeMode.Light -> false
+            ThemeMode.System -> systemDark
+        }
+
         KefeTheme(darkTheme = dark) {
             ProvideWindowSize { windowSize ->
                 KefeApp(
                     windowSize = windowSize,
+                    settingsVm = settingsVm,
+                    settings = settings,
                     darkTheme = dark,
-                    onToggleTheme = { dark = !dark },
                 )
             }
         }
@@ -108,8 +122,9 @@ fun App(darkTheme: Boolean = true) {
 @Composable
 private fun KefeApp(
     windowSize: WindowSize,
+    settingsVm: SettingsViewModel,
+    settings: SettingsUiState,
     darkTheme: Boolean,
-    onToggleTheme: () -> Unit,
 ) {
     // Uygulama girisle acilir. Oturum durumu simdilik BELLEKTE: kimlik dogrulama
     // katmani (Supabase) gelene kadar uygulama her acilista girise doner.
@@ -332,11 +347,9 @@ private fun KefeApp(
                         }
 
                         entry<SettingsKey> {
-                            val vm = koinViewModel<SettingsViewModel>()
-                            val state by vm.state.collectAsState()
                             SettingsScreen(
-                                state = state,
-                                onIntent = vm::onIntent,
+                                state = settings,
+                                onIntent = settingsVm::onIntent,
                                 onBack = { goBack() },
                                 onOpenShare = { goTo(ShareKey) },
                                 onOpenGallery = { goTo(GalleryKey) },
@@ -346,7 +359,13 @@ private fun KefeApp(
                         entry<GalleryKey> {
                             DesignSystemGallery(
                                 darkTheme = darkTheme,
-                                onToggleTheme = onToggleTheme,
+                                onToggleTheme = {
+                                    settingsVm.onIntent(
+                                        SettingsIntent.SelectTheme(
+                                            if (darkTheme) ThemeMode.Light else ThemeMode.Dark,
+                                        )
+                                    )
+                                },
                             )
                         }
                     },

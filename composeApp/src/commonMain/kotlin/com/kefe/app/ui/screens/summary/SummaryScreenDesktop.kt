@@ -51,6 +51,7 @@ import com.kefe.app.ui.charts.KefeNetWorthChart
 import com.kefe.app.ui.charts.Point
 import com.kefe.app.ui.components.KefeAccentCard
 import com.kefe.app.ui.components.KefeCard
+import com.kefe.app.ui.components.KefeChip
 import com.kefe.app.ui.components.KefeOfflineBanner
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeProgressBar
@@ -281,11 +282,17 @@ private fun HeroRow(
             modifier = Modifier.padding(bottom = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(Space.x8),
         ) {
+            // Birim cipi: 40dp, 14dp yan dolgu, iki durumda da 13sp/600 (handoff).
+            val chipText = t.caption.copy(fontWeight = FontWeight.SemiBold)
             DisplayUnit.entries.forEach { unit ->
-                UnitChip(
+                KefeChip(
                     text = unit.chipLabel,
                     selected = state.unit == unit,
                     onClick = { onIntent(SummaryIntent.SelectUnit(unit)) },
+                    height = Sizes.chipLarge,
+                    horizontalPadding = Space.x14,
+                    textStyle = chipText,
+                    selectedTextStyle = chipText,
                 )
             }
         }
@@ -522,11 +529,16 @@ private fun DesktopNetWorthCard(state: SummaryUiState, onIntent: (SummaryIntent)
                 modifier = Modifier.weight(1f),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Masaustu donem cipi: 32dp, 12dp yan dolgu, 12sp (handoff).
                 DesktopPeriods.forEach { (globalIndex, label) ->
-                    PeriodChip(
+                    KefeChip(
                         text = label,
                         selected = state.periodIndex == globalIndex,
                         onClick = { onIntent(SummaryIntent.SelectPeriod(globalIndex)) },
+                        height = Sizes.chipSmall,
+                        horizontalPadding = Space.x12,
+                        textStyle = t.captionSmall,
+                        selectedTextStyle = t.captionSmall.copy(fontWeight = FontWeight.SemiBold),
                     )
                 }
             }
@@ -573,53 +585,6 @@ private fun DesktopNetWorthCard(state: SummaryUiState, onIntent: (SummaryIntent)
 @Composable
 private fun DashedSwatch(color: Color) {
     Box(Modifier.width(14.dp).height(2.dp).dashedUnderline(color))
-}
-
-/**
- * Masaustu donem cipi: 32dp, 12sp. Ortak [com.kefe.app.ui.components.KefeChip]
- * secili metni accent yapar ve 13/15sp kullanir; bu satirda 12sp isteniyor.
- */
-@Composable
-private fun PeriodChip(text: String, selected: Boolean, onClick: () -> Unit) {
-    val c = KefeTheme.colors
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-
-    Box(
-        modifier = Modifier
-            .height(Sizes.chipSmall)
-            .clip(KefeShapes.pill)
-            .background(if (selected) c.accentMuted else Color.Transparent)
-            .border(
-                width = Sizes.hairline,
-                color = when {
-                    selected -> c.accent
-                    hovered -> c.onSurfaceMuted
-                    else -> c.outline
-                },
-                shape = KefeShapes.pill,
-            )
-            .hoverable(interaction)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                role = Role.Button,
-                onClick = onClick,
-            )
-            .padding(horizontal = Space.x12),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = if (selected) {
-                KefeTheme.type.captionSmall.copy(fontWeight = FontWeight.SemiBold)
-            } else {
-                KefeTheme.type.captionSmall
-            },
-            color = if (selected) c.onSurface else c.onSurfaceMuted,
-            maxLines = 1,
-        )
-    }
 }
 
 // --- Durumlar --------------------------------------------------------------

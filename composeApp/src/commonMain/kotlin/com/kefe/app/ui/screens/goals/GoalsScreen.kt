@@ -251,6 +251,7 @@ private fun GoalCard(
     val t = KefeTheme.type
     val main = goal.isMain
     val progress = goal.progress(totalWealth)
+    val reached = progress >= 1f
 
     val content: @Composable ColumnScope.() -> Unit = {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -292,9 +293,15 @@ private fun GoalCard(
             )
             Spacer(Modifier.weight(1f))
             Text(
-                text = Money.ratioOf(progress.toDouble()),
+                // Ulasilan hedefte %200 gibi bir sayi bilgi vermez, hata gibi
+                // okunur; %100'de durur ve renk ulasildigini soyler.
+                text = Money.ratioOf(if (reached) 1.0 else progress.toDouble()),
                 style = t.h2.tabular(),
-                color = if (main) c.accent else c.onSurface,
+                color = when {
+                    reached -> c.positive
+                    main -> c.accent
+                    else -> c.onSurface
+                },
                 modifier = Modifier.alignByBaseline(),
             )
         }
@@ -302,20 +309,39 @@ private fun GoalCard(
         Spacer(Modifier.height(Space.x8))
         KefeProgressBar(
             progress = progress,
-            color = if (main) c.accent else c.onSurfaceMuted,
+            color = when {
+                reached -> c.positive
+                main -> c.accent
+                else -> c.onSurfaceMuted
+            },
         )
 
         Spacer(Modifier.height(Space.x10))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            KefeIcon(KefeIcons.Clock, null, size = 14.dp, tint = c.onSurfaceMuted)
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = goal.arrivalLabel(),
-                style = t.caption,
-                color = c.onSurfaceMuted,
-                // Tasarimda tahmin metninin alti kesikli: kesin bir tarih degil.
-                modifier = Modifier.dashedUnderline(c.outline).padding(bottom = 1.dp),
-            )
+        // Hedefe ULASILMISSA varis tahmini gosterilmez - birikim zaten yetiyorken
+        // gelecege tarih vermek celiskili olurdu. Hedefler ayni birikimi
+        // paylastigi icin kucuk hedefler bastan karsilanmis olabilir.
+        if (reached) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                KefeIcon(KefeIcons.Check, null, size = 14.dp, tint = c.positive)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Birikim bu hedefi karşılıyor",
+                    style = t.caption,
+                    color = c.positive,
+                )
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                KefeIcon(KefeIcons.Clock, null, size = 14.dp, tint = c.onSurfaceMuted)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = goal.arrivalLabel(),
+                    style = t.caption,
+                    color = c.onSurfaceMuted,
+                    // Tasarimda tahmin metninin alti kesikli: kesin bir tarih degil.
+                    modifier = Modifier.dashedUnderline(c.outline).padding(bottom = 1.dp),
+                )
+            }
         }
     }
 

@@ -215,6 +215,14 @@ internal object KefeIconsCore {
             dot(18.5f, 12f)
         }.also { _moreHorizontal = it }
 
+    private var _moreVertical: ImageVector? = null
+    val MoreVertical: ImageVector
+        get() = _moreVertical ?: kefeIcon("KefeMoreVertical") {
+            dot(12f, 5.5f)
+            dot(12f, 12f)
+            dot(12f, 18.5f)
+        }.also { _moreVertical = it }
+
     private var _plusSmall: ImageVector? = null
     val PlusSmall: ImageVector
         get() = _plusSmall ?: kefeIcon("KefePlusSmall") {
