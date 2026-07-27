@@ -70,7 +70,7 @@ import com.kefe.app.ui.theme.tabular
  * Tablo hizalamasi: yapiskan baslik ile satirlar AYNI olcu duzenini kullanir
  * ([ColBid]/[ColAsk]/[ColChange]/[ColAction] + [ColGap]); basligin yan dolgusu
  * satir icerigi ile ayni noktaya denk gelsin diye [TableStart]/[TableEnd] olarak
- * kart disi dolgu + kenarlik + satir ic dolgusu toplanarak yazilmistir.
+ * kart disi dolgu + satir ic dolgusu toplanarak yazilmistir.
  */
 @Composable
 fun MarketScreen(
@@ -445,7 +445,12 @@ private fun MarketManualBadge() {
     }
 }
 
-/** 32dp genislikli kalem butonu - sutun hizasi icin dar, dokunma icin 44dp yuksek. */
+/**
+ * Kalem butonu: tasarimda 32x32 kutu (ustune -4px dikey negatif bosluk, yani
+ * satir yuksekligini hic buyutmez). Kutu 44dp yapilirsa satir ~10dp sisiyordu;
+ * ad + kaynak sutunu zaten 32dp'den yuksek oldugu icin dokunma alani satir
+ * boyunca korunur.
+ */
 @Composable
 private fun MarketPencilButton(onClick: () -> Unit) {
     val c = KefeTheme.colors
@@ -455,7 +460,7 @@ private fun MarketPencilButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .width(ColAction)
-            .height(Sizes.touchTarget)
+            .height(PencilBoxSize)
             .clip(KefeShapes.boxSmall)
             .background(if (hovered) c.surfaceSunken else Color.Transparent)
             .hoverable(interaction)
@@ -576,11 +581,18 @@ private val ColChange = 48.dp
 private val ColAction = 32.dp
 private val ColGap = Space.x8
 
-/** 16dp kart disi dolgu + 1dp kenarlik + 14dp satir ic dolgusu. */
-private val TableStart = 31.dp
+/** Kalem butonunun kutusu - tasarimdaki 32x32. */
+private val PencilBoxSize = 32.dp
 
-/** 16dp kart disi dolgu + 1dp kenarlik + 12dp satir ic dolgusu. */
-private val TableEnd = 29.dp
+/**
+ * 16dp kart disi dolgu + 14dp satir ic dolgusu. Kenarlik EKLENMEZ: Compose'da
+ * `Modifier.border` cizgiyi olculerin icine cizer, CSS'teki gibi icerigi 1px
+ * itmez - eklenirse baslik satirlardan 1dp kayar.
+ */
+private val TableStart = 30.dp
+
+/** 16dp kart disi dolgu + 12dp satir ic dolgusu (kenarlik yine eklenmez). */
+private val TableEnd = 28.dp
 
 // --- Yardimci --------------------------------------------------------------
 

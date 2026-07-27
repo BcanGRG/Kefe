@@ -32,6 +32,7 @@ object KefeIcons {
     val Search: ImageVector get() = KefeIconsCore.Search
     val DragHandle: ImageVector get() = KefeIconsCore.DragHandle
     val MoreHorizontal: ImageVector get() = KefeIconsCore.MoreHorizontal
+    val MoreVertical: ImageVector get() = KefeIconsCore.MoreVertical
     val PlusSmall: ImageVector get() = KefeIconsCore.PlusSmall
     val MinusSmall: ImageVector get() = KefeIconsCore.MinusSmall
     val CloudOff: ImageVector get() = KefeIconsCore.CloudOff

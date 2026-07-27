@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -217,8 +216,9 @@ private fun MemberRow(member: ShareMemberRow, menuOpen: Boolean, onMenu: () -> U
                     ),
                 contentAlignment = Alignment.Center,
             ) {
+                // Tasarimda uye satirindaki menu noktalari DIKEY dizilir.
                 KefeIcon(
-                    icon = KefeIcons.MoreHorizontal,
+                    icon = KefeIcons.MoreVertical,
                     contentDescription = "${member.name} için seçenekler",
                     size = 20.dp,
                     tint = if (menuOpen) c.onSurface else c.onSurfaceMuted,
@@ -323,11 +323,15 @@ private fun ShareEmpty(onInvite: () -> Unit) {
             .padding(horizontal = 18.dp, vertical = Space.x24),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // Ikinci halka 10dp bindirilir; offset yerine negatif aralik kullanilir
+        // ki grubun toplam genisligi de tasarimdaki gibi 10dp kisalsin.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy((-10).dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             AccountAvatar(initials = "VK", index = 0, size = Sizes.touchTarget, fontSize = 15.sp)
             Box(
                 modifier = Modifier
-                    .offset(x = (-10).dp)
                     .size(Sizes.touchTarget)
                     .drawBehind {
                         drawCircle(

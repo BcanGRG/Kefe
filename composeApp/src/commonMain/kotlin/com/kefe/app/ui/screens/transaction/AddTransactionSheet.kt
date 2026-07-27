@@ -811,11 +811,12 @@ private fun QuantityField(
             modifier = Modifier.weight(1f),
             placeholder = "0",
         )
-        Text(
-            text = state.quantityUnit.label(),
-            style = KefeTheme.type.body,
-            color = c.onSurfaceMuted,
-        )
+        // Nakit ve dovizde birim yazilmaz. Bos metin birakilsaydi satirin
+        // 8dp'lik aralik duzeni yuzunden olu bosluk kalirdi.
+        val unit = state.quantityUnit.label()
+        if (unit.isNotEmpty()) {
+            Text(text = unit, style = KefeTheme.type.body, color = c.onSurfaceMuted)
+        }
         StepButton(KefeIcons.MinusSmall, "Azalt") {
             onIntent(AddTransactionIntent.DecrementQuantity)
         }
@@ -854,12 +855,12 @@ private fun PriceBadge(manual: Boolean) {
         modifier = Modifier
             .clip(KefeShapes.pill)
             .background(if (manual) c.surfaceSunken else c.accentMuted)
-            .then(
-                if (manual) {
-                    Modifier.border(Sizes.hairline, c.outline, KefeShapes.pill)
-                } else {
-                    Modifier
-                },
+            // Tasarimda guncel fiyat rozetinin cercevesi saydamdir ama yer kaplar:
+            // iki rozet de ayni boyda durur, gecerken 2dp ziplamaz.
+            .border(
+                Sizes.hairline,
+                if (manual) c.outline else Color.Transparent,
+                KefeShapes.pill,
             )
             .padding(horizontal = Space.x8, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +22,8 @@ import androidx.compose.ui.unit.sp
 import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.tabular
 import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -33,19 +34,29 @@ import kotlin.math.sqrt
  * olarak ayrisabilmesi icin mil ve kiris atlanamaz.
  */
 
-// --- Referans cizim uzayi (200 x 150) ---
+// --- Referans cizim uzayi (200 x 148) ---
 
 private const val VIEW_W = 200f
-private const val VIEW_H = 150f
+private const val VIEW_H = 148f
 
-/** Mil: dikey cizgi. */
+/** Mil: 100,6 - 100,30 arasi dikey cizgi. */
 private const val MAST_X = 100f
-private const val MAST_TOP = 8f
+private const val MAST_TOP = 6f
+private const val MAST_BOTTOM = 30f
+private const val MAST_STROKE = 2f
 
-/** Kiris: yatay cizgi; kase yayinin iki ucunu birlestirir. */
-private const val BEAM_Y = 38f
+/** Askilik: kase yayinin iki ucunu tepe noktasinda birlestiren V. */
+private const val BEAM_Y = 38.1f
 private const val BEAM_LEFT = 39.9f
 private const val BEAM_RIGHT = 160.1f
+private const val BEAM_APEX_X = 100f
+private const val BEAM_APEX_Y = 22f
+private const val BEAM_STROKE = 1.4f
+
+/** Milin ucundaki donme noktasi. */
+private const val PIVOT_X = 100f
+private const val PIVOT_Y = 20f
+private const val PIVOT_RADIUS = 3f
 
 /** Kase yayi: M 39.9 38.1 A 64 64 0 1 0 160.1 38.1 */
 private const val ARC_START_X = 39.9f
@@ -54,10 +65,8 @@ private const val ARC_Y = 38.1f
 private const val ARC_RADIUS = 64f
 private const val ARC_STROKE = 14f
 
-private const val LINE_STROKE = 2f
-
-/** Centik genisligi - yay uzerinde 2 birimlik radyal ayirici. */
-private const val NOTCH_WIDTH = 2f
+/** Kilometre tasi noktasi - yay uzerine oturan kucuk daire. */
+private const val NOTCH_RADIUS = 2f
 
 private val DEG = 180f / kotlin.math.PI.toFloat()
 
@@ -109,32 +118,44 @@ fun KefeGoalRing(
             val dy = (size.height - VIEW_H * scale) / 2f
             fun px(x: Float, y: Float) = Offset(dx + x * scale, dy + y * scale)
 
-            val lineStroke = LINE_STROKE * scale
             val r = ARC_RADIUS * scale
             val arcTopLeft = px(arcCenterX - ARC_RADIUS, arcCenterY - ARC_RADIUS)
             val arcSize = Size(r * 2f, r * 2f)
             val ringStroke = Stroke(width = ARC_STROKE * scale, cap = StrokeCap.Round)
-            val notchStroke = Stroke(width = ARC_STROKE * scale, cap = StrokeCap.Butt)
 
             // 1. Mil
             drawLine(
-                color = colors.onSurfaceMuted,
+                color = colors.outline,
                 start = px(MAST_X, MAST_TOP),
-                end = px(MAST_X, BEAM_Y),
-                strokeWidth = lineStroke,
-                cap = StrokeCap.Butt,
+                end = px(MAST_X, MAST_BOTTOM),
+                strokeWidth = MAST_STROKE * scale,
+                cap = StrokeCap.Round,
             )
 
-            // 2. Kiris
+            // 2. Askilik - iki kol tepe noktasinda birlesir
             drawLine(
-                color = colors.onSurfaceMuted,
+                color = colors.outline,
                 start = px(BEAM_LEFT, BEAM_Y),
+                end = px(BEAM_APEX_X, BEAM_APEX_Y),
+                strokeWidth = BEAM_STROKE * scale,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = colors.outline,
+                start = px(BEAM_APEX_X, BEAM_APEX_Y),
                 end = px(BEAM_RIGHT, BEAM_Y),
-                strokeWidth = lineStroke,
-                cap = StrokeCap.Butt,
+                strokeWidth = BEAM_STROKE * scale,
+                cap = StrokeCap.Round,
             )
 
-            // 3. Kase yayi - once iz, sonra doluluk
+            // 3. Donme noktasi
+            drawCircle(
+                color = colors.outline,
+                radius = PIVOT_RADIUS * scale,
+                center = px(PIVOT_X, PIVOT_Y),
+            )
+
+            // 4. Kase yayi - once iz, sonra doluluk
             drawArc(
                 color = trackColor,
                 startAngle = arcStartAngle,
@@ -156,39 +177,40 @@ fun KefeGoalRing(
                 )
             }
 
-            // 4. Centikler - yay uzerinde surface renginde radyal ayirici
-            val notchDeg = NOTCH_WIDTH / ARC_RADIUS * DEG
+            // 5. Kilometre taslari - yayin uzerine oturan kucuk noktalar
             milestones.forEach { m ->
                 if (m > 0f && m < 1f) {
-                    drawArc(
-                        color = colors.surface,
-                        startAngle = arcStartAngle + arcSweepAngle * m - notchDeg / 2f,
-                        sweepAngle = notchDeg,
-                        useCenter = false,
-                        topLeft = arcTopLeft,
-                        size = arcSize,
-                        style = notchStroke,
+                    val rad = (arcStartAngle + arcSweepAngle * m) / DEG
+                    drawCircle(
+                        color = colors.outline,
+                        radius = NOTCH_RADIUS * scale,
+                        center = px(
+                            arcCenterX + ARC_RADIUS * cos(rad),
+                            arcCenterY + ARC_RADIUS * sin(rad),
+                        ),
                     )
                 }
             }
         }
 
-        // Metin blogu kasenin ic bosluguna oturur - kirisin biraz altina
+        // Metin blogu kasenin ic bosluguna oturur. Tasarimda iki taban cizgisi
+        // arasi 20px; bunun icin satir yuksekligi punto degerine cekilir.
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = Modifier.offset(y = 5.dp),
         ) {
             Text(
                 text = centerPercent,
-                style = KefeTheme.type.display.tabular(),
+                style = KefeTheme.type.display.copy(lineHeight = 40.sp).tabular(),
                 color = colors.onSurface,
                 maxLines = 1,
                 textAlign = TextAlign.Center,
             )
             Text(
                 text = centerAmount,
-                style = KefeTheme.type.caption.copy(fontSize = 12.sp).tabular(),
+                style = KefeTheme.type.caption
+                    .copy(fontSize = 12.sp, lineHeight = 14.sp)
+                    .tabular(),
                 color = colors.onSurfaceMuted,
                 maxLines = 1,
                 textAlign = TextAlign.Center,

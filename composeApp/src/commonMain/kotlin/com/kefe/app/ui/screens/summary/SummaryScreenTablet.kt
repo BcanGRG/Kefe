@@ -62,6 +62,7 @@ import com.kefe.app.ui.charts.Point
 import com.kefe.app.ui.components.KefeAccentCard
 import com.kefe.app.ui.components.KefeAvatar
 import com.kefe.app.ui.components.KefeCard
+import com.kefe.app.ui.components.KefeChip
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeOfflineBanner
 import com.kefe.app.ui.components.KefePrimaryButton
@@ -189,11 +190,17 @@ private fun TabletTopBar(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(Space.x8)) {
+            // Birim cipi: 40dp, 14dp yan dolgu, iki durumda da 13sp/600 (handoff).
+            val chipText = t.caption.copy(fontWeight = FontWeight.SemiBold)
             DisplayUnit.entries.forEach { unit ->
-                UnitChip(
+                KefeChip(
                     text = unit.chipLabel,
                     selected = state.unit == unit,
                     onClick = { onIntent(SummaryIntent.SelectUnit(unit)) },
+                    height = Sizes.chipLarge,
+                    horizontalPadding = Space.x14,
+                    textStyle = chipText,
+                    selectedTextStyle = chipText,
                 )
             }
         }
@@ -722,50 +729,6 @@ private fun TabletEmpty(onOpenGoals: () -> Unit, onAddAsset: () -> Unit) {
 }
 
 // --- Ortak kucuk parcalar --------------------------------------------------
-
-/**
- * Birim cipi. Ortak [com.kefe.app.ui.components.KefeChip] secili durumda metni
- * accent'e cevirir ve 36dp'dir; tablet/masaustu cubugunda 40dp ve secili metin
- * onSurface isteniyor - o yuzden burada ayri yazildi.
- */
-@Composable
-internal fun UnitChip(text: String, selected: Boolean, onClick: () -> Unit) {
-    val c = KefeTheme.colors
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-
-    Box(
-        modifier = Modifier
-            .height(Sizes.chipLarge)
-            .clip(KefeShapes.pill)
-            .background(if (selected) c.accentMuted else Color.Transparent)
-            .border(
-                width = Sizes.hairline,
-                color = when {
-                    selected -> c.accent
-                    hovered -> c.onSurfaceMuted
-                    else -> c.outline
-                },
-                shape = KefeShapes.pill,
-            )
-            .hoverable(interaction)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                role = Role.Button,
-                onClick = onClick,
-            )
-            .padding(horizontal = Space.x14),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = KefeTheme.type.caption.copy(fontWeight = FontWeight.SemiBold),
-            color = if (selected) c.onSurface else c.onSurfaceMuted,
-            maxLines = 1,
-        )
-    }
-}
 
 /** 44dp kenarlikli ikon butonu - tablet ust cubugu. */
 @Composable

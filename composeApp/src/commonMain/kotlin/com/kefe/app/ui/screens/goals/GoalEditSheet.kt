@@ -269,6 +269,8 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
                 onValueChange = { onIntent(GoalsIntent.EditorContribution(it)) },
                 placeholder = "0",
                 textStyle = t.body.tabular(),
+                // Tasarimda alan tek parca "₺50.000" gosterir - araya bosluk girmez.
+                spacing = 0.dp,
                 leading = { Text("₺", style = t.body, color = c.onSurface) },
             )
         }
@@ -518,6 +520,8 @@ private fun SheetTextField(
     modifier: Modifier = Modifier,
     height: Dp = Sizes.fieldDefault,
     textStyle: TextStyle = KefeTheme.type.body,
+    /** Bas/son ek ile deger arasindaki bosluk. Para on eki metne bitisiktir. */
+    spacing: Dp = Space.x8,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
@@ -538,7 +542,7 @@ private fun SheetTextField(
             )
             .padding(horizontal = Space.x14),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Space.x8),
+        horizontalArrangement = Arrangement.spacedBy(spacing),
     ) {
         leading?.invoke()
         BasicTextField(
