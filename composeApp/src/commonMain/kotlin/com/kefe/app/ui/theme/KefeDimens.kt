@@ -87,4 +87,21 @@ object Sizes {
     val railWidth: Dp = 92.dp
     val navWidth: Dp = 240.dp
     val sidePanelWidth: Dp = 320.dp
+
+    /**
+     * Ekran icerigi bu genisligi asmaz.
+     *
+     * Tasarimin masaustu duzeni 1440 = 240 (nav) + 880 (icerik) + 320 (piyasa
+     * paneli). Piyasa paneli yalniz Ozet'te var; diger ekranlar sinirsiz kalinca
+     * 1200px'e yayiliyor ve satirin etiketi solda, tutari sagda kalip arada
+     * ~900px bosluk olusuyor. Ozet'in icerik kolonuyla ayni sayiyi kullanmak
+     * sekme degistirince baslik hizasinin kaymamasini da saglar.
+     *
+     * Telefon (390) ve tablette (840 - 92 ray = 748) sinirin altinda kalindigi
+     * icin bu olcunun oralarda etkisi yoktur.
+     */
+    val contentMaxWidth: Dp = 880.dp
+
+    /** Giris ve onboarding formu: liste degil form oldugu icin daha dar. */
+    val formMaxWidth: Dp = 440.dp
 }
