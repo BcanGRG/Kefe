@@ -1,0 +1,39 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Makineye ozel - SDK yolu burada, paylasilmaz
+local.properties
+
+# Kotlin
+.kotlin/
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+output.json
+
+# IDE
+.idea/*
+!.idea/codeStyles/
+!.idea/inspectionProfiles/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Xcode / iOS (Mac'te calisildiginda)
+xcuserdata/
+*.xcuserstate
+DerivedData/
+Pods/
+
+# Isletim sistemi
+.DS_Store
+Thumbs.db
+desktop.ini

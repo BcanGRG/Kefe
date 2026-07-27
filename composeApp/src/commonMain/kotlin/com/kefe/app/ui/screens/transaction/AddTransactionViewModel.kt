@@ -1,0 +1,433 @@
+package com.kefe.app.ui.screens.transaction
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.kefe.app.domain.model.ActivityEvent
+import com.kefe.app.domain.model.ActivityKind
+import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.GoldSubtype
+import com.kefe.app.domain.model.Karat
+import com.kefe.app.domain.model.Member
+import com.kefe.app.domain.model.MemberRole
+import com.kefe.app.domain.model.Position
+import com.kefe.app.domain.model.QuantityUnit
+import com.kefe.app.domain.model.SyncState
+import com.kefe.app.domain.model.Transaction
+import com.kefe.app.domain.repository.PortfolioRepository
+import com.kefe.app.domain.repository.PriceBoard
+import com.kefe.app.domain.repository.PriceFreshness
+import com.kefe.app.domain.repository.PriceRepository
+import com.kefe.app.ui.format.Money
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
+
+/**
+ * Islem ekleme sayfasi. MVI-lite: tek durum akisi, tek [onIntent] girisi.
+ *
+ * Fiyatlar hicbir yerde sabit YAZILMAZ; alt tur satirlarindaki tutarlar, ayar
+ * gram fiyatlari ve fon kotasyonlari [PriceRepository] tablosundan gelir.
+ * Boylece bu sayfa Piyasa ekraniyla ayni rakami gosterir ve kaynak degistiginde
+ * ekran degismez.
+ */
+class AddTransactionViewModel(
+    private val portfolioRepository: PortfolioRepository,
+    private val priceRepository: PriceRepository,
+) : ViewModel() {
+
+    private val _state = MutableStateFlow(AddTransactionUiState())
+    val state: StateFlow<AddTransactionUiState> = _state.asStateFlow()
+
+    private var board: PriceBoard? = null
+    private var positions: List<Position> = emptyList()
+    private var members: List<Member> = emptyList()
+
+    init {
+        observePortfolio()
+        observePrices()
+    }
+
+    fun onIntent(intent: AddTransactionIntent) {
+        val s = _state.value
+        when (intent) {
+            is AddTransactionIntent.SelectAssetClass -> update(
+                s.copy(
+                    assetClass = intent.assetClass,
+                    // Sinif degisince onceki sinifin secimi anlamsizlasir.
+                    selectedFundKey = if (intent.assetClass == AssetClass.Fund) {
+                        s.selectedFundKey
+                    } else {
+                        null
+                    },
+                )
+            )
+
+            is AddTransactionIntent.SelectSubtype -> update(s.copy(selectedSubtype = intent.subtype))
+
+            is AddTransactionIntent.SelectKarat -> update(s.copy(karat = intent.karat))
+
+            is AddTransactionIntent.ChangeGram -> update(s.copy(gramText = intent.text))
+
+            is AddTransactionIntent.ChangeFundQuery -> update(s.copy(fundQuery = intent.text))
+
+            is AddTransactionIntent.SelectFund -> update(s.copy(selectedFundKey = intent.assetKey))
+
+            AddTransactionIntent.Continue -> if (s.canContinue) update(s.toAmountStep())
+
+            AddTransactionIntent.Back -> update(s.copy(step = AddTransactionStep.Asset))
+
+            AddTransactionIntent.RepeatLast -> s.lastAdded?.let { last ->
+                update(
+                    s.copy(
+                        assetClass = last.assetClass,
+                        selectedSubtype = last.subtype,
+                        karat = last.karat,
+                        selectedFundKey = null,
+                    ).toAmountStep(quantityText = last.quantityText)
+                )
+            }
+
+            is AddTransactionIntent.SelectSide -> _state.value = s.copy(side = intent.side)
+
+            is AddTransactionIntent.ChangeQuantity ->
+                _state.value = s.copy(quantityText = intent.text)
+
+            AddTransactionIntent.IncrementQuantity ->
+                _state.value = s.copy(quantityText = stepQuantity(s, up = true))
+
+            AddTransactionIntent.DecrementQuantity ->
+                _state.value = s.copy(quantityText = stepQuantity(s, up = false))
+
+            is AddTransactionIntent.ChangeUnitPrice -> _state.value = s.copy(
+                unitPriceText = intent.text,
+                // Elle yazilan fiyat otomatik yenilemede EZILMEZ.
+                priceManual = true,
+            )
+
+            AddTransactionIntent.ResetPriceToMarket -> _state.value = s.copy(
+                priceManual = false,
+                unitPriceText = Money.number(s.marketPrice, s.priceDecimals),
+            )
+
+            AddTransactionIntent.ToggleExtra ->
+                _state.value = s.copy(extraExpanded = !s.extraExpanded)
+
+            is AddTransactionIntent.ChangeFee -> _state.value = s.copy(feeText = intent.text)
+
+            is AddTransactionIntent.ChangeNote -> _state.value = s.copy(note = intent.text)
+
+            is AddTransactionIntent.ChangeStorage -> _state.value = s.copy(storage = intent.text)
+
+            AddTransactionIntent.Save -> save()
+
+            AddTransactionIntent.ConsumeSaved -> _state.value = s.copy(saved = false)
+        }
+    }
+
+    // --- Gozlemler ---------------------------------------------------------
+
+    private fun observePortfolio() {
+        viewModelScope.launch {
+            combine(
+                portfolioRepository.observePositions(),
+                portfolioRepository.observeMembers(),
+                portfolioRepository.observeActivity(),
+            ) { positionList, memberList, activity ->
+                positions = positionList
+                members = memberList
+                _state.value.copy(
+                    lastAdded = lastAddedOf(activity, positionList),
+                    partnerName = memberList.firstOrNull { it.role != MemberRole.Owner }?.name
+                        ?: memberList.getOrNull(1)?.name.orEmpty(),
+                )
+            }.collect { _state.value = withPrices(it) }
+        }
+    }
+
+    private fun observePrices() {
+        viewModelScope.launch {
+            priceRepository.observePrices().collect { latest ->
+                board = latest
+                _state.value = withPrices(_state.value)
+            }
+        }
+    }
+
+    /** Secimi degistiren her intent fiyat tablosunu yeniden uygular. */
+    private fun update(next: AddTransactionUiState) {
+        _state.value = withPrices(next)
+    }
+
+    /**
+     * Fiyata bagli tum alanlari tek yerden doldurur: alt tur satirlari, ayar
+     * fiyatlari, fon sonuclari ve secime karsilik gelen birim fiyat.
+     */
+    private fun withPrices(s: AddTransactionUiState): AddTransactionUiState {
+        val current = board ?: return s
+        val market = marketPriceOf(s, current)
+        return s.copy(
+            subtypes = GoldSubtype.entries.map {
+                SubtypeOption(it, subtypePriceText(it, current))
+            },
+            karatOptions = Karat.entries.map { KaratOption(it, karatGramPrice(it, current)) },
+            fundResults = fundCatalog(current).filter { it.matches(s.fundQuery) },
+            marketPrice = market,
+            unitPriceText = if (s.priceManual) {
+                s.unitPriceText
+            } else {
+                Money.number(market, s.priceDecimals)
+            },
+            offline = current.freshness == PriceFreshness.Offline,
+        )
+    }
+
+    // --- Kaydetme ----------------------------------------------------------
+
+    private fun save() {
+        val s = _state.value
+        if (!s.canSave || s.saving) return
+        _state.value = s.copy(saving = true)
+
+        viewModelScope.launch {
+            val position = positions.firstOrNull { it.matches(s) }
+            val positionId = position?.id ?: newPositionId(s)
+
+            // Varlik portfoyde yoksa once TANITILIR. Islem tek basina varligin
+            // adini, sinifini ve birimini tasimaz; pozisyon olmadan kayit oksuz
+            // kalir ve hicbir ekranda gorunmez.
+            if (position == null) {
+                portfolioRepository.upsertPosition(
+                    Position(
+                        id = positionId,
+                        name = newPositionName(s),
+                        assetClass = s.assetClass,
+                        subtype = s.selectedSubtype.takeIf { s.assetClass == AssetClass.Gold },
+                        karat = s.karat.takeIf {
+                            s.assetClass == AssetClass.Gold &&
+                                s.selectedSubtype == GoldSubtype.Jewelry
+                        },
+                        // Miktar ve maliyet defterden turer; burada yalniz meta bilgi.
+                        quantity = 0.0,
+                        unit = s.quantityUnit,
+                        unitPrice = s.unitPrice,
+                        value = 0.0,
+                        cost = 0.0,
+                        manualPrice = s.priceManual,
+                    )
+                )
+            }
+
+            portfolioRepository.addTransaction(
+                Transaction(
+                    id = transactionId(positionId, s),
+                    positionId = positionId,
+                    date = s.date,
+                    side = s.side,
+                    quantity = s.quantity,
+                    unitPrice = s.unitPrice,
+                    fee = s.fee,
+                    note = s.note.takeIf { it.isNotBlank() },
+                    storage = s.storage.takeIf { it.isNotBlank() },
+                    addedByMemberId = members.firstOrNull { it.role == MemberRole.Owner }?.id
+                        ?: members.firstOrNull()?.id.orEmpty(),
+                    // Cevrimdisi kayit cihazda bekler; baglaninca esitlenir.
+                    syncState = if (s.offline) SyncState.Pending else SyncState.Synced,
+                )
+            )
+            _state.value = _state.value.copy(saving = false, saved = true)
+        }
+    }
+}
+
+// --- Adim gecisi -------------------------------------------------------------
+
+/**
+ * Ikinci adima gecerken miktar alani bos birakilmaz: gramla olculen varlikta
+ * ilk adimda girilen gram tasinir, adetle olculende 1 ile baslanir.
+ */
+private fun AddTransactionUiState.toAmountStep(
+    quantityText: String? = null,
+): AddTransactionUiState = copy(
+    step = AddTransactionStep.Amount,
+    quantityText = quantityText
+        ?: when {
+            this.quantityText.isNotBlank() -> this.quantityText
+            quantityUnit == QuantityUnit.Gram && gramText.isNotBlank() -> gramText
+            else -> "1"
+        },
+)
+
+/** -/+ butonlari: gramda 0,1 kademe, digerlerinde 1 adet. Taban 0. */
+private fun stepQuantity(s: AddTransactionUiState, up: Boolean): String {
+    val stepSize = if (s.quantityUnit == QuantityUnit.Gram) 0.1 else 1.0
+    val decimals = if (s.quantityUnit == QuantityUnit.Gram) 1 else 0
+    val next = (s.quantity + if (up) stepSize else -stepSize).coerceAtLeast(0.0)
+    return Money.number(next, decimals)
+}
+
+// --- Fiyat eslemesi ----------------------------------------------------------
+
+/** Alt tur -> fiyat tablosu anahtari. Bilezik ayara baglidir, burada fiyati yok. */
+private fun GoldSubtype.priceKey(): String? = when (this) {
+    GoldSubtype.Gram -> "gold_gram"
+    GoldSubtype.Quarter -> "gold_quarter"
+    GoldSubtype.Half -> "gold_half"
+    GoldSubtype.Full -> "gold_full"
+    GoldSubtype.Ata -> "gold_ata"
+    GoldSubtype.Bullion -> "gold_gram"
+    GoldSubtype.Jewelry -> null
+}
+
+/**
+ * Has/kulce gram altinin ALIS kotasyonundan hesaplanir: kulce satarken
+ * kuyumcu isciligi olmadigi icin satis degil alis tarafi esas alinir.
+ */
+private fun subtypePrice(subtype: GoldSubtype, board: PriceBoard): Double? {
+    val price = subtype.priceKey()?.let { board.byKey(it) } ?: return null
+    return if (subtype == GoldSubtype.Bullion) price.bid ?: price.ask else price.ask
+}
+
+private fun subtypePriceText(subtype: GoldSubtype, board: PriceBoard): String =
+    subtypePrice(subtype, board)?.let { Money.tl(it) } ?: "ayar seçin"
+
+private fun Karat.priceKey(): String = when (this) {
+    Karat.K14 -> "gold_k14"
+    Karat.K18 -> "gold_k18"
+    Karat.K22 -> "gold_k22"
+    Karat.K24 -> "gold_gram"
+}
+
+private fun karatGramPrice(karat: Karat, board: PriceBoard): Double =
+    board.byKey(karat.priceKey())?.ask ?: 0.0
+
+/** Secime karsilik gelen guncel birim fiyat. */
+private fun marketPriceOf(s: AddTransactionUiState, board: PriceBoard): Double =
+    when (s.assetClass) {
+        AssetClass.Gold -> if (s.selectedSubtype == GoldSubtype.Jewelry) {
+            karatGramPrice(s.karat, board)
+        } else {
+            subtypePrice(s.selectedSubtype, board) ?: 0.0
+        }
+
+        AssetClass.Silver -> board.byKey("silver_gram")?.ask ?: 0.0
+        AssetClass.Fx -> board.byKey("usd_try")?.ask ?: 0.0
+        AssetClass.Fund -> s.selectedFundKey?.let { key ->
+            s.fundResults.firstOrNull { it.assetKey == key }?.price
+        } ?: 0.0
+        // Nakitte birim fiyat yoktur; girilen tutar dogrudan degerdir.
+        AssetClass.Cash -> 1.0
+    }
+
+// --- Fon kataloğu ------------------------------------------------------------
+
+/**
+ * Aranabilir fon listesi. Kod/ad/kurucu bilgisi urun katalogundan gelir; fiyat
+ * ve gunluk degisim fiyat tablosunda varsa oradan EZILIR - iki ekran arasinda
+ * kotasyon farki olmasin diye.
+ */
+private data class FundEntry(
+    val assetKey: String,
+    val code: String,
+    val name: String,
+    val issuer: String,
+    val price: Double,
+    val changePercent: Double,
+)
+
+private val FundCatalog: List<FundEntry> = listOf(
+    FundEntry("fund_tte", "TTE", "Türkiye Teknoloji Değişim Fonu", "İş Portföy", 21.40, -2.40),
+    FundEntry("fund_tkf", "TKF", "Teknoloji Katılım Fonu", "Ziraat Portföy", 13.86, 0.74),
+    FundEntry("fund_ytd", "YTD", "Yeni Teknolojiler Değişken Fon", "Yapı Kredi Portföy", 9.72, 0.31),
+    FundEntry("fund_afa", "AFA", "Ak Portföy Altın Fonu", "Ak Portföy", 24.60, 0.52),
+    FundEntry("fund_ipv", "IPV", "İş Portföy Değişken Fon", "İş Portföy", 24.41, 0.18),
+)
+
+private fun fundCatalog(board: PriceBoard): List<FundResult> = FundCatalog.map { entry ->
+    val live = board.byKey(entry.assetKey)
+    FundResult(
+        assetKey = entry.assetKey,
+        code = entry.code,
+        name = entry.name,
+        issuer = entry.issuer,
+        price = live?.ask ?: entry.price,
+        changePercent = live?.changePercent ?: entry.changePercent,
+    )
+}
+
+// --- Son eklenen -------------------------------------------------------------
+
+/**
+ * "Son eklediğin" kisayolu aktivite akisindan turetilir: en yeni ekleme olayinin
+ * metni ("2 Çeyrek Altın ekledi") portfoydeki bir pozisyonla eslesirse kisayol
+ * gosterilir. Eslesmezse satir hic cizilmez - calismayan bir dugme gostermektense.
+ */
+private fun lastAddedOf(activity: List<ActivityEvent>, positions: List<Position>): LastAdded? {
+    val event = activity.firstOrNull { it.kind == ActivityKind.AddTransaction } ?: return null
+    val label = event.description.removeSuffix(" ekledi")
+    val position = positions.firstOrNull { label.endsWith(it.name) } ?: return null
+    return LastAdded(
+        label = label,
+        assetClass = position.assetClass,
+        subtype = position.subtype ?: GoldSubtype.Quarter,
+        karat = position.karat ?: Karat.K22,
+        quantityText = label.removeSuffix(position.name).trim().ifBlank { "1" },
+    )
+}
+
+// --- Kayit anahtarlari -------------------------------------------------------
+
+/** Ayni varlik zaten portfoydeyse islem o pozisyona yazilir. */
+private fun Position.matches(s: AddTransactionUiState): Boolean = when (s.assetClass) {
+    AssetClass.Gold -> assetClass == AssetClass.Gold &&
+        subtype == s.selectedSubtype &&
+        (s.selectedSubtype != GoldSubtype.Jewelry || karat == s.karat)
+
+    AssetClass.Fund -> assetClass == AssetClass.Fund &&
+        s.selectedFund?.code?.let { name.startsWith(it) } == true
+
+    else -> assetClass == s.assetClass
+}
+
+private fun assetKeyOf(s: AddTransactionUiState): String = when (s.assetClass) {
+    AssetClass.Gold -> if (s.selectedSubtype == GoldSubtype.Jewelry) {
+        "gold_jewelry_${s.karat.milyem}"
+    } else {
+        s.selectedSubtype.priceKey().orEmpty()
+    }
+
+    AssetClass.Fund -> s.selectedFundKey.orEmpty()
+    AssetClass.Silver -> "silver_gram"
+    AssetClass.Fx -> "usd_try"
+    AssetClass.Cash -> "cash"
+}
+
+private fun newPositionId(s: AddTransactionUiState): String = "pos_" + assetKeyOf(s)
+
+/**
+ * Yeni pozisyonun gorunen adi.
+ *
+ * SINIR: doviz secimi (USD/EUR/diger) durumda modellenmemis - [assetKeyOf] da
+ * "usd_try" varsayiyor. Doviz secici eklendiginde ikisi birlikte duzeltilmeli.
+ */
+private fun newPositionName(s: AddTransactionUiState): String = when (s.assetClass) {
+    AssetClass.Gold -> if (s.selectedSubtype == GoldSubtype.Jewelry) {
+        "${s.karat.label()} Takı"
+    } else {
+        s.selectedSubtype.label()
+    }
+
+    AssetClass.Fund -> s.selectedFund?.let { "${it.code} · ${it.name}" } ?: "Fon"
+    AssetClass.Silver -> "Gram Gümüş"
+    AssetClass.Fx -> "Amerikan Doları"
+    AssetClass.Cash -> "Nakit"
+}
+
+/**
+ * Kimlik uretici yok (ortak kodda UUID/saat yok); anahtar pozisyon, tarih ve
+ * miktardan turetilir - ayni islemin iki kez yazilmasini da engeller.
+ */
+private fun transactionId(positionId: String, s: AddTransactionUiState): String =
+    "tx_" + positionId + "_" + s.date.year + "-" + s.date.month + "-" + s.date.day +
+        "_" + s.quantityText.replace(',', '-')

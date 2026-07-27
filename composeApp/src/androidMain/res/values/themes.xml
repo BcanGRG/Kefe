@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose kendi temasini cizer; buradaki tema yalniz acilis penceresi icindir.
+         surface (koyu) = #15120E -->
+    <style name="Theme.Kefe" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#15120E</item>
+        <item name="android:navigationBarColor">#15120E</item>
+        <item name="android:windowBackground">#15120E</item>
+    </style>
+</resources>
