@@ -587,53 +587,6 @@ private fun DashedSwatch(color: Color) {
     Box(Modifier.width(14.dp).height(2.dp).dashedUnderline(color))
 }
 
-/**
- * Masaustu donem cipi: 32dp, 12sp. Ortak [com.kefe.app.ui.components.KefeChip]
- * secili metni accent yapar ve 13/15sp kullanir; bu satirda 12sp isteniyor.
- */
-@Composable
-private fun PeriodChip(text: String, selected: Boolean, onClick: () -> Unit) {
-    val c = KefeTheme.colors
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-
-    Box(
-        modifier = Modifier
-            .height(Sizes.chipSmall)
-            .clip(KefeShapes.pill)
-            .background(if (selected) c.accentMuted else Color.Transparent)
-            .border(
-                width = Sizes.hairline,
-                color = when {
-                    selected -> c.accent
-                    hovered -> c.onSurfaceMuted
-                    else -> c.outline
-                },
-                shape = KefeShapes.pill,
-            )
-            .hoverable(interaction)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                role = Role.Button,
-                onClick = onClick,
-            )
-            .padding(horizontal = Space.x12),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = if (selected) {
-                KefeTheme.type.captionSmall.copy(fontWeight = FontWeight.SemiBold)
-            } else {
-                KefeTheme.type.captionSmall
-            },
-            color = if (selected) c.onSurface else c.onSurfaceMuted,
-            maxLines = 1,
-        )
-    }
-}
-
 // --- Durumlar --------------------------------------------------------------
 
 @Composable
