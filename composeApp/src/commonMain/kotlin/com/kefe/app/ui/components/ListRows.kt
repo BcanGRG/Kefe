@@ -228,20 +228,24 @@ fun KefeSectionHeader(
             modifier = Modifier.weight(1f, fill = false),
         )
         Spacer(Modifier.weight(1f))
-        Text(
-            text = total,
-            style = type.body.tabular(),
-            color = colors.onSurface,
-            maxLines = 1,
-        )
-        if (percent != null) {
-            Spacer(Modifier.width(Space.x8))
+        // Tasarimda tutar ve pay ALT ALTA durur, yan yana degil: sinif adi uzun
+        // oldugunda (ornegin fon adlari) tek satira sigmiyorlardi.
+        Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = percent,
-                style = type.micro.tabular(),
-                color = colors.onSurfaceMuted,
+                text = total,
+                style = type.body.tabular(),
+                color = colors.onSurface,
                 maxLines = 1,
             )
+            if (percent != null) {
+                Spacer(Modifier.height(1.dp))
+                Text(
+                    text = percent,
+                    style = type.nano.tabular(),
+                    color = colors.onSurfaceMuted,
+                    maxLines = 1,
+                )
+            }
         }
         Spacer(Modifier.width(Space.x8))
         Icon(
