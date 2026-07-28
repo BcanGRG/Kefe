@@ -183,6 +183,7 @@ class SqlDelightPortfolioRepository(
                 snapshotQueries.deleteAllSnapshots()
                 priceQueries.deleteAllManualPrices()
                 priceQueries.deleteAllCachedPrices()
+                priceQueries.deleteAllPriceHistory()
 
                 // Portfoy ve uye BIRAKILIR: onlar kullanici verisi degil kimlik.
                 // Silinirse islem eklerken "kim ekledi" bagi kopardi.

@@ -34,6 +34,40 @@ CREATE TABLE manual_prices (
     updatedAtEpochSeconds INTEGER NOT NULL DEFAULT 0
 );
 
+-- Varlik basina GUNLUK fiyat gecmisi - Varlik Detayi grafiginin kaynagi.
+--
+-- cached_prices her yenilemede uzerine yazilir, gecmis tutmaz. Grafik bu yuzden
+-- uydurma bir egri ciziyordu: sabit bir bicim guncel fiyatla olceklenip "12
+-- aylik gecmis" diye gosteriliyordu. Bugun alinan bir varlikta bile bir yillik
+-- yukselis gorunuyordu.
+--
+-- Gunde tek satir; gun icindeki yenilemeler satiri tazeler. Gecmis bir gunun
+-- fiyati sonradan ogrenilemez - o gun yazilmazsa kayiptir, net deger
+-- fotograflariyla ayni kural.
+CREATE TABLE price_history (
+    assetKey TEXT NOT NULL,
+    dateYear INTEGER NOT NULL,
+    dateMonth INTEGER NOT NULL,
+    dateDay INTEGER NOT NULL,
+    price REAL NOT NULL,
+    PRIMARY KEY (assetKey, dateYear, dateMonth, dateDay)
+);
+
+-- --- Fiyat gecmisi ---------------------------------------------------------
+
+selectPriceHistory:
+SELECT *
+FROM price_history
+WHERE assetKey = :assetKey
+ORDER BY dateYear, dateMonth, dateDay;
+
+upsertPriceHistory:
+INSERT OR REPLACE INTO price_history(assetKey, dateYear, dateMonth, dateDay, price)
+VALUES (:assetKey, :dateYear, :dateMonth, :dateDay, :price);
+
+deleteAllPriceHistory:
+DELETE FROM price_history;
+
 -- --- Onbellek --------------------------------------------------------------
 
 selectCachedPrices:

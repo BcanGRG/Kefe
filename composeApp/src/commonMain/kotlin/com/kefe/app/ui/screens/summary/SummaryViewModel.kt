@@ -2,7 +2,6 @@ package com.kefe.app.ui.screens.summary
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kefe.app.data.sample.SampleSeries
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.DailySnapshot

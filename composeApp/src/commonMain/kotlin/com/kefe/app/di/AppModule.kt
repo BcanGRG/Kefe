@@ -59,7 +59,7 @@ val appModule = module {
     single { KefePlatform.database(get<KefeClock>().today(), SeedSampleData) }
 
     single<PortfolioRepository> { SqlDelightPortfolioRepository(get(), get()) }
-    single<PriceRepository> { SqlDelightPriceRepository(get(), get()) }
+    single<PriceRepository> { SqlDelightPriceRepository(get(), get(), get()) }
     single<PreferencesRepository> { SqlDelightPreferencesRepository(get()) }
 
     viewModelOf(::SummaryViewModel)
@@ -73,6 +73,6 @@ val appModule = module {
     viewModelOf(::LoginViewModel)
 
     // Detay ekranlari hedef/pozisyon kimligini calisma aninda alir.
-    viewModel { (positionId: String) -> AssetDetailViewModel(get(), get(), positionId) }
+    viewModel { (positionId: String) -> AssetDetailViewModel(get(), get(), get(), positionId) }
     viewModel { (goalId: String) -> GoalDetailViewModel(get(), goalId) }
 }
