@@ -53,6 +53,7 @@ class SummaryViewModel(
 
     init {
         observeData()
+        observePrices()
         refresh()
     }
 
@@ -143,10 +144,18 @@ class SummaryViewModel(
         }
     }
 
-    private fun refresh() {
+    /**
+     * Fiyatlari BIR KEZ dinler.
+     *
+     * Toplama eskiden refresh() icindeydi ve refresh her yenilemede tekrar
+     * cagriliyordu: her cagri yeni bir toplayici aciyor, eskisi kapanmiyordu.
+     * Depo soguk bir akis donduruyor, yani her toplayici cached_prices ve
+     * manual_prices icin AYRI birer SQLDelight dinleyicisi kaydediyor. Kullanici
+     * asagi cektikce dinleyiciler birikiyor ve her fiyat yazmasinda durum N kez
+     * guncelleniyordu.
+     */
+    private fun observePrices() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(refreshing = true)
-            priceRepository.refresh()
             priceRepository.observePrices().collect { board ->
                 _state.value = _state.value.copy(
                     refreshing = false,
@@ -169,6 +178,15 @@ class SummaryViewModel(
                     },
                 )
             }
+        }
+    }
+
+    /** Yalniz cekme yapar; sonucu yukaridaki tek toplayici gorur. */
+    private fun refresh() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(refreshing = true)
+            priceRepository.refresh()
+            _state.value = _state.value.copy(refreshing = false)
         }
     }
 }

@@ -32,16 +32,21 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.kefe.app.domain.model.GoalAllocation
 import com.kefe.app.domain.model.GoalUnit
+import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.formatMonthYear
+import com.kefe.app.domain.model.monthName
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeSwitch
@@ -246,8 +251,11 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
         Column(Modifier.weight(1f)) {
             SheetLabel("Hedef tarihi")
             Spacer(Modifier.height(6.dp))
-            // Tarih secici bu teslimde yok; alan hedefin tarihini gosterir.
-            SheetDisplayBox {
+            // Alan ay-yil gosterir, secici de o incelikte: tam takvim bu ekranda
+            // gereksiz - hedefin gunu diye bir sey yok.
+            SheetDisplayBox(
+                onClick = { onIntent(GoalsIntent.ToggleEditorDatePicker) },
+            ) {
                 KefeIcon(
                     KefeIcons.Calendar,
                     null,
@@ -274,6 +282,14 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
                 leading = { Text("₺", style = t.body, color = c.onSurface) },
             )
         }
+    }
+
+    if (state.datePickerOpen) {
+        GoalDatePicker(
+            date = state.targetDate,
+            onShift = { onIntent(GoalsIntent.EditorShiftTargetDate(it)) },
+            onClose = { onIntent(GoalsIntent.ToggleEditorDatePicker) },
+        )
     }
 
     Spacer(Modifier.height(Space.x16 + 2.dp))
@@ -572,7 +588,10 @@ private fun SheetTextField(
 }
 
 @Composable
-private fun SheetDisplayBox(content: @Composable RowScope.() -> Unit) {
+private fun SheetDisplayBox(
+    onClick: (() -> Unit)? = null,
+    content: @Composable RowScope.() -> Unit,
+) {
     val c = KefeTheme.colors
     Row(
         modifier = Modifier
@@ -581,11 +600,101 @@ private fun SheetDisplayBox(content: @Composable RowScope.() -> Unit) {
             .clip(KefeShapes.button)
             .background(c.surface)
             .border(Sizes.hairline, c.outline, KefeShapes.button)
+            .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
             .padding(horizontal = Space.x14),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.x8),
         content = content,
     )
+}
+
+/**
+ * Ay-yil secici.
+ *
+ * Alan zaten yalniz ay ve yil gosteriyor; tam takvim hem yer kaplar hem de
+ * olmayan bir inceligi (gun) varmis gibi gosterir. Yil adimi ayri duruyor cunku
+ * hedefler cogu zaman yillar sonrasina konuyor - 48 kez aya basmak istemezsin.
+ */
+@Composable
+private fun GoalDatePicker(
+    date: KefeDate,
+    onShift: (Int) -> Unit,
+    onClose: () -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    Spacer(Modifier.height(Space.x10))
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(KefeShapes.button)
+            .background(c.surfaceSunken)
+            .border(Sizes.hairline, c.outline, KefeShapes.button)
+            .padding(Space.x12),
+    ) {
+        DateStepperRow(label = "Ay", value = date.monthName(), onBack = { onShift(-1) }) {
+            onShift(1)
+        }
+        Spacer(Modifier.height(Space.x8))
+        DateStepperRow(label = "Yıl", value = date.year.toString(), onBack = { onShift(-12) }) {
+            onShift(12)
+        }
+        Spacer(Modifier.height(Space.x10))
+        Text(
+            text = "Tamam",
+            style = t.bodyStrong,
+            color = c.accent,
+            modifier = Modifier
+                .align(Alignment.End)
+                .clip(KefeShapes.button)
+                .clickable(onClick = onClose)
+                .padding(horizontal = Space.x12, vertical = Space.x4),
+        )
+    }
+}
+
+@Composable
+private fun DateStepperRow(
+    label: String,
+    value: String,
+    onBack: () -> Unit,
+    onForward: () -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.x8),
+    ) {
+        Text(label, style = t.caption, color = c.onSurfaceMuted, modifier = Modifier.weight(1f))
+        StepperButton(KefeIcons.MinusSmall, onBack)
+        Text(
+            text = value,
+            style = t.bodyStrong.tabular(),
+            color = c.onSurface,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(96.dp),
+        )
+        StepperButton(KefeIcons.PlusSmall, onForward)
+    }
+}
+
+@Composable
+private fun StepperButton(icon: ImageVector, onClick: () -> Unit) {
+    val c = KefeTheme.colors
+    Box(
+        Modifier
+            .size(Sizes.touchTarget)
+            .clip(KefeShapes.button)
+            .background(c.surface)
+            .border(Sizes.hairline, c.outline, KefeShapes.button)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        KefeIcon(icon, null, size = IconSize.small, tint = c.onSurface)
+    }
 }
 
 @Composable

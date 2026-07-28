@@ -66,6 +66,14 @@ interface PortfolioRepository {
     suspend fun markOnboarded()
 
     /**
+     * Kullanicinin girdigi HER SEYI siler: pozisyonlar, islem defteri, hedefler,
+     * aktivite, gunluk fotograflar, elle girilen fiyatlar ve tercihler.
+     *
+     * Geri alinamaz. Cagiran taraf ONAY ALMADAN cagirmamali.
+     */
+    suspend fun deleteAllData()
+
+    /**
      * Pozisyonun kimligini/meta bilgisini yazar (ad, sinif, alt tur, ayar, birim,
      * birim fiyat). Miktar ve maliyet buradan DEGIL, islem defterinden gelir.
      */

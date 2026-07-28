@@ -59,6 +59,7 @@ class SqlDelightPortfolioRepository(
     private val activityQueries = database.activityQueries
     private val snapshotQueries = database.snapshotQueries
     private val settingQueries = database.settingQueries
+    private val priceQueries = database.priceQueries
 
     // --- Okumalar -----------------------------------------------------------
 
@@ -151,6 +152,10 @@ class SqlDelightPortfolioRepository(
                 val removed = transactionQueries.selectTransactionById(transactionId)
                     .executeAsOneOrNull() ?: return@transaction
                 transactionQueries.deleteTransactionById(transactionId)
+                // Aktivite satiri da gider. Kalirsa Aktivite akisi silinmis bir
+                // islemi "ekledi" diye gostermeye devam eder ve Islem Ekle'deki
+                // "son eklediginiz" kisayolu artik var olmayan bir kaydi onerir.
+                activityQueries.deleteActivityById("act_${removed.id}")
                 recomputePosition(removed.positionId)
             }
         }
@@ -163,6 +168,32 @@ class SqlDelightPortfolioRepository(
     override suspend fun markOnboarded() {
         withContext(dispatcher) {
             settingQueries.upsertSetting(settingKey = OnboardedKey, settingValue = "true")
+        }
+    }
+
+    override suspend fun deleteAllData() {
+        withContext(dispatcher) {
+            database.transaction {
+                // Islemler pozisyonlardan ONCE: yabanci anahtar zinciri aciksa
+                // ters sira zaten calisir ama bu sira niyeti okunur kiliyor.
+                transactionQueries.deleteAllTransactions()
+                positionQueries.deleteAllPositions()
+                goalQueries.deleteAllGoals()
+                activityQueries.deleteAllActivity()
+                snapshotQueries.deleteAllSnapshots()
+                priceQueries.deleteAllManualPrices()
+                priceQueries.deleteAllCachedPrices()
+
+                // Portfoy ve uye BIRAKILIR: onlar kullanici verisi degil kimlik.
+                // Silinirse islem eklerken "kim ekledi" bagi kopardi.
+                //
+                // Ayarlar tumden silinir - tercihler de kullanicinin verisi.
+                // Icindeki acilis bayraklari da gittigi icin uygulama sifirdan
+                // acilmis gibi baslar: bu, "her seyi sil" dedikten sonra
+                // beklenen davranis. Portfoy satirlari INSERT OR IGNORE ile
+                // kuruldugu icin acilis kurulumunun tekrar calismasi zararsiz.
+                settingQueries.deleteAllSettings()
+            }
         }
     }
 

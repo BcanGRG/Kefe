@@ -7,10 +7,12 @@ import com.kefe.app.data.remote.TcmbApi
 import com.kefe.app.data.remote.TefasApi
 import com.kefe.app.data.remote.createKefeHttpClient
 import com.kefe.app.data.repository.SqlDelightPortfolioRepository
+import com.kefe.app.data.repository.SqlDelightPreferencesRepository
 import com.kefe.app.data.repository.SqlDelightPriceRepository
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.SystemKefeClock
 import com.kefe.app.domain.repository.PortfolioRepository
+import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.ui.screens.account.ActivityViewModel
 import com.kefe.app.ui.screens.account.LoginViewModel
@@ -58,6 +60,7 @@ val appModule = module {
 
     single<PortfolioRepository> { SqlDelightPortfolioRepository(get(), get()) }
     single<PriceRepository> { SqlDelightPriceRepository(get(), get()) }
+    single<PreferencesRepository> { SqlDelightPreferencesRepository(get()) }
 
     viewModelOf(::SummaryViewModel)
     viewModelOf(::AssetsViewModel)
