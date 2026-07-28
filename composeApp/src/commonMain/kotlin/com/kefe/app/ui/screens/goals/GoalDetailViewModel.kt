@@ -9,12 +9,15 @@ import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.MonthlyContribution
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.Transaction
+import com.kefe.app.domain.model.assetsOf
 import com.kefe.app.domain.model.goalMilestones
 import com.kefe.app.domain.model.goalProjection
+import com.kefe.app.domain.model.goalWealth
 import com.kefe.app.domain.model.monthLabel
 import com.kefe.app.domain.model.monthName
 import com.kefe.app.domain.model.monthOrdinal
 import com.kefe.app.domain.model.monthlyContributions
+import com.kefe.app.domain.model.otherGoalOf
 import com.kefe.app.domain.model.plusMonths
 import com.kefe.app.domain.model.progress
 import com.kefe.app.domain.repository.PortfolioRepository
@@ -52,6 +55,9 @@ class GoalDetailViewModel(
     private val _state = MutableStateFlow(GoalDetailUiState())
     val state: StateFlow<GoalDetailUiState> = _state.asStateFlow()
 
+    /** Hedef kimligi -> ad. Secicide "Araba'da" uyarisini yazmak icin. */
+    private var goalNames: Map<String, String> = emptyMap()
+
     init {
         observeData()
     }
@@ -66,6 +72,22 @@ class GoalDetailViewModel(
 
             GoalDetailIntent.ToggleAllRows -> {
                 _state.value = _state.value.copy(showAllRows = !_state.value.showAllRows)
+            }
+
+            GoalDetailIntent.OpenAssetPicker ->
+                _state.value = _state.value.copy(assetPickerOpen = true)
+
+            GoalDetailIntent.CloseAssetPicker ->
+                _state.value = _state.value.copy(assetPickerOpen = false)
+
+            // Atanmisi tekrar secmek atamayi KALDIRIR - ayni dokunusla geri
+            // alinabilmesi icin ayri bir "kaldir" dugmesi yok.
+            is GoalDetailIntent.ToggleAsset -> viewModelScope.launch {
+                val alreadyMine = _state.value.assignedAssets.any { it.id == intent.positionId }
+                portfolioRepository.assignPositionToGoal(
+                    positionId = intent.positionId,
+                    goalId = if (alreadyMine) null else goalId,
+                )
             }
 
             GoalDetailIntent.CloseGoal -> {
@@ -84,12 +106,15 @@ class GoalDetailViewModel(
                 portfolioRepository.observePositions(),
                 portfolioRepository.observeSnapshots(),
                 portfolioRepository.observeAllTransactions(),
-            ) { goals, positions, snapshots, transactions ->
+                portfolioRepository.observeGoalAssets(),
+            ) { goals, positions, snapshots, transactions, assignments ->
                 val goal = goals.firstOrNull { it.id == goalId }
+                // Secicideki "Araba'da" uyarisi icin: kimlikten ada.
+                goalNames = goals.associate { it.id to it.name }
                 if (goal == null) {
                     _state.value.copy(stage = GoalDetailStage.Missing, goal = null)
                 } else {
-                    build(goal, positions, snapshots, transactions)
+                    build(goal, positions, snapshots, transactions, assignments)
                 }
             }.collect { _state.value = it }
         }
@@ -100,9 +125,11 @@ class GoalDetailViewModel(
         positions: List<Position>,
         snapshots: List<DailySnapshot>,
         transactions: List<Transaction>,
+        assignments: Map<String, String>,
     ): GoalDetailUiState {
         val previous = _state.value
-        val wealth = positions.sumOf { it.value }
+        // Hedefe varlik atanmissa yalniz onlar sayilir; atanmamissa tum birikim.
+        val wealth = goalWealth(goal, positions, assignments)
         val today = clock.today()
 
         // Katki gecmisi DEFTERDEN, projeksiyon FOTOGRAFLARDAN. Ikisi de once
@@ -131,6 +158,17 @@ class GoalDetailViewModel(
             rows = rows,
             collapsedRows = collapseRows(rows),
             baseContribution = goal.monthlyContribution,
+            assignedAssets = assetsOf(goal, positions, assignments),
+            // Secici: her varlik, varsa baska hedefin adiyla. Secmek TASIR;
+            // kullanici bunu okumadan yapmamali.
+            assignableAssets = positions.map { position ->
+                AssignableAsset(
+                    position = position,
+                    assignedToThis = assignments[position.id] == goal.id,
+                    otherGoalName = otherGoalOf(position.id, goal, assignments)
+                        ?.let { otherId -> goalNames[otherId] },
+                )
+            },
         )
 
         // Kaydirici hedefin kendi katkisinin bir tik uzerinde acilir: kullanici

@@ -292,7 +292,7 @@ private fun SummaryContent(
             item {
                 MainGoalCard(
                     goal = goal,
-                    currentWealth = totals.totalValue,
+                    currentWealth = state.mainGoalWealth,
                     masked = state.masked,
                     otherGoalCount = state.otherGoalCount,
                     onClick = { onOpenGoal(goal.id) },

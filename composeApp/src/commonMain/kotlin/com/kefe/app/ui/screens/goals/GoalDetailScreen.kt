@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -33,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +57,7 @@ import com.kefe.app.ui.charts.Point
 import com.kefe.app.ui.components.KefeCard
 import com.kefe.app.ui.components.KefeEmptyState
 import com.kefe.app.ui.components.KefeHairline
+import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefeSlider
 import com.kefe.app.ui.format.Money
@@ -86,29 +90,37 @@ fun GoalDetailScreen(
 ) {
     val goal = state.goal
 
-    Column(modifier.fillMaxSize()) {
-        DetailTopBar(
-            title = goal?.name.orEmpty(),
-            onBack = onBack,
-            onEdit = onEdit,
-            editEnabled = goal != null,
-        )
-
-        if (goal == null) {
-            KefeEmptyState(
-                icon = KefeIcons.Target,
-                title = "Hedef bulunamadı",
-                body = "Bu hedef silinmiş olabilir. Hedefler listesine dönebilirsiniz.",
+    // Secici icerigin USTUNDE cizilir; Column olsaydi dikey akisa katilir,
+    // sayfanin altina bir kutu olarak eklenirdi.
+    Box(modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            DetailTopBar(
+                title = goal?.name.orEmpty(),
+                onBack = onBack,
+                onEdit = onEdit,
+                editEnabled = goal != null,
             )
-        } else {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                DetailBody(goal, state, onIntent, onEdit)
+
+            if (goal == null) {
+                KefeEmptyState(
+                    icon = KefeIcons.Target,
+                    title = "Hedef bulunamadı",
+                    body = "Bu hedef silinmiş olabilir. Hedefler listesine dönebilirsiniz.",
+                )
+            } else {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    DetailBody(goal, state, onIntent, onEdit)
+                }
             }
+        }
+
+        if (state.assetPickerOpen) {
+            AssetPickerSheet(state, onIntent)
         }
     }
 }
@@ -186,6 +198,9 @@ private fun DetailBody(
     RingCard(goal, state, onIntent, onEdit)
     Spacer(Modifier.height(BlockGap))
 
+    AssignedAssetsCard(state, onIntent)
+    Spacer(Modifier.height(BlockGap))
+
     if (state.showAnalysis) {
         ProjectionCard(goal, state)
         Spacer(Modifier.height(BlockGap))
@@ -195,6 +210,196 @@ private fun DetailBody(
         Spacer(Modifier.height(BlockGap))
         HistoryCard(state, onIntent)
         Spacer(Modifier.height(Space.x24))
+    }
+}
+
+// --- Bu hedefi karsilayanlar ------------------------------------------------
+
+/**
+ * Hedefin arkasindaki varliklar.
+ *
+ * Once hedef yalniz bir toplam gosteriyordu: "bu parayi hangi varliklarim
+ * olusturuyor" ve "birini baska hedefe aktarayim" sorularinin karsiligi yoktu.
+ *
+ * Atama YAPILMAMISSA kart bunu acikca soyler ve hedef tum birikimi saymaya devam
+ * eder - atamayla ugrasmak istemeyen biri hicbir seyini kaybetmez.
+ */
+@Composable
+private fun AssignedAssetsCard(
+    state: GoalDetailUiState,
+    onIntent: (GoalDetailIntent) -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    KefeCard(modifier = Modifier.padding(horizontal = Space.x16)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Bu hedefi karşılayanlar", style = t.bodyStrong, color = c.onSurface)
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = if (state.assignedAssets.isEmpty()) "Varlık seç" else "Düzenle",
+                style = t.caption,
+                color = c.accent,
+                modifier = Modifier.clickable(
+                    indication = null,
+                    interactionSource = null,
+                    onClick = { onIntent(GoalDetailIntent.OpenAssetPicker) },
+                ),
+            )
+        }
+
+        Spacer(Modifier.height(Space.x10))
+
+        if (state.assignedAssets.isEmpty()) {
+            Text(
+                "Varlık atanmadı — tüm birikiminiz bu hedefe sayılıyor. " +
+                    "Belirli varlıkları ayırmak isterseniz seçin.",
+                style = t.caption,
+                color = c.onSurfaceMuted,
+            )
+        } else {
+            state.assignedAssets.forEachIndexed { index, position ->
+                if (index > 0) KefeHairline()
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = Space.x10),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(c.assetClass(position.assetClass.color())),
+                    )
+                    Spacer(Modifier.width(Space.x10))
+                    Text(
+                        text = position.name,
+                        style = t.body,
+                        color = c.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(Space.x8))
+                    Text(
+                        text = Money.tl(position.value),
+                        style = t.body.tabular(),
+                        color = c.onSurface,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Varlik secici.
+ *
+ * Baska hedefe atanmis varligin yaninda o hedefin adi yazar: secmek onu TASIR ve
+ * digerinin ilerlemesi duser. Yazilmazsa kullanici bunu ancak digerine bakinca
+ * fark eder.
+ */
+@Composable
+private fun AssetPickerSheet(
+    state: GoalDetailUiState,
+    onIntent: (GoalDetailIntent) -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(c.scrim)
+            .clickable(
+                indication = null,
+                interactionSource = null,
+                onClick = { onIntent(GoalDetailIntent.CloseAssetPicker) },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .padding(Space.x24)
+                .widthIn(max = Sizes.formMaxWidth)
+                .clip(KefeShapes.card)
+                .background(c.surfaceElevated)
+                .border(Sizes.hairline, c.outline, KefeShapes.card)
+                .clickable(indication = null, interactionSource = null, onClick = {})
+                .padding(Space.x20),
+        ) {
+            Text("Varlık seç", style = t.h2, color = c.onSurface)
+            Spacer(Modifier.height(Space.x8))
+            Text(
+                "Seçilenler bu hedefe sayılır. Hiçbiri seçilmezse tüm birikim sayılır.",
+                style = t.caption,
+                color = c.onSurfaceMuted,
+            )
+            Spacer(Modifier.height(Space.x14))
+
+            state.assignableAssets.forEachIndexed { index, item ->
+                if (index > 0) KefeHairline()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(role = Role.Checkbox) {
+                            onIntent(GoalDetailIntent.ToggleAsset(item.position.id))
+                        }
+                        .padding(vertical = Space.x12),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(20.dp)
+                            .clip(KefeShapes.boxSmall)
+                            .background(if (item.assignedToThis) c.accent else Color.Transparent)
+                            .border(
+                                width = Sizes.hairline,
+                                color = if (item.assignedToThis) c.accent else c.onSurfaceMuted,
+                                shape = KefeShapes.boxSmall,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (item.assignedToThis) {
+                            KefeIcon(KefeIcons.Check, null, size = 14.dp, tint = c.onAccent)
+                        }
+                    }
+                    Spacer(Modifier.width(Space.x12))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = item.position.name,
+                            style = t.body,
+                            color = c.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        item.otherGoalName?.let { other ->
+                            Text(
+                                text = "$other hedefinde — seçersen buraya taşınır",
+                                style = t.micro,
+                                color = c.onSurfaceMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(Space.x8))
+                    Text(
+                        text = Money.tl(item.position.value),
+                        style = t.caption.tabular(),
+                        color = c.onSurfaceMuted,
+                        maxLines = 1,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(Space.x16))
+            KefePrimaryButton(
+                text = "Bitti",
+                onClick = { onIntent(GoalDetailIntent.CloseAssetPicker) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 

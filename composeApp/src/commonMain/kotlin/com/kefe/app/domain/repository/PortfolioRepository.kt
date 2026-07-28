@@ -24,6 +24,14 @@ interface PortfolioRepository {
 
     fun observeGoals(): Flow<List<Goal>>
 
+    /**
+     * Varlik -> hedef atamasi (positionId -> goalId).
+     *
+     * Atama YAPILMAMIS bir hedef tum birikimi sayar; bkz. [goalWealth]. Bir
+     * varlik en fazla bir hedefe atanir - kural semada.
+     */
+    fun observeGoalAssets(): Flow<Map<String, String>>
+
     fun observeActivity(): Flow<List<ActivityEvent>>
 
     /** Gunluk anlik goruntuler - net deger ve projeksiyon grafiklerinin kaynagi. */
@@ -80,6 +88,9 @@ interface PortfolioRepository {
     suspend fun upsertPosition(position: Position)
 
     suspend fun deletePosition(positionId: String)
+
+    /** [goalId] null ise atama kaldirilir - varlik yeniden "tum birikim"e doner. */
+    suspend fun assignPositionToGoal(positionId: String, goalId: String?)
 
     suspend fun upsertGoal(goal: Goal)
 

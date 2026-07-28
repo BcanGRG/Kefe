@@ -5,8 +5,22 @@ import com.kefe.app.domain.model.GoalMilestone
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.MonthlyContribution
+import com.kefe.app.domain.model.Position
 
 enum class GoalDetailStage { Loading, Ready, Missing }
+
+/**
+ * Secicideki tek varlik satiri.
+ *
+ * [otherGoalName] doluysa varlik BASKA bir hedefe atanmis: secmek onu tasir ve
+ * o hedefin ilerlemesi duser. Yazilmazsa kullanici bunu ancak digerine bakinca
+ * fark eder.
+ */
+data class AssignableAsset(
+    val position: Position,
+    val assignedToThis: Boolean,
+    val otherGoalName: String?,
+)
 
 /** Aylik katki gecmisi tablosunun tek satiri. */
 data class ContributionRow(
@@ -51,6 +65,12 @@ data class GoalDetailUiState(
     val collapsedRows: List<ContributionRow> = emptyList(),
     val showAllRows: Boolean = false,
 
+    /** Bu hedefe atanmis varliklar. Bos ise hedef tum birikimi sayiyor. */
+    val assignedAssets: List<Position> = emptyList(),
+    /** Seciciye dokulen tum varliklar. */
+    val assignableAssets: List<AssignableAsset> = emptyList(),
+    val assetPickerOpen: Boolean = false,
+
     /** Senaryo kaydiricisi: aylik katki, BIN TL cinsinden (30..120). */
     val scenarioContribution: Float = ScenarioMinThousands,
     val baseContribution: Double = 0.0,
@@ -81,6 +101,12 @@ sealed interface GoalDetailIntent {
 
     /** "Hedefi kapat" - asilan hedefi tamamlandi olarak isaretler. */
     data object CloseGoal : GoalDetailIntent
+
+    data object OpenAssetPicker : GoalDetailIntent
+    data object CloseAssetPicker : GoalDetailIntent
+
+    /** Atanmamissa atar, atanmissa kaldirir. */
+    data class ToggleAsset(val positionId: String) : GoalDetailIntent
 }
 
 /** Ay sirasi - iki tarih arasindaki ay farkini hesaplamak icin. */

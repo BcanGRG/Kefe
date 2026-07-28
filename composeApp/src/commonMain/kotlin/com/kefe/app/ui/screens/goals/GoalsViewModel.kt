@@ -7,6 +7,7 @@ import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAllocation
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.GoalUnit
+import com.kefe.app.domain.model.goalWealth
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.plusMonths
 import com.kefe.app.domain.model.toEpochDay
@@ -105,7 +106,8 @@ class GoalsViewModel(
             combine(
                 portfolioRepository.observeGoals(),
                 portfolioRepository.observePositions(),
-            ) { goals, positions ->
+                portfolioRepository.observeGoalAssets(),
+            ) { goals, positions, assignments ->
                 // Tamamlananlar ayri gruba iner; vadesi gecmis hedef ACIKTIR -
                 // tasarimda "Hedef duruyor" der, kapatilmis degil.
                 _state.value.copy(
@@ -113,6 +115,11 @@ class GoalsViewModel(
                     goals = goals.filter { it.status != GoalStatus.Completed },
                     completed = goals.filter { it.status == GoalStatus.Completed },
                     totalWealth = positions.sumOf { it.value },
+                    // Her hedefin KENDI karsiligi: varlik atanmissa yalniz onlar,
+                    // atanmamissa tum birikim.
+                    wealthByGoal = goals.associate {
+                        it.id to goalWealth(it, positions, assignments)
+                    },
                 )
             }.collect { _state.value = it }
         }

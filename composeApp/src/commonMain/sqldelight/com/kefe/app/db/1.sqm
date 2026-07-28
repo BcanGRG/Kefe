@@ -1,0 +1,12 @@
+-- Surum 1 -> 2: varlik-hedef atamasi.
+--
+-- Kullanicinin telefonunda GERCEK veri var (varliklar, defter, hedefler); tablo
+-- eklemek icin veritabanini silmek kabul edilemez. Bu goc yalniz yeni tabloyu
+-- kurar, var olan hicbir satira dokunmaz - atama yapilmamis portfoy eskisi gibi
+-- calisir.
+CREATE TABLE goal_assets (
+    positionId TEXT NOT NULL PRIMARY KEY REFERENCES positions(id) ON DELETE CASCADE,
+    goalId TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE
+);
+
+CREATE INDEX goal_assets_goal ON goal_assets(goalId);

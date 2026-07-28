@@ -62,6 +62,7 @@ class SqlDelightPortfolioRepository(
     private val positionQueries = database.positionQueries
     private val transactionQueries = database.transactionQueries
     private val goalQueries = database.goalQueries
+    private val goalAssetQueries = database.goalAssetQueries
     private val activityQueries = database.activityQueries
     private val snapshotQueries = database.snapshotQueries
     private val settingQueries = database.settingQueries
@@ -113,6 +114,20 @@ class SqlDelightPortfolioRepository(
     ) { positions, board ->
         positions.map { position ->
             position.valuedAt(position.priceKey()?.let { board.byKey(it) })
+        }
+    }
+
+    override fun observeGoalAssets(): Flow<Map<String, String>> =
+        goalAssetQueries.selectGoalAssets().asFlow().mapToList(dispatcher)
+            .map { rows -> rows.associate { it.positionId to it.goalId } }
+
+    override suspend fun assignPositionToGoal(positionId: String, goalId: String?) {
+        withContext(dispatcher) {
+            if (goalId == null) {
+                goalAssetQueries.clearPositionAssignment(positionId)
+            } else {
+                goalAssetQueries.assignPositionToGoal(positionId = positionId, goalId = goalId)
+            }
         }
     }
 

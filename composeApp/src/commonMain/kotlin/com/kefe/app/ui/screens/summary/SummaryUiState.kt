@@ -64,6 +64,11 @@ data class SummaryUiState(
     val periodIndex: Int = 3,
     val freshness: PriceFreshness = PriceFreshness.Fresh,
     val pricesUpdatedAt: String = "",
+    /**
+     * Ana hedefin karsiligi. Hedefe varlik atanmissa TOPLAM birikimden farklidir;
+     * o yuzden ayri tutulur.
+     */
+    val mainGoalWealth: Double = 0.0,
     val pendingSyncCount: Int = 0,
     val refreshing: Boolean = false,
     /**

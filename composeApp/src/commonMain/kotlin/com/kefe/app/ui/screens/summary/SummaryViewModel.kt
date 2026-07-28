@@ -12,6 +12,7 @@ import com.kefe.app.domain.model.Portfolio
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.allocation
 import com.kefe.app.domain.model.color
+import com.kefe.app.domain.model.goalWealth
 import com.kefe.app.domain.model.portfolioTotals
 import com.kefe.app.domain.model.topGainer
 import com.kefe.app.domain.model.topLoser
@@ -89,6 +90,9 @@ class SummaryViewModel(
             ) { portfolio, members, positions, goals, activity ->
                 Snapshot(portfolio, members, positions, goals, activity)
             }.combine(portfolioRepository.observeAllTransactions()) { snapshot, transactions ->
+                snapshot to transactions
+            }.combine(portfolioRepository.observeGoalAssets()) { pair, assignments ->
+                val (snapshot, transactions) = pair
                 val (portfolio, members, positions, goals, activity) = snapshot
                 val main = goals.firstOrNull { it.isMain }
                 _state.value.copy(
@@ -104,6 +108,11 @@ class SummaryViewModel(
                     ),
                     allocation = positions.allocation(),
                     mainGoal = main,
+                    // Ana hedefe varlik atanmissa ilerlemesi TOPLAM birikimden
+                    // degil, kendi varliklarindan hesaplanir.
+                    mainGoalWealth = main
+                        ?.let { goalWealth(it, positions, assignments) }
+                        ?: 0.0,
                     // Vadesi gecmis hedef de sayilir: tasarimda o hal "Hedef duruyor"
                     // diyor, kapatilmis degil. Yalniz tamamlananlar dislanir.
                     otherGoalCount = (goals.count { it.isOpen() } - 1).coerceAtLeast(0),
