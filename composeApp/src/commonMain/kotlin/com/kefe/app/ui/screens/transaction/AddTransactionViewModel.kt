@@ -20,6 +20,7 @@ import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.mvi.MviViewModel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -33,7 +34,7 @@ import kotlinx.coroutines.launch
 class AddTransactionViewModel(
     private val portfolioRepository: PortfolioRepository,
     private val priceRepository: PriceRepository,
-    clock: KefeClock,
+    private val clock: KefeClock,
 ) : MviViewModel<AddTransactionUiState, AddTransactionIntent, AddTransactionEffect>(
     // Tarih varsayilani sabit YAZILAMAZ: kayit artik diske gidiyor, yanlis tarih
     // kalici olur ve duzeltme ekrani yok.
@@ -121,6 +122,19 @@ class AddTransactionViewModel(
             is AddTransactionIntent.ChangeStorage -> _state.value = s.copy(storage = intent.text)
 
             AddTransactionIntent.Save -> save()
+
+            is AddTransactionIntent.EditTransaction -> loadForEdit(intent.transactionId)
+
+            is AddTransactionIntent.StartNew -> update(
+                // Tasinanlar yalniz sheet'e ait olmayanlar: kisayol ve es adi
+                // portfoyden gelir, formun onceki icerigiyle ilgisi yok.
+                AddTransactionUiState(
+                    date = clock.today(),
+                    side = intent.side,
+                    lastAdded = s.lastAdded,
+                    partnerName = s.partnerName,
+                )
+            )
         }
     }
 
@@ -182,6 +196,56 @@ class AddTransactionViewModel(
         )
     }
 
+    // --- Duzenleme ---------------------------------------------------------
+
+    /**
+     * Var olan kaydi forma tasir.
+     *
+     * Birim fiyat ELLE girilmis sayilir: kayit gecmise ait, bugunun piyasa
+     * fiyatiyla degistirilirse kullanici yalniz miktari duzeltmek isterken alis
+     * fiyatini da sessizce degistirmis olur.
+     */
+    private fun loadForEdit(transactionId: String) {
+        viewModelScope.launch {
+            val transaction = portfolioRepository.observeAllTransactions().first()
+                .firstOrNull { it.id == transactionId } ?: return@launch
+            val position = portfolioRepository.observePositions().first()
+                .firstOrNull { it.id == transaction.positionId } ?: return@launch
+
+            val s = _state.value
+            update(
+                s.copy(
+                    step = AddTransactionStep.Amount,
+                    editingTransactionId = transaction.id,
+                    assetClass = position.assetClass,
+                    selectedSubtype = position.subtype ?: s.selectedSubtype,
+                    karat = position.karat ?: s.karat,
+                    // Fon pozisyonunun kimligi "pos_<fon anahtari>" bicimindedir;
+                    // secim bununla eslesmezse kayit yeni bir pozisyona yazilir.
+                    selectedFundKey = position.id.removePrefix("pos_")
+                        .takeIf { position.assetClass == AssetClass.Fund },
+                    side = transaction.side,
+                    quantityText = Money.number(
+                        transaction.quantity,
+                        if (position.unit == QuantityUnit.Gram) 1 else 0,
+                    ),
+                    unitPriceText = Money.number(transaction.unitPrice, s.priceDecimals),
+                    priceManual = true,
+                    date = transaction.date,
+                    isToday = false,
+                    feeText = transaction.fee.takeIf { it > 0.0 }?.let { Money.number(it, 0) }
+                        .orEmpty(),
+                    note = transaction.note.orEmpty(),
+                    storage = transaction.storage.orEmpty(),
+                    // Not, iscilik veya saklama doluysa alan kapali kalmamali.
+                    extraExpanded = transaction.fee > 0.0 ||
+                        !transaction.note.isNullOrBlank() ||
+                        !transaction.storage.isNullOrBlank(),
+                )
+            )
+        }
+    }
+
     // --- Kaydetme ----------------------------------------------------------
 
     private fun save() {
@@ -207,7 +271,19 @@ class AddTransactionViewModel(
         }
     }
 
+    /**
+     * Duzenleme once YAZAR, sonra siler.
+     *
+     * Ters sirada, tek islemi olan bir varlikta pozisyon bir an icin bosalir:
+     * defter bosalinca pozisyon dusuyor ve Varlik Detayi kendini listeye atiyor.
+     * Kullanici kaydini duzeltirken ekrandan atilmis olurdu.
+     *
+     * Silme yerine ustune yazmak da yetmez: kullanici varlik turunu de
+     * degistirebilir (yanlislikla Ceyrek yerine Yarim girmis olabilir) ve kayit
+     * o zaman baska bir pozisyona tasinmalidir.
+     */
     private suspend fun writeTransaction(s: AddTransactionUiState) {
+        val replaced = s.editingTransactionId
         run {
             val position = positions.firstOrNull { it.matches(s) }
             val positionId = position?.id ?: newPositionId(s)
@@ -255,6 +331,8 @@ class AddTransactionViewModel(
                 )
             )
         }
+
+        if (replaced != null) portfolioRepository.deleteTransaction(replaced)
     }
 }
 

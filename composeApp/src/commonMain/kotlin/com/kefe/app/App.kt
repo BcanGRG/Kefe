@@ -158,8 +158,17 @@ private fun KefeApp(
     var saveError by remember { mutableStateOf<String?>(null) }
     var addSheetSide by remember { mutableStateOf(TradeSide.Buy) }
 
+    // Duzenlenen islemin kimligi; null ise sheet yeni kayit icin acilir.
+    var addSheetEditId by remember { mutableStateOf<String?>(null) }
+
     fun openAddSheet(side: TradeSide = TradeSide.Buy) {
         addSheetSide = side
+        addSheetEditId = null
+        addSheetVisible = true
+    }
+
+    fun openEditSheet(transactionId: String) {
+        addSheetEditId = transactionId
         addSheetVisible = true
     }
 
@@ -382,7 +391,7 @@ private fun KefeApp(
                                     state = state,
                                     onIntent = vm::onIntent,
                                     onBack = { goBack() },
-                                    onEditTransaction = {},
+                                    onEditTransaction = { openEditSheet(it) },
                                     onAddBuy = { openAddSheet(TradeSide.Buy) },
                                     onAddSell = { openAddSheet(TradeSide.Sell) },
                                     onOpenMenu = {},
@@ -496,9 +505,16 @@ private fun KefeApp(
             val addVm = koinViewModel<AddTransactionViewModel>()
             val addState by addVm.state.collectAsState()
 
-            // Alis/Satis on-secimi: sheet hangi butondan acildiysa o sekmeyle gelir.
-            LaunchedEffect(addSheetSide) {
-                addVm.onIntent(AddTransactionIntent.SelectSide(addSheetSide))
+            // Duzenlemede alan degerleri kayittan gelir - alis/satis dahil.
+            // Yeni kayitta form sifirlanir: ViewModel sheet kapaninca olmedigi
+            // icin bir onceki acilisin alanlari duruyordu.
+            LaunchedEffect(addSheetSide, addSheetEditId) {
+                val editId = addSheetEditId
+                if (editId != null) {
+                    addVm.onIntent(AddTransactionIntent.EditTransaction(editId))
+                } else {
+                    addVm.onIntent(AddTransactionIntent.StartNew(addSheetSide))
+                }
             }
 
             // Kaydetme sonucu bir OLAY, durum degil: bayrak olarak tutulsaydi

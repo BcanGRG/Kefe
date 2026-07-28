@@ -127,7 +127,10 @@ fun AddTransactionSheet(
 
             if (state.offline) OfflineStrip()
 
-            state.lastAdded?.let { last ->
+            // "Tekrar ekle" duzenlemede gizlenir: kisayol YENI kayit icindir,
+            // burada dokunmak duzeltilen islemi baska bir kaydin degerleriyle
+            // ezerdi.
+            state.lastAdded?.takeUnless { state.isEditing }?.let { last ->
                 RepeatRow(
                     label = last.label,
                     offline = state.offline,
