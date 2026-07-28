@@ -75,6 +75,7 @@ import com.kefe.app.ui.screens.account.SettingsViewModel
 import com.kefe.app.ui.screens.account.ShareScreen
 import com.kefe.app.ui.screens.account.ShareViewModel
 import com.kefe.app.ui.screens.account.ThemeMode
+import com.kefe.app.ui.screens.assets.AssetDetailEffect
 import com.kefe.app.ui.screens.assets.AssetDetailScreen
 import com.kefe.app.ui.screens.assets.AssetDetailViewModel
 import com.kefe.app.ui.screens.assets.AssetsScreen
@@ -366,6 +367,16 @@ private fun KefeApp(
                                 parametersOf(key.positionId)
                             }
                             val state by vm.state.collectAsState()
+
+                            // Son islem silinince varlik listeden duser; ekranda
+                            // kalmak kullaniciyi "Varlik bulunamadi" bos
+                            // durumunda birakiyordu.
+                            CollectEffects(vm.effects) { effect ->
+                                when (effect) {
+                                    AssetDetailEffect.PositionGone -> goBack()
+                                }
+                            }
+
                             ContentWidth {
                                 AssetDetailScreen(
                                     state = state,

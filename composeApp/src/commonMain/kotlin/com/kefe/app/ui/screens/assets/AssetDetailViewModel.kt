@@ -15,10 +15,13 @@ import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -39,8 +42,18 @@ class AssetDetailViewModel(
     private val _state = MutableStateFlow(AssetDetailUiState())
     val state: StateFlow<AssetDetailUiState> = _state.asStateFlow()
 
+    private val _effects = Channel<AssetDetailEffect>(capacity = 4)
+    val effects: Flow<AssetDetailEffect> = _effects.receiveAsFlow()
+
     private var historyJob: Job? = null
     private var watchedAssetKey: String? = null
+
+    /**
+     * Varlik bir kez gorulduyse, sonradan kaybolmasi SILINDIGI anlamina gelir.
+     * Bu ayrim onemli: ilk yuklemede pozisyon henuz gelmemis olabilir, o zaman
+     * ekrandan cikilmamali.
+     */
+    private var everSeen = false
 
     init {
         viewModelScope.launch {
@@ -52,7 +65,15 @@ class AssetDetailViewModel(
             ) { positions, transactions, members, board ->
                 val position = positions.firstOrNull { it.id == positionId }
                 buildState(position, transactions, members, board)
-            }.collect { _state.value = it }
+            }.collect { next ->
+                _state.value = next
+                if (next.position != null) {
+                    everSeen = true
+                } else if (everSeen) {
+                    everSeen = false
+                    _effects.trySend(AssetDetailEffect.PositionGone)
+                }
+            }
         }
     }
 
