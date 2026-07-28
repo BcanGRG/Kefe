@@ -46,6 +46,7 @@ import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.ui.components.KefeBottomSheet
 import com.kefe.app.ui.components.KefeDashedCard
 import com.kefe.app.ui.components.KefeHairline
+import com.kefe.app.ui.components.KefePullToRefresh
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeTextButton
@@ -83,17 +84,23 @@ fun MarketScreen(
         Column(Modifier.fillMaxSize()) {
             MarketTopBar(state = state, onIntent = onIntent, onBack = onBack)
 
-            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                stickyHeader { MarketTableHeader() }
+            KefePullToRefresh(
+                refreshing = state.refreshing,
+                onRefresh = { onIntent(MarketIntent.Refresh) },
+                modifier = Modifier.weight(1f),
+            ) {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    stickyHeader { MarketTableHeader() }
 
-                items(
-                    items = state.sections,
-                    key = { it.assetClass.name },
-                ) { section ->
-                    MarketSectionBlock(section = section, onIntent = onIntent)
+                    items(
+                        items = state.sections,
+                        key = { it.assetClass.name },
+                    ) { section ->
+                        MarketSectionBlock(section = section, onIntent = onIntent)
+                    }
+
+                    item { MarketSafetyValveNote() }
                 }
-
-                item { MarketSafetyValveNote() }
             }
         }
 

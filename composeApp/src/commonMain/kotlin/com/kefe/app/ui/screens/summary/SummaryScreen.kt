@@ -71,6 +71,7 @@ import com.kefe.app.ui.components.KefePendingBadge
 import com.kefe.app.ui.components.KefePeriodChips
 import com.kefe.app.ui.components.KefeProgressBar
 import com.kefe.app.ui.components.KefeProgressBarThin
+import com.kefe.app.ui.components.KefePullToRefresh
 import com.kefe.app.ui.components.KefeSkeletonBlock
 import com.kefe.app.ui.components.KefeStaleBanner
 import com.kefe.app.ui.components.KefeSyncChip
@@ -135,17 +136,27 @@ fun SummaryScreen(
             PriceFreshness.Fresh -> Unit
         }
 
-        when (state.stage) {
-            SummaryStage.Loading -> SummarySkeleton()
-            SummaryStage.Empty -> SummaryEmpty(onOpenGoals = onOpenGoals, onAddAsset = onAddAsset)
-            SummaryStage.Ready -> SummaryContent(
-                state = state,
-                onIntent = onIntent,
-                onOpenGoal = onOpenGoal,
-                onOpenGoals = onOpenGoals,
-                onOpenActivity = onOpenActivity,
-                onOpenMarket = onOpenMarket,
-            )
+        // Asagi cekip yenileme - fiyat tazelemenin telefondaki refleks hareketi.
+        // Ust bardaki dugme duruyor; bu onun yerine degil yanina.
+        KefePullToRefresh(
+            refreshing = state.refreshing,
+            onRefresh = { onIntent(SummaryIntent.Refresh) },
+        ) {
+            when (state.stage) {
+                SummaryStage.Loading -> SummarySkeleton()
+                SummaryStage.Empty -> SummaryEmpty(
+                    onOpenGoals = onOpenGoals,
+                    onAddAsset = onAddAsset,
+                )
+                SummaryStage.Ready -> SummaryContent(
+                    state = state,
+                    onIntent = onIntent,
+                    onOpenGoal = onOpenGoal,
+                    onOpenGoals = onOpenGoals,
+                    onOpenActivity = onOpenActivity,
+                    onOpenMarket = onOpenMarket,
+                )
+            }
         }
     }
 }

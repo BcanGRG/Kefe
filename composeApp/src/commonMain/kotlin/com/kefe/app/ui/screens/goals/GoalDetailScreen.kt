@@ -61,6 +61,8 @@ import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefeSlider
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.quantityLabel
+import com.kefe.app.ui.format.shortQuantityLabel
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
@@ -271,14 +273,24 @@ private fun AssignedAssetsCard(
                             .background(c.assetClass(position.assetClass.color())),
                     )
                     Spacer(Modifier.width(Space.x10))
-                    Text(
-                        text = position.name,
-                        style = t.body,
-                        color = c.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = position.name,
+                            style = t.body,
+                            color = c.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        // Miktar da yazilir: "₺19.587" tek basina kac ceyrek
+                        // oldugunu soylemiyor.
+                        Text(
+                            text = position.quantityLabel(),
+                            style = t.micro,
+                            color = c.onSurfaceMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     Spacer(Modifier.width(Space.x8))
                     Text(
                         text = Money.tl(position.value),
@@ -367,7 +379,8 @@ private fun AssetPickerSheet(
                     Spacer(Modifier.width(Space.x12))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = item.position.name,
+                            text = item.position.name + " · " +
+                                item.position.shortQuantityLabel(),
                             style = t.body,
                             color = c.onSurface,
                             maxLines = 1,

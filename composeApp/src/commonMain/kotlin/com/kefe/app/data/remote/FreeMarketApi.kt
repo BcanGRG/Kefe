@@ -1,5 +1,6 @@
 package com.kefe.app.data.remote
 
+import com.kefe.app.domain.model.Currency
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -88,11 +89,14 @@ class FreeMarketApi(private val client: HttpClient) {
          * donuyor, gerisi bu uygulamada karsiliksiz.
          *
          * YIA = yirmi iki ayar. GRA = gram altin (24 ayar).
+         *
+         * Doviz de buradan gelir: kaynak 64 para birimini DAKIKADA BIR, alis ve
+         * satisiyla veriyor. Ayni istek oldugu icin ek ag maliyeti yok.
          */
         val SYMBOLS = listOf(
             "GRA", "CEYREKALTIN", "YARIMALTIN", "TAMALTIN", "ATAALTIN",
             "YIA", "18AYARALTIN", "14AYARALTIN", "HAS", "GUMUS",
-        )
+        ) + Currency.entries.map { it.code }
     }
 }
 

@@ -29,7 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.Position
-import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.label
 import com.kefe.app.ui.components.KefeEmptyState
@@ -39,6 +38,7 @@ import com.kefe.app.ui.components.KefeManualBadge
 import com.kefe.app.ui.components.KefeSectionHeader
 import com.kefe.app.ui.components.KefeSkeletonBlock
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.quantityLabel
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcons
 import com.kefe.app.ui.theme.KefeShapes
@@ -275,39 +275,3 @@ private fun AssetClass.icon() = when (this) {
     AssetClass.Cash -> KefeIcons.Cash
 }
 
-/**
- * Satir alt metni: "8 adet", "62,4 gr", "12.400 pay × ₺24,60".
- *
- * Ayar bilgisi yalniz adda gecmiyorsa eklenir - "22 Ayar Bilezik" satirinda
- * tekrar etmesin, "Anneannemin Bileziği · 22 ayar" satirinda kaybolmasin diye.
- */
-private fun Position.quantityLabel(): String {
-    val base = when (unit) {
-        QuantityUnit.Piece ->
-            Money.quantity(quantity, unit.label())
-
-        QuantityUnit.Gram ->
-            Money.quantity(quantity, unit.label(), quantityDecimals())
-
-        QuantityUnit.Share ->
-            Money.quantity(quantity, unit.label()) + " × " + Money.tl(unitPrice, decimals = 2)
-
-        QuantityUnit.Currency ->
-            if (assetClass == AssetClass.Cash) {
-                "TL"
-            } else {
-                Money.number(quantity) + " × " + Money.tl(unitPrice, decimals = 2)
-            }
-    }
-
-    val karatLabel = karat?.label()
-    return if (karatLabel != null && !name.contains(karatLabel, ignoreCase = true)) {
-        "$base · $karatLabel"
-    } else {
-        base
-    }
-}
-
-/** Tam sayi miktarlarda ondalik yazilmaz: 15 gr, 62,4 gr. */
-private fun Position.quantityDecimals(): Int =
-    if (quantity == quantity.toLong().toDouble()) 0 else 1
