@@ -54,6 +54,8 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 unit = position.unit,
                 unitPrice = position.unitPrice,
                 manualPrice = position.manualPrice,
+                // Ornek veri: zaman damgasi 0, esitlemede en eski sayilir.
+                updatedAt = 0L,
                 dailyChangePercent = position.dailyChangePercent,
             )
             // Ornek pozisyonlarin cogunda defter yok; miktar/maliyet defterden
@@ -82,6 +84,8 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 note = entry.note,
                 storage = entry.storage,
                 addedByMemberId = entry.addedByMemberId,
+                // Ornek veri: zaman damgasi 0, esitlemede en eski sayilir.
+                updatedAt = 0L,
                 syncState = entry.syncState,
             )
         }
@@ -103,6 +107,8 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 sortOrder = goal.order.toLong(),
                 estimatedYear = goal.estimatedArrival?.year?.toLong(),
                 estimatedMonth = goal.estimatedArrival?.month?.toLong(),
+                // Ornek veri: zaman damgasi 0, esitlemede en eski sayilir.
+                updatedAt = 0L,
                 estimatedDay = goal.estimatedArrival?.day?.toLong(),
             )
         }
@@ -130,6 +136,8 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 dateMonth = snapshot.date.month.toLong(),
                 dateDay = snapshot.date.day.toLong(),
                 totalValue = snapshot.totalValue,
+                // Ornek veri: zaman damgasi 0, esitlemede en eski sayilir.
+                updatedAt = 0L,
                 principal = snapshot.principal,
             )
         }

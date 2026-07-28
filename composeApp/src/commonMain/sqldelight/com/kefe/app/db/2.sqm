@@ -1,0 +1,36 @@
+-- Surum 2 -> 3: esitleme icin zaman damgasi ve mezar tasi.
+--
+-- NEDEN MEZAR TASI: hard delete cogaltilamaz. Bir islemi silersem ve es
+-- cevrimdisiysa, o dondugunde kendi cihazindaki kopya bana geri gelir - silinen
+-- kayit dirilir. Silme artik bir YAZMA islemidir: deletedAt doldurulur, satir
+-- yerinde kalir ve "silindi" bilgisi de esitlenebilir.
+--
+-- updatedAt cakisma cozumu icin: iki cihaz ayni satiri degistirdiginde hangisinin
+-- daha yeni oldugunu soyleyen tek sey bu.
+--
+-- Var olan satirlar updatedAt = 0 ile baslar; sunucudan gelen her sey daha yeni
+-- sayilir ve ilk esitlemede yerel veri kaybolmaz cunku ilk esitleme PUSH yonunde
+-- calisacak (bkz. 7.4).
+
+ALTER TABLE transactions ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE transactions ADD COLUMN deletedAt INTEGER;
+
+ALTER TABLE positions ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE positions ADD COLUMN deletedAt INTEGER;
+
+ALTER TABLE goals ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE goals ADD COLUMN deletedAt INTEGER;
+
+ALTER TABLE goal_assets ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE goal_assets ADD COLUMN deletedAt INTEGER;
+
+ALTER TABLE daily_snapshots ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE manual_prices ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE manual_prices ADD COLUMN deletedAt INTEGER;
+
+-- Esitleme "su tarihten sonra degisenler" diye soracak; indekssiz her sorgu tam
+-- tarama olurdu.
+CREATE INDEX transactions_updated ON transactions(updatedAt);
+CREATE INDEX goals_updated ON goals(updatedAt);
+CREATE INDEX positions_updated ON positions(updatedAt);

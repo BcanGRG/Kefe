@@ -30,6 +30,9 @@ CREATE TABLE transactions (
     storage TEXT,
     addedByMemberId TEXT NOT NULL,
     syncState TEXT AS SyncState NOT NULL DEFAULT 'Synced',
+    -- Esitleme alanlari; bkz. 2.sqm.
+    updatedAt INTEGER NOT NULL DEFAULT 0,
+    deletedAt INTEGER,
     -- Pozisyon silinince defteri de gitmeli. DIKKAT: SQLite'ta yabanci anahtar
     -- zorlamasi varsayilan olarak KAPALIDIR; surucu her baglantida
     -- "PRAGMA foreign_keys = ON" calistirmazsa bu satir hicbir sey yapmaz.
@@ -44,12 +47,14 @@ CREATE INDEX transactions_positionId ON transactions(positionId);
 selectAllTransactions:
 SELECT *
 FROM transactions
+WHERE deletedAt IS NULL
 ORDER BY dateYear DESC, dateMonth DESC, dateDay DESC, id;
 
 selectTransactionsByPosition:
 SELECT *
 FROM transactions
 WHERE positionId = :positionId
+AND deletedAt IS NULL
 ORDER BY dateYear DESC, dateMonth DESC, dateDay DESC, id;
 
 -- Maliyet hesabi icin AYRI sorgu: sira ekrandakinin tersi olmali.
@@ -66,28 +71,25 @@ selectTransactionsForCompute:
 SELECT *
 FROM transactions
 WHERE positionId = :positionId
+AND deletedAt IS NULL
 ORDER BY dateYear ASC, dateMonth ASC, dateDay ASC, rowid ASC;
 
 selectTransactionById:
 SELECT *
 FROM transactions
-WHERE id = :id;
+WHERE id = :id AND deletedAt IS NULL;
 
 countTransactions:
 SELECT count(*)
-FROM transactions;
+FROM transactions
+WHERE deletedAt IS NULL;
 
--- DIKKAT - KIMLIK CAKISMASI: islem kimligi bugun icerikten turetiliyor
--- ("tx_<pozisyon>_<yil>-<ay>-<gun>_<miktar>"), yani ayni gun ayni pozisyona ayni
--- miktarda ikinci alim AYNI kimligi uretir. Bellekte iki satir sessizce olusuyordu.
---
--- Burada bilerek duz INSERT var: "OR REPLACE" ikinci alimi birincinin uzerine
--- yazar ve kullanicinin islemi kaybolur - duzeltmeye calistigimiz sorunun ta
--- kendisi. Cagiran taraf once selectTransactionById ile bakip benzersiz bir
--- kimlik uretmeli; aksi halde bu sorgu PRIMARY KEY ihlaliyle atar.
+-- Kimlik artik UUID (bkz. 7.1): iceriginden turetilmiyor, dolayisiyla ayni gun
+-- ayni miktarda ikinci alim kendi satirini alir. Duz INSERT bilerek: "OR REPLACE"
+-- bir cakismada kullanicinin islemini sessizce ezerdi.
 insertTransaction:
-INSERT INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState)
-VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, :syncState);
+INSERT INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState, updatedAt)
+VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, :syncState, :updatedAt);
 
 updateTransaction:
 UPDATE transactions
@@ -102,18 +104,23 @@ SET positionId = :positionId,
     note = :note,
     storage = :storage,
     addedByMemberId = :addedByMemberId,
-    syncState = :syncState
+    syncState = :syncState,
+    updatedAt = :updatedAt
 WHERE id = :id;
 
+-- SILME BIR YAZMADIR: satir yerinde kalir, deletedAt doldurulur. Hard delete
+-- cogaltilamaz - es cevrimdisiyken silinen kayit, o dondugunde geri dirilirdi.
 deleteTransactionById:
-DELETE FROM transactions
+UPDATE transactions
+SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE id = :id;
 
 -- Pozisyon silinirken CASCADE zaten calisir; bu sorgu pragma foreign_keys kapali
 -- kalirsa diye acik yol birakir.
 deleteTransactionsByPosition:
-DELETE FROM transactions
-WHERE positionId = :positionId;
+UPDATE transactions
+SET deletedAt = :deletedAt, updatedAt = :deletedAt
+WHERE positionId = :positionId AND deletedAt IS NULL;
 
 deleteAllTransactions:
 DELETE FROM transactions;

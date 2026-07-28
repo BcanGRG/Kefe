@@ -26,6 +26,8 @@ CREATE TABLE positions (
     quantity REAL NOT NULL DEFAULT 0.0,
     cost REAL NOT NULL DEFAULT 0.0,
     value REAL NOT NULL DEFAULT 0.0
+    ,updatedAt INTEGER NOT NULL DEFAULT 0
+    ,deletedAt INTEGER
 );
 
 -- Ekranlarin gordugu liste. Miktari sifirlanan pozisyon SATIR OLARAK SILINMEZ,
@@ -42,6 +44,7 @@ selectActivePositions:
 SELECT *
 FROM positions
 WHERE quantity > 0.0
+AND deletedAt IS NULL
 ORDER BY value DESC, name;
 
 -- Miktari sifirlanmislar dahil. Meta arama ve "daha once tanimlanmis miydi"
@@ -49,12 +52,13 @@ ORDER BY value DESC, name;
 selectAllPositions:
 SELECT *
 FROM positions
+WHERE deletedAt IS NULL
 ORDER BY name;
 
 selectPositionById:
 SELECT *
 FROM positions
-WHERE id = :id;
+WHERE id = :id AND deletedAt IS NULL;
 
 countPositions:
 SELECT count(*)
@@ -67,8 +71,8 @@ FROM positions;
 --    sistem SQLite'i daha eski.
 -- Cagiran taraf: insertOrIgnorePosition + updatePositionMeta, tek transaction.
 insertOrIgnorePosition:
-INSERT OR IGNORE INTO positions(id, name, assetClass, subtype, karat, unit, unitPrice, manualPrice, dailyChangePercent, quantity, cost, value)
-VALUES (:id, :name, :assetClass, :subtype, :karat, :unit, :unitPrice, :manualPrice, :dailyChangePercent, 0.0, 0.0, 0.0);
+INSERT OR IGNORE INTO positions(id, name, assetClass, subtype, karat, unit, unitPrice, manualPrice, dailyChangePercent, quantity, cost, value, updatedAt)
+VALUES (:id, :name, :assetClass, :subtype, :karat, :unit, :unitPrice, :manualPrice, :dailyChangePercent, 0.0, 0.0, 0.0, :updatedAt);
 
 updatePositionMeta:
 UPDATE positions
@@ -79,7 +83,11 @@ SET name = :name,
     unit = :unit,
     unitPrice = :unitPrice,
     manualPrice = :manualPrice,
-    dailyChangePercent = :dailyChangePercent
+    dailyChangePercent = :dailyChangePercent,
+    updatedAt = :updatedAt,
+    -- Yeniden eklenen varlik dirilir: kullanici sildigi ceyregi tekrar
+    -- girdiginde yeni bir satir degil ayni satir devam etmeli.
+    deletedAt = NULL
 WHERE id = :id;
 
 -- recomputePosition'in yazma ucu: miktar/maliyet/deger defterden gelir.
@@ -106,7 +114,8 @@ WHERE id = :id;
 -- diye Transaction.sq'daki deleteTransactionsByPosition ile birlikte cagirilmasi
 -- guvenlidir.
 deletePositionById:
-DELETE FROM positions
+UPDATE positions
+SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE id = :id;
 
 deleteAllPositions:

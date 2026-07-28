@@ -142,9 +142,13 @@ class SqlDelightPortfolioRepository(
     override suspend fun assignPositionToGoal(positionId: String, goalId: String?) {
         withContext(dispatcher) {
             if (goalId == null) {
-                goalAssetQueries.clearPositionAssignment(positionId)
+                goalAssetQueries.clearPositionAssignment(positionId = positionId, deletedAt = clock.nowEpochMillis())
             } else {
-                goalAssetQueries.assignPositionToGoal(positionId = positionId, goalId = goalId)
+                goalAssetQueries.assignPositionToGoal(
+                    positionId = positionId,
+                    goalId = goalId,
+                    updatedAt = clock.nowEpochMillis(),
+                )
             }
         }
     }
@@ -178,12 +182,11 @@ class SqlDelightPortfolioRepository(
     override suspend fun addTransaction(transaction: Transaction) {
         withContext(dispatcher) {
             database.transaction {
-                // Kimlik icerikten turetiliyor ("tx_<pozisyon>_<tarih>_<miktar>"),
-                // yani ayni gun ayni miktarda ikinci alim AYNI kimligi uretir.
-                // Bellekte iki satir sessizce olusuyordu; burada duz INSERT
-                // birincil anahtar ihlaliyle atardi. Kullanicinin ikinci islemi
-                // kaybolmasin diye kimlik burada tekillestirilir.
-                val stored = transaction.copy(id = uniqueTransactionId(transaction.id))
+                // Kimlik cagiran taraftan UUID olarak gelir; burada tekillestirme
+                // YOK. Once icerikten turetiliyordu ve carpisanlari burada "_2"
+                // ekleyerek ayiriyorduk - iki cihazda o cozum bozuluyor, cunku
+                // her cihaz kendi numarasini bagimsiz veriyor.
+                val stored = transaction
 
                 transactionQueries.insertTransaction(
                     id = stored.id,
@@ -199,6 +202,7 @@ class SqlDelightPortfolioRepository(
                     storage = stored.storage,
                     addedByMemberId = stored.addedByMemberId,
                     syncState = stored.syncState,
+                    updatedAt = clock.nowEpochMillis(),
                 )
                 recomputePosition(stored.positionId)
                 appendActivity(stored)
@@ -211,7 +215,7 @@ class SqlDelightPortfolioRepository(
             database.transaction {
                 val removed = transactionQueries.selectTransactionById(transactionId)
                     .executeAsOneOrNull() ?: return@transaction
-                transactionQueries.deleteTransactionById(transactionId)
+                transactionQueries.deleteTransactionById(deletedAt = clock.nowEpochMillis(), id = transactionId)
                 // Aktivite satiri da gider. Kalirsa Aktivite akisi silinmis bir
                 // islemi "ekledi" diye gostermeye devam eder ve Islem Ekle'deki
                 // "son eklediginiz" kisayolu artik var olmayan bir kaydi onerir.
@@ -368,6 +372,7 @@ class SqlDelightPortfolioRepository(
                         unitPrice = position.unitPrice,
                         manualPrice = position.manualPrice,
                         dailyChangePercent = 0.0,
+                        updatedAt = clock.nowEpochMillis(),
                     )
                 }
 
@@ -386,6 +391,7 @@ class SqlDelightPortfolioRepository(
                         storage = tx.storage,
                         addedByMemberId = tx.addedByMemberId,
                         syncState = SyncState.Synced,
+                        updatedAt = clock.nowEpochMillis(),
                     )
                 }
 
@@ -410,6 +416,7 @@ class SqlDelightPortfolioRepository(
                         estimatedYear = null,
                         estimatedMonth = null,
                         estimatedDay = null,
+                        updatedAt = clock.nowEpochMillis(),
                     )
                 }
 
@@ -418,6 +425,7 @@ class SqlDelightPortfolioRepository(
                     goalAssetQueries.assignPositionToGoal(
                         positionId = assignment.positionId,
                         goalId = assignment.goalId,
+                        updatedAt = clock.nowEpochMillis(),
                     )
                 }
 
@@ -428,6 +436,7 @@ class SqlDelightPortfolioRepository(
                         dateDay = snapshot.day.toLong(),
                         totalValue = snapshot.totalValue,
                         principal = snapshot.principal,
+                        updatedAt = clock.nowEpochMillis(),
                     )
                 }
 
@@ -473,6 +482,7 @@ class SqlDelightPortfolioRepository(
                 dateDay = snapshot.date.day.toLong(),
                 totalValue = snapshot.totalValue,
                 principal = snapshot.principal,
+                updatedAt = clock.nowEpochMillis(),
             )
         }
     }
@@ -502,23 +512,6 @@ class SqlDelightPortfolioRepository(
         )
     }
 
-    /**
-     * Cakisan kimlige bos bir sira bulur. Kayit sayisi bir avuc oldugu icin
-     * dongu pratikte bir tur doner.
-     */
-    private fun uniqueTransactionId(candidate: String): String {
-        if (transactionQueries.selectTransactionById(candidate).executeAsOneOrNull() == null) {
-            return candidate
-        }
-        var suffix = 2
-        while (
-            transactionQueries.selectTransactionById("${candidate}_$suffix")
-                .executeAsOneOrNull() != null
-        ) {
-            suffix++
-        }
-        return "${candidate}_$suffix"
-    }
 
     /** Yeni islem Aktivite akisina da dusmeli - tasarimda "kim ne ekledi" oradan okunur. */
     private fun appendActivity(transaction: Transaction) {
@@ -575,6 +568,7 @@ class SqlDelightPortfolioRepository(
                     unitPrice = position.unitPrice,
                     manualPrice = position.manualPrice,
                     dailyChangePercent = position.dailyChangePercent,
+                    updatedAt = clock.nowEpochMillis(),
                 )
                 positionQueries.updatePositionMeta(
                     name = position.name,
@@ -586,6 +580,7 @@ class SqlDelightPortfolioRepository(
                     manualPrice = position.manualPrice,
                     dailyChangePercent = position.dailyChangePercent,
                     id = position.id,
+                    updatedAt = clock.nowEpochMillis(),
                 )
                 // Defter zaten doluysa miktar/maliyet oradan gelsin.
                 recomputePosition(position.id)
@@ -598,8 +593,8 @@ class SqlDelightPortfolioRepository(
             database.transaction {
                 // CASCADE zaten silerdi; yabanci anahtar zorlamasi kapali bir
                 // surucuye dusulurse diye defter acikca temizlenir.
-                transactionQueries.deleteTransactionsByPosition(positionId)
-                positionQueries.deletePositionById(positionId)
+                transactionQueries.deleteTransactionsByPosition(deletedAt = clock.nowEpochMillis(), positionId = positionId)
+                positionQueries.deletePositionById(deletedAt = clock.nowEpochMillis(), id = positionId)
             }
         }
     }
@@ -625,13 +620,14 @@ class SqlDelightPortfolioRepository(
                 estimatedYear = goal.estimatedArrival?.year?.toLong(),
                 estimatedMonth = goal.estimatedArrival?.month?.toLong(),
                 estimatedDay = goal.estimatedArrival?.day?.toLong(),
+                updatedAt = clock.nowEpochMillis(),
             )
         }
     }
 
     override suspend fun deleteGoal(goalId: String) {
         withContext(dispatcher) {
-            goalQueries.deleteGoalById(goalId)
+            goalQueries.deleteGoalById(deletedAt = clock.nowEpochMillis(), id = goalId)
         }
     }
 

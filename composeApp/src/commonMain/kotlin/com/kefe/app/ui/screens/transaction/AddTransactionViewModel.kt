@@ -17,6 +17,7 @@ import com.kefe.app.domain.model.SyncState
 import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.buyPrice
+import com.kefe.app.domain.model.newId
 import com.kefe.app.domain.model.priceKey
 import com.kefe.app.domain.model.sellPrice
 import com.kefe.app.domain.repository.PortfolioRepository
@@ -341,7 +342,11 @@ class AddTransactionViewModel(
 
             portfolioRepository.addTransaction(
                 Transaction(
-                    id = transactionId(positionId, s),
+                    // UUID. Kimlik once icerikten turetiliyordu ve ayni gun ayni
+                    // miktarda ikinci alim ayniyi uretiyordu; depo bunu yerelde
+                    // "_2" ekleyerek cozuyordu. Iki cihazda o cozum bozulur:
+                    // her cihaz kendi numaralandirmasini yapar.
+                    id = newId(),
                     positionId = positionId,
                     date = s.date,
                     side = s.side,
@@ -536,10 +541,3 @@ private fun newPositionName(s: AddTransactionUiState): String = when (s.assetCla
     AssetClass.Cash -> "Nakit"
 }
 
-/**
- * Kimlik uretici yok (ortak kodda UUID/saat yok); anahtar pozisyon, tarih ve
- * miktardan turetilir - ayni islemin iki kez yazilmasini da engeller.
- */
-private fun transactionId(positionId: String, s: AddTransactionUiState): String =
-    "tx_" + positionId + "_" + s.date.year + "-" + s.date.month + "-" + s.date.day +
-        "_" + s.quantityText.replace(',', '-')
