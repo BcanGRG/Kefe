@@ -64,3 +64,14 @@ data class AssetDetailUiState(
 sealed interface AssetDetailIntent {
     data class DeleteTransaction(val transactionId: String) : AssetDetailIntent
 }
+
+sealed interface AssetDetailEffect {
+    /**
+     * Varlik artik listede degil - son islemi de silindi.
+     *
+     * Ekranda kalmak "Varlik bulunamadi" bos durumunda birakiyordu: kullanici
+     * kendi sildigi seyin kaybolma haberini okuyup geri tusunu aramak zorunda
+     * kaliyordu. Listeye donmek dogru davranis.
+     */
+    data object PositionGone : AssetDetailEffect
+}

@@ -1,5 +1,8 @@
 package com.kefe.app
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -72,6 +75,7 @@ import com.kefe.app.ui.screens.account.SettingsViewModel
 import com.kefe.app.ui.screens.account.ShareScreen
 import com.kefe.app.ui.screens.account.ShareViewModel
 import com.kefe.app.ui.screens.account.ThemeMode
+import com.kefe.app.ui.screens.assets.AssetDetailEffect
 import com.kefe.app.ui.screens.assets.AssetDetailScreen
 import com.kefe.app.ui.screens.assets.AssetDetailViewModel
 import com.kefe.app.ui.screens.assets.AssetsScreen
@@ -276,49 +280,74 @@ private fun KefeApp(
                     backStack = backStack,
                     modifier = Modifier.weight(1f),
                     onBack = { goBack() },
+                    // SEKME GECISI ANINDA OLUR.
+                    //
+                    // Varsayilan capraz solmada cikan ve giren ekran bir sure
+                    // AYNI ANDA cizilir; ekranlarin zemini saydam oldugu icin
+                    // ikisi ust uste binip okunuyordu - Ozet'in uzerinde
+                    // Hedefler'in "Hazir oneriler" cipleri hayalet gibi
+                    // gorunuyordu. Koyu temada daha belirgin, cunku karisan
+                    // metin dusuk kontrastli griye duser. Kullanicinin
+                    // "titreme" dedigi sey buydu; tekrar-besteleme degil.
+                    //
+                    // Alt navigasyonda sekmeler arasi animasyon zaten beklenen
+                    // bir sey degil - Android'in kendi davranisi da anidir.
+                    transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+                    popTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+                    predictivePopTransitionSpec = {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    },
                     entryProvider = entryProvider {
                         entry<LoginKey> {
                             val vm = koinViewModel<LoginViewModel>()
                             val state by vm.state.collectAsState()
-                            LoginScreen(
-                                state = state,
-                                onIntent = vm::onIntent,
-                                onStartOnboarding = {
-                                    onboardingPage = 0
-                                    goTo(OnboardingKey)
-                                },
-                                onEnterApp = { enterApp() },
-                            )
+                            ScreenSurface {
+                                LoginScreen(
+                                    state = state,
+                                    onIntent = vm::onIntent,
+                                    onStartOnboarding = {
+                                        onboardingPage = 0
+                                        goTo(OnboardingKey)
+                                    },
+                                    onEnterApp = { enterApp() },
+                                )
+                            }
                         }
 
                         entry<OnboardingKey> {
-                            OnboardingScreen(
-                                pageIndex = onboardingPage,
-                                onNext = {
-                                    if (onboardingPage < OnboardingPageCount - 1) {
-                                        onboardingPage++
-                                    } else {
-                                        enterApp()
-                                    }
-                                },
-                                onSkip = { enterApp() },
-                            )
+                            ScreenSurface {
+                                OnboardingScreen(
+                                    pageIndex = onboardingPage,
+                                    onNext = {
+                                        if (onboardingPage < OnboardingPageCount - 1) {
+                                            onboardingPage++
+                                        } else {
+                                            enterApp()
+                                        }
+                                    },
+                                    onSkip = { enterApp() },
+                                )
+                            }
                         }
 
                         entry<SummaryKey> {
-                            SummaryScreenAdaptive(
-                                state = summary,
-                                onIntent = summaryVm::onIntent,
-                                onOpenGoal = { goTo(GoalDetailKey(it)) },
-                                onOpenGoals = { selectTab(GoalsKey) },
-                                onOpenActivity = { goTo(ActivityKey) },
-                                onOpenMarket = { goTo(MarketKey) },
-                                onAddAsset = { openAddSheet() },
-                                marketRows = summary.marketRows,
-                                searchQuery = searchQuery,
-                                onSearchQueryChange = { searchQuery = it },
-                                onOpenMarketRow = { goTo(MarketKey) },
-                            )
+                            // Ozet ContentWidth'ten gecmez (kendi masaustu
+                            // duzenini cizer) ama opak zemine yine ihtiyaci var.
+                            ScreenSurface {
+                                SummaryScreenAdaptive(
+                                    state = summary,
+                                    onIntent = summaryVm::onIntent,
+                                    onOpenGoal = { goTo(GoalDetailKey(it)) },
+                                    onOpenGoals = { selectTab(GoalsKey) },
+                                    onOpenActivity = { goTo(ActivityKey) },
+                                    onOpenMarket = { goTo(MarketKey) },
+                                    onAddAsset = { openAddSheet() },
+                                    marketRows = summary.marketRows,
+                                    searchQuery = searchQuery,
+                                    onSearchQueryChange = { searchQuery = it },
+                                    onOpenMarketRow = { goTo(MarketKey) },
+                                )
+                            }
                         }
 
                         entry<AssetsKey> {
@@ -338,6 +367,16 @@ private fun KefeApp(
                                 parametersOf(key.positionId)
                             }
                             val state by vm.state.collectAsState()
+
+                            // Son islem silinince varlik listeden duser; ekranda
+                            // kalmak kullaniciyi "Varlik bulunamadi" bos
+                            // durumunda birakiyordu.
+                            CollectEffects(vm.effects) { effect ->
+                                when (effect) {
+                                    AssetDetailEffect.PositionGone -> goBack()
+                                }
+                            }
+
                             ContentWidth {
                                 AssetDetailScreen(
                                     state = state,
@@ -542,7 +581,27 @@ private fun BoxScope.ErrorBanner(message: String, onDismiss: () -> Unit) {
  */
 @Composable
 private fun ContentWidth(content: @Composable () -> Unit) {
-    Box(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize()) {
+    ScreenSurface {
+        Box(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize()) {
+            content()
+        }
+    }
+}
+
+/**
+ * Ekranin OPAK zemini.
+ *
+ * Gecis sirasinda cikan ve giren ekran bir sure ayni anda cizilir. Ekranlarin
+ * kendi zemini yoktu, ikisi de saydamdi; ust uste binip birbirinin icinden
+ * okunuyorlardi - Ozet'in uzerinde Hedefler'in cipleri hayalet gibi
+ * gorunuyordu. Koyu temada daha belirgindi, cunku karisan metin dusuk
+ * kontrastli griye dusuyor. Kullanicinin "titreme" dedigi seyin sebebi buydu.
+ *
+ * Zemin opak olunca ustteki ekran alttakini tamamen ortuyor.
+ */
+@Composable
+private fun ScreenSurface(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().background(KefeTheme.colors.surface)) {
         content()
     }
 }

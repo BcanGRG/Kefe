@@ -39,6 +39,15 @@ interface PriceRepository {
 
     fun observePrices(): Flow<PriceBoard>
 
+    /**
+     * Tek varligin gunluk fiyat gecmisi, eskiden yeniye.
+     *
+     * Guncel fiyat tablosu her yenilemede uzerine yazildigi icin gecmis ayri
+     * tutulur. Yeni bir varlikta liste bostur ya da tek elemanlidir - grafik o
+     * zaman cizilmez, uydurma bir egri gosterilmez.
+     */
+    fun observePriceHistory(assetKey: String): Flow<List<Double>>
+
     /** Kaynaktan yeniden ceker. Basarisizlikta son bilinen fiyatlar korunur. */
     suspend fun refresh(): Result<Unit>
 

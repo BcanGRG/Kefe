@@ -5,17 +5,19 @@ import app.cash.sqldelight.coroutines.mapToList
 import com.kefe.app.data.db.toDomain
 import com.kefe.app.data.remote.PriceRemoteDataSource
 import com.kefe.app.db.KefeDatabase
+import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.PriceSource
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.domain.repository.PriceRepository
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.CoroutineContext
 
 /**
  * Fiyat deposu.
@@ -32,6 +34,7 @@ import kotlin.coroutines.CoroutineContext
 class SqlDelightPriceRepository(
     private val database: KefeDatabase,
     private val remote: PriceRemoteDataSource,
+    private val clock: KefeClock,
     private val dispatcher: CoroutineContext = Dispatchers.Default,
 ) : PriceRepository {
 
@@ -74,9 +77,14 @@ class SqlDelightPriceRepository(
         )
     }
 
+    override fun observePriceHistory(assetKey: String): Flow<List<Double>> =
+        priceQueries.selectPriceHistory(assetKey).asFlow().mapToList(dispatcher)
+            .map { rows -> rows.map { it.price } }
+
     override suspend fun refresh(): Result<Unit> = runCatching {
         val prices = remote.fetchPrices()
         fetched.value = prices
+        val today = clock.today()
         withContext(dispatcher) {
             database.transaction {
                 prices.forEach { price ->
@@ -92,6 +100,16 @@ class SqlDelightPriceRepository(
                         // Gercek saat kaynagi gelene kadar 0: "2 saatten eski"
                         // kurali (PriceFreshness.Stale) bugun de isletilmiyor.
                         fetchedAtEpochSeconds = 0L,
+                    )
+                    // Gunun fiyati AYRICA gecmise yazilir: onbellek uzerine
+                    // yazildigi icin gecmisi tutamaz, gecmis fiyat da sonradan
+                    // ogrenilemez. Bugun yazilmazsa bugun kayiptir.
+                    priceQueries.upsertPriceHistory(
+                        assetKey = price.assetKey,
+                        dateYear = today.year.toLong(),
+                        dateMonth = today.month.toLong(),
+                        dateDay = today.day.toLong(),
+                        price = price.ask,
                     )
                 }
             }

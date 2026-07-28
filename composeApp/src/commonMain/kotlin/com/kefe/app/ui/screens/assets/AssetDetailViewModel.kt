@@ -2,26 +2,26 @@ package com.kefe.app.ui.screens.assets
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kefe.app.data.sample.SampleData
 import com.kefe.app.domain.KefeClock
-import com.kefe.app.domain.model.KefeDate
-import com.kefe.app.domain.model.annualizedReturnPercent
-import com.kefe.app.domain.model.costBasis
-import com.kefe.app.domain.model.holdingDays
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.PriceSource
-import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
-import com.kefe.app.domain.model.monthLabel
+import com.kefe.app.domain.model.annualizedReturnPercent
+import com.kefe.app.domain.model.costBasis
+import com.kefe.app.domain.model.holdingDays
 import com.kefe.app.domain.repository.PortfolioRepository
-import com.kefe.app.ui.charts.TradeMarker
-import com.kefe.app.ui.format.trUpper
+import com.kefe.app.domain.repository.PriceBoard
+import com.kefe.app.domain.repository.PriceRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
  */
 class AssetDetailViewModel(
     private val repo: PortfolioRepository,
+    private val priceRepository: PriceRepository,
     private val clock: KefeClock,
     private val positionId: String,
 ) : ViewModel() {
@@ -41,16 +42,54 @@ class AssetDetailViewModel(
     private val _state = MutableStateFlow(AssetDetailUiState())
     val state: StateFlow<AssetDetailUiState> = _state.asStateFlow()
 
+    private val _effects = Channel<AssetDetailEffect>(capacity = 4)
+    val effects: Flow<AssetDetailEffect> = _effects.receiveAsFlow()
+
+    private var historyJob: Job? = null
+    private var watchedAssetKey: String? = null
+
+    /**
+     * Varlik bir kez gorulduyse, sonradan kaybolmasi SILINDIGI anlamina gelir.
+     * Bu ayrim onemli: ilk yuklemede pozisyon henuz gelmemis olabilir, o zaman
+     * ekrandan cikilmamali.
+     */
+    private var everSeen = false
+
     init {
         viewModelScope.launch {
             combine(
                 repo.observePositions(),
                 repo.observeTransactions(positionId),
                 repo.observeMembers(),
-            ) { positions, transactions, members ->
+                priceRepository.observePrices(),
+            ) { positions, transactions, members, board ->
                 val position = positions.firstOrNull { it.id == positionId }
-                buildState(position, transactions, members)
-            }.collect { _state.value = it }
+                buildState(position, transactions, members, board)
+            }.collect { next ->
+                _state.value = next
+                if (next.position != null) {
+                    everSeen = true
+                } else if (everSeen) {
+                    everSeen = false
+                    _effects.trySend(AssetDetailEffect.PositionGone)
+                }
+            }
+        }
+    }
+
+    /**
+     * Fiyat gecmisi AYRI toplanir: hangi varligin gecmisi olduğu pozisyondan,
+     * yani yukaridaki akistan cikiyor. Ikisini tek combine'a koymak, pozisyon
+     * her degistiginde gecmis sorgusunu yeniden kurmayi gerektirirdi.
+     */
+    private fun observeHistory(assetKey: String) {
+        historyJob?.cancel()
+        historyJob = viewModelScope.launch {
+            priceRepository.observePriceHistory(assetKey).collect { series ->
+                // Tek nokta egri degildir: iki noktadan az veri varken grafik
+                // hic cizilmez (ekran zaten size >= 2 kontrolu yapiyor).
+                _state.value = _state.value.copy(priceSeries = series)
+            }
         }
     }
 
@@ -66,9 +105,19 @@ class AssetDetailViewModel(
         position: Position?,
         transactions: List<Transaction>,
         members: List<Member>,
+        board: PriceBoard,
     ): AssetDetailUiState {
         if (position == null) {
             return AssetDetailUiState(loading = false, members = members)
+        }
+
+        // Fiyat gecmisi bu varligin anahtarina baglidir; anahtar cozulunce
+        // dinlenmeye baslanir, degisirse eski dinleme birakilir.
+        val price = board.matchTo(position)
+        val assetKey = price?.assetKey
+        if (assetKey != null && assetKey != watchedAssetKey) {
+            watchedAssetKey = assetKey
+            observeHistory(assetKey)
         }
 
         // Yeniden eskiye: tasarimda islem gecmisi en son islemle baslar.
@@ -78,10 +127,6 @@ class AssetDetailViewModel(
                 .thenByDescending { it.date.day },
         )
         val oldest = ordered.lastOrNull()
-        val newest = ordered.firstOrNull()
-
-        val series = priceSeries(position)
-        val start = newest?.date?.let { monthIndex(it) - (SeriesLength - 1) }
 
         // Defterden turetilen maliyet. Islem yoksa pozisyondaki hazir degerlere
         // duseriz - ornek veride her pozisyonun gecmisi henuz yok.
@@ -100,12 +145,16 @@ class AssetDetailViewModel(
             position = position,
             transactions = ordered,
             members = members,
-            priceSeries = if (start == null) emptyList() else series,
-            tradeMarkers = if (start == null) emptyList() else markers(ordered, start),
-            axisLabels = if (start == null) emptyList() else axisLabels(start),
+            // Grafik AYRI akistan gelir; burada yeniden yazmak onu sifirlardi.
+            priceSeries = _state.value.priceSeries,
+            // Isaretciler ve eksen etiketleri gecmis serisine dayaniyordu;
+            // gercek seri gunluk ve daha yeni oldugu icin ikisi de bu turda
+            // bos birakildi - uydurma bir eksen cizmektense hic cizmemek dogru.
+            tradeMarkers = emptyList(),
+            axisLabels = emptyList(),
             averageBuyPrice = averagePrice,
             firstBuyDate = if (hasLedger) basis.firstBuy else oldest?.date,
-            priceSourceLabel = priceSourceLabel(position),
+            priceSourceLabel = priceSourceLabel(price, position),
             unrealizedProfit = if (hasLedger) {
                 basis.unrealizedProfit(position.unitPrice)
             } else {
@@ -121,40 +170,10 @@ class AssetDetailViewModel(
         )
     }
 
-    // --- Fiyat serisi ------------------------------------------------------
-
-    /**
-     * 12 aylik birim fiyat serisi. Depoda pozisyon bazli fiyat gecmisi yok;
-     * seri, tasarimdaki egrinin bicimi guncel birim fiyata olceklenerek uretilir.
-     * Gercek fiyat gecmisi geldiginde yalniz bu fonksiyon degisir.
-     */
-    private fun priceSeries(position: Position): List<Double> =
-        SeriesShape.map { it * position.unitPrice }
-
-    private fun markers(transactions: List<Transaction>, startMonth: Int): List<TradeMarker> =
-        transactions.mapNotNull { tx ->
-            val index = monthIndex(tx.date) - startMonth
-            if (index in 0 until SeriesLength) {
-                TradeMarker(index = index, isBuy = tx.side == TradeSide.Buy)
-            } else {
-                null
-            }
-        }
-
-    private fun axisLabels(startMonth: Int): List<String> =
-        listOf(0, SeriesLength / 2, SeriesLength - 1).map { offset ->
-            val date = dateOf(startMonth + offset)
-            "${date.monthLabel()} ${date.year % 100}"
-        }
-
     // --- Fiyat kaynagi -----------------------------------------------------
 
-    /**
-     * "Serbest piyasa · 14:32". Fiyat tablosu ornek veriden okunur: detay
-     * gorunumu fiyat deposuna baglanmadan da tutarli kalsin diye.
-     */
-    private fun priceSourceLabel(position: Position): String {
-        val price = matchPrice(position)
+    /** "Serbest piyasa · 14:32" - GERCEK fiyat tablosundan. */
+    private fun priceSourceLabel(price: Price?, position: Position): String {
         val source = when {
             position.manualPrice || price?.isManual == true -> PriceSource.Manual
             else -> price?.source ?: PriceSource.FreeMarket
@@ -162,28 +181,20 @@ class AssetDetailViewModel(
         val timestamp = price?.timestamp
         return if (timestamp.isNullOrBlank()) source.label() else "${source.label()} · $timestamp"
     }
-
-    private fun matchPrice(position: Position): Price? {
-        val prices = SampleData.prices
-        return prices.firstOrNull { it.label == position.name }
-            ?: prices.firstOrNull { position.name.startsWith(it.label) }
-            ?: prices.firstOrNull { position.name.startsWith(it.assetKey.substringAfterLast('_').trUpper()) }
-    }
 }
 
-/** Grafikteki nokta sayisi - tasarimdaki 12 aylik pencere. */
-private const val SeriesLength = 12
-
 /**
- * Tasarimdaki egrinin bicimi: son noktaya orani. Grafik kendi araligini
- * olceklendirdigi icin bu oranlar egriyi birebir yeniden uretir.
+ * Pozisyonu fiyat tablosundaki satirla eslestirir.
+ *
+ * Once ornek veriye bakiyordu; gercek fiyatlar bagli olmasina ragmen detay
+ * ekrani sabit bir tabloyu okuyordu ve kaynak etiketi cogu zaman bos kaliyordu.
+ *
+ * Eslesme ADA gore, cunku pozisyonun assetKey'i yok: pozisyon kullanicinin
+ * verdigi adi tasir ("Anneannemin Bileziği"), fiyat satiri ise turun adini
+ * ("22 Ayar"). Once tam ad, sonra baslangic eslesmesi denenir.
  */
-private val SeriesShape = listOf(
-    0.7472, 0.7717, 0.7898, 0.8143, 0.8449, 0.8664,
-    0.8872, 0.9117, 0.9298, 0.9513, 0.9728, 1.0,
-)
+private fun PriceBoard.matchTo(position: Position): Price? =
+    prices.firstOrNull { it.label == position.name }
+        ?: prices.firstOrNull { position.name.startsWith(it.label) }
+        ?: prices.firstOrNull { it.label.startsWith(position.name) }
 
-private fun monthIndex(date: KefeDate): Int = date.year * 12 + (date.month - 1)
-
-private fun dateOf(monthIndex: Int): KefeDate =
-    KefeDate(year = monthIndex / 12, month = (monthIndex % 12) + 1)
