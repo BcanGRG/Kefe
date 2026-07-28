@@ -1,19 +1,32 @@
 package com.kefe.app
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
@@ -24,8 +37,8 @@ import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.navigation.ActivityKey
 import com.kefe.app.navigation.AssetDetailKey
 import com.kefe.app.navigation.AssetsKey
-import com.kefe.app.navigation.GoalDetailKey
 import com.kefe.app.navigation.GalleryKey
+import com.kefe.app.navigation.GoalDetailKey
 import com.kefe.app.navigation.GoalsKey
 import com.kefe.app.navigation.KefeKey
 import com.kefe.app.navigation.LoginKey
@@ -44,6 +57,7 @@ import com.kefe.app.ui.layout.KefeNavigationRail
 import com.kefe.app.ui.layout.KefeSideNavigation
 import com.kefe.app.ui.layout.ProvideWindowSize
 import com.kefe.app.ui.layout.WindowSize
+import com.kefe.app.ui.mvi.CollectEffects
 import com.kefe.app.ui.screens.account.ActivityScreen
 import com.kefe.app.ui.screens.account.ActivityViewModel
 import com.kefe.app.ui.screens.account.LoginScreen
@@ -55,8 +69,8 @@ import com.kefe.app.ui.screens.account.SettingsScreen
 import com.kefe.app.ui.screens.account.SettingsUiState
 import com.kefe.app.ui.screens.account.SettingsViewModel
 import com.kefe.app.ui.screens.account.ShareScreen
-import com.kefe.app.ui.screens.account.ThemeMode
 import com.kefe.app.ui.screens.account.ShareViewModel
+import com.kefe.app.ui.screens.account.ThemeMode
 import com.kefe.app.ui.screens.assets.AssetDetailScreen
 import com.kefe.app.ui.screens.assets.AssetDetailViewModel
 import com.kefe.app.ui.screens.assets.AssetsScreen
@@ -72,10 +86,14 @@ import com.kefe.app.ui.screens.market.MarketViewModel
 import com.kefe.app.ui.screens.summary.SummaryIntent
 import com.kefe.app.ui.screens.summary.SummaryScreenAdaptive
 import com.kefe.app.ui.screens.summary.SummaryViewModel
+import com.kefe.app.ui.screens.transaction.AddTransactionEffect
 import com.kefe.app.ui.screens.transaction.AddTransactionIntent
 import com.kefe.app.ui.screens.transaction.AddTransactionSheet
 import com.kefe.app.ui.screens.transaction.AddTransactionViewModel
+import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
+import com.kefe.app.ui.theme.Sizes
+import com.kefe.app.ui.theme.Space
 import org.koin.compose.KoinApplication
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -131,6 +149,10 @@ private fun KefeApp(
     val backStack = remember { NavBackStack<NavKey>(LoginKey) }
     var onboardingPage by remember { mutableStateOf(0) }
     var addSheetVisible by remember { mutableStateOf(false) }
+
+    // Yazma hatasi kullaniciya SOYLENMELI: sessizce yutulursa girdigi islem
+    // kaybolur ve kaydettigini sanir.
+    var saveError by remember { mutableStateOf<String?>(null) }
     var addSheetSide by remember { mutableStateOf(TradeSide.Buy) }
 
     fun openAddSheet(side: TradeSide = TradeSide.Buy) {
@@ -277,11 +299,13 @@ private fun KefeApp(
                         entry<AssetsKey> {
                             val vm = koinViewModel<AssetsViewModel>()
                             val state by vm.state.collectAsState()
-                            AssetsScreen(
-                                state = state,
-                                onIntent = vm::onIntent,
-                                onOpenPosition = { goTo(AssetDetailKey(it)) },
-                            )
+                            ContentWidth {
+                                AssetsScreen(
+                                    state = state,
+                                    onIntent = vm::onIntent,
+                                    onOpenPosition = { goTo(AssetDetailKey(it)) },
+                                )
+                            }
                         }
 
                         entry<AssetDetailKey> { key ->
@@ -289,84 +313,104 @@ private fun KefeApp(
                                 parametersOf(key.positionId)
                             }
                             val state by vm.state.collectAsState()
-                            AssetDetailScreen(
-                                state = state,
-                                onIntent = vm::onIntent,
-                                onBack = { goBack() },
-                                onEditTransaction = {},
-                                onAddBuy = { openAddSheet(TradeSide.Buy) },
-                                onAddSell = { openAddSheet(TradeSide.Sell) },
-                                onOpenMenu = {},
-                            )
+                            ContentWidth {
+                                AssetDetailScreen(
+                                    state = state,
+                                    onIntent = vm::onIntent,
+                                    onBack = { goBack() },
+                                    onEditTransaction = {},
+                                    onAddBuy = { openAddSheet(TradeSide.Buy) },
+                                    onAddSell = { openAddSheet(TradeSide.Sell) },
+                                    onOpenMenu = {},
+                                )
+                            }
                         }
 
                         entry<GoalsKey> {
-                            GoalsScreen(
-                                state = goalsState,
-                                onIntent = goalsVm::onIntent,
-                                onOpenGoal = { goTo(GoalDetailKey(it)) },
-                            )
+                            ContentWidth {
+                                GoalsScreen(
+                                    state = goalsState,
+                                    onIntent = goalsVm::onIntent,
+                                    onOpenGoal = { goTo(GoalDetailKey(it)) },
+                                )
+                            }
                         }
 
                         entry<GoalDetailKey> { key ->
                             val vm = koinViewModel<GoalDetailViewModel> { parametersOf(key.goalId) }
                             val state by vm.state.collectAsState()
-                            GoalDetailScreen(
-                                state = state,
-                                onIntent = vm::onIntent,
-                                onBack = { goBack() },
-                                onEdit = { goalsVm.onIntent(GoalsIntent.EditGoal(key.goalId)) },
-                            )
+                            ContentWidth {
+                                GoalDetailScreen(
+                                    state = state,
+                                    onIntent = vm::onIntent,
+                                    onBack = { goBack() },
+                                    onEdit = { goalsVm.onIntent(GoalsIntent.EditGoal(key.goalId)) },
+                                )
+                            }
                         }
 
                         entry<MarketKey> {
                             val vm = koinViewModel<MarketViewModel>()
                             val state by vm.state.collectAsState()
-                            MarketScreen(
-                                state = state,
-                                onIntent = vm::onIntent,
-                                onBack = { goBack() },
-                            )
+                            ContentWidth {
+                                MarketScreen(
+                                    state = state,
+                                    onIntent = vm::onIntent,
+                                    onBack = { goBack() },
+                                )
+                            }
                         }
 
                         entry<ActivityKey> {
                             val vm = koinViewModel<ActivityViewModel>()
                             val state by vm.state.collectAsState()
-                            ActivityScreen(
-                                state = state,
-                                onIntent = vm::onIntent,
-                                onBack = { goBack() },
-                                onAddTransaction = { openAddSheet() },
-                            )
+                            ContentWidth {
+                                ActivityScreen(
+                                    state = state,
+                                    onIntent = vm::onIntent,
+                                    onBack = { goBack() },
+                                    onAddTransaction = { openAddSheet() },
+                                )
+                            }
                         }
 
                         entry<ShareKey> {
                             val vm = koinViewModel<ShareViewModel>()
                             val state by vm.state.collectAsState()
-                            ShareScreen(state = state, onIntent = vm::onIntent, onBack = { goBack() })
+                            ContentWidth {
+                                ShareScreen(
+                                    state = state,
+                                    onIntent = vm::onIntent,
+                                    onBack = { goBack() },
+                                )
+                            }
                         }
 
                         entry<SettingsKey> {
-                            SettingsScreen(
-                                state = settings,
-                                onIntent = settingsVm::onIntent,
-                                onBack = { goBack() },
-                                onOpenShare = { goTo(ShareKey) },
-                                onOpenGallery = { goTo(GalleryKey) },
-                            )
+                            ContentWidth {
+                                SettingsScreen(
+                                    state = settings,
+                                    onIntent = settingsVm::onIntent,
+                                    onBack = { goBack() },
+                                    onOpenShare = { goTo(ShareKey) },
+                                    onOpenGallery = { goTo(GalleryKey) },
+                                )
+                            }
                         }
 
                         entry<GalleryKey> {
-                            DesignSystemGallery(
-                                darkTheme = darkTheme,
-                                onToggleTheme = {
-                                    settingsVm.onIntent(
-                                        SettingsIntent.SelectTheme(
-                                            if (darkTheme) ThemeMode.Light else ThemeMode.Dark,
+                            ContentWidth {
+                                DesignSystemGallery(
+                                    darkTheme = darkTheme,
+                                    onToggleTheme = {
+                                        settingsVm.onIntent(
+                                            SettingsIntent.SelectTheme(
+                                                if (darkTheme) ThemeMode.Light else ThemeMode.Dark,
+                                            )
                                         )
-                                    )
-                                },
-                            )
+                                    },
+                                )
+                            }
                         }
                     },
                 )
@@ -393,20 +437,103 @@ private fun KefeApp(
                 addVm.onIntent(AddTransactionIntent.SelectSide(addSheetSide))
             }
 
-            // Kaydetme basarili olunca sheet kendiliginden kapanir; bayrak tuketilir
-            // ki bir sonraki acilista sheet aninda kapanmasin.
-            LaunchedEffect(addState.saved) {
-                if (addState.saved) {
-                    addSheetVisible = false
-                    addVm.onIntent(AddTransactionIntent.ConsumeSaved)
+            // Kaydetme sonucu bir OLAY, durum degil: bayrak olarak tutulsaydi
+            // tuketildikten sonra elle temizlenmesi gerekirdi.
+            CollectEffects(addVm.effects) { effect ->
+                when (effect) {
+                    AddTransactionEffect.Saved -> addSheetVisible = false
+                    is AddTransactionEffect.SaveFailed -> saveError = effect.message
                 }
             }
 
-            AddTransactionSheet(
-                state = addState,
-                onIntent = addVm::onIntent,
-                onDismiss = { addSheetVisible = false },
-            )
+            // Sheet masaustunde icerik genisligiyle sinirlanir ve ortalanir:
+            // 1440px'e yayilinca varlik turu kartlari 470px'e cikiyordu. Scrim
+            // sheet'in KENDI icinde oldugu ve onunla birlikte daraldigi icin
+            // yanlarda kalan bosluk burada karartilir.
+            Row(Modifier.fillMaxSize()) {
+                SheetSideScrim { addSheetVisible = false }
+                AddTransactionSheet(
+                    state = addState,
+                    onIntent = addVm::onIntent,
+                    onDismiss = { addSheetVisible = false },
+                    modifier = Modifier.widthIn(max = Sizes.contentMaxWidth),
+                )
+                SheetSideScrim { addSheetVisible = false }
+            }
+        }
+
+        saveError?.let { message ->
+            ErrorBanner(message = message, onDismiss = { saveError = null })
         }
     }
+}
+
+/**
+ * Yazma hatasi seridi - her seyin ustunde, altta.
+ *
+ * Kendiliginden KAYBOLMAZ: kullanicinin girdigi islem kaydedilemedi, bunu
+ * kacirmamali. Kapatmayi kendisi secer.
+ */
+@Composable
+private fun BoxScope.ErrorBanner(message: String, onDismiss: () -> Unit) {
+    val c = KefeTheme.colors
+    Row(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(Space.x16)
+            .widthIn(max = Sizes.formMaxWidth)
+            .clip(KefeShapes.card)
+            .background(c.surfaceElevated)
+            .border(Sizes.hairline, c.negative, KefeShapes.card)
+            .padding(horizontal = Space.x16, vertical = Space.x12),
+        horizontalArrangement = Arrangement.spacedBy(Space.x12),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = message,
+            style = KefeTheme.type.caption,
+            color = c.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "Kapat",
+            style = KefeTheme.type.caption.copy(fontWeight = FontWeight.SemiBold),
+            color = c.negative,
+            modifier = Modifier
+                .clip(KefeShapes.button)
+                .clickable(onClick = onDismiss)
+                .padding(horizontal = Space.x8, vertical = Space.x4),
+        )
+    }
+}
+
+/**
+ * Ekran icerigini [Sizes.contentMaxWidth] ile sinirlar. Ozet DISINDAKI her
+ * ekran bundan gecer: sinirsiz kalinca satirin etiketi solda, tutari sagda
+ * kalip arada ~900px bosluk olusuyor. Ozet kendi masaustu duzenini (nav +
+ * icerik + piyasa paneli) kendi cizdigi icin disarida birakildi.
+ *
+ * Kutu BASA hizalidir; ortalansa sekme degistirince baslik yatay olarak ziplardi.
+ */
+@Composable
+private fun ContentWidth(content: @Composable () -> Unit) {
+    Box(Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize()) {
+        content()
+    }
+}
+
+/** Sheet daraldiginda yanda kalan bosluk: karartir ve dokununca sheet'i kapatir. */
+@Composable
+private fun RowScope.SheetSideScrim(onDismiss: () -> Unit) {
+    Box(
+        Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .background(KefeTheme.colors.scrim)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss,
+            ),
+    )
 }

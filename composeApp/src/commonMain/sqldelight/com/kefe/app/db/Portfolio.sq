@@ -1,0 +1,99 @@
+import com.kefe.app.domain.model.MemberPermission;
+import com.kefe.app.domain.model.MemberRole;
+
+-- Portfoy ve uyeleri.
+--
+-- Portfolio.memberIds ayri bir ara tablo olarak DEGIL, uyenin uzerindeki
+-- portfolioId ile tutulur: uygulama tek portfoyle calisiyor ve hicbir yazma
+-- yolu bir uyeyi ikinci portfoye baglamiyor. Ara tablo bugun yalniz REPLACE
+-- tuzagi ve fazladan join getirirdi.
+CREATE TABLE portfolios (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    currency TEXT NOT NULL
+);
+
+-- lastSeen serbest metin ("2 saat once goruldu") - tarih degil, ekran metni.
+-- Gercek zaman damgasi gerektiginde ayri bir kolon eklenmeli, bu kolon
+-- yorumlanmamali.
+CREATE TABLE members (
+    id TEXT NOT NULL PRIMARY KEY,
+    portfolioId TEXT NOT NULL,
+    name TEXT NOT NULL,
+    initials TEXT NOT NULL,
+    role TEXT AS MemberRole NOT NULL,
+    permission TEXT AS MemberPermission NOT NULL,
+    lastSeen TEXT NOT NULL,
+    -- Portfolio.memberIds bir LISTE; sirasi ekranda avatar sirasini belirledigi
+    -- icin saklanmali.
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(portfolioId) REFERENCES portfolios(id) ON DELETE CASCADE
+);
+
+-- --- Portfoy ---------------------------------------------------------------
+
+selectPortfolio:
+SELECT *
+FROM portfolios
+LIMIT 1;
+
+countPortfolios:
+SELECT count(*)
+FROM portfolios;
+
+-- Portfoyun cocuklari var (members). INSERT OR REPLACE satiri once SILECEGI icin
+-- ON DELETE CASCADE tetiklenir ve uyeler ucar; bu yuzden ekleme/guncelleme iki
+-- adima bolundu. Cagiran taraf ikisini tek transaction icinde calistirmali.
+insertOrIgnorePortfolio:
+INSERT OR IGNORE INTO portfolios(id, name, currency)
+VALUES (:id, :name, :currency);
+
+updatePortfolio:
+UPDATE portfolios
+SET name = :name,
+    currency = :currency
+WHERE id = :id;
+
+deleteAllPortfolios:
+DELETE FROM portfolios;
+
+-- --- Uyeler ----------------------------------------------------------------
+
+selectMembers:
+SELECT *
+FROM members
+ORDER BY sortOrder, name;
+
+selectMemberById:
+SELECT *
+FROM members
+WHERE id = :id;
+
+-- Portfolio.memberIds bu sorgudan kurulur.
+selectMemberIds:
+SELECT id
+FROM members
+WHERE portfolioId = :portfolioId
+ORDER BY sortOrder, name;
+
+insertOrIgnoreMember:
+INSERT OR IGNORE INTO members(id, portfolioId, name, initials, role, permission, lastSeen, sortOrder)
+VALUES (:id, :portfolioId, :name, :initials, :role, :permission, :lastSeen, :sortOrder);
+
+updateMember:
+UPDATE members
+SET portfolioId = :portfolioId,
+    name = :name,
+    initials = :initials,
+    role = :role,
+    permission = :permission,
+    lastSeen = :lastSeen,
+    sortOrder = :sortOrder
+WHERE id = :id;
+
+deleteMemberById:
+DELETE FROM members
+WHERE id = :id;
+
+deleteAllMembers:
+DELETE FROM members;

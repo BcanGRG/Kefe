@@ -82,9 +82,16 @@ fun LoginScreen(
     LaunchedEffect(state.unlocked) { if (state.unlocked) onEnterApp() }
     LaunchedEffect(state.portfolioCreated) { if (state.portfolioCreated) onStartOnboarding() }
 
-    Column(modifier.fillMaxSize()) {
+    // Form masaustunde pencere boyunca uzarsa alan ve butonlar okunaksiz olur;
+    // ust cubuk da icerikle ayni dar kolonda kalsin diye birlikte ortalanir.
+    // Telefonda (390) sinir devreye girmez.
+    Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (state.stage == LoginStage.Start) {
-            AccountTopBar(title = "Başlangıç", onBack = { onIntent(LoginIntent.GoToSignIn) })
+            AccountTopBar(
+                title = "Başlangıç",
+                onBack = { onIntent(LoginIntent.GoToSignIn) },
+                modifier = Modifier.widthIn(max = Sizes.formMaxWidth),
+            )
         }
 
         Column(
@@ -92,11 +99,20 @@ fun LoginScreen(
                 .fillMaxWidth()
                 .weight(1f)
                 .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            when (state.stage) {
-                LoginStage.SignIn -> SignInStage(state, onIntent)
-                LoginStage.Start -> StartStage(state, onIntent)
-                LoginStage.Locked -> LockStage(state, onIntent)
+            // widthIn ONCE gelmeli: fillMaxWidth once uygulanirsa asagi kesin
+            // genislik kisiti iner ve sinir hicbir sey yapmaz.
+            Column(
+                Modifier
+                    .widthIn(max = Sizes.formMaxWidth)
+                    .fillMaxWidth(),
+            ) {
+                when (state.stage) {
+                    LoginStage.SignIn -> SignInStage(state, onIntent)
+                    LoginStage.Start -> StartStage(state, onIntent)
+                    LoginStage.Locked -> LockStage(state, onIntent)
+                }
             }
         }
     }

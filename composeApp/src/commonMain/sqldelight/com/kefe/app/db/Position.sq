@@ -1,0 +1,113 @@
+import com.kefe.app.domain.model.AssetClass;
+import com.kefe.app.domain.model.GoldSubtype;
+import com.kefe.app.domain.model.Karat;
+import com.kefe.app.domain.model.QuantityUnit;
+import kotlin.Boolean;
+
+-- Portfoydeki varlik satiri.
+--
+-- Satirin ilk yarisi META (kullanicinin girdigi kimlik bilgisi), ikinci yarisi
+-- DEFTERDEN TURETILEN degerler. Turetilenler burada tutuluyor cunku her okumada
+-- tum islem defterini toplamak liste ekranini gereksiz yere yavaslatir; tek
+-- gercek kaynak yine transactions tablosudur ve her yazmadan sonra
+-- updatePositionComputed ile uzerine yazilir.
+CREATE TABLE positions (
+    id TEXT NOT NULL PRIMARY KEY,
+    -- Meta
+    name TEXT NOT NULL,
+    assetClass TEXT AS AssetClass NOT NULL,
+    subtype TEXT AS GoldSubtype,
+    karat TEXT AS Karat,
+    unit TEXT AS QuantityUnit NOT NULL,
+    unitPrice REAL NOT NULL,
+    manualPrice INTEGER AS Boolean NOT NULL DEFAULT 0,
+    dailyChangePercent REAL NOT NULL DEFAULT 0.0,
+    -- Defterden turetilen: elle yazilmaz
+    quantity REAL NOT NULL DEFAULT 0.0,
+    cost REAL NOT NULL DEFAULT 0.0,
+    value REAL NOT NULL DEFAULT 0.0
+);
+
+-- Ekranlarin gordugu liste. Miktari sifirlanan pozisyon SATIR OLARAK SILINMEZ,
+-- yalniz bu filtrenin disinda kalir.
+--
+-- Bellek ici surumde miktar sifirlaninca pozisyon listeden dusuruluyordu; SQL'de
+-- ayni seyi DELETE ile yapmak ON DELETE CASCADE yuzunden gecmis defteri de yok
+-- ederdi. Tumunu satan kullanici gecmisini kaybetmemeli, ayrica ayni varligi
+-- tekrar aldiginda meta bilgisi (ad, ayar, birim) yerinde durmali.
+--
+-- Siralama: ekranlar (AssetsViewModel) listeyi kendi olcutune gore yeniden
+-- siraliyor; buradaki sira yalniz belirlilik icin.
+selectActivePositions:
+SELECT *
+FROM positions
+WHERE quantity > 0.0
+ORDER BY value DESC, name;
+
+-- Miktari sifirlanmislar dahil. Meta arama ve "daha once tanimlanmis miydi"
+-- kontrolu icin.
+selectAllPositions:
+SELECT *
+FROM positions
+ORDER BY name;
+
+selectPositionById:
+SELECT *
+FROM positions
+WHERE id = :id;
+
+countPositions:
+SELECT count(*)
+FROM positions;
+
+-- upsertPosition YALNIZ metayi yazar. Iki adim, cunku:
+-- 1) INSERT OR REPLACE once satiri siler -> transactions'a giden CASCADE
+--    tetiklenir ve pozisyonun tum defteri ucar.
+-- 2) ON CONFLICT DO UPDATE (gercek upsert) SQLite 3.24 ister; minSdk 26'daki
+--    sistem SQLite'i daha eski.
+-- Cagiran taraf: insertOrIgnorePosition + updatePositionMeta, tek transaction.
+insertOrIgnorePosition:
+INSERT OR IGNORE INTO positions(id, name, assetClass, subtype, karat, unit, unitPrice, manualPrice, dailyChangePercent, quantity, cost, value)
+VALUES (:id, :name, :assetClass, :subtype, :karat, :unit, :unitPrice, :manualPrice, :dailyChangePercent, 0.0, 0.0, 0.0);
+
+updatePositionMeta:
+UPDATE positions
+SET name = :name,
+    assetClass = :assetClass,
+    subtype = :subtype,
+    karat = :karat,
+    unit = :unit,
+    unitPrice = :unitPrice,
+    manualPrice = :manualPrice,
+    dailyChangePercent = :dailyChangePercent
+WHERE id = :id;
+
+-- recomputePosition'in yazma ucu: miktar/maliyet/deger defterden gelir.
+-- Islem ekleme-silme ile ayni transaction icinde calismali, yoksa akislar araya
+-- girip ekran bir an "miktar 0" gorur.
+updatePositionComputed:
+UPDATE positions
+SET quantity = :quantity,
+    cost = :cost,
+    value = :value
+WHERE id = :id;
+
+-- Fiyat yenilemesinin dokundugu tek yer. value'yu SQL hesaplar ki miktar ile
+-- fiyat arasinda tutarsiz bir an olusmasin.
+updatePositionPrice:
+UPDATE positions
+SET unitPrice = :unitPrice,
+    dailyChangePercent = :dailyChangePercent,
+    manualPrice = :manualPrice,
+    value = quantity * :unitPrice
+WHERE id = :id;
+
+-- Kullanicinin acik silme istegi. Defter de gitmeli (CASCADE); pragma kapaliysa
+-- diye Transaction.sq'daki deleteTransactionsByPosition ile birlikte cagirilmasi
+-- guvenlidir.
+deletePositionById:
+DELETE FROM positions
+WHERE id = :id;
+
+deleteAllPositions:
+DELETE FROM positions;

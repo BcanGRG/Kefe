@@ -69,6 +69,7 @@ data class AddTransactionUiState(
     /** Alanda gorunen fiyat metni; elle degistirilince [priceManual] acilir. */
     val unitPriceText: String = "",
     val priceManual: Boolean = false,
+    /** ViewModel gercek gunle doldurur; buradaki deger yalniz onizleme icindir. */
     val date: KefeDate = KefeDate(2026, 7, 12),
     val isToday: Boolean = true,
     val extraExpanded: Boolean = false,
@@ -83,8 +84,22 @@ data class AddTransactionUiState(
     /** Alt notta adi gecen diger uye - kayit ona da gorunecek. */
     val partnerName: String = "",
     val saving: Boolean = false,
-    val saved: Boolean = false,
 )
+
+/**
+ * Bir kereye mahsus olanlar.
+ *
+ * "Kaydedildi" bir DURUM degil, bir OLAYDIR: once `saved: Boolean` olarak
+ * durumda tutuluyordu ve tuketildikten sonra elle temizlenmesi gerekiyordu -
+ * temizlenmezse sheet bir daha acilir acilmaz kapaniyordu.
+ */
+sealed interface AddTransactionEffect {
+    /** Kayit yazildi, sheet kapanmali. */
+    data object Saved : AddTransactionEffect
+
+    /** Yazma patladi. Kullaniciya soylenmezse girdigi islem sessizce kaybolur. */
+    data class SaveFailed(val message: String) : AddTransactionEffect
+}
 
 sealed interface AddTransactionIntent {
     data class SelectAssetClass(val assetClass: AssetClass) : AddTransactionIntent
@@ -111,7 +126,6 @@ sealed interface AddTransactionIntent {
     data class ChangeStorage(val text: String) : AddTransactionIntent
 
     data object Save : AddTransactionIntent
-    data object ConsumeSaved : AddTransactionIntent
 }
 
 // --- Turetilen degerler ------------------------------------------------------

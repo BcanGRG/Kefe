@@ -1,0 +1,46 @@
+-- Gunluk net deger fotograflari - zaman serisi grafiginin kaynagi.
+--
+-- Neden ayri bir tablo: gecmis bir gunun toplam degeri islem defterinden
+-- turetilemez, o gunku FIYATLARI da bilmek gerekir ve gecmis fiyatlar hicbir
+-- yerde tutulmuyor. Fotograf o gun cekilmezse o gun sonsuza kadar kayiptir.
+--
+-- Gunde tek satir: (yil, ay, gun) bilesik anahtar. Ayni gun icinde yeniden
+-- hesaplanirsa satir tazelenir, cogalmaz. Tarih kolonlari Kotlin'de Long doner -
+-- KefeDate kurulurken toInt() gerekir.
+CREATE TABLE daily_snapshots (
+    dateYear INTEGER NOT NULL,
+    dateMonth INTEGER NOT NULL,
+    dateDay INTEGER NOT NULL,
+    totalValue REAL NOT NULL,
+    principal REAL NOT NULL,
+    PRIMARY KEY (dateYear, dateMonth, dateDay)
+);
+
+-- Grafik ekseni eskiden yeniye ciziliyor.
+selectSnapshots:
+SELECT *
+FROM daily_snapshots
+ORDER BY dateYear, dateMonth, dateDay;
+
+selectSnapshotsSince:
+SELECT *
+FROM daily_snapshots
+WHERE (dateYear * 10000 + dateMonth * 100 + dateDay) >= :sinceKey
+ORDER BY dateYear, dateMonth, dateDay;
+
+selectLastSnapshot:
+SELECT *
+FROM daily_snapshots
+ORDER BY dateYear DESC, dateMonth DESC, dateDay DESC
+LIMIT 1;
+
+countSnapshots:
+SELECT count(*)
+FROM daily_snapshots;
+
+upsertSnapshot:
+INSERT OR REPLACE INTO daily_snapshots(dateYear, dateMonth, dateDay, totalValue, principal)
+VALUES (:dateYear, :dateMonth, :dateDay, :totalValue, :principal);
+
+deleteAllSnapshots:
+DELETE FROM daily_snapshots;

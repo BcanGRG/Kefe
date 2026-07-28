@@ -1,0 +1,86 @@
+import com.kefe.app.domain.model.AssetClass;
+import com.kefe.app.domain.model.PriceSource;
+
+-- Kaynaktan cekilen son fiyatlar - CEVRIMDISI ACILIS icin onbellek.
+--
+-- Yalniz uzak fiyatlar buraya yazilir; elle girilen degerler ayri tabloda
+-- (manual_prices) durur ve okurken bunlarin uzerine bindirilir. Ikisi ayni
+-- tabloda olsaydi bir yenileme elle girilen degeri ezerdi - fiyat sozlesmesinin
+-- tam tersi.
+--
+-- Price.isManual kolon DEGIL: bindirme sirasinda uretilen gorunum bayragi.
+--
+-- timestamp kaynaktan gelen serbest metin ("14:32", "dun 21:30") - sirf ekranda
+-- gosterilir. Tazelik hesabi (2 saatten eski = Stale) o metinden yapilamaz,
+-- bu yuzden fetchedAtEpochSeconds ayri tutulur.
+CREATE TABLE cached_prices (
+    assetKey TEXT NOT NULL PRIMARY KEY,
+    label TEXT NOT NULL,
+    bid REAL,
+    ask REAL NOT NULL,
+    changePercent REAL NOT NULL,
+    timestamp TEXT NOT NULL,
+    source TEXT AS PriceSource NOT NULL,
+    assetClass TEXT AS AssetClass NOT NULL,
+    fetchedAtEpochSeconds INTEGER NOT NULL DEFAULT 0
+);
+
+-- Elle girilen fiyatlar. Kalici olmasi ZORUNLU: "elle girilen deger otomatik
+-- yenilemede ezilmez" sozu, harita bellekte tutuldugu surece uygulama her
+-- kapandiginda cokuyordu.
+CREATE TABLE manual_prices (
+    assetKey TEXT NOT NULL PRIMARY KEY,
+    price REAL NOT NULL,
+    updatedAtEpochSeconds INTEGER NOT NULL DEFAULT 0
+);
+
+-- --- Onbellek --------------------------------------------------------------
+
+selectCachedPrices:
+SELECT *
+FROM cached_prices;
+
+selectCachedPrice:
+SELECT *
+FROM cached_prices
+WHERE assetKey = :assetKey;
+
+-- Tazelik serit rengi bu degerden hesaplanir (2 saat esigi).
+selectLastFetchedAt:
+SELECT max(fetchedAtEpochSeconds)
+FROM cached_prices;
+
+-- Bagli tablo yok, REPLACE guvenli.
+upsertCachedPrice:
+INSERT OR REPLACE INTO cached_prices(assetKey, label, bid, ask, changePercent, timestamp, source, assetClass, fetchedAtEpochSeconds)
+VALUES (:assetKey, :label, :bid, :ask, :changePercent, :timestamp, :source, :assetClass, :fetchedAtEpochSeconds);
+
+deleteCachedPrice:
+DELETE FROM cached_prices
+WHERE assetKey = :assetKey;
+
+deleteAllCachedPrices:
+DELETE FROM cached_prices;
+
+-- --- Elle fiyatlar ---------------------------------------------------------
+
+selectManualPrices:
+SELECT *
+FROM manual_prices;
+
+selectManualPrice:
+SELECT *
+FROM manual_prices
+WHERE assetKey = :assetKey;
+
+upsertManualPrice:
+INSERT OR REPLACE INTO manual_prices(assetKey, price, updatedAtEpochSeconds)
+VALUES (:assetKey, :price, :updatedAtEpochSeconds);
+
+-- clearManualPrice: elle girilen deger yalniz buradan silinir, yenileme silmez.
+deleteManualPrice:
+DELETE FROM manual_prices
+WHERE assetKey = :assetKey;
+
+deleteAllManualPrices:
+DELETE FROM manual_prices;

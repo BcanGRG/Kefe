@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.kefe.app.data.sample.SampleSeries
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.ActivityEvent
+import com.kefe.app.domain.model.DailySnapshot
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.Member
@@ -68,6 +69,8 @@ class SummaryViewModel(
             ) { portfolio, members, positions, goals, activity ->
                 Snapshot(portfolio, members, positions, goals, activity)
             }.combine(portfolioRepository.observeAllTransactions()) { snapshot, transactions ->
+                snapshot to transactions
+            }.combine(portfolioRepository.observeSnapshots()) { (snapshot, transactions), history ->
                 val (portfolio, members, positions, goals, activity) = snapshot
                 val main = goals.firstOrNull { it.isMain }
                 _state.value.copy(
@@ -87,14 +90,42 @@ class SummaryViewModel(
                     // diyor, kapatilmis degil. Yalniz tamamlananlar dislanir.
                     otherGoalCount = (goals.count { it.isOpen() } - 1).coerceAtLeast(0),
                     activity = activity.take(3),
-                    netWorthTotal = SampleSeries.netWorthTotal,
-                    netWorthPrincipal = SampleSeries.netWorthPrincipal,
+                    // Gercek fotograflar. Ornek seri kullanilamaz: kullanicinin
+                    // kendi rakami tepede dururken altinda baskasinin egrisini
+                    // cizmek "param buyumus" dedirtirdi.
+                    netWorthTotal = history.map { it.totalValue },
+                    netWorthPrincipal = history.map { it.principal },
                     topGainer = positions.topGainer(),
                     topLoser = positions.topLoser(),
                     positionCount = positions.size,
                     openGoalCount = goals.count { it.isOpen() },
                 )
-            }.collect { _state.value = it }
+            }.collect { next ->
+                _state.value = next
+                recordTodaySnapshot(next)
+            }
+        }
+    }
+
+    /**
+     * Gunun fotografini ceker.
+     *
+     * Gecmis bir gunun degeri sonradan hesaplanamaz - o gunku fiyatlari da bilmek
+     * gerekir. Uygulama acildiginda ve toplam her degistiginde yazmak, seriyi
+     * biriktirmenin tek yolu. Ayni gune tekrar yazmak satiri tazeler.
+     */
+    private fun recordTodaySnapshot(state: SummaryUiState) {
+        val totals = state.totals ?: return
+        // Bos portfoy icin fotograf cekmek seriyi sifirlarla doldururdu.
+        if (state.positionCount == 0) return
+        viewModelScope.launch {
+            portfolioRepository.recordSnapshot(
+                DailySnapshot(
+                    date = clock.today(),
+                    totalValue = totals.totalValue,
+                    principal = totals.principal,
+                ),
+            )
         }
     }
 

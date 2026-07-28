@@ -1,0 +1,68 @@
+import com.kefe.app.domain.model.ActivityKind;
+import kotlin.Boolean;
+
+-- Aktivite akisi.
+--
+-- Neden saklaniyor: akisin yalniz iki turu islem defterinden yeniden uretilebilir
+-- (AddTransaction, SellTransaction). ManualPrice, GoalUpdate ve ExcludeFromGoals
+-- hicbir yerde iz birakmiyor - turetmeye kalkilirsa bu satirlar tumden kaybolur.
+--
+-- ZAMAN: modeldeki timeLabel ("az once") ve dayGroup ("BUGUN") veri degil ekran
+-- metnidir; diske yazilirsa yarin da "az once" der. Bu yuzden diske GERCEK TARIH
+-- yazilir, gruplama etiketi okurken bugunle karsilastirilarak uretilir.
+-- dayGroup icin kolon YOK - tamamen turetilebilir.
+-- timeLabel NULLABLE: elde gercek saat yok (KefeClock yalniz gun veriyor);
+-- kaynak saat uretmeye baslarsa buraya yazilir, yoksa okurken uydurulur.
+--
+-- seq: ayni gun icindeki sira. Kimlik icerikten turedigi ve saat bilgisi olmadigi
+-- icin "en yeni ustte" sozu ancak artan bir sayacla tutulabilir.
+--
+-- Tarih kolonlari Kotlin'de Long doner - KefeDate kurulurken toInt() gerekir.
+CREATE TABLE activity_events (
+    seq INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,
+    memberId TEXT NOT NULL,
+    kind TEXT AS ActivityKind NOT NULL,
+    -- Hazir Turkce cumle ("2 Ceyrek Altin ekledi"). Islem Ekle ekranindaki
+    -- "son ekledigin" kisayolu bu metni AYRISTIRIYOR - bicimi degistirme.
+    description TEXT NOT NULL,
+    amount REAL,
+    isManualPrice INTEGER AS Boolean NOT NULL DEFAULT 0,
+    occurredYear INTEGER NOT NULL,
+    occurredMonth INTEGER NOT NULL,
+    occurredDay INTEGER NOT NULL,
+    timeLabel TEXT
+);
+
+CREATE INDEX activity_events_occurred ON activity_events(occurredYear, occurredMonth, occurredDay);
+
+-- observeActivity() en yeni ustte bekliyor.
+selectActivity:
+SELECT *
+FROM activity_events
+ORDER BY occurredYear DESC, occurredMonth DESC, occurredDay DESC, seq DESC;
+
+-- Ozet ekrani yalniz ilk birkac satiri gosteriyor; tum akisi okuyup atmasin.
+selectRecentActivity:
+SELECT *
+FROM activity_events
+ORDER BY occurredYear DESC, occurredMonth DESC, occurredDay DESC, seq DESC
+LIMIT :limit;
+
+selectActivityById:
+SELECT *
+FROM activity_events
+WHERE id = :id;
+
+-- Bagli tablo yok, REPLACE guvenli. Cakisan kimlik (act_<islem kimligi>) ayni
+-- olayin tekrar yazilmasi demektir; yeni satir seq'in sonuna gecer.
+insertActivity:
+INSERT OR REPLACE INTO activity_events(id, memberId, kind, description, amount, isManualPrice, occurredYear, occurredMonth, occurredDay, timeLabel)
+VALUES (:id, :memberId, :kind, :description, :amount, :isManualPrice, :occurredYear, :occurredMonth, :occurredDay, :timeLabel);
+
+deleteActivityById:
+DELETE FROM activity_events
+WHERE id = :id;
+
+deleteAllActivity:
+DELETE FROM activity_events;

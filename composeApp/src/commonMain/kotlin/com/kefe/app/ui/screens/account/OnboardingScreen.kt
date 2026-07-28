@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,62 +61,74 @@ fun OnboardingScreen(
     val t = KefeTheme.type
     val page = pageIndex.coerceIn(0, OnboardingPageCount - 1)
 
-    Column(modifier.fillMaxSize()) {
+    // Tanitim sayfasi tek kolondur: gorsel kolonun ortasinda, metin kolonun sol
+    // kenarinda durur. Kolon genislemezse bu iki hiza masaustunde de telefondaki
+    // gibi ayni eksende kalir. Telefonda (390) sinir devreye girmez.
+    Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // widthIn ONCE gelmeli: fillMaxWidth once uygulanirsa asagi kesin
+        // genislik kisiti iner ve sinir hicbir sey yapmaz.
         Column(
             Modifier
+                .widthIn(max = Sizes.formMaxWidth)
                 .fillMaxWidth()
-                .weight(1f)
-                .padding(horizontal = Space.x24),
+                .weight(1f),
         ) {
-            Box(
-                modifier = Modifier
+            Column(
+                Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .defaultMinSize(minHeight = 420.dp),
-                contentAlignment = Alignment.Center,
+                    .padding(horizontal = Space.x24),
             ) {
-                when (page) {
-                    0 -> AllocationRingArt()
-                    1 -> GoalGaugeArt()
-                    else -> SetupStepsArt()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 420.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when (page) {
+                        0 -> AllocationRingArt()
+                        1 -> GoalGaugeArt()
+                        else -> SetupStepsArt()
+                    }
+                }
+
+                Column(Modifier.fillMaxWidth().padding(bottom = Space.x8)) {
+                    Text(OnboardingTitles[page], style = t.h1, color = c.onSurface)
+                    Spacer(Modifier.height(Space.x10))
+                    Text(
+                        OnboardingBodies[page],
+                        style = t.body.copy(lineHeight = 22.sp),
+                        color = c.onSurfaceMuted,
+                    )
                 }
             }
 
-            Column(Modifier.fillMaxWidth().padding(bottom = Space.x8)) {
-                Text(OnboardingTitles[page], style = t.h1, color = c.onSurface)
-                Spacer(Modifier.height(Space.x10))
-                Text(
-                    OnboardingBodies[page],
-                    style = t.body.copy(lineHeight = 22.sp),
-                    color = c.onSurfaceMuted,
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = Space.x24,
+                        end = Space.x24,
+                        top = Space.x12,
+                        bottom = Space.x24,
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(Space.x12),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OnboardingDots(activeIndex = page, modifier = Modifier.weight(1f))
+                AccountFlatButton(
+                    text = "Atla",
+                    onClick = onSkip,
+                    contentColor = c.onSurfaceMuted,
+                    horizontalPadding = Space.x14,
+                )
+                AccountFilledButton(
+                    text = if (page == OnboardingPageCount - 1) "Kuruluma başla" else "Devam",
+                    onClick = onNext,
+                    horizontalPadding = Space.x24,
                 )
             }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = Space.x24,
-                    end = Space.x24,
-                    top = Space.x12,
-                    bottom = Space.x24,
-                ),
-            horizontalArrangement = Arrangement.spacedBy(Space.x12),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OnboardingDots(activeIndex = page, modifier = Modifier.weight(1f))
-            AccountFlatButton(
-                text = "Atla",
-                onClick = onSkip,
-                contentColor = c.onSurfaceMuted,
-                horizontalPadding = Space.x14,
-            )
-            AccountFilledButton(
-                text = if (page == OnboardingPageCount - 1) "Kuruluma başla" else "Devam",
-                onClick = onNext,
-                horizontalPadding = Space.x24,
-            )
         }
     }
 }

@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.androidApplication)
+    alias(libs.plugins.sqldelight)
 }
 
 kotlin {
@@ -52,6 +53,9 @@ kotlin {
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.json)
             implementation(libs.ktor.client.logging)
+
+            implementation(libs.sqldelight.runtime)
+            implementation(libs.sqldelight.coroutines)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
@@ -59,11 +63,13 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.ktor.client.okhttp)
+            implementation(libs.sqldelight.driver.android)
         }
         // iosMain kaynak kumesi yalniz Apple hedefleri yapilandirildiginda var olur.
         if (OperatingSystem.current().isMacOsX) {
             iosMain.dependencies {
                 implementation(libs.ktor.client.darwin)
+                implementation(libs.sqldelight.driver.native)
             }
         }
         val desktopMain by getting
@@ -71,6 +77,19 @@ kotlin {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
             implementation(libs.ktor.client.cio)
+            implementation(libs.sqldelight.driver.jvm)
+        }
+    }
+}
+
+sqldelight {
+    databases {
+        create("KefeDatabase") {
+            packageName.set("com.kefe.app.db")
+            // Sema dosyalari varsayilan konumda: src/commonMain/sqldelight/com/kefe/app/db/
+            // Lehce belirtilmiyor; varsayilan sqlite-3-18, minSdk 26 cihazlarin gomulu
+            // SQLite surumuyle ayni. Daha yenisini secmek eski telefonlarda calisma
+            // aninda patlar (ornegin ON CONFLICT ... DO UPDATE 3.24 ister).
         }
     }
 }
