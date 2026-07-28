@@ -58,6 +58,7 @@ class SqlDelightPortfolioRepository(
     private val goalQueries = database.goalQueries
     private val activityQueries = database.activityQueries
     private val snapshotQueries = database.snapshotQueries
+    private val settingQueries = database.settingQueries
 
     // --- Okumalar -----------------------------------------------------------
 
@@ -152,6 +153,16 @@ class SqlDelightPortfolioRepository(
                 transactionQueries.deleteTransactionById(transactionId)
                 recomputePosition(removed.positionId)
             }
+        }
+    }
+
+    override fun observeOnboarded(): Flow<Boolean> =
+        settingQueries.selectSetting(OnboardedKey).asFlow().mapToOneOrNull(dispatcher)
+            .map { it == "true" }
+
+    override suspend fun markOnboarded() {
+        withContext(dispatcher) {
+            settingQueries.upsertSetting(settingKey = OnboardedKey, settingValue = "true")
         }
     }
 
@@ -340,3 +351,6 @@ class SqlDelightPortfolioRepository(
         }
     }
 }
+
+/** Acilis akisinin gecildigini isaretleyen ayar anahtari. */
+private const val OnboardedKey = "onboarded"

@@ -82,6 +82,16 @@ kotlin {
     }
 }
 
+// Fiyat sondasi GERCEK servislere baglanir: normal kosuda calisirsa testler
+// internete ve ucuncu taraf calisma suresine bagli hale gelir. Elle calistirilir:
+//   ./gradlew :composeApp:desktopTest --tests "*LivePriceProbeTest" -i
+tasks.withType<Test>().configureEach {
+    filter {
+        isFailOnNoMatchingTests = false
+        excludeTestsMatching("*LivePriceProbeTest")
+    }
+}
+
 sqldelight {
     databases {
         create("KefeDatabase") {

@@ -3,7 +3,10 @@ package com.kefe.app.ui.theme
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -83,8 +86,13 @@ fun KefeTheme(
         MaterialTheme(
             colorScheme = materialScheme,
             content = {
+                // Zemin sistem cubuklarinin ALTINA da uzanir (kenardan kenara
+                // gorunum), ama ICERIK onlarin altina girmez: Android'de ust
+                // cubuktaki portfoy adi sistem saatiyle cakisiyordu.
                 Box(Modifier.fillMaxSize().background(colors.surface)) {
-                    content()
+                    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+                        content()
+                    }
                 }
             },
         )
