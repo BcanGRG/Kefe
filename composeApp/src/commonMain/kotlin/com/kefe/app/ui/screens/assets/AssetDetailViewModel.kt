@@ -98,6 +98,23 @@ class AssetDetailViewModel(
             is AssetDetailIntent.DeleteTransaction -> viewModelScope.launch {
                 repo.deleteTransaction(intent.transactionId)
             }
+
+            AssetDetailIntent.OpenMenu -> _state.value = _state.value.copy(menuOpen = true)
+            AssetDetailIntent.CloseMenu -> _state.value = _state.value.copy(menuOpen = false)
+
+            // Menu kapanir, onay acilir: silme geri alinamaz, tek dokunusla
+            // olmamali.
+            AssetDetailIntent.RequestDelete ->
+                _state.value = _state.value.copy(menuOpen = false, confirmDelete = true)
+
+            AssetDetailIntent.DismissDeleteConfirm ->
+                _state.value = _state.value.copy(confirmDelete = false)
+
+            // Silinen varligin ekrani da kapanir; PositionGone kabugu geri atar.
+            AssetDetailIntent.ConfirmDelete -> viewModelScope.launch {
+                _state.value = _state.value.copy(confirmDelete = false)
+                repo.deletePosition(positionId)
+            }
         }
     }
 

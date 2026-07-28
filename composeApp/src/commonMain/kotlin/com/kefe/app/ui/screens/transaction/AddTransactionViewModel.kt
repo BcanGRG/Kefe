@@ -187,10 +187,12 @@ class AddTransactionViewModel(
             karatOptions = Karat.entries.map { KaratOption(it, karatGramPrice(it, prices)) },
             fundResults = fundCatalog(prices).filter { it.matches(s.fundQuery) },
             marketPrice = market,
-            unitPriceText = if (s.priceManual) {
-                s.unitPriceText
-            } else {
-                Money.number(market, s.priceDecimals)
+            unitPriceText = when {
+                s.priceManual -> s.unitPriceText
+                // Fiyat yoksa alan BOS kalir - "0" yazmak fiyatin sifir oldugunu
+                // soyler ve kullanici ustune yazmak icin once silmek zorunda.
+                market > 0.0 -> Money.number(market, s.priceDecimals)
+                else -> ""
             },
             offline = prices.freshness == PriceFreshness.Offline,
         )

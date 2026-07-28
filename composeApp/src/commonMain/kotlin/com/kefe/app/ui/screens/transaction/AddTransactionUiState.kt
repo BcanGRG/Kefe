@@ -214,6 +214,15 @@ val AddTransactionUiState.fee: Double get() = feeText.parseTrNumber()
 
 val AddTransactionUiState.total: Double get() = quantity * unitPrice + fee
 
+/**
+ * Bu varlik icin piyasadan bir fiyat gelmis mi.
+ *
+ * Sifir bir fiyat DEGILDIR; fiyatin olmamasidir. Cevrimdisi ilk acilista
+ * onbellek bos oldugu icin sifir geliyordu ve ekran bunu "güncel fiyat" diye
+ * gosterip Kaydet'i sebepsiz pasif birakiyordu.
+ */
+val AddTransactionUiState.hasMarketPrice: Boolean get() = marketPrice > 0.0
+
 val AddTransactionUiState.priceDifference: Double get() = unitPrice - marketPrice
 
 /** Elle fiyat girildiginde alanin altindaki karsilastirma satiri. */

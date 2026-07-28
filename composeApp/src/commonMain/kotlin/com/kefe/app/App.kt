@@ -63,6 +63,7 @@ import com.kefe.app.ui.layout.WindowSize
 import com.kefe.app.ui.mvi.CollectEffects
 import com.kefe.app.ui.screens.account.ActivityScreen
 import com.kefe.app.ui.screens.account.ActivityViewModel
+import com.kefe.app.ui.screens.account.LoginIntent
 import com.kefe.app.ui.screens.account.LoginScreen
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.OnboardingPageCount
@@ -72,6 +73,7 @@ import com.kefe.app.ui.screens.account.SettingsIntent
 import com.kefe.app.ui.screens.account.SettingsScreen
 import com.kefe.app.ui.screens.account.SettingsUiState
 import com.kefe.app.ui.screens.account.SettingsViewModel
+import com.kefe.app.ui.screens.account.ShareIntent
 import com.kefe.app.ui.screens.account.ShareScreen
 import com.kefe.app.ui.screens.account.ShareViewModel
 import com.kefe.app.ui.screens.account.ThemeMode
@@ -103,6 +105,14 @@ import org.koin.compose.KoinApplication
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.koinConfiguration
+
+/**
+ * Karsiligi henuz olmayan satirlarin ortak yaniti.
+ *
+ * Dokununca hicbir sey olmamasi hata gibi gorunuyordu; tek cumle "burasi
+ * calismiyor" ile "burasi henuz yok" arasindaki farki soyluyor.
+ */
+private const val NotReadyMessage = "Bu bölüm henüz hazır değil."
 
 @Composable
 fun App(darkTheme: Boolean = true) {
@@ -209,7 +219,7 @@ private fun KefeApp(
                 backStack[0] = LoginKey
             }
             is SettingsEffect.DeleteFailed -> saveError = effect.message
-            SettingsEffect.NotReady -> saveError = "Bu bölüm henüz hazır değil."
+            SettingsEffect.NotReady -> saveError = NotReadyMessage
         }
     }
 
@@ -313,7 +323,16 @@ private fun KefeApp(
                             ScreenSurface {
                                 LoginScreen(
                                     state = state,
-                                    onIntent = vm::onIntent,
+                                    // Sifreyle giris kimlik dogrulama katmanina
+                                    // bagli; o gelene kadar dokununca hicbir sey
+                                    // olmamasi hata gibi gorunuyordu.
+                                    onIntent = { intent ->
+                                        if (intent == LoginIntent.SignInWithPassword) {
+                                            saveError = NotReadyMessage
+                                        } else {
+                                            vm.onIntent(intent)
+                                        }
+                                    },
                                     onStartOnboarding = {
                                         onboardingPage = 0
                                         goTo(OnboardingKey)
@@ -394,7 +413,6 @@ private fun KefeApp(
                                     onEditTransaction = { openEditSheet(it) },
                                     onAddBuy = { openAddSheet(TradeSide.Buy) },
                                     onAddSell = { openAddSheet(TradeSide.Sell) },
-                                    onOpenMenu = {},
                                 )
                             }
                         }
@@ -453,7 +471,16 @@ private fun KefeApp(
                             ContentWidth {
                                 ShareScreen(
                                     state = state,
-                                    onIntent = vm::onIntent,
+                                    // Sistem paylasim sayfasi platforma ozgu ve
+                                    // paylasilacak gercek bir davet baglantisi
+                                    // henuz yok - sessiz kalmak yerine soyler.
+                                    onIntent = { intent ->
+                                        if (intent == ShareIntent.ShareLink) {
+                                            saveError = NotReadyMessage
+                                        } else {
+                                            vm.onIntent(intent)
+                                        }
+                                    },
                                     onBack = { goBack() },
                                 )
                             }

@@ -37,6 +37,11 @@ data class AssetDetailUiState(
      * O durumda ekran bu satiri HIC gostermez - uydurma sayi uretilmez.
      */
     val annualizedReturnPercent: Double? = null,
+
+    /** Ust bardaki "..." menusu acik mi. */
+    val menuOpen: Boolean = false,
+    /** Varligi silme onayi bekleniyor. */
+    val confirmDelete: Boolean = false,
 ) {
     /**
      * Elde tutma suresinin okunabilir hali: "2 yıl 5 ay", "7 ay", "12 gün".
@@ -63,6 +68,18 @@ data class AssetDetailUiState(
 
 sealed interface AssetDetailIntent {
     data class DeleteTransaction(val transactionId: String) : AssetDetailIntent
+
+    data object OpenMenu : AssetDetailIntent
+    data object CloseMenu : AssetDetailIntent
+
+    /**
+     * Varligi tumden silme. Islemleri tek tek silmek disinda varliktan kurtulma
+     * yolu yoktu - `deletePosition` depoda duruyordu ama hicbir yerden
+     * cagirilmiyordu.
+     */
+    data object RequestDelete : AssetDetailIntent
+    data object ConfirmDelete : AssetDetailIntent
+    data object DismissDeleteConfirm : AssetDetailIntent
 }
 
 sealed interface AssetDetailEffect {

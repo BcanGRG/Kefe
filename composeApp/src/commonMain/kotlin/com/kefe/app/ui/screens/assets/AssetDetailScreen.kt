@@ -2,11 +2,13 @@ package com.kefe.app.ui.screens.assets
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,6 +38,7 @@ import com.kefe.app.ui.charts.Point
 import com.kefe.app.ui.components.KefeAvatar
 import com.kefe.app.ui.components.KefeBuyBadge
 import com.kefe.app.ui.components.KefeCard
+import com.kefe.app.ui.components.KefeConfirmDialog
 import com.kefe.app.ui.components.KefeEmptyState
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeIconButton
@@ -67,51 +71,123 @@ fun AssetDetailScreen(
     onEditTransaction: (String) -> Unit,
     onAddBuy: () -> Unit,
     onAddSell: () -> Unit,
-    onOpenMenu: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val position = state.position
 
-    Column(modifier.fillMaxWidth()) {
-        DetailTopBar(position = position, onBack = onBack, onOpenMenu = onOpenMenu)
-
-        when {
-            position == null && state.loading -> DetailSkeleton()
-
-            position == null -> KefeEmptyState(
-                icon = KefeIcons.Wallet,
-                title = "Varlık bulunamadı",
-                body = "Bu varlık silinmiş olabilir. Listeye dönüp yeniden deneyin.",
+    // Menu ve onay kutusu icerigin USTUNDE cizilmeli; Column olsaydi dikey
+    // akisa katilir, sayfanin altina bir kutu olarak eklenirdi.
+    Box(modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxWidth()) {
+            DetailTopBar(
+                position = position,
+                onBack = onBack,
+                onOpenMenu = { onIntent(AssetDetailIntent.OpenMenu) },
             )
 
-            else -> {
-                LazyColumn(Modifier.weight(1f)) {
-                    item { CurrentValueBlock(position, state.holdingLabel) }
+            when {
+                position == null && state.loading -> DetailSkeleton()
 
-                    if (state.priceSeries.size >= 2) {
-                        item { PriceCard(state) }
-                    }
+                position == null -> KefeEmptyState(
+                    icon = KefeIcons.Wallet,
+                    title = "Varlık bulunamadı",
+                    body = "Bu varlık silinmiş olabilir. Listeye dönüp yeniden deneyin.",
+                )
 
-                    item { SummaryCard(state, position) }
+                else -> {
+                    LazyColumn(Modifier.weight(1f)) {
+                        item { CurrentValueBlock(position, state.holdingLabel) }
 
-                    item { HistoryHeader(state.transactions.size) }
-
-                    if (state.transactions.isNotEmpty()) {
-                        item {
-                            HistoryCard(
-                                state = state,
-                                position = position,
-                                onEditTransaction = onEditTransaction,
-                                onDeleteTransaction = {
-                                    onIntent(AssetDetailIntent.DeleteTransaction(it))
-                                },
-                            )
+                        if (state.priceSeries.size >= 2) {
+                            item { PriceCard(state) }
                         }
-                        item { SwipeHint() }
-                    }
-                }
 
-                DetailBottomActions(onAddBuy = onAddBuy, onAddSell = onAddSell)
+                        item { SummaryCard(state, position) }
+
+                        item { HistoryHeader(state.transactions.size) }
+
+                        if (state.transactions.isNotEmpty()) {
+                            item {
+                                HistoryCard(
+                                    state = state,
+                                    position = position,
+                                    onEditTransaction = onEditTransaction,
+                                    onDeleteTransaction = {
+                                        onIntent(AssetDetailIntent.DeleteTransaction(it))
+                                    },
+                                )
+                            }
+                            item { SwipeHint() }
+                        }
+                    }
+
+                    DetailBottomActions(onAddBuy = onAddBuy, onAddSell = onAddSell)
+                }
+            }
+        }
+
+        if (state.menuOpen) {
+            DetailMenu(
+                onDelete = { onIntent(AssetDetailIntent.RequestDelete) },
+                onDismiss = { onIntent(AssetDetailIntent.CloseMenu) },
+            )
+        }
+
+        if (state.confirmDelete) {
+            KefeConfirmDialog(
+                title = "Varlığı sil",
+                // Defter de gider: kullanici yalniz satiri degil, o varliga ait
+                // TUM alim satim gecmisini kaybediyor.
+                message = "${position?.name ?: "Bu varlık"} ve ona ait " +
+                    "${state.transactions.size} işlem silinecek. Bu işlem geri alınamaz.",
+                confirmLabel = "Sil",
+                onConfirm = { onIntent(AssetDetailIntent.ConfirmDelete) },
+                onDismiss = { onIntent(AssetDetailIntent.DismissDeleteConfirm) },
+            )
+        }
+    }
+}
+
+/**
+ * Ust bardaki "..." menusu.
+ *
+ * Tek bir gercek eylem tasiyor - varligi silmek. Once hicbir sey yapmiyordu ve
+ * varliktan kurtulmanin yolu islemleri tek tek silmekti.
+ */
+@Composable
+private fun DetailMenu(onDelete: () -> Unit, onDismiss: () -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clickable(indication = null, interactionSource = null, onClick = onDismiss),
+    ) {
+        Column(
+            Modifier
+                .align(Alignment.TopEnd)
+                // Ust barin altina oturur; bar sabit yukseklikte degil, kendi
+                // icerigiyle olculuyor - 56dp o olcunun karsiligi.
+                .padding(top = 56.dp, end = Space.x12)
+                // Sabit genisik: icerideki satir fillMaxWidth kullandigi icin
+                // yalniz alt sinir verilse kutu ekran genisligine yayiliyordu.
+                .width(200.dp)
+                .clip(KefeShapes.card)
+                .background(c.surfaceElevated)
+                .border(Sizes.hairline, c.outline, KefeShapes.card)
+                .padding(vertical = Space.x8),
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button, onClick = onDelete)
+                    .padding(horizontal = Space.x14, vertical = Space.x10),
+                horizontalArrangement = Arrangement.spacedBy(Space.x10),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                KefeIcon(KefeIcons.Trash, null, size = 18.dp, tint = c.negative)
+                Text("Varlığı sil", style = t.body, color = c.negative)
             }
         }
     }
