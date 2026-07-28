@@ -1,6 +1,5 @@
 package com.kefe.app.ui.screens.transaction
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.ActivityEvent
@@ -19,9 +18,7 @@ import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.ui.format.Money
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import com.kefe.app.ui.mvi.MviViewModel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -36,13 +33,12 @@ import kotlinx.coroutines.launch
 class AddTransactionViewModel(
     private val portfolioRepository: PortfolioRepository,
     private val priceRepository: PriceRepository,
-    private val clock: KefeClock,
-) : ViewModel() {
-
+    clock: KefeClock,
+) : MviViewModel<AddTransactionUiState, AddTransactionIntent, AddTransactionEffect>(
     // Tarih varsayilani sabit YAZILAMAZ: kayit artik diske gidiyor, yanlis tarih
     // kalici olur ve duzeltme ekrani yok.
-    private val _state = MutableStateFlow(AddTransactionUiState(date = clock.today()))
-    val state: StateFlow<AddTransactionUiState> = _state.asStateFlow()
+    AddTransactionUiState(date = clock.today()),
+) {
 
     private var board: PriceBoard? = null
     private var positions: List<Position> = emptyList()
@@ -53,7 +49,7 @@ class AddTransactionViewModel(
         observePrices()
     }
 
-    fun onIntent(intent: AddTransactionIntent) {
+    override fun onIntent(intent: AddTransactionIntent) {
         val s = _state.value
         when (intent) {
             is AddTransactionIntent.SelectAssetClass -> update(
@@ -125,8 +121,6 @@ class AddTransactionViewModel(
             is AddTransactionIntent.ChangeStorage -> _state.value = s.copy(storage = intent.text)
 
             AddTransactionIntent.Save -> save()
-
-            AddTransactionIntent.ConsumeSaved -> _state.value = s.copy(saved = false)
         }
     }
 
@@ -169,21 +163,22 @@ class AddTransactionViewModel(
      * fiyatlari, fon sonuclari ve secime karsilik gelen birim fiyat.
      */
     private fun withPrices(s: AddTransactionUiState): AddTransactionUiState {
-        val current = board ?: return s
-        val market = marketPriceOf(s, current)
+        // "current" DEGIL: taban sinifin ayni adli durum ozelligini golgeler.
+        val prices = board ?: return s
+        val market = marketPriceOf(s, prices)
         return s.copy(
             subtypes = GoldSubtype.entries.map {
-                SubtypeOption(it, subtypePriceText(it, current))
+                SubtypeOption(it, subtypePriceText(it, prices))
             },
-            karatOptions = Karat.entries.map { KaratOption(it, karatGramPrice(it, current)) },
-            fundResults = fundCatalog(current).filter { it.matches(s.fundQuery) },
+            karatOptions = Karat.entries.map { KaratOption(it, karatGramPrice(it, prices)) },
+            fundResults = fundCatalog(prices).filter { it.matches(s.fundQuery) },
             marketPrice = market,
             unitPriceText = if (s.priceManual) {
                 s.unitPriceText
             } else {
                 Money.number(market, s.priceDecimals)
             },
-            offline = current.freshness == PriceFreshness.Offline,
+            offline = prices.freshness == PriceFreshness.Offline,
         )
     }
 
@@ -195,6 +190,25 @@ class AddTransactionViewModel(
         _state.value = s.copy(saving = true)
 
         viewModelScope.launch {
+            // Yazma artik DISKE gidiyor: dolu disk, kilitli veritabani, yabanci
+            // anahtar ihlali gercek atma yollari. Yakalanmazsa `saving` takili
+            // kalir (Kaydet dugmesi kalici olarak pasif), sheet kapanmaz ve
+            // Android'de uygulama duser - girilen islem sessizce kaybolur.
+            try {
+                writeTransaction(s)
+                _state.value = _state.value.copy(saving = false)
+                emitEffect(AddTransactionEffect.Saved)
+            } catch (error: Exception) {
+                _state.value = _state.value.copy(saving = false)
+                emitEffect(
+                    AddTransactionEffect.SaveFailed(error.message ?: "Kayıt yazılamadı."),
+                )
+            }
+        }
+    }
+
+    private suspend fun writeTransaction(s: AddTransactionUiState) {
+        run {
             val position = positions.firstOrNull { it.matches(s) }
             val positionId = position?.id ?: newPositionId(s)
 
@@ -240,7 +254,6 @@ class AddTransactionViewModel(
                     syncState = if (s.offline) SyncState.Pending else SyncState.Synced,
                 )
             )
-            _state.value = _state.value.copy(saving = false, saved = true)
         }
     }
 }
