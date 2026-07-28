@@ -252,6 +252,21 @@ fun SettingsScreen(
                 onDismiss = { onIntent(SettingsIntent.DismissDeleteConfirm) },
             )
         }
+
+        // Geri yukleme de yikicidir: yedek mevcut verinin USTUNE degil YERINE
+        // gecer. Birlestirme yapilmiyor cunku hangi kaydin daha yeni oldugunu
+        // soyleyecek bir zaman damgasi yok.
+        if (state.confirmRestore) {
+            KefeConfirmDialog(
+                title = "Yedeği geri yükle",
+                message = "Şu anki varlıklarınız, işlemleriniz ve hedefleriniz " +
+                    "yedektekilerle DEĞİŞTİRİLECEK. Bu işlem geri alınamaz — " +
+                    "önce mevcut halin yedeğini almak isteyebilirsiniz.",
+                confirmLabel = "Dosya seç",
+                onConfirm = { onIntent(SettingsIntent.ConfirmRestore) },
+                onDismiss = { onIntent(SettingsIntent.DismissRestoreConfirm) },
+            )
+        }
     }
 }
 

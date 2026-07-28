@@ -24,7 +24,7 @@ data class SettingsUiState(
     val members: List<SettingsMember> = emptyList(),
 
     // Gorunum
-    val themeMode: ThemeMode = ThemeMode.Dark,
+    val themeMode: ThemeMode = ThemeMode.Light,
     val currencyLabel: String = "₺ Türk lirası",
     val showCents: Boolean = false,
 
@@ -49,6 +49,10 @@ data class SettingsUiState(
     /** "Tüm verileri sil" onay penceresi acik mi. */
     val confirmDelete: Boolean = false,
     val deleting: Boolean = false,
+    /** Geri yukleme onayi bekleniyor - mevcut veri silinecek. */
+    val confirmRestore: Boolean = false,
+    /** Yedekleme ya da geri yukleme suruyor. */
+    val working: Boolean = false,
 ) {
     /** Paylasim kartinin alt satiri: "Ortak Birikim · Volkan, Ayşe". */
     val shareSummary: String
@@ -74,6 +78,8 @@ sealed interface SettingsIntent {
 
     data object Backup : SettingsIntent
     data object Restore : SettingsIntent
+    data object ConfirmRestore : SettingsIntent
+    data object DismissRestoreConfirm : SettingsIntent
     data object ExportCsv : SettingsIntent
 
     /** Onay penceresini acar - silmez. */
@@ -99,4 +105,12 @@ sealed interface SettingsEffect {
      * olmayinca uygulamanin takildigini dusunuyor.
      */
     data object NotReady : SettingsEffect
+
+    /** Dosya kullanicinin sectigi yere gonderildi. */
+    data object BackupReady : SettingsEffect
+
+    /** Yedek geri yuklendi - ekranlar kendiliginden tazelenir. */
+    data object Restored : SettingsEffect
+
+    data class BackupFailed(val message: String) : SettingsEffect
 }

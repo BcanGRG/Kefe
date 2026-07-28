@@ -1,6 +1,14 @@
 package com.kefe.app.ui.screens.account
 
 import androidx.lifecycle.viewModelScope
+import com.kefe.app.data.backup.CsvMimeType
+import com.kefe.app.data.backup.FileTransfer
+import com.kefe.app.data.backup.JsonMimeType
+import com.kefe.app.domain.KefeClock
+import com.kefe.app.domain.backup.decodeBackup
+import com.kefe.app.domain.backup.encode
+import com.kefe.app.domain.backup.transactionsCsv
+import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.domain.repository.PreferencesRepository
@@ -18,6 +26,8 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(
     private val portfolioRepository: PortfolioRepository,
     private val preferences: PreferencesRepository,
+    private val files: FileTransfer,
+    private val clock: KefeClock,
 ) : MviViewModel<SettingsUiState, SettingsIntent, SettingsEffect>(
     SettingsUiState(email = "volkan@ornek.com"),
 ) {
@@ -47,12 +57,15 @@ class SettingsViewModel(
 
             // Henuz karsiligi olmayanlar. Sessizce yutmak yerine kullaniciya
             // soylenir - dokununca hicbir sey olmamasi hata gibi gorunuyordu.
+            SettingsIntent.Backup -> exportBackup()
+            SettingsIntent.ExportCsv -> exportCsv()
+            SettingsIntent.Restore -> setState { copy(confirmRestore = true) }
+            SettingsIntent.DismissRestoreConfirm -> setState { copy(confirmRestore = false) }
+            SettingsIntent.ConfirmRestore -> restore()
+
             SettingsIntent.OpenCurrency,
             SettingsIntent.OpenPriceRefresh,
             SettingsIntent.OpenPriceSource,
-            SettingsIntent.Backup,
-            SettingsIntent.Restore,
-            SettingsIntent.ExportCsv,
             SettingsIntent.SignOut,
             SettingsIntent.OpenPrivacy,
             SettingsIntent.OpenTerms,
@@ -64,6 +77,71 @@ class SettingsViewModel(
 
     private fun put(key: String, value: String) {
         viewModelScope.launch { preferences.put(key, value) }
+    }
+
+    // --- Yedekleme ----------------------------------------------------------
+
+    /**
+     * Yedek dosyasi uretir ve kullanicinin sectigi yere gonderir.
+     *
+     * Dosya adinda TARIH var: kullanici birden fazla yedek tutabilmeli ve
+     * hangisinin hangi gune ait oldugunu ad satirindan gorebilmeli.
+     */
+    private fun exportBackup() {
+        setState { copy(working = true) }
+        viewModelScope.launch {
+            runCatching {
+                val today = clock.today()
+                val file = portfolioRepository.exportBackup(takenOn = today.stamp())
+                files.share(
+                    fileName = "kefe-yedek-${today.stamp()}.json",
+                    mimeType = JsonMimeType,
+                    content = file.encode(),
+                )
+            }
+                .onSuccess { emitEffect(SettingsEffect.BackupReady) }
+                .onFailure { emitEffect(SettingsEffect.BackupFailed(it.reason())) }
+            setState { copy(working = false) }
+        }
+    }
+
+    /** CSV yedek DEGILDIR: geri yuklenemez, bakmak icindir. */
+    private fun exportCsv() {
+        setState { copy(working = true) }
+        viewModelScope.launch {
+            runCatching {
+                val today = clock.today()
+                val backup = portfolioRepository.exportBackup(takenOn = today.stamp())
+                files.share(
+                    fileName = "kefe-islemler-${today.stamp()}.csv",
+                    mimeType = CsvMimeType,
+                    content = backup.transactionsCsv(),
+                )
+            }
+                .onSuccess { emitEffect(SettingsEffect.BackupReady) }
+                .onFailure { emitEffect(SettingsEffect.BackupFailed(it.reason())) }
+            setState { copy(working = false) }
+        }
+    }
+
+    /**
+     * Yedegi geri yukler - mevcut verinin YERINE.
+     *
+     * Onay istenir cunku geri donusu yok: yanlis dosya secildiginde kullanici
+     * bugunku portfoyunu kaybeder.
+     */
+    private fun restore() {
+        setState { copy(confirmRestore = false, working = true) }
+        viewModelScope.launch {
+            runCatching {
+                val text = files.pickText()
+                if (text != null) portfolioRepository.restoreBackup(decodeBackup(text))
+                text != null
+            }
+                .onSuccess { picked -> if (picked) emitEffect(SettingsEffect.Restored) }
+                .onFailure { emitEffect(SettingsEffect.BackupFailed(it.reason())) }
+            setState { copy(working = false) }
+        }
     }
 
     private fun deleteAll() {
@@ -103,7 +181,23 @@ class SettingsViewModel(
 
 /** Taninmayan deger varsayilana duser - eski bir kayit uygulamayi dusurmemeli. */
 private fun Map<String, String>.themeMode(): ThemeMode =
-    ThemeMode.entries.firstOrNull { it.name == this[PreferenceKeys.ThemeMode] } ?: ThemeMode.Dark
+    ThemeMode.entries.firstOrNull { it.name == this[PreferenceKeys.ThemeMode] } ?: ThemeMode.Light
 
 private fun Map<String, String>.flag(key: String, default: Boolean): Boolean =
     this[key]?.toBooleanStrictOrNull() ?: default
+
+/** "2026-07-28" - dosya adinda ve yedegin icinde ayni bicim. */
+private fun KefeDate.stamp(): String {
+    val mm = if (month < 10) "0$month" else "$month"
+    val dd = if (day < 10) "0$day" else "$day"
+    return "$year-$mm-$dd"
+}
+
+/**
+ * Hatanin kullaniciya gosterilecek sebebi.
+ *
+ * Dosya islemleri platforma iniyor ve oradan gelen mesajlar ("EACCES", "No such
+ * file") kullaniciya bir sey soylemez; kendi attigimiz mesajlar soyler.
+ */
+private fun Throwable.reason(): String =
+    message?.takeIf { it.isNotBlank() } ?: "Bilinmeyen hata"

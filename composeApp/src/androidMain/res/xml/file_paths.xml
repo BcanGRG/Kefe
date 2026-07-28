@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Yalniz onbellekteki backups klasoru paylasilir.
+
+    Veritabani ve tercihler DISARIDA: saglayiciya genis bir yol vermek, izin
+    verilen her uygulamaya ham veritabanini okuma kapisi acardi.
+-->
+<paths>
+    <cache-path name="backups" path="backups/" />
+</paths>
