@@ -59,6 +59,7 @@ import com.kefe.app.ui.charts.Point
 import com.kefe.app.ui.components.KefeAvatar
 import com.kefe.app.ui.components.KefeAvatarStack
 import com.kefe.app.ui.components.KefeCard
+import com.kefe.app.ui.layout.KefeMarketRow
 import com.kefe.app.ui.components.KefeChip
 import com.kefe.app.ui.components.KefeDashedCard
 import com.kefe.app.ui.components.KefeHairline
@@ -143,6 +144,7 @@ fun SummaryScreen(
                 onOpenGoal = onOpenGoal,
                 onOpenGoals = onOpenGoals,
                 onOpenActivity = onOpenActivity,
+                onOpenMarket = onOpenMarket,
             )
         }
     }
@@ -279,6 +281,7 @@ private fun SummaryContent(
     onOpenGoal: (String) -> Unit,
     onOpenGoals: () -> Unit,
     onOpenActivity: () -> Unit,
+    onOpenMarket: () -> Unit,
 ) {
     val totals = state.totals ?: return
 
@@ -318,6 +321,28 @@ private fun SummaryContent(
                 // basligin kendi 20dp ust dolgusundan gelir.
                 modifier = Modifier.padding(horizontal = Space.x16),
             )
+        }
+
+        // Piyasa telefonda GORUNUR bir yer kazandi.
+        //
+        // Tek girisi ust bardaki "Fiyatlar 19:38'de güncellendi" satiriydi: gri,
+        // kucuk ve durum etiketi gibi duruyordu; masaustunde sag panelde acikca
+        // duran bolumun telefonda karsiligi yok sanildi.
+        if (state.marketRows.isNotEmpty()) {
+            item {
+                SectionHeader(
+                    title = "Piyasa",
+                    actionText = "Tümünü gör",
+                    onAction = onOpenMarket,
+                )
+            }
+            item {
+                MarketCard(
+                    rows = state.marketRows.take(MarketPreviewCount),
+                    onOpen = onOpenMarket,
+                    modifier = Modifier.padding(horizontal = Space.x16),
+                )
+            }
         }
 
         if (state.activity.isNotEmpty()) {
@@ -781,6 +806,75 @@ private fun MonthCard(
         }
         Spacer(Modifier.height(Space.x12))
         KefeProgressBarThin(progress = progress)
+    }
+}
+
+// --- Piyasa ----------------------------------------------------------------
+
+/** Ozet'te gosterilen piyasa satiri sayisi; tamami Piyasa ekraninda. */
+private const val MarketPreviewCount = 5
+
+/**
+ * Piyasa onizlemesi.
+ *
+ * Masaustunde sag panelde surekli duran tablo telefonda YOKTU; tek giris ust
+ * bardaki gri fiyat satiriydi ve o bir baglanti gibi gorunmuyordu.
+ *
+ * Fiyatlar burada portfoy tutarlarindan DAHA COK ondalikla yazilir: gram altin
+ * dakikalar icinde kurus mertebesinde oynar, tam liraya yuvarlanirsa ekran
+ * "hic degismiyor" gibi gorunur.
+ */
+@Composable
+private fun MarketCard(
+    rows: List<KefeMarketRow>,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    KefeCard(modifier = modifier, contentPadding = PaddingValues(0.dp)) {
+        rows.forEachIndexed { index, row ->
+            if (index > 0) KefeHairline()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(indication = null, interactionSource = null, onClick = onOpen)
+                    .padding(horizontal = ActivityRowPaddingH, vertical = Space.x12),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(c.assetClass(row.assetClass)),
+                )
+                Spacer(Modifier.width(Space.x10))
+                Text(
+                    text = row.name,
+                    style = t.body,
+                    color = c.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(Space.x8))
+                Text(
+                    text = row.priceText,
+                    style = t.body.tabular(),
+                    color = c.onSurface,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.width(Space.x10))
+                // Isaret her zaman yazilir; yon bilgisi renge birakilmaz.
+                Text(
+                    text = Money.delta(row.changePercent),
+                    style = t.caption.tabular(),
+                    color = c.delta(row.changePercent),
+                    maxLines = 1,
+                )
+            }
+        }
     }
 }
 

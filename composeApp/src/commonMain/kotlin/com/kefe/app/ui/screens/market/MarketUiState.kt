@@ -61,5 +61,9 @@ sealed interface MarketIntent {
  */
 fun AssetClass.priceDecimals(): Int = when (this) {
     AssetClass.Fx, AssetClass.Fund -> 2
-    AssetClass.Gold, AssetClass.Silver, AssetClass.Cash -> 0
+    // Altin ve gumus de iki ondalikla: kaynak dakikada bir guncelleniyor ve
+    // hareket cogu zaman kurus mertebesinde. Tam liraya yuvarlandiginda tablo
+    // saatlerce ayni rakami gosteriyor, fiyat donmus saniliyordu.
+    AssetClass.Gold, AssetClass.Silver -> 2
+    AssetClass.Cash -> 0
 }
