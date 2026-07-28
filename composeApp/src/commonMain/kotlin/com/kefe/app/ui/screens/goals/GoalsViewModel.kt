@@ -164,10 +164,14 @@ class GoalsViewModel(
         val amount = editor.amountInTry()
         if (editor.name.isBlank() || amount <= 0.0) return
 
-        val existing = _state.value.goals.firstOrNull { it.id == editor.goalId }
-        val id = editor.goalId ?: "goal_${editor.iconKey}_${_state.value.goals.size + 1}"
+        // TAMAMLANANLAR DA ARANIR. Duzenleme tamamlanmis bir hedeften de
+        // acilabiliyor (bkz. EditGoal); yalniz aciklara bakilinca `existing` null
+        // kaliyor ve kayit hedefi Active'e cekip tamamlandi isaretini, sirasini ve
+        // tahmini varisini siliyordu.
+        val all = _state.value.goals + _state.value.completed
+        val existing = all.firstOrNull { it.id == editor.goalId }
         val goal = Goal(
-            id = id,
+            id = editor.goalId ?: newGoalId(editor.iconKey, all),
             name = editor.name.trim(),
             iconKey = editor.iconKey,
             amount = amount,
@@ -191,6 +195,24 @@ class GoalsViewModel(
             portfolioRepository.upsertGoal(goal)
         }
         update { it.copy(editor = null) }
+    }
+
+    /**
+     * Kullanilmayan ilk kimligi bulur.
+     *
+     * Onceden "goal_<ikon>_<hedef sayisi + 1>" uretiliyordu ve SILME sonRASI
+     * tekrar ediyordu: uc hedeften biri silinince sayac geriye dusuyor, uretilen
+     * kimlik hayattaki bir hedefinkiyle cakisiyordu. Kayit INSERT OR REPLACE
+     * oldugu icin de o hedef SESSIZCE eziliyordu. Bellekteyken veri zaten
+     * ucucuydu; diske yazildigindan beri geri donusu yok.
+     *
+     * Tamamlananlar da sayilir - onlar da tabloda duruyor.
+     */
+    private fun newGoalId(iconKey: String, existing: List<Goal>): String {
+        val taken = existing.mapTo(mutableSetOf()) { it.id }
+        var index = 1
+        while ("goal_${iconKey}_$index" in taken) index++
+        return "goal_${iconKey}_$index"
     }
 
     private fun delete() {

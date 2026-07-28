@@ -64,6 +64,7 @@ import com.kefe.app.ui.screens.account.LoginScreen
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.OnboardingPageCount
 import com.kefe.app.ui.screens.account.OnboardingScreen
+import com.kefe.app.ui.screens.account.SettingsEffect
 import com.kefe.app.ui.screens.account.SettingsIntent
 import com.kefe.app.ui.screens.account.SettingsScreen
 import com.kefe.app.ui.screens.account.SettingsUiState
@@ -183,6 +184,20 @@ private fun KefeApp(
         while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
         backStack[0] = SummaryKey
         summaryVm.markOnboarded()
+    }
+
+    // Ayarlar etkileri kabukta karsilanir: silme sonrasi yigini sifirlamak ve
+    // seride mesaj gostermek ekranin isi degil.
+    CollectEffects(settingsVm.effects) { effect ->
+        when (effect) {
+            SettingsEffect.AllDataDeleted -> {
+                saveError = "Tüm veriler silindi."
+                while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                backStack[0] = LoginKey
+            }
+            is SettingsEffect.DeleteFailed -> saveError = effect.message
+            SettingsEffect.NotReady -> saveError = "Bu bölüm henüz hazır değil."
+        }
     }
 
     // Bir kez girildiyse giris ekrani ATLANIR.

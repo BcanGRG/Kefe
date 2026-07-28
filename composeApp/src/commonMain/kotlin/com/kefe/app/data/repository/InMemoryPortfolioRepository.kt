@@ -80,6 +80,15 @@ class InMemoryPortfolioRepository : PortfolioRepository {
         onboardedState.value = true
     }
 
+    override suspend fun deleteAllData() {
+        positionsState.value = emptyList()
+        transactionsState.value = emptyList()
+        goalsState.value = emptyList()
+        activityState.value = emptyList()
+        snapshotsState.value = emptyList()
+        onboardedState.value = false
+    }
+
     override suspend fun recordSnapshot(snapshot: DailySnapshot) {
         // Gunde tek satir: ayni gune ikinci yazma satiri tazeler, cogaltmaz.
         snapshotsState.value = snapshotsState.value

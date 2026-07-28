@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -63,7 +64,12 @@ fun SettingsScreen(
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
-    Column(modifier.fillMaxSize()) {
+    // Onay penceresi icerigin USTUNE cizilmeli; ekranin koku Column oldugu icin
+    // burada bir Box gerekiyor - Column'un cocugu olarak eklenirse dikey akisa
+    // girip sayfayi ikiye boluyor.
+    Box(modifier.fillMaxSize()) {
+
+    Column(Modifier.fillMaxSize()) {
         AccountTopBar(title = "Ayarlar", onBack = onBack)
 
         Column(
@@ -232,6 +238,14 @@ fun SettingsScreen(
                 FooterDot()
                 FooterLink("Koşullar") { onIntent(SettingsIntent.OpenTerms) }
             }
+        }
+    }
+
+        if (state.confirmDelete) {
+            DeleteAllConfirmDialog(
+                onConfirm = { onIntent(SettingsIntent.ConfirmDeleteAllData) },
+                onDismiss = { onIntent(SettingsIntent.DismissDeleteConfirm) },
+            )
         }
     }
 }
@@ -423,4 +437,88 @@ private fun FooterLink(text: String, onClick: () -> Unit) {
             onClick = onClick,
         ),
     )
+}
+
+/**
+ * "Tüm verileri sil" onayi.
+ *
+ * Yikici ve geri alinamaz oldugu icin onaysiz calismamali; ayrica onay
+ * dugmesi VARSAYILAN DEGIL - kutuyu kapatmak tek dokunusla, silmek bilerek
+ * yapilir. Ne silindigi tek tek yazilir: kullanici neyi kaybettigini bilmeli.
+ */
+@Composable
+private fun DeleteAllConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(c.scrim)
+            .clickable(
+                indication = null,
+                interactionSource = null,
+                onClick = onDismiss,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .padding(Space.x24)
+                .widthIn(max = Sizes.formMaxWidth)
+                .clip(KefeShapes.card)
+                .background(c.surfaceElevated)
+                .border(Sizes.hairline, c.outline, KefeShapes.card)
+                // Kutuya dokunmak kapatmasin: disaridaki tiklama yukaridaki
+                // katmana ait, burada tuketilir.
+                .clickable(indication = null, interactionSource = null, onClick = {})
+                .padding(Space.x20),
+        ) {
+            Text("Tüm verileri sil", style = t.h2, color = c.onSurface)
+            Spacer(Modifier.height(Space.x10))
+            Text(
+                "Varlıklarınız, işlem geçmişiniz, hedefleriniz ve tercihleriniz " +
+                    "silinecek. Bu işlem geri alınamaz.",
+                style = t.caption,
+                color = c.onSurfaceMuted,
+            )
+            Spacer(Modifier.height(Space.x20))
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.x10)) {
+                DialogButton(
+                    text = "Vazgeç",
+                    textColor = c.onSurface,
+                    background = c.surfaceSunken,
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                )
+                DialogButton(
+                    text = "Sil",
+                    textColor = c.onAccent,
+                    background = c.negative,
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DialogButton(
+    text: String,
+    textColor: Color,
+    background: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier
+            .height(Sizes.fieldDefault)
+            .clip(KefeShapes.button)
+            .background(background)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = KefeTheme.type.bodyStrong, color = textColor)
+    }
 }

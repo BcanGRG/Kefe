@@ -45,6 +45,10 @@ data class SettingsUiState(
     val lastBackupLabel: String = "",
     val email: String = "",
     val appVersion: String = "1.0.4",
+
+    /** "Tüm verileri sil" onay penceresi acik mi. */
+    val confirmDelete: Boolean = false,
+    val deleting: Boolean = false,
 ) {
     /** Paylasim kartinin alt satiri: "Ortak Birikim · Volkan, Ayşe". */
     val shareSummary: String
@@ -71,9 +75,28 @@ sealed interface SettingsIntent {
     data object Backup : SettingsIntent
     data object Restore : SettingsIntent
     data object ExportCsv : SettingsIntent
+
+    /** Onay penceresini acar - silmez. */
     data object DeleteAllData : SettingsIntent
+    data object DismissDeleteConfirm : SettingsIntent
+
+    /** Asil silme. Yalniz onay penceresinden gonderilir. */
+    data object ConfirmDeleteAllData : SettingsIntent
 
     data object SignOut : SettingsIntent
     data object OpenPrivacy : SettingsIntent
     data object OpenTerms : SettingsIntent
+}
+
+sealed interface SettingsEffect {
+    data object AllDataDeleted : SettingsEffect
+    data class DeleteFailed(val message: String) : SettingsEffect
+
+    /**
+     * Karsiligi henuz yazilmamis bir satira dokunuldu.
+     *
+     * Sessiz kalmak hata gibi gorunuyordu: kullanici "Yedekle"ye basip hicbir sey
+     * olmayinca uygulamanin takildigini dusunuyor.
+     */
+    data object NotReady : SettingsEffect
 }
