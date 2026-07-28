@@ -259,6 +259,10 @@ private fun RingCard(
                 progress = state.progress,
                 centerPercent = Money.ratioOf(state.progress.toDouble()),
                 centerAmount = "${Money.tl(state.currentWealth)} / ${Money.tl(goal.amount)}",
+                // Buyuk hedeflerde tam yazim kaseye sigmaz; tam rakam zaten
+                // hemen altindaki "KALAN" kartinda duruyor.
+                centerAmountShort = "₺${Money.compact(state.currentWealth, 1)} / " +
+                    "₺${Money.compact(goal.amount, 1)}",
                 color = if (state.exceeded) c.positive else c.accent,
             )
         }

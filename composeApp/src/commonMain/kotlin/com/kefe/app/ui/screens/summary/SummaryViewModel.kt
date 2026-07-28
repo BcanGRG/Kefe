@@ -73,6 +73,8 @@ class SummaryViewModel(
             is SummaryIntent.SelectPeriod -> _state.value =
                 _state.value.copy(periodIndex = intent.index)
             SummaryIntent.Refresh -> refresh()
+            SummaryIntent.DismissRefreshError -> _state.value =
+                _state.value.copy(refreshError = null)
         }
     }
 
@@ -203,12 +205,23 @@ class SummaryViewModel(
         }
     }
 
-    /** Yalniz cekme yapar; sonucu yukaridaki tek toplayici gorur. */
+    /**
+     * Yalniz cekme yapar; yeni fiyatlari yukaridaki tek toplayici gorur.
+     *
+     * Sonuc ATILAMAZ: basarisiz yenileme ekranda hicbir iz birakmiyordu ve
+     * basarili olanindan ayirt edilemiyordu. Fiyatlar dakikalar icinde cok az
+     * oynadigi icin "yenilemiyor" sanilan sey buydu.
+     */
     private fun refresh() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(refreshing = true)
-            priceRepository.refresh()
-            _state.value = _state.value.copy(refreshing = false)
+            _state.value = _state.value.copy(refreshing = true, refreshError = null)
+            val error = priceRepository.refresh().exceptionOrNull()
+            _state.value = _state.value.copy(
+                refreshing = false,
+                refreshError = error?.let {
+                    "Fiyatlar güncellenemedi — son bilinen değerler gösteriliyor."
+                },
+            )
         }
     }
 }

@@ -698,6 +698,8 @@ fun DesignSystemGallery(
                                     progress = 0.41f,
                                     centerPercent = Money.ratio(41.0),
                                     centerAmount = Money.tl(2_860_400.0) + " / " + Money.tl(7_800_000.0),
+                                    centerAmountShort = "₺" + Money.compact(2_860_400.0) +
+                                        " / ₺" + Money.compact(7_800_000.0),
                                 )
                             }
 

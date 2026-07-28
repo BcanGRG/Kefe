@@ -572,6 +572,15 @@ private fun KefeApp(
         saveError?.let { message ->
             ErrorBanner(message = message, onDismiss = { saveError = null })
         }
+
+        // Basarisiz fiyat yenilemesi. Sessiz kalinca basarili yenilemeden ayirt
+        // edilemiyordu ve "yenileme calismiyor" gibi gorunuyordu.
+        summary.refreshError?.let { message ->
+            ErrorBanner(
+                message = message,
+                onDismiss = { summaryVm.onIntent(SummaryIntent.DismissRefreshError) },
+            )
+        }
     }
 }
 

@@ -63,13 +63,25 @@ object Money {
         return sign + format(abs(percent), decimals, forceSign = false) + "%"
     }
 
-    /** Eksen kisaltmasi: `4,2M` (milyon), `850B` (bin). Simge cagiran tarafta. */
-    fun compact(value: Double): String {
+    /**
+     * Eksen kisaltmasi: `4,2M` (milyon), `850B` (bin). Simge cagiran tarafta.
+     *
+     * [thousandDecimals] bin araligindaki ondalik: eksende 0 yeterli, dar bir
+     * yere sigdirilan GERCEK bir tutarda 1 gerekir - 19.587 aksi halde "20B"
+     * olur ve yuzde yarim kayar.
+     */
+    fun compact(value: Double, thousandDecimals: Int = 0): String {
         val a = abs(value)
         val sign = if (value < 0) MINUS.toString() else ""
         return sign + when {
             a >= 1_000_000 -> format(a / 1_000_000.0, 1, false) + "M"
-            a >= 1_000 -> format(a / 1_000.0, 0, false) + "B"
+            // Tam bin ise ondalik yazilmaz: "100,0B" degil "100B".
+            a >= 1_000 -> {
+                val thousands = a / 1_000.0
+                val decimals = if (thousands % 1.0 == 0.0) 0 else thousandDecimals
+                format(thousands, decimals, false) + "B"
+            }
+
             else -> format(a, 0, false)
         }
     }
