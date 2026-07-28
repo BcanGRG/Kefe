@@ -17,18 +17,22 @@ import kotlin.math.max
 private val ChartHeight = 178.dp
 
 /**
- * Projeksiyon grafigi: gerceklesen seri dolu, tahmin kesikli cizilir ve
- * tahminin etrafinda belirsizlik bandi gosterilir.
+ * Projeksiyon grafigi: gerceklesen seri dolu, tahmin kesikli cizilir.
  *
- * Kesikli cizgi ve bant opsiyonel degildir - tahmini kesin bir sonucmus gibi
- * gostermek yanlis yonlendirir.
+ * Kesikli cizgi opsiyonel degildir - tahmini kesin bir sonucmus gibi gostermek
+ * yanlis yonlendirir.
+ *
+ * Belirsizlik bandi YOK. Tasarimda vardi ama bant "getirinin varyansini
+ * modelledik" demektir; modellemiyoruz. Genisligi uydurulmus bir bant, kesin
+ * gosterilen tahminden daha yaniltici olurdu.
+ *
+ * SOZLESME: [forecast] listesinin ilk noktasi BUGUNDUR - yani [actual]
+ * listesinin son noktasiyla ayni ani gosterir. Iki seri o noktada birlesir.
  */
 @Composable
 fun KefeProjectionChart(
     actual: List<Point>,
     forecast: List<Point>,
-    bandLow: List<Point>,
-    bandHigh: List<Point>,
     goal: Double,
     goalLabel: String,
     todayLabel: String = "bugün",
@@ -63,13 +67,18 @@ fun KefeProjectionChart(
         val allValues = buildList {
             actual.forEach { add(it.y.toDouble()) }
             forecast.forEach { add(it.y.toDouble()) }
-            bandLow.forEach { add(it.y.toDouble()) }
-            bandHigh.forEach { add(it.y.toDouble()) }
         }
         val range = valueRangeOf(allValues).padded(0.08)
 
         // Gerceklesen ve tahmin arka arkaya tek bir zaman ekseninde durur.
-        val totalCount = actual.size + forecast.size
+        // [forecast] ilk noktasi BUGUNU gosterir, yani gerceklesenin son
+        // noktasiyla ayni ana denk gelir; ikisi ayni yuvayi paylasir. Once
+        // tahmin bir yuva saga kaydiriliyor ve basina son gerceklesen nokta
+        // ekleniyordu: ayni deger iki kez cizildigi icin egri bugunden sonra
+        // bir sure DUZ gidiyor, sonra kalkiyordu. Duz kisim veri degil,
+        // ciziciden geliyordu.
+        val forecastStart = (actual.size - 1).coerceAtLeast(0)
+        val totalCount = if (forecast.isEmpty()) actual.size else forecastStart + forecast.size
         val scale = ChartScale(
             left = left,
             top = dataTop,
@@ -80,23 +89,9 @@ fun KefeProjectionChart(
         )
 
         val actualPts = actual.mapIndexed { i, p -> Point(scale.x(i), scale.y(p.y.toDouble())) }
-        val forecastStart = actual.size - 1
-        val forecastPts = forecast.mapIndexed { i, p ->
-            Point(scale.x(actual.size + i), scale.y(p.y.toDouble()))
+        val forecastLine = forecast.mapIndexed { i, p ->
+            Point(scale.x(forecastStart + i), scale.y(p.y.toDouble()))
         }
-        // Tahmin cizgisi gecis noktasindan baslar, kopuk gorunmez.
-        val forecastLine = if (actualPts.isNotEmpty()) {
-            listOf(actualPts.last()) + forecastPts
-        } else {
-            forecastPts
-        }
-
-        fun bandPoints(list: List<Point>): List<Point> = list.mapIndexed { i, p ->
-            Point(scale.x((forecastStart + 1 + i).coerceAtLeast(0)), scale.y(p.y.toDouble()))
-        }
-
-        val highPts = bandPoints(bandHigh)
-        val lowPts = bandPoints(bandLow)
 
         // Taban ekseni
         drawLine(
@@ -105,15 +100,6 @@ fun KefeProjectionChart(
             end = Offset(right, plotBottom),
             strokeWidth = ChartDefaults.axisStroke.toPx(),
         )
-
-        // Belirsizlik bandi tahmin cizgisinin altinda kalir.
-        if (highPts.size >= 2 && lowPts.size >= 2) {
-            drawPath(
-                path = areaBetween(highPts, lowPts),
-                color = colors.accent,
-                alpha = 0.14f,
-            )
-        }
 
         // Hedef: kesikli yatay cizgi + cizginin ustunde sola hizali etiket.
         drawDashedLine(
@@ -147,7 +133,7 @@ fun KefeProjectionChart(
             )
         }
 
-        val actualLine = actualPts.ensureSegment(left, scale.x(max(0, forecastStart)))
+        val actualLine = actualPts.ensureSegment(left, scale.x(forecastStart))
         if (actualLine.size >= 2) {
             drawPath(
                 path = actualLine.smoothPath(),

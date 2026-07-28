@@ -40,6 +40,7 @@ import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.label
+import com.kefe.app.domain.model.monthLabel
 import com.kefe.app.data.sample.SampleData
 import com.kefe.app.data.sample.SampleSeries
 import com.kefe.app.ui.brand.KefeAnimatedMark
@@ -163,17 +164,11 @@ fun DesignSystemGallery(
         val projectionForecast = remember {
             SampleSeries.projectionForecast.mapIndexed { i, v -> Point(i.toFloat(), v.toFloat()) }
         }
-        val projectionLow = remember {
-            SampleSeries.bandLow.mapIndexed { i, v -> Point(i.toFloat(), v.toFloat()) }
-        }
-        val projectionHigh = remember {
-            SampleSeries.bandHigh.mapIndexed { i, v -> Point(i.toFloat(), v.toFloat()) }
-        }
         val contributionMonths = remember {
-            SampleSeries.monthlyContributions.map { month ->
+            SampleSeries.galleryContributions.map { month ->
                 MonthBar(
-                    label = month.monthLabel,
-                    segments = month.segments.map { BarSegment(it.assetClass.color(), it.amount) },
+                    label = month.date.monthLabel(),
+                    segments = month.slices.map { BarSegment(it.assetClass.color(), it.amount) },
                 )
             }
         }
@@ -724,12 +719,10 @@ fun DesignSystemGallery(
                             )
 
                             KefeHairline()
-                            Caption("Projeksiyon: gerçekleşen dolu, tahmin kesikli, belirsizlik bandı zamanla genişler.")
+                            Caption("Projeksiyon: gerçekleşen dolu, tahmin kesikli.")
                             KefeProjectionChart(
                                 actual = projectionActual,
                                 forecast = projectionForecast,
-                                bandLow = projectionLow,
-                                bandHigh = projectionHigh,
                                 goal = SampleSeries.projectionTarget,
                                 goalLabel = "hedef",
                             )

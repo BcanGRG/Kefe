@@ -1,10 +1,10 @@
 package com.kefe.app.ui.screens.goals
 
-import com.kefe.app.data.sample.MonthlyContribution
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalMilestone
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.MonthlyContribution
 
 enum class GoalDetailStage { Loading, Ready, Missing }
 
@@ -14,14 +14,16 @@ data class ContributionRow(
     val monthLabel: String,
     /** 0.0 ise o ay katki yapilmamistir - tabloda "katkı yok" yazar. */
     val contribution: Double,
-    val monthEnd: Double,
-    val gain: Double,
+    /** O ayin son fotografi. Fotograf yoksa null - "0" yazmak yanlis olurdu. */
+    val monthEnd: Double?,
+    /** Ay sonu - ay basi - katki. Iki ucundan biri bilinmiyorsa null. */
+    val gain: Double?,
 )
 
 data class GoalDetailUiState(
     val stage: GoalDetailStage = GoalDetailStage.Loading,
     val goal: Goal? = null,
-    /** Son anlik goruntunun tarihi - "bugun" tum hesaplarda buradan gelir. */
+    /** Gercek bugun - tum ay hesaplari buradan gelir. */
     val today: KefeDate = KefeDate(2026, 7, 1),
 
     /** Ilerleme TOPLAM birikime gore olculur. */
@@ -33,10 +35,12 @@ data class GoalDetailUiState(
     /** Tahmin hedef tarihini kac ay asiyor (negatifse erken). */
     val delayMonths: Int = 0,
 
+    /** Gerceklesen: gunluk net deger fotograflari. */
     val projectionActual: List<Double> = emptyList(),
+    /** Tahmin: bugunku birikim + her ay eklenecek katki. Belirsizlik bandi yok. */
     val projectionForecast: List<Double> = emptyList(),
-    val bandLow: List<Double> = emptyList(),
-    val bandHigh: List<Double> = emptyList(),
+    /** Tahmine gore hedefe varis. Aylik katki 0 ise null - tahmin edilemez. */
+    val projectedArrival: KefeDate? = null,
 
     val milestones: List<GoalMilestone> = emptyList(),
     val months: List<MonthlyContribution> = emptyList(),

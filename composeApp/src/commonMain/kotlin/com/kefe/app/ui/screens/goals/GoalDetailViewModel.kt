@@ -2,14 +2,19 @@ package com.kefe.app.ui.screens.goals
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kefe.app.data.sample.SampleSeries
+import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.DailySnapshot
 import com.kefe.app.domain.model.Goal
-import com.kefe.app.domain.model.GoalMilestone
 import com.kefe.app.domain.model.GoalStatus
-import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.MonthlyContribution
+import com.kefe.app.domain.model.Position
+import com.kefe.app.domain.model.Transaction
+import com.kefe.app.domain.model.goalMilestones
+import com.kefe.app.domain.model.goalProjection
 import com.kefe.app.domain.model.monthLabel
 import com.kefe.app.domain.model.monthName
+import com.kefe.app.domain.model.monthOrdinal
+import com.kefe.app.domain.model.monthlyContributions
 import com.kefe.app.domain.model.plusMonths
 import com.kefe.app.domain.model.progress
 import com.kefe.app.domain.repository.PortfolioRepository
@@ -20,8 +25,17 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+/** Katki gecmisi tablosunun penceresi - tasarimdaki gibi son 12 ay. */
+private const val ContributionMonths = 12
+
 /**
  * Tek hedefin detayi: kefe kavisi, projeksiyon, senaryo ve katki gecmisi.
+ *
+ * Projeksiyon ve katki gecmisi ONCE ORNEK SERIDEN geliyordu: kullanicinin kendi
+ * rakami tepede dururken altinda baskasinin gecmisi ve baskasinin egrisi
+ * duruyordu. Artik ucu de kullanicinin verisinden turer - gerceklesen egri
+ * gunluk fotograflardan, katkilar islem defterinden, tahmin bugunku birikim ile
+ * hedefin aylik katkisindan.
  *
  * Senaryo egrisi tasarimdaki degerleri birebir uretir. Formul
  *   ay = K / (aylik katki [bin TL] + ScenarioInertia)
@@ -31,6 +45,7 @@ import kotlin.math.roundToInt
  */
 class GoalDetailViewModel(
     private val portfolioRepository: PortfolioRepository,
+    private val clock: KefeClock,
     private val goalId: String,
 ) : ViewModel() {
 
@@ -68,12 +83,13 @@ class GoalDetailViewModel(
                 portfolioRepository.observeGoals(),
                 portfolioRepository.observePositions(),
                 portfolioRepository.observeSnapshots(),
-            ) { goals, positions, snapshots ->
+                portfolioRepository.observeAllTransactions(),
+            ) { goals, positions, snapshots, transactions ->
                 val goal = goals.firstOrNull { it.id == goalId }
                 if (goal == null) {
                     _state.value.copy(stage = GoalDetailStage.Missing, goal = null)
                 } else {
-                    build(goal, positions.sumOf { it.value }, snapshots)
+                    build(goal, positions, snapshots, transactions)
                 }
             }.collect { _state.value = it }
         }
@@ -81,14 +97,20 @@ class GoalDetailViewModel(
 
     private fun build(
         goal: Goal,
-        wealth: Double,
+        positions: List<Position>,
         snapshots: List<DailySnapshot>,
+        transactions: List<Transaction>,
     ): GoalDetailUiState {
         val previous = _state.value
-        val today = snapshots.lastOrNull()?.date ?: previous.today
-        val rows = buildRows(snapshots)
-        val emptyIndex = SampleSeries.monthlyContributions.indexOfFirst { it.isEmpty }
-        val emptyDate = snapshots.getOrNull(emptyIndex + 1)?.date
+        val wealth = positions.sumOf { it.value }
+        val today = clock.today()
+
+        // Katki gecmisi DEFTERDEN, projeksiyon FOTOGRAFLARDAN. Ikisi de once
+        // ornek seriden okunuyordu: kullanicinin kendi rakami tepede dururken
+        // altinda baskasinin gecmisi ve baskasinin egrisi duruyordu.
+        val months = monthlyContributions(transactions, positions, ContributionMonths, today)
+        val projection = goalProjection(snapshots, goal, wealth, today)
+        val rows = buildRows(months, snapshots)
 
         val base = previous.copy(
             stage = GoalDetailStage.Ready,
@@ -98,15 +120,14 @@ class GoalDetailViewModel(
             progress = goal.progress(wealth),
             monthsToTarget = (goal.targetDate.monthIndex() - today.monthIndex())
                 .coerceAtLeast(0),
-            delayMonths = (goal.estimatedArrival ?: goal.targetDate).monthIndex() -
+            delayMonths = (projection.arrival ?: goal.targetDate).monthIndex() -
                 goal.targetDate.monthIndex(),
-            projectionActual = SampleSeries.projectionActual,
-            projectionForecast = SampleSeries.projectionForecast,
-            bandLow = SampleSeries.bandLow,
-            bandHigh = SampleSeries.bandHigh,
-            milestones = milestonesFor(goal, wealth),
-            months = SampleSeries.monthlyContributions,
-            emptyMonthLocative = emptyDate?.let { trMonthLocative(it.month) },
+            projectionActual = projection.actual,
+            projectionForecast = projection.forecast,
+            projectedArrival = projection.arrival,
+            milestones = goalMilestones(goal, wealth, projection.forecast, today),
+            months = months,
+            emptyMonthLocative = gapMonth(months)?.let { trMonthLocative(it.date.month) },
             rows = rows,
             collapsedRows = collapseRows(rows),
             baseContribution = goal.monthlyContribution,
@@ -123,22 +144,51 @@ class GoalDetailViewModel(
         return base.withScenario(start)
     }
 
-    private fun buildRows(snapshots: List<DailySnapshot>): List<ContributionRow> =
-        SampleSeries.monthlyContributions.mapIndexed { index, month ->
-            // Katki listesi anlik goruntularle hizalidir: snapshots[i] ay basi,
-            // snapshots[i + 1] ay sonu.
-            val end = snapshots.getOrNull(index + 1)
-            val endValue = end?.totalValue ?: 0.0
-            val startValue = snapshots.getOrNull(index)?.totalValue ?: endValue
+    /**
+     * Katki tablosu: her ay ne konuldu, ay sonu ne oldu, ne kadari getiri.
+     *
+     * Ay sonu degeri o aya ait SON fotograftan gelir. Fotograf yoksa - ki yeni
+     * kullanicida cogu ay boyledir - ay sonu ve getiri bos birakilir; bilinmeyen
+     * yerine sifir yazmak "o ay hicbir sey kazanmadin" demek olurdu.
+     */
+    private fun buildRows(
+        months: List<MonthlyContribution>,
+        snapshots: List<DailySnapshot>,
+    ): List<ContributionRow> {
+        val lastOfMonth = snapshots.groupBy { it.date.monthOrdinal() }
+            .mapValues { (_, list) -> list.maxByOrNull { it.date.day }?.totalValue }
+
+        return months.map { month ->
+            val ordinal = month.date.monthOrdinal()
+            val end = lastOfMonth[ordinal]
+            val start = lastOfMonth[ordinal - 1]
             ContributionRow(
-                monthLabel = end?.date?.let { "${it.monthLabel()} ${it.year}" }
-                    ?: month.monthLabel,
+                monthLabel = "${month.date.monthLabel()} ${month.date.year}",
                 contribution = month.total,
-                monthEnd = endValue,
-                // Getiri = ay sonu - ay basi - o ay eklenen para.
-                gain = endValue - startValue - month.total,
+                monthEnd = end,
+                // Getiri = ay sonu - ay basi - o ay eklenen para. Iki ucundan
+                // biri bilinmiyorsa hesaplanamaz.
+                gain = if (end != null && start != null) end - start - month.total else null,
             )
         }.reversed()
+    }
+
+    /**
+     * Grafigin altindaki "Kasım'da katkı yok" notunun konusu: katki YAPILAN iki
+     * ayin ARASINDA kalan bos ay.
+     *
+     * Tasarim bu notu dolu bir yilin icindeki tek boslugu anlatmak icin
+     * koymustu. Yeni kullanicida on ay bos oldugu icin not once "Haziran'da
+     * katki yok" diyordu - hem gurultu, hem de cumlenin devami ("ay sonu deger
+     * piyasa hareketiyle degisti") yanlisti: o ayin bir ay sonu degeri yok.
+     * Gercek bir bosluk yoksa not hic cikmaz.
+     */
+    private fun gapMonth(months: List<MonthlyContribution>): MonthlyContribution? {
+        val first = months.indexOfFirst { !it.isEmpty }
+        val last = months.indexOfLast { !it.isEmpty }
+        if (first < 0 || last - first < 2) return null
+        return months.subList(first + 1, last).lastOrNull { it.isEmpty }
+    }
 
     /** Tasarim: en yeni uc ay, ayrica katkisiz ay listede degilse o da eklenir. */
     private fun collapseRows(rows: List<ContributionRow>): List<ContributionRow> {
@@ -146,12 +196,6 @@ class GoalDetailViewModel(
         val empty = rows.firstOrNull { it.contribution <= 0.0 }
         return if (empty == null || empty in head) head else head + empty
     }
-
-    private fun milestonesFor(goal: Goal, wealth: Double): List<GoalMilestone> =
-        SampleSeries.milestones.map { milestone ->
-            val amount = goal.amount * milestone.percent / 100.0
-            milestone.copy(amount = amount, reached = wealth >= amount)
-        }
 }
 
 // --- Senaryo ---------------------------------------------------------------
@@ -168,7 +212,9 @@ private const val ScenarioOpeningStep = 15f
 private fun GoalDetailUiState.withScenario(thousands: Float): GoalDetailUiState {
     val goal = goal ?: return copy(scenarioContribution = thousands)
 
-    val arrivalMonths = ((goal.estimatedArrival ?: goal.targetDate).monthIndex() -
+    // Referans nokta hedefin KENDI tahmini varisi; boylece kaydirici mevcut
+    // katkida birakildiginda ekranin ustundeki tarihi tekrar eder.
+    val arrivalMonths = ((projectedArrival ?: goal.targetDate).monthIndex() -
         today.monthIndex()).coerceAtLeast(1)
     val k = arrivalMonths * (goal.monthlyContribution / 1000.0 + ScenarioInertia)
 

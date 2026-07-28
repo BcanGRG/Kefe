@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.formatMonthYear
+import com.kefe.app.domain.model.monthLabel
 import com.kefe.app.ui.charts.BarSegment
 import com.kefe.app.ui.charts.KefeGoalRing
 import com.kefe.app.ui.charts.KefeProjectionChart
@@ -379,8 +380,6 @@ private fun ProjectionCard(goal: Goal, state: GoalDetailUiState) {
         KefeProjectionChart(
             actual = state.projectionActual.toPoints(),
             forecast = state.projectionForecast.toPoints(),
-            bandLow = state.bandLow.toPoints(),
-            bandHigh = state.bandHigh.toPoints(),
             goal = goal.amount,
             goalLabel = "₺${Money.compact(goal.amount)} hedef",
             modifier = Modifier.fillMaxWidth(),
@@ -418,15 +417,6 @@ private fun ProjectionCard(goal: Goal, state: GoalDetailUiState) {
                         },
                 )
             }
-            LegendItem("Belirsizlik aralığı") {
-                Box(
-                    Modifier
-                        .width(12.dp)
-                        .height(10.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(c.accent.copy(alpha = 0.25f)),
-                )
-            }
         }
 
         Spacer(Modifier.height(Space.x14))
@@ -438,7 +428,7 @@ private fun ProjectionCard(goal: Goal, state: GoalDetailUiState) {
                 .padding(Space.x12),
         ) {
             Text(
-                text = projectionSummary(goal, state.delayMonths),
+                text = projectionSummary(goal, state),
                 style = t.caption.copy(lineHeight = 20.sp),
                 color = c.onSurface,
             )
@@ -464,18 +454,36 @@ private fun LegendItem(label: String, marker: @Composable () -> Unit) {
     }
 }
 
-private fun projectionSummary(goal: Goal, delayMonths: Int) = buildAnnotatedString {
-    val arrival = (goal.estimatedArrival ?: goal.targetDate).formatMonthYear()
-    append("Son 6 ayın ortalama katkısı ve getirisiyle devam ederseniz hedefe ")
-    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(arrival) }
+/**
+ * Tahmin cumlesi. Once "son 6 ayin ortalama katkisi ve getirisiyle" diyordu -
+ * ikisi de yalandi: seri ornek veriden geliyordu ve hicbir getiri
+ * hesaplanmiyordu. Artik cumle modelin AYNISINI soyler: aylik katki, getiri
+ * varsayimi yok.
+ */
+private fun projectionSummary(goal: Goal, state: GoalDetailUiState) = buildAnnotatedString {
+    val arrival = state.projectedArrival
+    if (arrival == null) {
+        append("Bu hedefe aylık katkı tanımlanmadığı için varış tarihi tahmin edilemiyor. ")
+        append("Hedefi düzenleyip aylık katkı girin.")
+        return@buildAnnotatedString
+    }
+
+    append("Ayda ")
+    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
+        append(Money.tl(goal.monthlyContribution))
+    }
+    append(" katkıyla devam ederseniz hedefe ")
+    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(arrival.formatMonthYear()) }
     append(" civarında ulaşırsınız")
     append(
         when {
-            delayMonths > 0 -> " — planladığınızdan $delayMonths ay geç."
-            delayMonths < 0 -> " — planladığınızdan ${-delayMonths} ay erken."
+            state.delayMonths > 0 -> " — planladığınızdan ${state.delayMonths} ay geç."
+            state.delayMonths < 0 -> " — planladığınızdan ${-state.delayMonths} ay erken."
             else -> " — tam hedef tarihinde."
         },
     )
+    // Getiri VARSAYILMAZ; tahmin yalnizca eklenecek parayi sayar.
+    append(" Piyasa getirisi hesaba katılmaz.")
 }
 
 // --- Senaryo ---------------------------------------------------------------
@@ -632,8 +640,8 @@ private fun HistoryCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) -
         KefeStackedBarChart(
             months = state.months.map { month ->
                 MonthBar(
-                    label = month.monthLabel,
-                    segments = month.segments.map {
+                    label = month.date.monthLabel(),
+                    segments = month.slices.map {
                         BarSegment(it.assetClass.color(), it.amount)
                     },
                 )
@@ -682,18 +690,19 @@ private fun HistoryCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) -
                     align = TextAlign.End,
                     color = if (muted) c.onSurfaceMuted else c.onSurface,
                 )
+                // O aya ait fotograf yoksa tire: bilinmeyen deger sifir degildir.
                 BodyCell(
-                    text = Money.tl(row.monthEnd),
+                    text = row.monthEnd?.let { Money.tl(it) } ?: "—",
                     weight = 1.2f,
                     align = TextAlign.End,
-                    color = c.onSurface,
+                    color = if (row.monthEnd == null) c.onSurfaceMuted else c.onSurface,
                 )
                 // Isaret her zaman yazilir: renk tek sinyal degildir.
                 BodyCell(
-                    text = Money.tlSigned(row.gain),
+                    text = row.gain?.let { Money.tlSigned(it) } ?: "—",
                     weight = 1f,
                     align = TextAlign.End,
-                    color = c.delta(row.gain),
+                    color = row.gain?.let { c.delta(it) } ?: c.onSurfaceMuted,
                 )
             }
         }
