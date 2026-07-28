@@ -5,6 +5,7 @@ import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.ActivityKind
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.Currency
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.Karat
 import com.kefe.app.domain.model.Member
@@ -73,6 +74,8 @@ class AddTransactionViewModel(
             is AddTransactionIntent.SelectSubtype -> update(s.copy(selectedSubtype = intent.subtype))
 
             is AddTransactionIntent.SelectKarat -> update(s.copy(karat = intent.karat))
+
+            is AddTransactionIntent.SelectCurrency -> update(s.copy(currency = intent.currency))
 
             is AddTransactionIntent.ChangeGram -> update(s.copy(gramText = intent.text))
 
@@ -194,6 +197,14 @@ class AddTransactionViewModel(
             karatOptions = Karat.entries.map {
                 KaratOption(it, karatGramPrice(it, prices, s.side))
             },
+            currencyOptions = Currency.entries.map { currency ->
+                CurrencyOption(
+                    currency = currency,
+                    priceText = prices.byKey(currency.priceKey())
+                        ?.let { Money.tl(it.buyPrice(), decimals = 2) }
+                        .orEmpty(),
+                )
+            },
             fundResults = fundCatalog(prices).filter { it.matches(s.fundQuery) },
             marketPrice = market,
             unitPriceText = when {
@@ -235,6 +246,10 @@ class AddTransactionViewModel(
                     // secim bununla eslesmezse kayit yeni bir pozisyona yazilir.
                     selectedFundKey = position.id.removePrefix("pos_")
                         .takeIf { position.assetClass == AssetClass.Fund },
+                    // Doviz de kimlikten cozulur; yoksa euro kaydi duzenlenirken
+                    // dolar secili gelir ve kaydedince dolara tasinirdi.
+                    currency = Currency.fromPriceKey(position.id.removePrefix("pos_"))
+                        ?: s.currency,
                     side = transaction.side,
                     quantityText = Money.number(
                         transaction.quantity,
@@ -409,7 +424,7 @@ private fun marketPriceOf(s: AddTransactionUiState, board: PriceBoard): Double =
         }
 
         AssetClass.Silver -> board.byKey("silver_gram")?.forSide(s.side) ?: 0.0
-        AssetClass.Fx -> board.byKey("usd_try")?.forSide(s.side) ?: 0.0
+        AssetClass.Fx -> board.byKey(s.currency.priceKey())?.forSide(s.side) ?: 0.0
         AssetClass.Fund -> s.selectedFundKey?.let { key ->
             s.fundResults.firstOrNull { it.assetKey == key }?.price
         } ?: 0.0
@@ -484,6 +499,11 @@ private fun Position.matches(s: AddTransactionUiState): Boolean = when (s.assetC
     AssetClass.Fund -> assetClass == AssetClass.Fund &&
         s.selectedFund?.code?.let { name.startsWith(it) } == true
 
+    // Para birimi de eslesmeli. Once yalniz sinifa bakiliyordu: euro girilirse
+    // kayit dolar pozisyonunun defterine yaziliyor, iki para birimi tek satirda
+    // toplaniyordu.
+    AssetClass.Fx -> assetClass == AssetClass.Fx && id == "pos_" + s.currency.priceKey()
+
     else -> assetClass == s.assetClass
 }
 
@@ -496,18 +516,13 @@ private fun assetKeyOf(s: AddTransactionUiState): String = when (s.assetClass) {
 
     AssetClass.Fund -> s.selectedFundKey.orEmpty()
     AssetClass.Silver -> "silver_gram"
-    AssetClass.Fx -> "usd_try"
+    AssetClass.Fx -> s.currency.priceKey()
     AssetClass.Cash -> "cash"
 }
 
 private fun newPositionId(s: AddTransactionUiState): String = "pos_" + assetKeyOf(s)
 
-/**
- * Yeni pozisyonun gorunen adi.
- *
- * SINIR: doviz secimi (USD/EUR/diger) durumda modellenmemis - [assetKeyOf] da
- * "usd_try" varsayiyor. Doviz secici eklendiginde ikisi birlikte duzeltilmeli.
- */
+/** Yeni pozisyonun gorunen adi. */
 private fun newPositionName(s: AddTransactionUiState): String = when (s.assetClass) {
     AssetClass.Gold -> if (s.selectedSubtype == GoldSubtype.Jewelry) {
         "${s.karat.label()} Takı"
@@ -517,7 +532,7 @@ private fun newPositionName(s: AddTransactionUiState): String = when (s.assetCla
 
     AssetClass.Fund -> s.selectedFund?.let { "${it.code} · ${it.name}" } ?: "Fon"
     AssetClass.Silver -> "Gram Gümüş"
-    AssetClass.Fx -> "Amerikan Doları"
+    AssetClass.Fx -> s.currency.label()
     AssetClass.Cash -> "Nakit"
 }
 

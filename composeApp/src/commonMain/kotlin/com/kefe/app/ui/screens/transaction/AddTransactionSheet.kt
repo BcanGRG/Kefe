@@ -345,8 +345,69 @@ private fun StepAsset(
             InfoLine("Fon fiyatları günde bir kez, TEFAS kapanışıyla güncellenir.")
         }
 
-        // Gumus, doviz ve nakitte alt tur yoktur; dogrudan ikinci adima gecilir.
+        // Doviz secilebilir olmali: once secim YOKTU ve her kayit sessizce
+        // dolar oluyordu - euro girmenin bir yolu bulunmuyordu.
+        AssetClass.Fx -> {
+            Spacer(Modifier.height(Space.x20))
+            SectionLabel("Para birimi")
+            Spacer(Modifier.height(Space.x8))
+            CurrencyList(state, onIntent)
+            Spacer(Modifier.height(Space.x10))
+            InfoLine("Kurlar TCMB günlük bülteninden gelir; hafta içi bir kez yayınlanır.")
+        }
+
+        // Gumus ve nakitte alt tur yoktur; dogrudan ikinci adima gecilir.
         else -> Unit
+    }
+}
+
+@Composable
+private fun CurrencyList(
+    state: AddTransactionUiState,
+    onIntent: (AddTransactionIntent) -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(KefeShapes.card)
+            .background(c.surface)
+            .border(Sizes.hairline, c.outline, KefeShapes.card),
+    ) {
+        state.currencyOptions.forEachIndexed { index, option ->
+            if (index > 0) KefeHairline()
+            val selected = option.currency == state.currency
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(if (selected) c.accentMuted else Color.Transparent)
+                    .clickable(role = Role.RadioButton) {
+                        onIntent(AddTransactionIntent.SelectCurrency(option.currency))
+                    }
+                    .padding(horizontal = Space.x14, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioDot(selected)
+                Spacer(Modifier.width(Space.x12))
+                Text(
+                    text = option.currency.label(),
+                    style = t.body,
+                    color = c.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(Space.x12))
+                Text(
+                    // Kuru cekilemeyen para birimi "—" ile gosterilir; sifir
+                    // yazmak fiyatin sifir oldugunu soylerdi.
+                    text = option.priceText.ifBlank { "—" },
+                    style = t.caption.tabular(),
+                    color = c.onSurfaceMuted,
+                    maxLines = 1,
+                )
+            }
+        }
     }
 }
 
@@ -824,9 +885,14 @@ private fun QuantityField(
             modifier = Modifier.weight(1f),
             placeholder = "0",
         )
-        // Nakit ve dovizde birim yazilmaz. Bos metin birakilsaydi satirin
-        // 8dp'lik aralik duzeni yuzunden olu bosluk kalirdi.
-        val unit = state.quantityUnit.label()
+        // Nakitte birim yazilmaz (tutar zaten TL). Dovizde ise para biriminin
+        // simgesi yazilir: "250" tek basina hangi paradan 250 oldugunu
+        // soylemiyor.
+        val unit = if (state.assetClass == AssetClass.Fx) {
+            state.currency.symbol()
+        } else {
+            state.quantityUnit.label()
+        }
         if (unit.isNotEmpty()) {
             Text(text = unit, style = KefeTheme.type.body, color = c.onSurfaceMuted)
         }

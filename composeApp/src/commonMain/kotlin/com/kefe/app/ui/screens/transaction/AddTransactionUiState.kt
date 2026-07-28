@@ -1,6 +1,7 @@
 package com.kefe.app.ui.screens.transaction
 
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.Currency
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.Karat
 import com.kefe.app.domain.model.KefeDate
@@ -23,6 +24,12 @@ data class SubtypeOption(
 data class KaratOption(
     val karat: Karat,
     val gramPrice: Double,
+)
+
+/** Doviz satiri - ad modelden, fiyat metni fiyat tablosundan gelir. */
+data class CurrencyOption(
+    val currency: Currency,
+    val priceText: String,
 )
 
 /** Fon arama sonucu satiri. */
@@ -60,6 +67,9 @@ data class AddTransactionUiState(
     val fundQuery: String = "",
     val fundResults: List<FundResult> = emptyList(),
     val selectedFundKey: String? = null,
+    /** Doviz secimi. Once secim yoktu ve her kayit sessizce USD oluyordu. */
+    val currency: Currency = Currency.Usd,
+    val currencyOptions: List<CurrencyOption> = emptyList(),
 
     // --- 2. adim -----------------------------------------------------------
     val side: TradeSide = TradeSide.Buy,
@@ -113,6 +123,7 @@ sealed interface AddTransactionIntent {
     data class SelectAssetClass(val assetClass: AssetClass) : AddTransactionIntent
     data class SelectSubtype(val subtype: GoldSubtype) : AddTransactionIntent
     data class SelectKarat(val karat: Karat) : AddTransactionIntent
+    data class SelectCurrency(val currency: Currency) : AddTransactionIntent
     data class ChangeGram(val text: String) : AddTransactionIntent
     data class ChangeFundQuery(val text: String) : AddTransactionIntent
     data class SelectFund(val assetKey: String) : AddTransactionIntent
@@ -180,6 +191,9 @@ val AddTransactionUiState.selectionName: String
         }
 
         AssetClass.Fund -> selectedFund?.let { "${it.code} · ${it.name}" } ?: assetClass.label()
+        // "Döviz" degil "Euro": ikinci adimda hangi para biriminin girildigi
+        // gorunmezse kullanici yanlis kuru kaydettigini anlamaz.
+        AssetClass.Fx -> currency.label()
         else -> assetClass.label()
     }
 

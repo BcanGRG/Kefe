@@ -1,6 +1,7 @@
 package com.kefe.app.data.remote
 
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.Currency
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.PriceSource
 
@@ -116,10 +117,17 @@ private val MetalMapping: Map<String, SymbolMapping> = mapOf(
     "silver_gram" to SymbolMapping("GUMUS", "Gram Gümüş", AssetClass.Silver),
 )
 
-private val CurrencyMapping: Map<String, SymbolMapping> = mapOf(
-    "usd_try" to SymbolMapping("USD", "USD/TRY", AssetClass.Fx),
-    "eur_try" to SymbolMapping("EUR", "EUR/TRY", AssetClass.Fx),
-)
+/**
+ * Portfoye girilebilen her para birimi icin bir satir - liste [Currency]'den
+ * turer ki secilebilen ama fiyati olmayan bir para birimi olusmasin.
+ */
+private val CurrencyMapping: Map<String, SymbolMapping> = Currency.entries.associate { currency ->
+    currency.priceKey() to SymbolMapping(
+        symbol = currency.code,
+        label = "${currency.code}/TRY",
+        assetClass = AssetClass.Fx,
+    )
+}
 
 /**
  * Baslangicta cekilen fonlar.
