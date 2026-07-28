@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -16,6 +18,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,9 +94,21 @@ private val arcSweepAngle = run {
 }
 
 /**
+ * Tutar satirinin kasenin ICINE sigabilecegi en genis olcu.
+ *
+ * Kasenin ic yaricapi 57 birim (yaricap 64, kalinlik 14). Tutar satiri yay
+ * merkezinin ~35 birim altinda durur; o yukseklikteki kiris yariyarıya
+ * sqrt(57^2 - 35^2) = 45 birim eder. Cizim olcegi ~1 oldugu icin dp ile ayni.
+ */
+private val AmountMaxWidth = 90.dp
+
+/**
  * Hedef ilerlemesi halkasi.
  *
  * @param progress 0..1 arasi doluluk.
+ * @param centerAmount tam yazim ("₺19.587 / ₺100.000").
+ * @param centerAmountShort kisa yazim ("₺19,6B / ₺100B") - tam yazim kaseye
+ *   sigmadiginda kullanilir. Verilmezse tam yazim kucultulmeden yazilir.
  * @param milestones yay uzerinde ayirici cizilecek oranlar.
  */
 @Composable
@@ -101,6 +117,7 @@ fun KefeGoalRing(
     centerPercent: String,
     centerAmount: String,
     modifier: Modifier = Modifier,
+    centerAmountShort: String? = null,
     color: Color = KefeTheme.colors.accent,
     trackColor: Color = KefeTheme.colors.surfaceSunken,
     milestones: List<Float> = listOf(.25f, .5f, .75f),
@@ -206,14 +223,26 @@ fun KefeGoalRing(
                 maxLines = 1,
                 textAlign = TextAlign.Center,
             )
+            // Tutar kasenin ICINDE kalmali. Once tam yazim kasenin disina
+            // tasiyor, yayin ve uzerindeki kilometre noktalarinin ustune
+            // biniyordu: rakam okunakli ama halka bozuk gorunuyordu.
+            val amountStyle = KefeTheme.type.caption
+                .copy(fontSize = 12.sp, lineHeight = 14.sp)
+                .tabular()
+            val measurer = rememberTextMeasurer()
+            val density = LocalDensity.current
+            val amountText = remember(centerAmount, centerAmountShort, amountStyle, density) {
+                val width = measurer.measure(centerAmount, amountStyle).size.width
+                val fits = with(density) { width.toDp() } <= AmountMaxWidth
+                if (fits || centerAmountShort == null) centerAmount else centerAmountShort
+            }
             Text(
-                text = centerAmount,
-                style = KefeTheme.type.caption
-                    .copy(fontSize = 12.sp, lineHeight = 14.sp)
-                    .tabular(),
+                text = amountText,
+                style = amountStyle,
                 color = colors.onSurfaceMuted,
                 maxLines = 1,
                 textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = AmountMaxWidth),
             )
         }
     }

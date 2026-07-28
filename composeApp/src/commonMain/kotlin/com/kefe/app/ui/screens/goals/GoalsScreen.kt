@@ -174,7 +174,7 @@ private fun GoalsBody(
             val dragging = goal.id == dragId
             GoalCard(
                 goal = goal,
-                totalWealth = state.totalWealth,
+                totalWealth = state.wealthByGoal[goal.id] ?: state.totalWealth,
                 sortMode = state.sortMode,
                 onClick = { onOpenGoal(goal.id) },
                 modifier = Modifier

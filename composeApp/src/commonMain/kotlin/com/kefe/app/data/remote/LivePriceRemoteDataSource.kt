@@ -1,6 +1,7 @@
 package com.kefe.app.data.remote
 
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.Currency
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.PriceSource
 
@@ -45,22 +46,41 @@ class LivePriceRemoteDataSource(
             )
         }
 
-        // Doviz ayri kaynak: dusesrse altin tablosu yine gosterilsin.
-        runCatching { tcmb.fetch() }.getOrNull()?.let { rates ->
-            CurrencyMapping.forEach { (assetKey, mapping) ->
-                val rate = rates[mapping.symbol] ?: return@forEach
-                prices += Price(
-                    assetKey = assetKey,
-                    label = mapping.label,
-                    bid = rate.buying,
-                    ask = rate.selling,
-                    // TCMB gunluk bulten; gun ici degisim yuzdesi vermez.
-                    changePercent = 0.0,
-                    timestamp = "TCMB",
-                    source = PriceSource.FreeMarket,
-                    assetClass = AssetClass.Fx,
-                )
-            }
+        // --- Doviz -----------------------------------------------------------
+        //
+        // ONCE SERBEST PIYASA, TCMB yedek.
+        //
+        // TCMB resmi bultendir ve HAFTA ICI GUNDE BIR yayinlanir: gun icinde hic
+        // degismez, hafta sonu bir oncekini verir. Ustelik referans kurdur,
+        // kimsenin alip sattigi fiyat degil. Serbest piyasa ayni istekte dakikalik
+        // ve gercek alis/satis makasiyla geliyor - "bugun bozdursam ne alirim"
+        // sorusu ancak onunla yanitlanir.
+        //
+        // TCMB yine de duruyor: serbest piyasada olmayan bir para birimi ya da
+        // eksik bir satir icin tek cagriyla devreye giriyor.
+        val missingFromFreeMarket = CurrencyMapping.filterValues { metals.quotes[it.symbol] == null }
+        val official = if (missingFromFreeMarket.isEmpty()) {
+            emptyMap()
+        } else {
+            runCatching { tcmb.fetch() }.getOrNull().orEmpty()
+        }
+
+        CurrencyMapping.forEach { (assetKey, mapping) ->
+            val free = metals.quotes[mapping.symbol]
+            val rate = official[mapping.symbol]
+            val bid = free?.buying ?: rate?.buying
+            val ask = free?.selling ?: rate?.selling ?: return@forEach
+            prices += Price(
+                assetKey = assetKey,
+                label = mapping.label,
+                bid = bid,
+                ask = ask,
+                // TCMB gunluk bulten; gun ici degisim yuzdesi vermez.
+                changePercent = free?.changePercent ?: 0.0,
+                timestamp = if (free != null) metalStamp else "TCMB",
+                source = PriceSource.FreeMarket,
+                assetClass = AssetClass.Fx,
+            )
         }
 
         fundCodes.forEach { code ->
@@ -116,10 +136,17 @@ private val MetalMapping: Map<String, SymbolMapping> = mapOf(
     "silver_gram" to SymbolMapping("GUMUS", "Gram Gümüş", AssetClass.Silver),
 )
 
-private val CurrencyMapping: Map<String, SymbolMapping> = mapOf(
-    "usd_try" to SymbolMapping("USD", "USD/TRY", AssetClass.Fx),
-    "eur_try" to SymbolMapping("EUR", "EUR/TRY", AssetClass.Fx),
-)
+/**
+ * Portfoye girilebilen her para birimi icin bir satir - liste [Currency]'den
+ * turer ki secilebilen ama fiyati olmayan bir para birimi olusmasin.
+ */
+private val CurrencyMapping: Map<String, SymbolMapping> = Currency.entries.associate { currency ->
+    currency.priceKey() to SymbolMapping(
+        symbol = currency.code,
+        label = "${currency.code}/TRY",
+        assetClass = AssetClass.Fx,
+    )
+}
 
 /**
  * Baslangicta cekilen fonlar.

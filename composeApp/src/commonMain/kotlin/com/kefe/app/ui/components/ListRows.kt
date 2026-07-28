@@ -212,22 +212,44 @@ fun KefeSectionHeader(
             .padding(horizontal = Space.x12, vertical = Space.x8),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(dotColor)
-        )
-        Spacer(Modifier.width(Space.x10))
-        Text(
-            text = title,
-            style = type.bodyStrong,
-            color = colors.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        Spacer(Modifier.weight(1f))
+        // Sol blok TEK bir agirlikli cocuk.
+        //
+        // Once nokta, baslik ve bosluk ayri ayri cocuklardi ve baslik
+        // `weight(1f, fill = false)` ile payinin tamamini kullanmiyordu; artan
+        // pay satirin SONUNDA bos kaliyordu. Tutar sutunu bu yuzden sag kenara
+        // oturmuyor, hemen altindaki varlik satirinin rakamindan ~40dp iceride
+        // duruyordu - cogu zaman ayni sayi, iki farkli hizada.
+        //
+        // Chevron da bu blogun icinde: acilip kapanma isareti basligin isi,
+        // tutarin degil.
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(dotColor)
+            )
+            Spacer(Modifier.width(Space.x10))
+            Text(
+                text = title,
+                style = type.bodyStrong,
+                color = colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Spacer(Modifier.width(6.dp))
+            Icon(
+                imageVector = chevronIcon,
+                contentDescription = null,
+                tint = colors.onSurfaceMuted,
+                modifier = Modifier.size(IconSize.small).rotate(rotation),
+            )
+        }
+        Spacer(Modifier.width(Space.x8))
         // Tasarimda tutar ve pay ALT ALTA durur, yan yana degil: sinif adi uzun
         // oldugunda (ornegin fon adlari) tek satira sigmiyorlardi.
         Column(horizontalAlignment = Alignment.End) {
@@ -247,13 +269,6 @@ fun KefeSectionHeader(
                 )
             }
         }
-        Spacer(Modifier.width(Space.x8))
-        Icon(
-            imageVector = chevronIcon,
-            contentDescription = null,
-            tint = colors.onSurfaceMuted,
-            modifier = Modifier.size(IconSize.small).rotate(rotation),
-        )
     }
 }
 

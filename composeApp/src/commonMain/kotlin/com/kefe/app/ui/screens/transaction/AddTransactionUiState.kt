@@ -1,6 +1,7 @@
 package com.kefe.app.ui.screens.transaction
 
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.Currency
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.Karat
 import com.kefe.app.domain.model.KefeDate
@@ -23,6 +24,12 @@ data class SubtypeOption(
 data class KaratOption(
     val karat: Karat,
     val gramPrice: Double,
+)
+
+/** Doviz satiri - ad modelden, fiyat metni fiyat tablosundan gelir. */
+data class CurrencyOption(
+    val currency: Currency,
+    val priceText: String,
 )
 
 /** Fon arama sonucu satiri. */
@@ -60,6 +67,9 @@ data class AddTransactionUiState(
     val fundQuery: String = "",
     val fundResults: List<FundResult> = emptyList(),
     val selectedFundKey: String? = null,
+    /** Doviz secimi. Once secim yoktu ve her kayit sessizce USD oluyordu. */
+    val currency: Currency = Currency.Usd,
+    val currencyOptions: List<CurrencyOption> = emptyList(),
 
     // --- 2. adim -----------------------------------------------------------
     val side: TradeSide = TradeSide.Buy,
@@ -78,6 +88,14 @@ data class AddTransactionUiState(
     val storage: String = "",
 
     // --- Ortak -------------------------------------------------------------
+    /**
+     * Duzenlenen islemin kimligi. null ise yeni kayit.
+     *
+     * Sheet ikisini de gorur: baslik, CTA ve alt not buna gore degisir. Yanlis
+     * girilen islem eskiden yalniz silinip yeniden eklenerek duzeltilebiliyordu;
+     * satirdaki kalem ikonu hicbir sey yapmiyordu.
+     */
+    val editingTransactionId: String? = null,
     val lastAdded: LastAdded? = null,
     /** Cevrimdisi kayit: serit, "Bekliyor" rozeti ve farkli CTA metni. */
     val offline: Boolean = false,
@@ -105,6 +123,7 @@ sealed interface AddTransactionIntent {
     data class SelectAssetClass(val assetClass: AssetClass) : AddTransactionIntent
     data class SelectSubtype(val subtype: GoldSubtype) : AddTransactionIntent
     data class SelectKarat(val karat: Karat) : AddTransactionIntent
+    data class SelectCurrency(val currency: Currency) : AddTransactionIntent
     data class ChangeGram(val text: String) : AddTransactionIntent
     data class ChangeFundQuery(val text: String) : AddTransactionIntent
     data class SelectFund(val assetKey: String) : AddTransactionIntent
@@ -126,6 +145,18 @@ sealed interface AddTransactionIntent {
     data class ChangeStorage(val text: String) : AddTransactionIntent
 
     data object Save : AddTransactionIntent
+
+    /** Var olan bir kaydi forma yukler; sheet dogrudan ikinci adimda acilir. */
+    data class EditTransaction(val transactionId: String) : AddTransactionIntent
+
+    /**
+     * Formu temiz bir yeni kayit icin hazirlar.
+     *
+     * ViewModel sheet kapaninca olmedigi icin bir onceki acilisin alanlari
+     * duruyordu. Duzenlemeden sonra en tehlikelisi [editingTransactionId]:
+     * temizlenmezse yeni kayit eski islemi de silerdi.
+     */
+    data class StartNew(val side: TradeSide) : AddTransactionIntent
 }
 
 // --- Turetilen degerler ------------------------------------------------------
@@ -134,10 +165,20 @@ val AddTransactionUiState.isFirstStep: Boolean
     get() = step == AddTransactionStep.Asset
 
 val AddTransactionUiState.stepTitle: String
-    get() = if (isFirstStep) "Ne?" else "Ne kadar?"
+    get() = when {
+        isEditing -> "İşlemi düzenle"
+        isFirstStep -> "Ne?"
+        else -> "Ne kadar?"
+    }
 
 val AddTransactionUiState.stepLabel: String
-    get() = if (isFirstStep) "1. adım · Varlık türünü seçin" else "2. adım · $selectionName"
+    get() = when {
+        // Duzenlemede adim sayaci yaniltici olurdu: kullanici bir akisa
+        // baslamiyor, var olan bir kaydi degistiriyor.
+        isEditing -> selectionName
+        isFirstStep -> "1. adım · Varlık türünü seçin"
+        else -> "2. adım · $selectionName"
+    }
 
 /** Secimin okunur adi - ikinci adimin alt basligi ve pozisyon adi. */
 val AddTransactionUiState.selectionName: String
@@ -150,6 +191,9 @@ val AddTransactionUiState.selectionName: String
         }
 
         AssetClass.Fund -> selectedFund?.let { "${it.code} · ${it.name}" } ?: assetClass.label()
+        // "Döviz" degil "Euro": ikinci adimda hangi para biriminin girildigi
+        // gorunmezse kullanici yanlis kuru kaydettigini anlamaz.
+        AssetClass.Fx -> currency.label()
         else -> assetClass.label()
     }
 
@@ -184,6 +228,15 @@ val AddTransactionUiState.fee: Double get() = feeText.parseTrNumber()
 
 val AddTransactionUiState.total: Double get() = quantity * unitPrice + fee
 
+/**
+ * Bu varlik icin piyasadan bir fiyat gelmis mi.
+ *
+ * Sifir bir fiyat DEGILDIR; fiyatin olmamasidir. Cevrimdisi ilk acilista
+ * onbellek bos oldugu icin sifir geliyordu ve ekran bunu "güncel fiyat" diye
+ * gosterip Kaydet'i sebepsiz pasif birakiyordu.
+ */
+val AddTransactionUiState.hasMarketPrice: Boolean get() = marketPrice > 0.0
+
 val AddTransactionUiState.priceDifference: Double get() = unitPrice - marketPrice
 
 /** Elle fiyat girildiginde alanin altindaki karsilastirma satiri. */
@@ -207,8 +260,12 @@ val AddTransactionUiState.ctaText: String
     get() = when {
         isFirstStep -> "Devam"
         offline -> "Çevrimdışı kaydet"
+        isEditing -> "Güncelle"
         else -> "Kaydet"
     }
+
+val AddTransactionUiState.isEditing: Boolean
+    get() = editingTransactionId != null
 
 /** Altligin ince aciklama satiri: cevrimdisiyken uyari, aksi halde hesap. */
 val AddTransactionUiState.footNote: String

@@ -58,8 +58,9 @@ val appModule = module {
     // Koin grafigi Compose icinde yeniden kurulsa bile ayni baglanti dondurulur.
     single { KefePlatform.database(get<KefeClock>().today(), SeedSampleData) }
 
-    single<PortfolioRepository> { SqlDelightPortfolioRepository(get(), get()) }
+    // Fiyat deposu ONCE: portfoy pozisyonlari okurken guncel fiyatla degerler.
     single<PriceRepository> { SqlDelightPriceRepository(get(), get(), get()) }
+    single<PortfolioRepository> { SqlDelightPortfolioRepository(get(), get(), get()) }
     single<PreferencesRepository> { SqlDelightPreferencesRepository(get()) }
 
     viewModelOf(::SummaryViewModel)
@@ -74,5 +75,5 @@ val appModule = module {
 
     // Detay ekranlari hedef/pozisyon kimligini calisma aninda alir.
     viewModel { (positionId: String) -> AssetDetailViewModel(get(), get(), get(), positionId) }
-    viewModel { (goalId: String) -> GoalDetailViewModel(get(), goalId) }
+    viewModel { (goalId: String) -> GoalDetailViewModel(get(), get(), goalId) }
 }

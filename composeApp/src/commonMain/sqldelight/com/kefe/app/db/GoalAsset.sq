@@ -1,0 +1,32 @@
+-- Varlik -> hedef atamasi.
+--
+-- AYRI TABLO, pozisyonda kolon degil. Uc sebep:
+--   1. positions tablosuna dokunmadan eklenir; defterle birlikte en cok yazilan
+--      tablo o.
+--   2. Iki yonlu ON DELETE CASCADE: hedef silinince atamalar duser, varlik
+--      silinince de. Kolon olsaydi hedef silindiginde pozisyonlarda oksuz
+--      kimlikler kalirdi.
+--   3. positionId PRIMARY KEY oldugu icin "bir varlik en fazla bir hedefe"
+--      kurali SEMADA durur, kodun hatirlamasi gereken bir sey degil.
+--
+-- Bolme (3 ceyregin 2'si Ev'e) bilincli olarak YOK: miktar tasiyan bir atama,
+-- satis olunca hangi hedeften dusuruleceginden fotograflarin nasil bolunecegine
+-- kadar ayri bir hesap defteri gerektirir. Once tam varlik.
+CREATE TABLE goal_assets (
+    positionId TEXT NOT NULL PRIMARY KEY REFERENCES positions(id) ON DELETE CASCADE,
+    goalId TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE
+);
+
+CREATE INDEX goal_assets_goal ON goal_assets(goalId);
+
+selectGoalAssets:
+SELECT *
+FROM goal_assets;
+
+assignPositionToGoal:
+INSERT OR REPLACE INTO goal_assets(positionId, goalId)
+VALUES (:positionId, :goalId);
+
+clearPositionAssignment:
+DELETE FROM goal_assets
+WHERE positionId = :positionId;

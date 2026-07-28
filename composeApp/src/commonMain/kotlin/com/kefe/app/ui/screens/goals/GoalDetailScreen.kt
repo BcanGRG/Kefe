@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -33,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.formatMonthYear
+import com.kefe.app.domain.model.monthLabel
 import com.kefe.app.ui.charts.BarSegment
 import com.kefe.app.ui.charts.KefeGoalRing
 import com.kefe.app.ui.charts.KefeProjectionChart
@@ -53,9 +57,12 @@ import com.kefe.app.ui.charts.Point
 import com.kefe.app.ui.components.KefeCard
 import com.kefe.app.ui.components.KefeEmptyState
 import com.kefe.app.ui.components.KefeHairline
+import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefeSlider
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.quantityLabel
+import com.kefe.app.ui.format.shortQuantityLabel
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
@@ -85,29 +92,37 @@ fun GoalDetailScreen(
 ) {
     val goal = state.goal
 
-    Column(modifier.fillMaxSize()) {
-        DetailTopBar(
-            title = goal?.name.orEmpty(),
-            onBack = onBack,
-            onEdit = onEdit,
-            editEnabled = goal != null,
-        )
-
-        if (goal == null) {
-            KefeEmptyState(
-                icon = KefeIcons.Target,
-                title = "Hedef bulunamadı",
-                body = "Bu hedef silinmiş olabilir. Hedefler listesine dönebilirsiniz.",
+    // Secici icerigin USTUNDE cizilir; Column olsaydi dikey akisa katilir,
+    // sayfanin altina bir kutu olarak eklenirdi.
+    Box(modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            DetailTopBar(
+                title = goal?.name.orEmpty(),
+                onBack = onBack,
+                onEdit = onEdit,
+                editEnabled = goal != null,
             )
-        } else {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                DetailBody(goal, state, onIntent, onEdit)
+
+            if (goal == null) {
+                KefeEmptyState(
+                    icon = KefeIcons.Target,
+                    title = "Hedef bulunamadı",
+                    body = "Bu hedef silinmiş olabilir. Hedefler listesine dönebilirsiniz.",
+                )
+            } else {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    DetailBody(goal, state, onIntent, onEdit)
+                }
             }
+        }
+
+        if (state.assetPickerOpen) {
+            AssetPickerSheet(state, onIntent)
         }
     }
 }
@@ -185,6 +200,9 @@ private fun DetailBody(
     RingCard(goal, state, onIntent, onEdit)
     Spacer(Modifier.height(BlockGap))
 
+    AssignedAssetsCard(state, onIntent)
+    Spacer(Modifier.height(BlockGap))
+
     if (state.showAnalysis) {
         ProjectionCard(goal, state)
         Spacer(Modifier.height(BlockGap))
@@ -194,6 +212,207 @@ private fun DetailBody(
         Spacer(Modifier.height(BlockGap))
         HistoryCard(state, onIntent)
         Spacer(Modifier.height(Space.x24))
+    }
+}
+
+// --- Bu hedefi karsilayanlar ------------------------------------------------
+
+/**
+ * Hedefin arkasindaki varliklar.
+ *
+ * Once hedef yalniz bir toplam gosteriyordu: "bu parayi hangi varliklarim
+ * olusturuyor" ve "birini baska hedefe aktarayim" sorularinin karsiligi yoktu.
+ *
+ * Atama YAPILMAMISSA kart bunu acikca soyler ve hedef tum birikimi saymaya devam
+ * eder - atamayla ugrasmak istemeyen biri hicbir seyini kaybetmez.
+ */
+@Composable
+private fun AssignedAssetsCard(
+    state: GoalDetailUiState,
+    onIntent: (GoalDetailIntent) -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    KefeCard(modifier = Modifier.padding(horizontal = Space.x16)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Bu hedefi karşılayanlar", style = t.bodyStrong, color = c.onSurface)
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = if (state.assignedAssets.isEmpty()) "Varlık seç" else "Düzenle",
+                style = t.caption,
+                color = c.accent,
+                modifier = Modifier.clickable(
+                    indication = null,
+                    interactionSource = null,
+                    onClick = { onIntent(GoalDetailIntent.OpenAssetPicker) },
+                ),
+            )
+        }
+
+        Spacer(Modifier.height(Space.x10))
+
+        if (state.assignedAssets.isEmpty()) {
+            Text(
+                "Varlık atanmadı — tüm birikiminiz bu hedefe sayılıyor. " +
+                    "Belirli varlıkları ayırmak isterseniz seçin.",
+                style = t.caption,
+                color = c.onSurfaceMuted,
+            )
+        } else {
+            state.assignedAssets.forEachIndexed { index, position ->
+                if (index > 0) KefeHairline()
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = Space.x10),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(c.assetClass(position.assetClass.color())),
+                    )
+                    Spacer(Modifier.width(Space.x10))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = position.name,
+                            style = t.body,
+                            color = c.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        // Miktar da yazilir: "₺19.587" tek basina kac ceyrek
+                        // oldugunu soylemiyor.
+                        Text(
+                            text = position.quantityLabel(),
+                            style = t.micro,
+                            color = c.onSurfaceMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Spacer(Modifier.width(Space.x8))
+                    Text(
+                        text = Money.tl(position.value),
+                        style = t.body.tabular(),
+                        color = c.onSurface,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Varlik secici.
+ *
+ * Baska hedefe atanmis varligin yaninda o hedefin adi yazar: secmek onu TASIR ve
+ * digerinin ilerlemesi duser. Yazilmazsa kullanici bunu ancak digerine bakinca
+ * fark eder.
+ */
+@Composable
+private fun AssetPickerSheet(
+    state: GoalDetailUiState,
+    onIntent: (GoalDetailIntent) -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(c.scrim)
+            .clickable(
+                indication = null,
+                interactionSource = null,
+                onClick = { onIntent(GoalDetailIntent.CloseAssetPicker) },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .padding(Space.x24)
+                .widthIn(max = Sizes.formMaxWidth)
+                .clip(KefeShapes.card)
+                .background(c.surfaceElevated)
+                .border(Sizes.hairline, c.outline, KefeShapes.card)
+                .clickable(indication = null, interactionSource = null, onClick = {})
+                .padding(Space.x20),
+        ) {
+            Text("Varlık seç", style = t.h2, color = c.onSurface)
+            Spacer(Modifier.height(Space.x8))
+            Text(
+                "Seçilenler bu hedefe sayılır. Hiçbiri seçilmezse tüm birikim sayılır.",
+                style = t.caption,
+                color = c.onSurfaceMuted,
+            )
+            Spacer(Modifier.height(Space.x14))
+
+            state.assignableAssets.forEachIndexed { index, item ->
+                if (index > 0) KefeHairline()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(role = Role.Checkbox) {
+                            onIntent(GoalDetailIntent.ToggleAsset(item.position.id))
+                        }
+                        .padding(vertical = Space.x12),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(20.dp)
+                            .clip(KefeShapes.boxSmall)
+                            .background(if (item.assignedToThis) c.accent else Color.Transparent)
+                            .border(
+                                width = Sizes.hairline,
+                                color = if (item.assignedToThis) c.accent else c.onSurfaceMuted,
+                                shape = KefeShapes.boxSmall,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (item.assignedToThis) {
+                            KefeIcon(KefeIcons.Check, null, size = 14.dp, tint = c.onAccent)
+                        }
+                    }
+                    Spacer(Modifier.width(Space.x12))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = item.position.name + " · " +
+                                item.position.shortQuantityLabel(),
+                            style = t.body,
+                            color = c.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        item.otherGoalName?.let { other ->
+                            Text(
+                                text = "$other hedefinde — seçersen buraya taşınır",
+                                style = t.micro,
+                                color = c.onSurfaceMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(Space.x8))
+                    Text(
+                        text = Money.tl(item.position.value),
+                        style = t.caption.tabular(),
+                        color = c.onSurfaceMuted,
+                        maxLines = 1,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(Space.x16))
+            KefePrimaryButton(
+                text = "Bitti",
+                onClick = { onIntent(GoalDetailIntent.CloseAssetPicker) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 
@@ -258,6 +477,10 @@ private fun RingCard(
                 progress = state.progress,
                 centerPercent = Money.ratioOf(state.progress.toDouble()),
                 centerAmount = "${Money.tl(state.currentWealth)} / ${Money.tl(goal.amount)}",
+                // Buyuk hedeflerde tam yazim kaseye sigmaz; tam rakam zaten
+                // hemen altindaki "KALAN" kartinda duruyor.
+                centerAmountShort = "₺${Money.compact(state.currentWealth, 1)} / " +
+                    "₺${Money.compact(goal.amount, 1)}",
                 color = if (state.exceeded) c.positive else c.accent,
             )
         }
@@ -379,8 +602,6 @@ private fun ProjectionCard(goal: Goal, state: GoalDetailUiState) {
         KefeProjectionChart(
             actual = state.projectionActual.toPoints(),
             forecast = state.projectionForecast.toPoints(),
-            bandLow = state.bandLow.toPoints(),
-            bandHigh = state.bandHigh.toPoints(),
             goal = goal.amount,
             goalLabel = "₺${Money.compact(goal.amount)} hedef",
             modifier = Modifier.fillMaxWidth(),
@@ -418,15 +639,6 @@ private fun ProjectionCard(goal: Goal, state: GoalDetailUiState) {
                         },
                 )
             }
-            LegendItem("Belirsizlik aralığı") {
-                Box(
-                    Modifier
-                        .width(12.dp)
-                        .height(10.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(c.accent.copy(alpha = 0.25f)),
-                )
-            }
         }
 
         Spacer(Modifier.height(Space.x14))
@@ -438,7 +650,7 @@ private fun ProjectionCard(goal: Goal, state: GoalDetailUiState) {
                 .padding(Space.x12),
         ) {
             Text(
-                text = projectionSummary(goal, state.delayMonths),
+                text = projectionSummary(goal, state),
                 style = t.caption.copy(lineHeight = 20.sp),
                 color = c.onSurface,
             )
@@ -464,18 +676,36 @@ private fun LegendItem(label: String, marker: @Composable () -> Unit) {
     }
 }
 
-private fun projectionSummary(goal: Goal, delayMonths: Int) = buildAnnotatedString {
-    val arrival = (goal.estimatedArrival ?: goal.targetDate).formatMonthYear()
-    append("Son 6 ayın ortalama katkısı ve getirisiyle devam ederseniz hedefe ")
-    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(arrival) }
+/**
+ * Tahmin cumlesi. Once "son 6 ayin ortalama katkisi ve getirisiyle" diyordu -
+ * ikisi de yalandi: seri ornek veriden geliyordu ve hicbir getiri
+ * hesaplanmiyordu. Artik cumle modelin AYNISINI soyler: aylik katki, getiri
+ * varsayimi yok.
+ */
+private fun projectionSummary(goal: Goal, state: GoalDetailUiState) = buildAnnotatedString {
+    val arrival = state.projectedArrival
+    if (arrival == null) {
+        append("Bu hedefe aylık katkı tanımlanmadığı için varış tarihi tahmin edilemiyor. ")
+        append("Hedefi düzenleyip aylık katkı girin.")
+        return@buildAnnotatedString
+    }
+
+    append("Ayda ")
+    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
+        append(Money.tl(goal.monthlyContribution))
+    }
+    append(" katkıyla devam ederseniz hedefe ")
+    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(arrival.formatMonthYear()) }
     append(" civarında ulaşırsınız")
     append(
         when {
-            delayMonths > 0 -> " — planladığınızdan $delayMonths ay geç."
-            delayMonths < 0 -> " — planladığınızdan ${-delayMonths} ay erken."
+            state.delayMonths > 0 -> " — planladığınızdan ${state.delayMonths} ay geç."
+            state.delayMonths < 0 -> " — planladığınızdan ${-state.delayMonths} ay erken."
             else -> " — tam hedef tarihinde."
         },
     )
+    // Getiri VARSAYILMAZ; tahmin yalnizca eklenecek parayi sayar.
+    append(" Piyasa getirisi hesaba katılmaz.")
 }
 
 // --- Senaryo ---------------------------------------------------------------
@@ -632,8 +862,8 @@ private fun HistoryCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) -
         KefeStackedBarChart(
             months = state.months.map { month ->
                 MonthBar(
-                    label = month.monthLabel,
-                    segments = month.segments.map {
+                    label = month.date.monthLabel(),
+                    segments = month.slices.map {
                         BarSegment(it.assetClass.color(), it.amount)
                     },
                 )
@@ -682,18 +912,19 @@ private fun HistoryCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) -
                     align = TextAlign.End,
                     color = if (muted) c.onSurfaceMuted else c.onSurface,
                 )
+                // O aya ait fotograf yoksa tire: bilinmeyen deger sifir degildir.
                 BodyCell(
-                    text = Money.tl(row.monthEnd),
+                    text = row.monthEnd?.let { Money.tl(it) } ?: "—",
                     weight = 1.2f,
                     align = TextAlign.End,
-                    color = c.onSurface,
+                    color = if (row.monthEnd == null) c.onSurfaceMuted else c.onSurface,
                 )
                 // Isaret her zaman yazilir: renk tek sinyal degildir.
                 BodyCell(
-                    text = Money.tlSigned(row.gain),
+                    text = row.gain?.let { Money.tlSigned(it) } ?: "—",
                     weight = 1f,
                     align = TextAlign.End,
-                    color = c.delta(row.gain),
+                    color = row.gain?.let { c.delta(it) } ?: c.onSurfaceMuted,
                 )
             }
         }

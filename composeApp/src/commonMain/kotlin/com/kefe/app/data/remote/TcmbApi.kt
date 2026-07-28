@@ -1,5 +1,6 @@
 package com.kefe.app.data.remote
 
+import com.kefe.app.domain.model.Currency
 import io.ktor.client.HttpClient
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
@@ -63,7 +64,8 @@ class TcmbApi(private val client: HttpClient) {
 
     private companion object {
         const val ENDPOINT = "https://www.tcmb.gov.tr/kurlar/today.xml"
-        val CURRENCIES = listOf("USD", "EUR")
+        // Portfoye girilebilenlerle ayni liste - bkz. Currency.
+        val CURRENCIES = Currency.entries.map { it.code }
     }
 }
 

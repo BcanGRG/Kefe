@@ -67,7 +67,15 @@ class SqlDelightPriceRepository(
             if (override == null) {
                 price
             } else {
-                price.copy(ask = override, source = PriceSource.Manual, isManual = true)
+                // Elle girilen deger TEK fiyattir: alis tarafi eski onbellekten
+                // kalirsa portfoy degeri (satis fiyatini kullanir) kullanicinin
+                // girdigi rakami yok sayardi.
+                price.copy(
+                    bid = override,
+                    ask = override,
+                    source = PriceSource.Manual,
+                    isManual = true,
+                )
             }
         }
         PriceBoard(

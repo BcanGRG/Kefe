@@ -1,12 +1,26 @@
 package com.kefe.app.ui.screens.goals
 
-import com.kefe.app.data.sample.MonthlyContribution
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalMilestone
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.MonthlyContribution
+import com.kefe.app.domain.model.Position
 
 enum class GoalDetailStage { Loading, Ready, Missing }
+
+/**
+ * Secicideki tek varlik satiri.
+ *
+ * [otherGoalName] doluysa varlik BASKA bir hedefe atanmis: secmek onu tasir ve
+ * o hedefin ilerlemesi duser. Yazilmazsa kullanici bunu ancak digerine bakinca
+ * fark eder.
+ */
+data class AssignableAsset(
+    val position: Position,
+    val assignedToThis: Boolean,
+    val otherGoalName: String?,
+)
 
 /** Aylik katki gecmisi tablosunun tek satiri. */
 data class ContributionRow(
@@ -14,14 +28,16 @@ data class ContributionRow(
     val monthLabel: String,
     /** 0.0 ise o ay katki yapilmamistir - tabloda "katkı yok" yazar. */
     val contribution: Double,
-    val monthEnd: Double,
-    val gain: Double,
+    /** O ayin son fotografi. Fotograf yoksa null - "0" yazmak yanlis olurdu. */
+    val monthEnd: Double?,
+    /** Ay sonu - ay basi - katki. Iki ucundan biri bilinmiyorsa null. */
+    val gain: Double?,
 )
 
 data class GoalDetailUiState(
     val stage: GoalDetailStage = GoalDetailStage.Loading,
     val goal: Goal? = null,
-    /** Son anlik goruntunun tarihi - "bugun" tum hesaplarda buradan gelir. */
+    /** Gercek bugun - tum ay hesaplari buradan gelir. */
     val today: KefeDate = KefeDate(2026, 7, 1),
 
     /** Ilerleme TOPLAM birikime gore olculur. */
@@ -33,10 +49,12 @@ data class GoalDetailUiState(
     /** Tahmin hedef tarihini kac ay asiyor (negatifse erken). */
     val delayMonths: Int = 0,
 
+    /** Gerceklesen: gunluk net deger fotograflari. */
     val projectionActual: List<Double> = emptyList(),
+    /** Tahmin: bugunku birikim + her ay eklenecek katki. Belirsizlik bandi yok. */
     val projectionForecast: List<Double> = emptyList(),
-    val bandLow: List<Double> = emptyList(),
-    val bandHigh: List<Double> = emptyList(),
+    /** Tahmine gore hedefe varis. Aylik katki 0 ise null - tahmin edilemez. */
+    val projectedArrival: KefeDate? = null,
 
     val milestones: List<GoalMilestone> = emptyList(),
     val months: List<MonthlyContribution> = emptyList(),
@@ -46,6 +64,12 @@ data class GoalDetailUiState(
     /** Tasarimdaki kisa liste: en yeni uc ay + varsa katkisiz ay. */
     val collapsedRows: List<ContributionRow> = emptyList(),
     val showAllRows: Boolean = false,
+
+    /** Bu hedefe atanmis varliklar. Bos ise hedef tum birikimi sayiyor. */
+    val assignedAssets: List<Position> = emptyList(),
+    /** Seciciye dokulen tum varliklar. */
+    val assignableAssets: List<AssignableAsset> = emptyList(),
+    val assetPickerOpen: Boolean = false,
 
     /** Senaryo kaydiricisi: aylik katki, BIN TL cinsinden (30..120). */
     val scenarioContribution: Float = ScenarioMinThousands,
@@ -77,6 +101,12 @@ sealed interface GoalDetailIntent {
 
     /** "Hedefi kapat" - asilan hedefi tamamlandi olarak isaretler. */
     data object CloseGoal : GoalDetailIntent
+
+    data object OpenAssetPicker : GoalDetailIntent
+    data object CloseAssetPicker : GoalDetailIntent
+
+    /** Atanmamissa atar, atanmissa kaldirir. */
+    data class ToggleAsset(val positionId: String) : GoalDetailIntent
 }
 
 /** Ay sirasi - iki tarih arasindaki ay farkini hesaplamak icin. */

@@ -76,6 +76,11 @@ data class GoalsUiState(
     val completed: List<Goal> = emptyList(),
     /** Hedef ilerlemesi TOPLAM birikime gore olculur. */
     val totalWealth: Double = 0.0,
+    /**
+     * Hedef basina karsilik. Varlik atanmis hedef yalniz kendi varliklarini
+     * sayar; atanmamis hedef tum birikimi sayar (eski davranis).
+     */
+    val wealthByGoal: Map<String, Double> = emptyMap(),
     val completedExpanded: Boolean = false,
     val sortMode: Boolean = false,
     val editor: GoalEditorState? = null,

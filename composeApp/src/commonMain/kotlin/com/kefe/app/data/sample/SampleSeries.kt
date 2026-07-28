@@ -1,27 +1,13 @@
 package com.kefe.app.data.sample
 
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.ContributionSlice
 import com.kefe.app.domain.model.DailySnapshot
-import com.kefe.app.domain.model.GoalMilestone
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.MonthlyContribution
 import com.kefe.app.domain.model.monthLabel
 import com.kefe.app.domain.model.plusMonths
 import kotlin.math.pow
-
-/** Aylik katkinin varlik sinifina gore parcalanmasi. */
-data class ContributionSegment(
-    val assetClass: AssetClass,
-    val amount: Double,
-)
-
-/** Tek ay. Segment listesi bos ise o ay katki yapilmamistir. */
-data class MonthlyContribution(
-    val monthLabel: String,
-    val segments: List<ContributionSegment>,
-) {
-    val total: Double get() = segments.sumOf { it.amount }
-    val isEmpty: Boolean get() = segments.isEmpty()
-}
 
 /** Grafiklerin ornek serileri. Son degerler ozet rakamlarla birebir tutar. */
 object SampleSeries {
@@ -81,20 +67,6 @@ object SampleSeries {
      */
     val projectionForecast: List<Double> = buildForecast()
 
-    /** Belirsizlik bandi - zaman ilerledikce genisler. */
-    val bandLow: List<Double> = projectionForecast.mapIndexed { i, v ->
-        v * (1.0 - 0.11 * forecastProgress(i))
-    }
-
-    val bandHigh: List<Double> = projectionForecast.mapIndexed { i, v ->
-        v * (1.0 + 0.13 * forecastProgress(i))
-    }
-
-    private fun forecastProgress(index: Int): Double {
-        val steps = projectionTargetIndex - todayIndex
-        return if (steps <= 0) 0.0 else index.toDouble() / steps.toDouble()
-    }
-
     private fun buildForecast(): List<Double> {
         val start = netWorthTotal.last()
         val steps = projectionTargetIndex - todayIndex
@@ -104,108 +76,33 @@ object SampleSeries {
         }
     }
 
-    /** Hedef yolundaki duraklar. */
-    val milestones: List<GoalMilestone> = listOf(
-        GoalMilestone(25, projectionTarget * 0.25, "Mart 2025'te geçildi", reached = true),
-        GoalMilestone(50, projectionTarget * 0.50, "≈ Nisan 2027", reached = false),
-        GoalMilestone(75, projectionTarget * 0.75, "≈ Ağustos 2028", reached = false),
-        GoalMilestone(100, projectionTarget, "≈ Mart 2029", reached = false),
-    )
-
     // --- Aylik katkilar: son 12 ay -----------------------------------------
 
-    /** Kasım'da katki yok - bos ay grafikte bosluk olarak gosterilir. */
-    val monthlyContributions: List<MonthlyContribution> = listOf(
+    /**
+     * Bilesen katalogunun yiginli bar ornegi - YALNIZ galeri kullanir. Urundeki
+     * katki gecmisi artik islem defterinden turer (monthlyContributions).
+     *
+     * Kasim bos: katkisiz ayin nasil gorundugu de katalogda durmali.
+     */
+    val galleryContributions: List<MonthlyContribution> = listOf(
+        listOf(AssetClass.Gold to 22000.0, AssetClass.Fund to 12000.0, AssetClass.Cash to 8000.0),
+        listOf(AssetClass.Gold to 18000.0, AssetClass.Fund to 14000.0, AssetClass.Fx to 10000.0),
+        listOf(AssetClass.Gold to 26000.0, AssetClass.Cash to 6000.0, AssetClass.Silver to 4000.0),
+        emptyList(),
+        listOf(AssetClass.Gold to 30000.0, AssetClass.Fund to 15000.0, AssetClass.Cash to 10000.0),
+        listOf(AssetClass.Gold to 20000.0, AssetClass.Fund to 12000.0, AssetClass.Fx to 9000.0),
+        listOf(AssetClass.Gold to 24000.0, AssetClass.Cash to 12000.0, AssetClass.Silver to 5000.0),
+        listOf(AssetClass.Gold to 28000.0, AssetClass.Fund to 18000.0),
+        listOf(AssetClass.Gold to 21000.0, AssetClass.Fx to 11000.0, AssetClass.Cash to 7000.0),
+        listOf(AssetClass.Gold to 32000.0, AssetClass.Fund to 10000.0, AssetClass.Silver to 3000.0),
+        listOf(AssetClass.Gold to 25000.0, AssetClass.Fund to 14000.0, AssetClass.Cash to 9000.0),
+        listOf(AssetClass.Gold to 27000.0, AssetClass.Fund to 12000.0, AssetClass.Fx to 6000.0),
+    ).mapIndexed { index, slices ->
         MonthlyContribution(
-            "Ağu",
-            listOf(
-                ContributionSegment(AssetClass.Gold, 22000.0),
-                ContributionSegment(AssetClass.Fund, 12000.0),
-                ContributionSegment(AssetClass.Cash, 8000.0),
-            ),
-        ),
-        MonthlyContribution(
-            "Eyl",
-            listOf(
-                ContributionSegment(AssetClass.Gold, 18000.0),
-                ContributionSegment(AssetClass.Fund, 14000.0),
-                ContributionSegment(AssetClass.Fx, 10000.0),
-            ),
-        ),
-        MonthlyContribution(
-            "Eki",
-            listOf(
-                ContributionSegment(AssetClass.Gold, 26000.0),
-                ContributionSegment(AssetClass.Cash, 6000.0),
-                ContributionSegment(AssetClass.Silver, 4000.0),
-            ),
-        ),
-        MonthlyContribution("Kas", emptyList()),
-        MonthlyContribution(
-            "Ara",
-            listOf(
-                ContributionSegment(AssetClass.Gold, 30000.0),
-                ContributionSegment(AssetClass.Fund, 15000.0),
-                ContributionSegment(AssetClass.Cash, 10000.0),
-            ),
-        ),
-        MonthlyContribution(
-            "Oca",
-            listOf(
-                ContributionSegment(AssetClass.Gold, 20000.0),
-                ContributionSegment(AssetClass.Fund, 12000.0),
-                ContributionSegment(AssetClass.Fx, 9000.0),
-            ),
-        ),
-        MonthlyContribution(
-            "Şub",
-            listOf(
-                ContributionSegment(AssetClass.Gold, 24000.0),
-                ContributionSegment(AssetClass.Cash, 12000.0),
-                ContributionSegment(AssetClass.Silver, 5000.0),
-            ),
-        ),
-        MonthlyContribution(
-            "Mar",
-            listOf(
-                ContributionSegment(AssetClass.Gold, 28000.0),
-                ContributionSegment(AssetClass.Fund, 18000.0),
-            ),
-        ),
-        MonthlyContribution(
-            "Nis",
-            listOf(
-                ContributionSegment(AssetClass.Gold, 21000.0),
-                ContributionSegment(AssetClass.Fx, 11000.0),
-                ContributionSegment(AssetClass.Cash, 7000.0),
-            ),
-        ),
-        MonthlyContribution(
-            "May",
-            listOf(
-                ContributionSegment(AssetClass.Gold, 32000.0),
-                ContributionSegment(AssetClass.Fund, 10000.0),
-                ContributionSegment(AssetClass.Silver, 3000.0),
-            ),
-        ),
-        MonthlyContribution(
-            "Haz",
-            listOf(
-                ContributionSegment(AssetClass.Gold, 25000.0),
-                ContributionSegment(AssetClass.Fund, 14000.0),
-                ContributionSegment(AssetClass.Cash, 9000.0),
-            ),
-        ),
-        MonthlyContribution(
-            "Tem",
-            listOf(
-                ContributionSegment(AssetClass.Gold, 27000.0),
-                ContributionSegment(AssetClass.Fund, 12000.0),
-                ContributionSegment(AssetClass.Fx, 6000.0),
-            ),
-        ),
-    )
-
-    /** Aylik katki hedefi - bar grafigindeki kesikli cizgi. */
-    const val monthlyContributionTarget: Double = 50000.0
+            date = netWorthStart.plusMonths(index + 1),
+            slices = slices.map { (assetClass, amount) ->
+                ContributionSlice(assetClass, amount)
+            },
+        )
+    }
 }

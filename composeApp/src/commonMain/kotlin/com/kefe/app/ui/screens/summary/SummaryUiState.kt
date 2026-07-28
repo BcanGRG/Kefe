@@ -64,8 +64,21 @@ data class SummaryUiState(
     val periodIndex: Int = 3,
     val freshness: PriceFreshness = PriceFreshness.Fresh,
     val pricesUpdatedAt: String = "",
+    /**
+     * Ana hedefin karsiligi. Hedefe varlik atanmissa TOPLAM birikimden farklidir;
+     * o yuzden ayri tutulur.
+     */
+    val mainGoalWealth: Double = 0.0,
     val pendingSyncCount: Int = 0,
     val refreshing: Boolean = false,
+    /**
+     * Son yenilemenin hatasi.
+     *
+     * Once `refresh()` sonucu ATILIYORDU: ag yoksa ekranda hicbir sey degismiyor
+     * ve basarili bir yenilemeden ayirt edilemiyordu. Fiyatlar dakikalar icinde
+     * cok az oynadigi icin "yenilemiyor" gibi gorunen sey buydu.
+     */
+    val refreshError: String? = null,
 
     // --- Uygulama kabugunun (rail / yan nav / ust cubuk) ihtiyaclari ---------
     val positionCount: Int = 0,
@@ -97,4 +110,5 @@ sealed interface SummaryIntent {
     data object ToggleMask : SummaryIntent
     data class SelectPeriod(val index: Int) : SummaryIntent
     data object Refresh : SummaryIntent
+    data object DismissRefreshError : SummaryIntent
 }

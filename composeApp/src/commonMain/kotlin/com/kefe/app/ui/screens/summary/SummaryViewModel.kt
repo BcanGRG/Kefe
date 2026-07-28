@@ -12,6 +12,7 @@ import com.kefe.app.domain.model.Portfolio
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.allocation
 import com.kefe.app.domain.model.color
+import com.kefe.app.domain.model.goalWealth
 import com.kefe.app.domain.model.portfolioTotals
 import com.kefe.app.domain.model.topGainer
 import com.kefe.app.domain.model.topLoser
@@ -73,6 +74,8 @@ class SummaryViewModel(
             is SummaryIntent.SelectPeriod -> _state.value =
                 _state.value.copy(periodIndex = intent.index)
             SummaryIntent.Refresh -> refresh()
+            SummaryIntent.DismissRefreshError -> _state.value =
+                _state.value.copy(refreshError = null)
         }
     }
 
@@ -87,6 +90,9 @@ class SummaryViewModel(
             ) { portfolio, members, positions, goals, activity ->
                 Snapshot(portfolio, members, positions, goals, activity)
             }.combine(portfolioRepository.observeAllTransactions()) { snapshot, transactions ->
+                snapshot to transactions
+            }.combine(portfolioRepository.observeGoalAssets()) { pair, assignments ->
+                val (snapshot, transactions) = pair
                 val (portfolio, members, positions, goals, activity) = snapshot
                 val main = goals.firstOrNull { it.isMain }
                 _state.value.copy(
@@ -102,6 +108,11 @@ class SummaryViewModel(
                     ),
                     allocation = positions.allocation(),
                     mainGoal = main,
+                    // Ana hedefe varlik atanmissa ilerlemesi TOPLAM birikimden
+                    // degil, kendi varliklarindan hesaplanir.
+                    mainGoalWealth = main
+                        ?.let { goalWealth(it, positions, assignments) }
+                        ?: 0.0,
                     // Vadesi gecmis hedef de sayilir: tasarimda o hal "Hedef duruyor"
                     // diyor, kapatilmis degil. Yalniz tamamlananlar dislanir.
                     otherGoalCount = (goals.count { it.isOpen() } - 1).coerceAtLeast(0),
@@ -189,11 +200,16 @@ class SummaryViewModel(
                         eurTry = board.byKey("eur_try")?.ask ?: 1.0,
                         goldGramTry = board.byKey("gold_gram")?.ask ?: 1.0,
                     ),
-                    // Masaustu sag panelinde gosterilen ozet piyasa listesi.
+                    // Ozet'teki piyasa karti ve masaustu sag paneli.
+                    //
+                    // Fiyatlar IKI ONDALIKLA yazilir - portfoy tutarlari gibi tam
+                    // liraya yuvarlanmaz. Gram altin dakikalar icinde kurus
+                    // mertebesinde oynuyor; yuvarlaninca tablo "hic degismiyor"
+                    // gibi gorunuyordu, oysa deger her yenilemede tazeleniyordu.
                     marketRows = board.prices.map { price ->
                         KefeMarketRow(
                             name = price.label,
-                            priceText = Money.tl(price.ask, decimals = if (price.ask < 100) 2 else 0),
+                            priceText = Money.tl(price.ask, decimals = 2),
                             changePercent = price.changePercent,
                             assetClass = price.assetClass.color(),
                         )
@@ -203,12 +219,27 @@ class SummaryViewModel(
         }
     }
 
-    /** Yalniz cekme yapar; sonucu yukaridaki tek toplayici gorur. */
+    /**
+     * Yalniz cekme yapar; yeni fiyatlari yukaridaki tek toplayici gorur.
+     *
+     * Sonuc ATILAMAZ: basarisiz yenileme ekranda hicbir iz birakmiyordu ve
+     * basarili olanindan ayirt edilemiyordu. Fiyatlar dakikalar icinde cok az
+     * oynadigi icin "yenilemiyor" sanilan sey buydu.
+     */
     private fun refresh() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(refreshing = true)
-            priceRepository.refresh()
-            _state.value = _state.value.copy(refreshing = false)
+            _state.value = _state.value.copy(refreshing = true, refreshError = null)
+            val error = priceRepository.refresh().exceptionOrNull()
+            _state.value = _state.value.copy(
+                refreshing = false,
+                // Sebep de yazilir. "Güncellenemedi" tek basina ne kullaniciya
+                // ne bize bir sey soyluyor: ag mi yok, kaynak mi dustu, sertifika
+                // mi bozuk - hepsi ayni cumleye cikiyordu.
+                refreshError = error?.let {
+                    "Fiyatlar güncellenemedi — son bilinen değerler gösteriliyor. " +
+                        "(${it.shortReason()})"
+                },
+            )
         }
     }
 }
@@ -226,3 +257,17 @@ private data class Snapshot(
     val goals: List<Goal>,
     val activity: List<ActivityEvent>,
 )
+
+/**
+ * Hatanin kisa sebebi.
+ *
+ * Ortak kodda gunluk altyapisi yok; sebep ekranda gorunmezse hicbir yerde
+ * gorunmuyor. Tip adi cogu zaman yeterli (UnknownHostException, SSLException),
+ * mesaj varsa daha aciklayici oldugu icin o tercih edilir.
+ */
+private fun Throwable.shortReason(): String {
+    val text = message?.takeIf { it.isNotBlank() }
+        ?: this::class.simpleName
+        ?: "bilinmeyen hata"
+    return text.take(120)
+}
