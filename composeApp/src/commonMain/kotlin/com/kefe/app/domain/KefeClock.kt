@@ -15,12 +15,21 @@ interface KefeClock {
 }
 
 /**
- * Sabit tarih. Ornek veri belirli bir gune gore kurgulandigi icin (en yeni islem
- * 12 Temmuz 2026, fiyatlar 14:32, net deger serisi Tem 2026'da bitiyor) uygulama
- * simdilik o gunu "bugun" kabul eder.
+ * Cihazin takvimi.
  *
- * Gercek saat platform API'si gerektirir; kotlinx-datetime eklendiginde yalniz
- * bu sinifin yerine gecen bir uygulama yazilir, cagiran hicbir yer degismez.
+ * Kayitlar artik DISKE yaziliyor: yanlis tarihli bir islem uygulamayi kapatinca
+ * silinmiyor, sonsuza kadar kaliyor. Elle duzeltme ekrani da yok. Bu yuzden
+ * gercek gun sart.
+ */
+class SystemKefeClock : KefeClock {
+    override fun today(): KefeDate = currentDate()
+}
+
+/**
+ * Sabit tarih - yalniz TESTLER icin.
+ *
+ * Uretimde kullanilmamali: ornek verinin kurgulandigi gune sabitler ve
+ * kullanicinin bugun girdigi islem 12 Temmuz 2026 tarihiyle diske yazilir.
  */
 class FixedKefeClock(private val date: KefeDate = SampleToday) : KefeClock {
     override fun today(): KefeDate = date
@@ -28,3 +37,11 @@ class FixedKefeClock(private val date: KefeDate = SampleToday) : KefeClock {
 
 /** Ornek verinin kurgulandigi gun. */
 val SampleToday: KefeDate = KefeDate(2026, 7, 12)
+
+/**
+ * Cihazin yerel takvim gunu.
+ *
+ * kotlinx-datetime eklemek yerine platform API'si kullanildi: tek ihtiyac yerel
+ * gun, bagimlilik getirmeye degmez.
+ */
+expect fun currentDate(): KefeDate

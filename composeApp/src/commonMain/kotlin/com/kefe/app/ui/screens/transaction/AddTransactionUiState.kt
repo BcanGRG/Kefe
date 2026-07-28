@@ -69,6 +69,7 @@ data class AddTransactionUiState(
     /** Alanda gorunen fiyat metni; elle degistirilince [priceManual] acilir. */
     val unitPriceText: String = "",
     val priceManual: Boolean = false,
+    /** ViewModel gercek gunle doldurur; buradaki deger yalniz onizleme icindir. */
     val date: KefeDate = KefeDate(2026, 7, 12),
     val isToday: Boolean = true,
     val extraExpanded: Boolean = false,

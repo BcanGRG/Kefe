@@ -1,0 +1,78 @@
+import com.kefe.app.domain.model.GoalAllocation;
+import com.kefe.app.domain.model.GoalStatus;
+import com.kefe.app.domain.model.GoalUnit;
+import kotlin.Boolean;
+
+-- Hedefler.
+--
+-- Goal.order kolon adi olarak kullanilamaz ("order" ayrilmis kelime) - sortOrder.
+--
+-- Tarihler yil/ay/gun ucluleri: KefeDate'in epochDay'den geri donusumu yok.
+-- estimatedArrival NULLABLE oldugu icin uc kolonu da NULL olabilir; okurken
+-- ucu de doluysa KefeDate kurulmali. INTEGER kolonlar Kotlin'de Long doner -
+-- toInt() gerekir.
+--
+-- GoalMilestone burada YOK: yuzde duraklari hedef tutarindan hesaplanan gorunum
+-- verisi, saklanacak bir sey degil.
+CREATE TABLE goals (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    iconKey TEXT NOT NULL,
+    amount REAL NOT NULL,
+    unit TEXT AS GoalUnit NOT NULL,
+    targetYear INTEGER NOT NULL,
+    targetMonth INTEGER NOT NULL,
+    targetDay INTEGER NOT NULL,
+    monthlyContribution REAL NOT NULL,
+    isMain INTEGER AS Boolean NOT NULL DEFAULT 0,
+    allocation TEXT AS GoalAllocation NOT NULL DEFAULT 'AllWealth',
+    status TEXT AS GoalStatus NOT NULL DEFAULT 'Active',
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    estimatedYear INTEGER,
+    estimatedMonth INTEGER,
+    estimatedDay INTEGER
+);
+
+-- observeGoals() siralamayi VAAT EDIYOR - sira SQL'de kalmali, ekranda degil.
+selectGoals:
+SELECT *
+FROM goals
+ORDER BY sortOrder, name;
+
+selectGoalById:
+SELECT *
+FROM goals
+WHERE id = :id;
+
+countGoals:
+SELECT count(*)
+FROM goals;
+
+-- Hedefin cocuk tablosu yok; REPLACE burada guvenli (silinecek bagli satir yok).
+upsertGoal:
+INSERT OR REPLACE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, allocation, status, sortOrder, estimatedYear, estimatedMonth, estimatedDay)
+VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :allocation, :status, :sortOrder, :estimatedYear, :estimatedMonth, :estimatedDay);
+
+-- reorderGoals: verilen kimlik listesi tek transaction icinde indeksleriyle
+-- yazilir. Listede olmayan hedefler sortOrder'ini korur.
+updateGoalOrder:
+UPDATE goals
+SET sortOrder = :sortOrder
+WHERE id = :id;
+
+-- Ana hedef tektir: yenisi isaretlenmeden once digerleri temizlenir.
+clearMainGoalFlag:
+UPDATE goals
+SET isMain = 0;
+
+updateGoalStatus:
+UPDATE goals
+SET status = :status
+WHERE id = :id;
+
+deleteGoalById:
+DELETE FROM goals
+WHERE id = :id;
+
+deleteAllGoals:
+DELETE FROM goals;

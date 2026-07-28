@@ -3,10 +3,10 @@ package com.kefe.app.di
 import com.kefe.app.data.remote.PriceRemoteDataSource
 import com.kefe.app.data.remote.SamplePriceRemoteDataSource
 import com.kefe.app.data.remote.createKefeHttpClient
-import com.kefe.app.data.repository.DefaultPriceRepository
-import com.kefe.app.data.repository.InMemoryPortfolioRepository
-import com.kefe.app.domain.FixedKefeClock
+import com.kefe.app.data.repository.SqlDelightPortfolioRepository
+import com.kefe.app.data.repository.SqlDelightPriceRepository
 import com.kefe.app.domain.KefeClock
+import com.kefe.app.domain.SystemKefeClock
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.ui.screens.account.ActivityViewModel
@@ -24,6 +24,16 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
+/**
+ * Ornek portfoyu (13 pozisyon, 21 islem) veritabanina tohumlar - GELISTIRME BAYRAGI.
+ *
+ * Varsayilan KAPALI: uygulama bos acilir ve kullanici kendi verisini girer.
+ * Acmak icin bayragi true yapmak yetmez, veritabani dosyasinin da silinmesi
+ * gerekir - tohum tek seferlik bir bayrakla korunuyor ki kullanici her seyi
+ * silince ornek veri geri gelmesin.
+ */
+const val SeedSampleData: Boolean = false
+
 val appModule = module {
 
     // Ktor istemcisi tek ornek: baglanti havuzu ve motor paylasilir.
@@ -32,11 +42,16 @@ val appModule = module {
     single<PriceRemoteDataSource> { SamplePriceRemoteDataSource() }
 
     // Uygulamanin "bugun"u tek yerden gelir - getiri ve projeksiyon hesaplari
-    // ayni gune gore calissin diye.
-    single<KefeClock> { FixedKefeClock() }
+    // ayni gune gore calissin diye. Kayitlar diske yazildigi icin cihazin
+    // gercek takvimi kullanilir; sabit saat yalniz testlerde.
+    single<KefeClock> { SystemKefeClock() }
 
-    single<PortfolioRepository> { InMemoryPortfolioRepository() }
-    single<PriceRepository> { DefaultPriceRepository(get()) }
+    // Veritabani surec omru boyunca tek: nesneyi Koin degil KefePlatform tutar,
+    // Koin grafigi Compose icinde yeniden kurulsa bile ayni baglanti dondurulur.
+    single { KefePlatform.database(get<KefeClock>().today(), SeedSampleData) }
+
+    single<PortfolioRepository> { SqlDelightPortfolioRepository(get(), get()) }
+    single<PriceRepository> { SqlDelightPriceRepository(get(), get()) }
 
     viewModelOf(::SummaryViewModel)
     viewModelOf(::AssetsViewModel)

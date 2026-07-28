@@ -1,0 +1,119 @@
+import com.kefe.app.domain.model.SyncState;
+import com.kefe.app.domain.model.TradeSide;
+
+-- Islem defteri. Uygulamanin tek gercek kaynagi burasi: pozisyonun miktari da
+-- maliyeti de bu satirlardan hesaplanir.
+--
+-- Tablo adi "transactions" (cogul) - "transaction" SQLite'ta ayrilmis kelime.
+--
+-- TARIH: KefeDate uc alanli bir deger nesnesi ve TERSI YOK (toEpochDay var,
+-- fromEpochDay yok). Tek epochDay kolonu secilse okurken KefeDate uretilemezdi;
+-- bu yuzden yil/ay/gun ayri kolonlar. Siralama da (yil, ay, gun) uzerinden
+-- dogru calisir.
+--
+-- Kolonlar duz INTEGER: Kotlin'de Long donerler, KefeDate kurulurken toInt()
+-- gerekir. "INTEGER AS Int" daha okunakli olurdu ama ayri bir adaptor
+-- bagimliligi (primitive-adapters) ister - bu is icin gereksiz risk.
+--
+-- total (miktar * fiyat + iscilik) TURETILMIS, kolon degil.
+CREATE TABLE transactions (
+    id TEXT NOT NULL PRIMARY KEY,
+    positionId TEXT NOT NULL,
+    dateYear INTEGER NOT NULL,
+    dateMonth INTEGER NOT NULL,
+    dateDay INTEGER NOT NULL,
+    side TEXT AS TradeSide NOT NULL,
+    quantity REAL NOT NULL,
+    unitPrice REAL NOT NULL,
+    fee REAL NOT NULL DEFAULT 0.0,
+    note TEXT,
+    storage TEXT,
+    addedByMemberId TEXT NOT NULL,
+    syncState TEXT AS SyncState NOT NULL DEFAULT 'Synced',
+    -- Pozisyon silinince defteri de gitmeli. DIKKAT: SQLite'ta yabanci anahtar
+    -- zorlamasi varsayilan olarak KAPALIDIR; surucu her baglantida
+    -- "PRAGMA foreign_keys = ON" calistirmazsa bu satir hicbir sey yapmaz.
+    FOREIGN KEY(positionId) REFERENCES positions(id) ON DELETE CASCADE
+);
+
+-- Her yazmada pozisyonun tum defteri okunuyor; indekssiz bu tam tarama olurdu.
+CREATE INDEX transactions_positionId ON transactions(positionId);
+
+-- Yeniden siralamayi ekran yapiyor (AssetDetailViewModel), buradaki sira yalniz
+-- belirlilik icin: en yeni ustte.
+selectAllTransactions:
+SELECT *
+FROM transactions
+ORDER BY dateYear DESC, dateMonth DESC, dateDay DESC, id;
+
+selectTransactionsByPosition:
+SELECT *
+FROM transactions
+WHERE positionId = :positionId
+ORDER BY dateYear DESC, dateMonth DESC, dateDay DESC, id;
+
+-- Maliyet hesabi icin AYRI sorgu: sira ekrandakinin tersi olmali.
+--
+-- costBasis() defteri kararli siralar, yani AYNI TARIHLI kayitlar geldikleri
+-- sirada islenir. Ekran sorgusu id'ye gore siraladigindan ayni gun once alip
+-- sonra satan kullanicinin SATISI alistan once gelebiliyor; costBasis satis
+-- dalinda elde miktar bulamayip kaydi tumden atliyor ve satis hesaptan
+-- dusuyordu. Islemler ayni gune dusmek zorunda degil ama siklikla duser.
+--
+-- rowid SQLite'in ortuk ekleme sayacidir: ayni tarihli kayitlar arasinda
+-- kronolojik sirayi verir ve fazladan kolon istemez.
+selectTransactionsForCompute:
+SELECT *
+FROM transactions
+WHERE positionId = :positionId
+ORDER BY dateYear ASC, dateMonth ASC, dateDay ASC, rowid ASC;
+
+selectTransactionById:
+SELECT *
+FROM transactions
+WHERE id = :id;
+
+countTransactions:
+SELECT count(*)
+FROM transactions;
+
+-- DIKKAT - KIMLIK CAKISMASI: islem kimligi bugun icerikten turetiliyor
+-- ("tx_<pozisyon>_<yil>-<ay>-<gun>_<miktar>"), yani ayni gun ayni pozisyona ayni
+-- miktarda ikinci alim AYNI kimligi uretir. Bellekte iki satir sessizce olusuyordu.
+--
+-- Burada bilerek duz INSERT var: "OR REPLACE" ikinci alimi birincinin uzerine
+-- yazar ve kullanicinin islemi kaybolur - duzeltmeye calistigimiz sorunun ta
+-- kendisi. Cagiran taraf once selectTransactionById ile bakip benzersiz bir
+-- kimlik uretmeli; aksi halde bu sorgu PRIMARY KEY ihlaliyle atar.
+insertTransaction:
+INSERT INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState)
+VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, :syncState);
+
+updateTransaction:
+UPDATE transactions
+SET positionId = :positionId,
+    dateYear = :dateYear,
+    dateMonth = :dateMonth,
+    dateDay = :dateDay,
+    side = :side,
+    quantity = :quantity,
+    unitPrice = :unitPrice,
+    fee = :fee,
+    note = :note,
+    storage = :storage,
+    addedByMemberId = :addedByMemberId,
+    syncState = :syncState
+WHERE id = :id;
+
+deleteTransactionById:
+DELETE FROM transactions
+WHERE id = :id;
+
+-- Pozisyon silinirken CASCADE zaten calisir; bu sorgu pragma foreign_keys kapali
+-- kalirsa diye acik yol birakir.
+deleteTransactionsByPosition:
+DELETE FROM transactions
+WHERE positionId = :positionId;
+
+deleteAllTransactions:
+DELETE FROM transactions;

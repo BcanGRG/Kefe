@@ -2,6 +2,7 @@ package com.kefe.app.ui.screens.transaction
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.ActivityKind
 import com.kefe.app.domain.model.AssetClass
@@ -35,9 +36,12 @@ import kotlinx.coroutines.launch
 class AddTransactionViewModel(
     private val portfolioRepository: PortfolioRepository,
     private val priceRepository: PriceRepository,
+    private val clock: KefeClock,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(AddTransactionUiState())
+    // Tarih varsayilani sabit YAZILAMAZ: kayit artik diske gidiyor, yanlis tarih
+    // kalici olur ve duzeltme ekrani yok.
+    private val _state = MutableStateFlow(AddTransactionUiState(date = clock.today()))
     val state: StateFlow<AddTransactionUiState> = _state.asStateFlow()
 
     private var board: PriceBoard? = null

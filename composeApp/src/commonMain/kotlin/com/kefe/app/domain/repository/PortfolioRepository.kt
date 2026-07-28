@@ -47,6 +47,14 @@ interface PortfolioRepository {
     suspend fun deleteTransaction(transactionId: String)
 
     /**
+     * Gunun net degerini kaydeder. Ayni gune ikinci kez yazmak satiri tazeler.
+     *
+     * Gecmis bir gunun degeri sonradan HESAPLANAMAZ - o gunku fiyatlari da bilmek
+     * gerekir, gecmis fiyatlar tutulmuyor. Fotograf o gun cekilmezse o gun kayiptir.
+     */
+    suspend fun recordSnapshot(snapshot: DailySnapshot)
+
+    /**
      * Pozisyonun kimligini/meta bilgisini yazar (ad, sinif, alt tur, ayar, birim,
      * birim fiyat). Miktar ve maliyet buradan DEGIL, islem defterinden gelir.
      */

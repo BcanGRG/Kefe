@@ -1,0 +1,38 @@
+-- Tercihler: tema, kurus gosterimi, acilista bakiyeyi gizleme, biyometrik kilit,
+-- bildirim anahtarlari, fiyat yenileme araligi...
+--
+-- Neden anahtar-deger, neden kolonlar degil: bu tercihlerin domain modeli yok,
+-- hepsi SettingsUiState icinde yasiyor ve listesi urun kararlariyla surekli
+-- degisiyor. Her tercih icin kolon acmak, her yeni anahtarda sema surumu
+-- yukseltmek demekti. Deger metin olarak yazilir ("true", "Dark", "15"),
+-- yorumlamak cagiran tarafin isi.
+--
+-- Ilk acilis tohumu da buradan izlenebilir (ornegin "seedApplied" = "true"):
+-- "tablo bossa ornek veriyi yukle" kurali, kullanici her seyi silince ornek
+-- veriyi GERI GETIRIR. Tek seferlik bayrak bunu onler.
+--
+-- "key" SQLite'ta ayrilmis kelime - settingKey/settingValue.
+CREATE TABLE settings (
+    settingKey TEXT NOT NULL PRIMARY KEY,
+    settingValue TEXT NOT NULL
+);
+
+selectAllSettings:
+SELECT *
+FROM settings;
+
+selectSetting:
+SELECT settingValue
+FROM settings
+WHERE settingKey = :settingKey;
+
+upsertSetting:
+INSERT OR REPLACE INTO settings(settingKey, settingValue)
+VALUES (:settingKey, :settingValue);
+
+deleteSetting:
+DELETE FROM settings
+WHERE settingKey = :settingKey;
+
+deleteAllSettings:
+DELETE FROM settings;

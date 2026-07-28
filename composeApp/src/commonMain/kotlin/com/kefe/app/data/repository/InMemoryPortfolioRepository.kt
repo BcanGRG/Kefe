@@ -12,6 +12,7 @@ import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.costBasis
+import com.kefe.app.domain.model.toEpochDay
 import com.kefe.app.domain.repository.PortfolioRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,6 +70,14 @@ class InMemoryPortfolioRepository : PortfolioRepository {
         val removed = transactionsState.value.firstOrNull { it.id == transactionId } ?: return
         transactionsState.value = transactionsState.value.filterNot { it.id == transactionId }
         recomputePosition(removed.positionId)
+    }
+
+    override suspend fun recordSnapshot(snapshot: DailySnapshot) {
+        // Gunde tek satir: ayni gune ikinci yazma satiri tazeler, cogaltmaz.
+        snapshotsState.value = snapshotsState.value
+            .filterNot { it.date == snapshot.date }
+            .plus(snapshot)
+            .sortedBy { it.date.toEpochDay() }
     }
 
     /**
