@@ -9,6 +9,23 @@ import com.kefe.app.data.db.LocalPortfolioId
 import com.kefe.app.data.db.toDomain
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.domain.KefeClock
+import com.kefe.app.domain.backup.BackupFile
+import com.kefe.app.domain.backup.BackupGoal
+import com.kefe.app.domain.backup.BackupGoalAsset
+import com.kefe.app.domain.backup.BackupMember
+import com.kefe.app.domain.backup.BackupPosition
+import com.kefe.app.domain.backup.BackupSnapshot
+import com.kefe.app.domain.backup.BackupTransaction
+import com.kefe.app.domain.backup.toAssetClass
+import com.kefe.app.domain.backup.toGoalAllocation
+import com.kefe.app.domain.backup.toGoalStatus
+import com.kefe.app.domain.backup.toGoalUnit
+import com.kefe.app.domain.backup.toGoldSubtype
+import com.kefe.app.domain.backup.toKarat
+import com.kefe.app.domain.backup.toMemberPermission
+import com.kefe.app.domain.backup.toMemberRole
+import com.kefe.app.domain.backup.toQuantityUnit
+import com.kefe.app.domain.backup.toTradeSide
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.ActivityKind
 import com.kefe.app.domain.model.DailySnapshot
@@ -16,6 +33,7 @@ import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.Portfolio
 import com.kefe.app.domain.model.Position
+import com.kefe.app.domain.model.SyncState
 import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.costBasis
@@ -210,6 +228,213 @@ class SqlDelightPortfolioRepository(
     override suspend fun markOnboarded() {
         withContext(dispatcher) {
             settingQueries.upsertSetting(settingKey = OnboardedKey, settingValue = "true")
+        }
+    }
+
+    // --- Yedekleme ----------------------------------------------------------
+
+    /**
+     * Kullanicinin GIRDIGI her sey.
+     *
+     * Fiyat onbellegi ve gunluk fiyat gecmisi disaridadir: kaynaktan yeniden
+     * gelirler ve yedege konsalardi geri yukleyen kullanici eski fiyatlarla
+     * acilirdi. Aktivite akisi da disarida - islemlerden yeniden uretilebilir
+     * bir gunluk, verinin kendisi degil.
+     */
+    override suspend fun exportBackup(takenOn: String): BackupFile =
+        withContext(dispatcher) {
+            BackupFile(
+                takenOn = takenOn,
+                portfolioName = portfolioQueries.selectPortfolio().executeAsOneOrNull()?.name
+                    ?: DefaultPortfolioName,
+                members = portfolioQueries.selectMembers().executeAsList().map {
+                    BackupMember(
+                        id = it.id,
+                        name = it.name,
+                        initials = it.initials,
+                        role = it.role.name,
+                        permission = it.permission.name,
+                    )
+                },
+                positions = positionQueries.selectAllPositions().executeAsList().map {
+                    BackupPosition(
+                        id = it.id,
+                        name = it.name,
+                        assetClass = it.assetClass.name,
+                        subtype = it.subtype?.name,
+                        karat = it.karat?.name,
+                        unit = it.unit.name,
+                        unitPrice = it.unitPrice,
+                        manualPrice = it.manualPrice,
+                    )
+                },
+                transactions = transactionQueries.selectAllTransactions().executeAsList().map {
+                    BackupTransaction(
+                        id = it.id,
+                        positionId = it.positionId,
+                        year = it.dateYear.toInt(),
+                        month = it.dateMonth.toInt(),
+                        day = it.dateDay.toInt(),
+                        side = it.side.name,
+                        quantity = it.quantity,
+                        unitPrice = it.unitPrice,
+                        fee = it.fee,
+                        note = it.note,
+                        storage = it.storage,
+                        addedByMemberId = it.addedByMemberId,
+                    )
+                },
+                goals = goalQueries.selectGoals().executeAsList().map {
+                    BackupGoal(
+                        id = it.id,
+                        name = it.name,
+                        iconKey = it.iconKey,
+                        amount = it.amount,
+                        unit = it.unit.name,
+                        year = it.targetYear.toInt(),
+                        month = it.targetMonth.toInt(),
+                        day = it.targetDay.toInt(),
+                        monthlyContribution = it.monthlyContribution,
+                        isMain = it.isMain,
+                        allocation = it.allocation.name,
+                        status = it.status.name,
+                        order = it.sortOrder.toInt(),
+                    )
+                },
+                goalAssets = goalAssetQueries.selectGoalAssets().executeAsList().map {
+                    BackupGoalAsset(positionId = it.positionId, goalId = it.goalId)
+                },
+                snapshots = snapshotQueries.selectSnapshots().executeAsList().map {
+                    BackupSnapshot(
+                        year = it.dateYear.toInt(),
+                        month = it.dateMonth.toInt(),
+                        day = it.dateDay.toInt(),
+                        totalValue = it.totalValue,
+                        principal = it.principal,
+                    )
+                },
+                settings = settingQueries.selectAllSettings().executeAsList()
+                    .associate { it.settingKey to it.settingValue },
+            )
+        }
+
+    /**
+     * Yedegi geri yukler - TEK TRANSACTION.
+     *
+     * Yarim yuklenmis bir portfoy hic yuklenmemis olandan kotudur: yarida hata
+     * cikarsa transaction geri alinir ve kullanici eski verisiyle kalir.
+     *
+     * Pozisyonlarin miktar/maliyet/deger alanlari yedekte YOK; defter yazildiktan
+     * sonra her pozisyon icin yeniden hesaplanir. Boylece yedegin icinde
+     * defteriyle celisen bir toplam tasinamaz.
+     */
+    override suspend fun restoreBackup(file: BackupFile) {
+        withContext(dispatcher) {
+            database.transaction {
+                transactionQueries.deleteAllTransactions()
+                positionQueries.deleteAllPositions()
+                goalQueries.deleteAllGoals()
+                activityQueries.deleteAllActivity()
+                snapshotQueries.deleteAllSnapshots()
+                settingQueries.deleteAllSettings()
+
+                portfolioQueries.updatePortfolio(
+                    name = file.portfolioName,
+                    currency = DefaultCurrency,
+                    id = LocalPortfolioId,
+                )
+
+                file.members.forEachIndexed { index, member ->
+                    portfolioQueries.insertOrIgnoreMember(
+                        id = member.id,
+                        portfolioId = LocalPortfolioId,
+                        name = member.name,
+                        initials = member.initials,
+                        role = member.role.toMemberRole(),
+                        permission = member.permission.toMemberPermission(),
+                        lastSeen = "",
+                        sortOrder = index.toLong(),
+                    )
+                }
+
+                file.positions.forEach { position ->
+                    positionQueries.insertOrIgnorePosition(
+                        id = position.id,
+                        name = position.name,
+                        assetClass = position.assetClass.toAssetClass(),
+                        subtype = position.subtype.toGoldSubtype(),
+                        karat = position.karat.toKarat(),
+                        unit = position.unit.toQuantityUnit(),
+                        unitPrice = position.unitPrice,
+                        manualPrice = position.manualPrice,
+                        dailyChangePercent = 0.0,
+                    )
+                }
+
+                file.transactions.forEach { tx ->
+                    transactionQueries.insertTransaction(
+                        id = tx.id,
+                        positionId = tx.positionId,
+                        dateYear = tx.year.toLong(),
+                        dateMonth = tx.month.toLong(),
+                        dateDay = tx.day.toLong(),
+                        side = tx.side.toTradeSide(),
+                        quantity = tx.quantity,
+                        unitPrice = tx.unitPrice,
+                        fee = tx.fee,
+                        note = tx.note,
+                        storage = tx.storage,
+                        addedByMemberId = tx.addedByMemberId,
+                        syncState = SyncState.Synced,
+                    )
+                }
+
+                // Miktar ve maliyet DEFTERDEN yeniden hesaplanir.
+                file.positions.forEach { recomputePosition(it.id) }
+
+                file.goals.forEach { goal ->
+                    goalQueries.upsertGoal(
+                        id = goal.id,
+                        name = goal.name,
+                        iconKey = goal.iconKey,
+                        amount = goal.amount,
+                        unit = goal.unit.toGoalUnit(),
+                        targetYear = goal.year.toLong(),
+                        targetMonth = goal.month.toLong(),
+                        targetDay = goal.day.toLong(),
+                        monthlyContribution = goal.monthlyContribution,
+                        isMain = goal.isMain,
+                        allocation = goal.allocation.toGoalAllocation(),
+                        status = goal.status.toGoalStatus(),
+                        sortOrder = goal.order.toLong(),
+                        estimatedYear = null,
+                        estimatedMonth = null,
+                        estimatedDay = null,
+                    )
+                }
+
+                // Atamalar hedeflerden ve pozisyonlardan SONRA: yabanci anahtar.
+                file.goalAssets.forEach { assignment ->
+                    goalAssetQueries.assignPositionToGoal(
+                        positionId = assignment.positionId,
+                        goalId = assignment.goalId,
+                    )
+                }
+
+                file.snapshots.forEach { snapshot ->
+                    snapshotQueries.upsertSnapshot(
+                        dateYear = snapshot.year.toLong(),
+                        dateMonth = snapshot.month.toLong(),
+                        dateDay = snapshot.day.toLong(),
+                        totalValue = snapshot.totalValue,
+                        principal = snapshot.principal,
+                    )
+                }
+
+                file.settings.forEach { (key, value) ->
+                    settingQueries.upsertSetting(settingKey = key, settingValue = value)
+                }
+            }
         }
     }
 

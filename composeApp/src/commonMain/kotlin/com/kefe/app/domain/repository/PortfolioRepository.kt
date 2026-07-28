@@ -1,5 +1,6 @@
 package com.kefe.app.domain.repository
 
+import com.kefe.app.domain.backup.BackupFile
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.DailySnapshot
 import com.kefe.app.domain.model.Goal
@@ -91,6 +92,18 @@ interface PortfolioRepository {
 
     /** [goalId] null ise atama kaldirilir - varlik yeniden "tum birikim"e doner. */
     suspend fun assignPositionToGoal(positionId: String, goalId: String?)
+
+    /** Kullanicinin girdigi her sey - yedek dosyasinin icerigi. */
+    suspend fun exportBackup(takenOn: String): BackupFile
+
+    /**
+     * Yedegi geri yukler.
+     *
+     * TAMAMEN DEGISTIRIR: mevcut veri silinir, yedektekiler yazilir. Birlestirme
+     * yapilmaz - hangi kaydin daha yeni oldugunu soyleyecek bir zaman damgasi
+     * yok ve yanlis tahmin sessizce cift kayit uretirdi.
+     */
+    suspend fun restoreBackup(file: BackupFile)
 
     suspend fun upsertGoal(goal: Goal)
 

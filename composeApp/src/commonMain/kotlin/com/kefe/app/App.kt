@@ -25,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -101,6 +102,7 @@ import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
 import com.kefe.app.ui.theme.Space
+import kotlinx.coroutines.delay
 import org.koin.compose.KoinApplication
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -220,6 +222,12 @@ private fun KefeApp(
             }
             is SettingsEffect.DeleteFailed -> saveError = effect.message
             SettingsEffect.NotReady -> saveError = NotReadyMessage
+
+            // Paylasim sayfasi acildi; dosyanin nereye gittigine kullanici karar
+            // verir, biz "kaydedildi" diyemeyiz.
+            SettingsEffect.BackupReady -> saveError = "Yedek hazır — kaydetmek için bir yer seçin."
+            SettingsEffect.Restored -> saveError = "Yedek geri yüklendi."
+            is SettingsEffect.BackupFailed -> saveError = effect.message
         }
     }
 
@@ -569,14 +577,20 @@ private fun KefeApp(
             }
         }
 
+        // Seritler KENDILIGINDEN kapanir.
+        //
+        // Once yalniz "Kapat" ile gidiyorlardi ve ekranin altinda kalici olarak
+        // duruyorlardi: acilan her sheet ve onay kutusunun uzerine biniyor,
+        // uygulama bozuk gorunuyordu. Bilgi bir kez okunur; okunmadiysa da
+        // kullaniciyi kilitlemez.
         saveError?.let { message ->
-            ErrorBanner(message = message, onDismiss = { saveError = null })
+            AutoDismissBanner(message = message, onDismiss = { saveError = null })
         }
 
         // Basarisiz fiyat yenilemesi. Sessiz kalinca basarili yenilemeden ayirt
         // edilemiyordu ve "yenileme calismiyor" gibi gorunuyordu.
         summary.refreshError?.let { message ->
-            ErrorBanner(
+            AutoDismissBanner(
                 message = message,
                 onDismiss = { summaryVm.onIntent(SummaryIntent.DismissRefreshError) },
             )
@@ -672,4 +686,25 @@ private fun RowScope.SheetSideScrim(onDismiss: () -> Unit) {
                 onClick = onDismiss,
             ),
     )
+}
+
+/** Serit ekranda kaldigi sure. Okunacak kadar uzun, engel olmayacak kadar kisa. */
+private const val BannerVisibleMillis = 4_000L
+
+/**
+ * Kendiliginden kapanan bilgi seridi.
+ *
+ * [message] her degistiginde sayac bastan baslar; art arda gelen iki bildirim
+ * birbirinin suresini yemez.
+ */
+@Composable
+private fun BoxScope.AutoDismissBanner(message: String, onDismiss: () -> Unit) {
+    // rememberUpdatedState olmadan, kapatma islevi her bestelemede degisirse
+    // bekleme yeniden baslar ve serit hic kapanmayabilir.
+    val dismiss by rememberUpdatedState(onDismiss)
+    LaunchedEffect(message) {
+        delay(BannerVisibleMillis)
+        dismiss()
+    }
+    ErrorBanner(message = message, onDismiss = onDismiss)
 }

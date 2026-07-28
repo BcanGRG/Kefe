@@ -6,6 +6,7 @@ import com.kefe.app.data.remote.PriceRemoteDataSource
 import com.kefe.app.data.remote.TcmbApi
 import com.kefe.app.data.remote.TefasApi
 import com.kefe.app.data.remote.createKefeHttpClient
+import com.kefe.app.data.backup.FileTransfer
 import com.kefe.app.data.repository.SqlDelightPortfolioRepository
 import com.kefe.app.data.repository.SqlDelightPreferencesRepository
 import com.kefe.app.data.repository.SqlDelightPriceRepository
@@ -62,6 +63,9 @@ val appModule = module {
     single<PriceRepository> { SqlDelightPriceRepository(get(), get(), get()) }
     single<PortfolioRepository> { SqlDelightPortfolioRepository(get(), get(), get()) }
     single<PreferencesRepository> { SqlDelightPreferencesRepository(get()) }
+
+    // Dosya paylasimi/secimi platforma iner; Android tarafi Activity ister.
+    single { FileTransfer() }
 
     viewModelOf(::SummaryViewModel)
     viewModelOf(::AssetsViewModel)
