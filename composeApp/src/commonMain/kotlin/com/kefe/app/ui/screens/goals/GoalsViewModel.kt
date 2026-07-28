@@ -2,11 +2,14 @@ package com.kefe.app.ui.screens.goals
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAllocation
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.plusMonths
+import com.kefe.app.domain.model.toEpochDay
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.ui.format.Money
@@ -26,6 +29,7 @@ import kotlinx.coroutines.launch
 class GoalsViewModel(
     private val portfolioRepository: PortfolioRepository,
     private val priceRepository: PriceRepository,
+    private val clock: KefeClock,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(GoalsUiState())
@@ -73,6 +77,18 @@ class GoalsViewModel(
 
             is GoalsIntent.EditorAllocation -> editor { it.copy(allocation = intent.allocation) }
             is GoalsIntent.EditorMain -> editor { it.copy(isMain = intent.value) }
+
+            GoalsIntent.ToggleEditorDatePicker -> editor {
+                it.copy(datePickerOpen = !it.datePickerOpen)
+            }
+
+            is GoalsIntent.EditorShiftTargetDate -> editor {
+                // Gecmise cekilemez: gecmis tarihli bir hedef icin "tahmini varis"
+                // ve "gecikme" hesaplari anlamsiz.
+                val shifted = it.targetDate.plusMonths(intent.months)
+                if (shifted.toEpochDay() < clock.today().toEpochDay()) it
+                else it.copy(targetDate = shifted)
+            }
             GoalsIntent.ToggleEditorAdvanced -> editor {
                 it.copy(advancedExpanded = !it.advancedExpanded)
             }

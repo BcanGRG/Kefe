@@ -45,6 +45,9 @@ data class GoalEditorState(
     val allocation: GoalAllocation = GoalAllocation.AllWealth,
     val isMain: Boolean = false,
     val advancedExpanded: Boolean = true,
+
+    /** Tarih secici acik mi. Alan ay-yil gosterdigi icin secici de o inceliktedir. */
+    val datePickerOpen: Boolean = false,
     val goldGramPrice: Double = 0.0,
     val usdPrice: Double = 0.0,
     val openGoalCount: Int = 0,
@@ -96,6 +99,11 @@ sealed interface GoalsIntent {
     data class EditorContribution(val value: String) : GoalsIntent
     data class EditorAllocation(val allocation: GoalAllocation) : GoalsIntent
     data class EditorMain(val value: Boolean) : GoalsIntent
+
+    data object ToggleEditorDatePicker : GoalsIntent
+
+    /** Hedef tarihini [months] ay kaydirir. Negatif geri alir. */
+    data class EditorShiftTargetDate(val months: Int) : GoalsIntent
     data object ToggleEditorAdvanced : GoalsIntent
     data object SaveEditor : GoalsIntent
     data object DeleteEditorGoal : GoalsIntent
