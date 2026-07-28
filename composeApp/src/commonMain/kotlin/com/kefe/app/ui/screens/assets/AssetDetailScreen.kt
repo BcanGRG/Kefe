@@ -397,9 +397,29 @@ private fun SummaryCard(state: AssetDetailUiState, position: Position) {
             .background(c.surfaceElevated)
             .border(Sizes.hairline, c.outline, KefeShapes.card)
     ) {
-        SummaryRow("Ortalama alış", Money.tl(state.averageBuyPrice, decimals = position.priceDecimals()))
+        // "Ortalama alış" degil "maliyet": artik ekranda iki ayri "alis" var -
+        // kullanicinin odedigi ve piyasanin alis tarafi. Ayni kelime ikisini de
+        // anlatirsa hangisinin ne oldugu okunmaz.
+        SummaryRow(
+            "Ortalama maliyet",
+            Money.tl(state.averageBuyPrice, decimals = position.priceDecimals()),
+        )
         KefeHairline()
-        SummaryRow("Güncel birim fiyat", Money.tl(position.unitPrice, decimals = position.priceDecimals()))
+        SummaryRow(
+            "Güncel birim fiyat",
+            Money.tl(position.unitPrice, decimals = position.priceDecimals()),
+        )
+        // Makas gorunur olmali: deger piyasanin ALIS tarafiyla olculuyor, yani
+        // "bugun satsam ne alirim". Bu satir olmasa bugun alinan varlik ilk anda
+        // zararda gorunur ve bu bir hata sanilir.
+        state.spreadPercent?.let { percent ->
+            KefeHairline()
+            SummaryRow(
+                "Alış / satış makası",
+                Money.tl(state.spreadAmount, decimals = position.priceDecimals()) +
+                    " · " + Money.ratio(percent, decimals = 1),
+            )
+        }
         KefeHairline()
         SummaryRow("İlk alım", state.firstBuyDate?.formatLong() ?: "—")
         // Farkli tarihlerde alinan bir varlikta "asil performans ne" sorusunun

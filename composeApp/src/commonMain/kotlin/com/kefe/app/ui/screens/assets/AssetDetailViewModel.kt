@@ -9,8 +9,12 @@ import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.PriceSource
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.annualizedReturnPercent
+import com.kefe.app.domain.model.buyPrice
 import com.kefe.app.domain.model.costBasis
 import com.kefe.app.domain.model.holdingDays
+import com.kefe.app.domain.model.priceKey
+import com.kefe.app.domain.model.sellPrice
+import com.kefe.app.domain.model.spreadPercent
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceRepository
@@ -170,6 +174,8 @@ class AssetDetailViewModel(
             tradeMarkers = emptyList(),
             axisLabels = emptyList(),
             averageBuyPrice = averagePrice,
+            spreadAmount = price?.let { it.buyPrice() - it.sellPrice() } ?: 0.0,
+            spreadPercent = price?.spreadPercent(),
             firstBuyDate = if (hasLedger) basis.firstBuy else oldest?.date,
             priceSourceLabel = priceSourceLabel(price, position),
             unrealizedProfit = if (hasLedger) {
@@ -210,8 +216,17 @@ class AssetDetailViewModel(
  * verdigi adi tasir ("Anneannemin Bileziği"), fiyat satiri ise turun adini
  * ("22 Ayar"). Once tam ad, sonra baslangic eslesmesi denenir.
  */
+/**
+ * Pozisyonun fiyat satiri.
+ *
+ * Once yalniz ETIKET esleniyordu ("Çeyrek Altın" == "Çeyrek Altın"); ad
+ * degistiginde ya da tasarim etiketi guncellendiginde sessizce kopan bir bagdi.
+ * Artik once anahtar denenir - pozisyonun kendi alanlarindan turer - etiket
+ * eslemesi yalniz eski/ornek satirlar icin geride durur.
+ */
 private fun PriceBoard.matchTo(position: Position): Price? =
-    prices.firstOrNull { it.label == position.name }
+    position.priceKey()?.let { byKey(it) }
+        ?: prices.firstOrNull { it.label == position.name }
         ?: prices.firstOrNull { position.name.startsWith(it.label) }
         ?: prices.firstOrNull { it.label.startsWith(position.name) }
 

@@ -19,7 +19,10 @@ import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.costBasis
+import com.kefe.app.domain.model.priceKey
+import com.kefe.app.domain.model.valuedAt
 import com.kefe.app.domain.repository.PortfolioRepository
+import com.kefe.app.domain.repository.PriceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -47,6 +50,9 @@ import kotlin.coroutines.CoroutineContext
 class SqlDelightPortfolioRepository(
     private val database: KefeDatabase,
     private val clock: KefeClock,
+    // Pozisyonlar okunurken guncel fiyatla degerlenir; bkz. [observePositions].
+    // Ters bagimlilik yok - fiyat deposu portfoyu bilmiyor.
+    private val priceRepository: PriceRepository,
     // Dispatchers.IO ortak kodda garanti degil; SQLite cagrilari kisa oldugu icin
     // Default havuzu yeterli. Ana is parcacigi her durumda bosta kalir.
     private val dispatcher: CoroutineContext = Dispatchers.Default,
@@ -85,9 +91,30 @@ class SqlDelightPortfolioRepository(
         portfolioQueries.selectMembers().asFlow().mapToList(dispatcher)
             .map { rows -> rows.map { it.toDomain() } }
 
-    override fun observePositions(): Flow<List<Position>> =
+    /**
+     * Pozisyonlar - GUNCEL FIYATLA degerlenmis.
+     *
+     * Tablodaki `unitPrice` ve `value` pozisyon ilk olustugunda yazilip bir daha
+     * hic guncellenmiyordu; fiyat yenilemesi icin yazilmis `updatePositionPrice`
+     * sorgusu duruyordu ama hicbir yerden cagirilmiyordu. Ceyrek ₺10.018'e
+     * alindiysa ekran haftalar sonra da ₺10.018 gosteriyordu.
+     *
+     * Cozum tabloya yazmak DEGIL, okurken bindirmek: fiyatin tek gercek kaynagi
+     * fiyat tablosudur ve ayni sayiyi iki yerde tutmak ikisinin ayrisabilecegi
+     * anlamina gelir. Saklanan degerler yalniz fiyat bulunamadiginda - o varlik
+     * tabloda yoksa - son bilinen deger olarak kullanilir.
+     *
+     * Miktar ve maliyet bindirilmez: onlar defterden turer, fiyattan degil.
+     */
+    override fun observePositions(): Flow<List<Position>> = combine(
         positionQueries.selectActivePositions().asFlow().mapToList(dispatcher)
-            .map { rows -> rows.map { it.toDomain() } }
+            .map { rows -> rows.map { it.toDomain() } },
+        priceRepository.observePrices(),
+    ) { positions, board ->
+        positions.map { position ->
+            position.valuedAt(position.priceKey()?.let { board.byKey(it) })
+        }
+    }
 
     /** Siralama sozu SQL'de tutulur (ORDER BY sortOrder). */
     override fun observeGoals(): Flow<List<Goal>> =

@@ -10,9 +10,14 @@ import com.kefe.app.domain.model.Karat
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.MemberRole
 import com.kefe.app.domain.model.Position
+import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.SyncState
+import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
+import com.kefe.app.domain.model.buyPrice
+import com.kefe.app.domain.model.priceKey
+import com.kefe.app.domain.model.sellPrice
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
@@ -90,7 +95,9 @@ class AddTransactionViewModel(
                 )
             }
 
-            is AddTransactionIntent.SelectSide -> _state.value = s.copy(side = intent.side)
+            // Fiyat tarafa bagli (alirken satis fiyati, satarken alis fiyati),
+            // bu yuzden dogrudan durum yazmak yetmez - fiyatlar yeniden uygulanir.
+            is AddTransactionIntent.SelectSide -> update(s.copy(side = intent.side))
 
             is AddTransactionIntent.ChangeQuantity ->
                 _state.value = s.copy(quantityText = intent.text)
@@ -184,7 +191,9 @@ class AddTransactionViewModel(
             subtypes = GoldSubtype.entries.map {
                 SubtypeOption(it, subtypePriceText(it, prices))
             },
-            karatOptions = Karat.entries.map { KaratOption(it, karatGramPrice(it, prices)) },
+            karatOptions = Karat.entries.map {
+                KaratOption(it, karatGramPrice(it, prices, s.side))
+            },
             fundResults = fundCatalog(prices).filter { it.matches(s.fundQuery) },
             marketPrice = market,
             unitPriceText = when {
@@ -366,50 +375,41 @@ private fun stepQuantity(s: AddTransactionUiState, up: Boolean): String {
 
 // --- Fiyat eslemesi ----------------------------------------------------------
 
-/** Alt tur -> fiyat tablosu anahtari. Bilezik ayara baglidir, burada fiyati yok. */
-private fun GoldSubtype.priceKey(): String? = when (this) {
-    GoldSubtype.Gram -> "gold_gram"
-    GoldSubtype.Quarter -> "gold_quarter"
-    GoldSubtype.Half -> "gold_half"
-    GoldSubtype.Full -> "gold_full"
-    GoldSubtype.Ata -> "gold_ata"
-    GoldSubtype.Bullion -> "gold_gram"
-    GoldSubtype.Jewelry -> null
-}
-
 /**
- * Has/kulce gram altinin ALIS kotasyonundan hesaplanir: kulce satarken
- * kuyumcu isciligi olmadigi icin satis degil alis tarafi esas alinir.
+ * Islemin tarafina gore fiyat.
+ *
+ * Alirken kuyumcunun SATIS fiyatini oderiz, satarken ALIS fiyatina satariz.
+ * Onceden her iki durumda da satis fiyati oneriliyordu: satis kaydeden kullanici
+ * makas kadar fazla hasilat gormus oluyordu.
+ *
+ * Has/kulce ise istisna: kulcede iscilik yok, iki yonde de alis kotasyonu esas.
  */
-private fun subtypePrice(subtype: GoldSubtype, board: PriceBoard): Double? {
+private fun Price.forSide(side: TradeSide, bullion: Boolean = false): Double =
+    if (side == TradeSide.Sell || bullion) sellPrice() else buyPrice()
+
+private fun subtypePrice(subtype: GoldSubtype, board: PriceBoard, side: TradeSide): Double? {
     val price = subtype.priceKey()?.let { board.byKey(it) } ?: return null
-    return if (subtype == GoldSubtype.Bullion) price.bid ?: price.ask else price.ask
+    return price.forSide(side, bullion = subtype == GoldSubtype.Bullion)
 }
 
+/** Alt tur listesindeki fiyat etiketi hep ALIS tarafini gosterir - odenecek tutar. */
 private fun subtypePriceText(subtype: GoldSubtype, board: PriceBoard): String =
-    subtypePrice(subtype, board)?.let { Money.tl(it) } ?: "ayar seçin"
+    subtypePrice(subtype, board, TradeSide.Buy)?.let { Money.tl(it) } ?: "ayar seçin"
 
-private fun Karat.priceKey(): String = when (this) {
-    Karat.K14 -> "gold_k14"
-    Karat.K18 -> "gold_k18"
-    Karat.K22 -> "gold_k22"
-    Karat.K24 -> "gold_gram"
-}
-
-private fun karatGramPrice(karat: Karat, board: PriceBoard): Double =
-    board.byKey(karat.priceKey())?.ask ?: 0.0
+private fun karatGramPrice(karat: Karat, board: PriceBoard, side: TradeSide): Double =
+    board.byKey(karat.priceKey())?.forSide(side) ?: 0.0
 
 /** Secime karsilik gelen guncel birim fiyat. */
 private fun marketPriceOf(s: AddTransactionUiState, board: PriceBoard): Double =
     when (s.assetClass) {
         AssetClass.Gold -> if (s.selectedSubtype == GoldSubtype.Jewelry) {
-            karatGramPrice(s.karat, board)
+            karatGramPrice(s.karat, board, s.side)
         } else {
-            subtypePrice(s.selectedSubtype, board) ?: 0.0
+            subtypePrice(s.selectedSubtype, board, s.side) ?: 0.0
         }
 
-        AssetClass.Silver -> board.byKey("silver_gram")?.ask ?: 0.0
-        AssetClass.Fx -> board.byKey("usd_try")?.ask ?: 0.0
+        AssetClass.Silver -> board.byKey("silver_gram")?.forSide(s.side) ?: 0.0
+        AssetClass.Fx -> board.byKey("usd_try")?.forSide(s.side) ?: 0.0
         AssetClass.Fund -> s.selectedFundKey?.let { key ->
             s.fundResults.firstOrNull { it.assetKey == key }?.price
         } ?: 0.0

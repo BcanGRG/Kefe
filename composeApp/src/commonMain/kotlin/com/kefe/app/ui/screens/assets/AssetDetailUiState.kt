@@ -38,6 +38,13 @@ data class AssetDetailUiState(
      */
     val annualizedReturnPercent: Double? = null,
 
+    /**
+     * Piyasa satis ile alis arasindaki fark - "aldigim gun neden zararliyim"in
+     * cevabi. Fonda tek fiyat vardir, orada null.
+     */
+    val spreadAmount: Double = 0.0,
+    val spreadPercent: Double? = null,
+
     /** Ust bardaki "..." menusu acik mi. */
     val menuOpen: Boolean = false,
     /** Varligi silme onayi bekleniyor. */
