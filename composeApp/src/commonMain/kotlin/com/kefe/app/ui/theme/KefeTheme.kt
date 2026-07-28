@@ -15,6 +15,7 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 
@@ -47,41 +48,50 @@ fun KefeTheme(
 ) {
     val colors = if (darkTheme) KefeDarkColors else KefeLightColors
 
-    val materialScheme = if (darkTheme) {
-        darkColorScheme(
-            primary = colors.accent,
-            onPrimary = colors.onAccent,
-            background = colors.surface,
-            onBackground = colors.onSurface,
-            surface = colors.surfaceElevated,
-            onSurface = colors.onSurface,
-            surfaceVariant = colors.surfaceSunken,
-            onSurfaceVariant = colors.onSurfaceMuted,
-            outline = colors.outline,
-            error = colors.negative,
-            scrim = colors.scrim,
-        )
-    } else {
-        lightColorScheme(
-            primary = colors.accent,
-            onPrimary = colors.onAccent,
-            background = colors.surface,
-            onBackground = colors.onSurface,
-            surface = colors.surfaceElevated,
-            onSurface = colors.onSurface,
-            surfaceVariant = colors.surfaceSunken,
-            onSurfaceVariant = colors.onSurfaceMuted,
-            outline = colors.outline,
-            error = colors.negative,
-            scrim = colors.scrim,
-        )
+    // Tema koku CompositionLocal saglar: asagidaki degerlerin KIMLIGI degisirse
+    // agactaki her okuyucu gecersizlesir. Bu iki nesne her bestelemede yeniden
+    // yaratiliyordu ve KefeTheme, Ayarlar durumunu okuyan App() icinde yasiyor -
+    // yani her ayar emisyonunda butun ekran yeniden besteleniyordu. Ciplerin ve
+    // bos durum kartlarinin titremesinin sebebi buydu.
+    val materialScheme = remember(darkTheme) {
+        if (darkTheme) {
+            darkColorScheme(
+                primary = colors.accent,
+                onPrimary = colors.onAccent,
+                background = colors.surface,
+                onBackground = colors.onSurface,
+                surface = colors.surfaceElevated,
+                onSurface = colors.onSurface,
+                surfaceVariant = colors.surfaceSunken,
+                onSurfaceVariant = colors.onSurfaceMuted,
+                outline = colors.outline,
+                error = colors.negative,
+                scrim = colors.scrim,
+            )
+        } else {
+            lightColorScheme(
+                primary = colors.accent,
+                onPrimary = colors.onAccent,
+                background = colors.surface,
+                onBackground = colors.onSurface,
+                surface = colors.surfaceElevated,
+                onSurface = colors.onSurface,
+                surfaceVariant = colors.surfaceSunken,
+                onSurfaceVariant = colors.onSurfaceMuted,
+                outline = colors.outline,
+                error = colors.negative,
+                scrim = colors.scrim,
+            )
+        }
     }
+
+    val indication = remember(darkTheme) { ripple(color = colors.accent) }
 
     CompositionLocalProvider(
         LocalKefeColors provides colors,
         LocalKefeTypography provides KefeDefaultTypography,
         LocalContentColor provides colors.onSurface,
-        LocalIndication provides ripple(color = colors.accent),
+        LocalIndication provides indication,
     ) {
         MaterialTheme(
             colorScheme = materialScheme,
