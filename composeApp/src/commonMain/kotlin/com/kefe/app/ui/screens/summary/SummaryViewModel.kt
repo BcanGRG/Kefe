@@ -16,14 +16,16 @@ import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.portfolioTotals
 import com.kefe.app.domain.model.topGainer
 import com.kefe.app.domain.model.topLoser
-import com.kefe.app.ui.format.Money
-import com.kefe.app.ui.layout.KefeMarketRow
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PriceRepository
+import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.layout.KefeMarketRow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
@@ -42,9 +44,21 @@ class SummaryViewModel(
     private val _state = MutableStateFlow(SummaryUiState())
     val state: StateFlow<SummaryUiState> = _state.asStateFlow()
 
+    /**
+     * Acilis akisi gecildi mi. Ekranin durumuna DEGIL kabuga ait - hangi ekranla
+     * acilacagini o karar veriyor - bu yuzden ayri bir akis.
+     */
+    val onboarded: StateFlow<Boolean> = portfolioRepository.observeOnboarded()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     init {
         observeData()
         refresh()
+    }
+
+    /** Giris/onboarding tamamlandi - bir daha sorulmayacak. */
+    fun markOnboarded() {
+        viewModelScope.launch { portfolioRepository.markOnboarded() }
     }
 
     fun onIntent(intent: SummaryIntent) {

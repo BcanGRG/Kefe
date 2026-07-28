@@ -1,0 +1,130 @@
+package com.kefe.app.data.remote
+
+import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.Price
+import com.kefe.app.domain.model.PriceSource
+
+/**
+ * Gercek fiyat kaynagi: uc ayri servisi tek tabloya indirir.
+ *
+ *   Altin, gumus  -> serbest piyasa (surekli guncellenir)
+ *   Doviz         -> TCMB gunluk bulteni
+ *   Fon           -> TEFAS (gunde bir fiyatlanir)
+ *
+ * Uc kaynagin tazeligi FARKLIDIR ve bu ekranda gorunur: her satir kendi
+ * zaman damgasini tasir.
+ *
+ * BOLUNMEZ DEGIL: fonlar cekilemezse altin ve doviz yine gosterilir. Ama altin
+ * kaynagi dusesrse yenileme basarisiz sayilir - altin portfoyun ana kalemi,
+ * onsuz "guncellendi" demek yaniltici olur.
+ */
+class LivePriceRemoteDataSource(
+    private val freeMarket: FreeMarketApi,
+    private val tcmb: TcmbApi,
+    private val tefas: TefasApi,
+    private val fundCodes: List<String> = DefaultFundCodes,
+) : PriceRemoteDataSource {
+
+    override suspend fun fetchPrices(): List<Price> {
+        val metals = freeMarket.fetch()
+        val metalStamp = metals.updatedAt.toClockLabel()
+
+        val prices = mutableListOf<Price>()
+
+        MetalMapping.forEach { (assetKey, mapping) ->
+            val quote = metals.quotes[mapping.symbol] ?: return@forEach
+            prices += Price(
+                assetKey = assetKey,
+                label = mapping.label,
+                bid = quote.buying,
+                ask = quote.selling,
+                changePercent = quote.changePercent,
+                timestamp = metalStamp,
+                source = PriceSource.FreeMarket,
+                assetClass = mapping.assetClass,
+            )
+        }
+
+        // Doviz ayri kaynak: dusesrse altin tablosu yine gosterilsin.
+        runCatching { tcmb.fetch() }.getOrNull()?.let { rates ->
+            CurrencyMapping.forEach { (assetKey, mapping) ->
+                val rate = rates[mapping.symbol] ?: return@forEach
+                prices += Price(
+                    assetKey = assetKey,
+                    label = mapping.label,
+                    bid = rate.buying,
+                    ask = rate.selling,
+                    // TCMB gunluk bulten; gun ici degisim yuzdesi vermez.
+                    changePercent = 0.0,
+                    timestamp = "TCMB",
+                    source = PriceSource.FreeMarket,
+                    assetClass = AssetClass.Fx,
+                )
+            }
+        }
+
+        fundCodes.forEach { code ->
+            // Tek fonun dusmesi butun yenilemeyi dusurmemeli: altin ve doviz
+            // gelmisken tablo bos kalmasin.
+            val quote = runCatching { tefas.fetchFund(code) }.getOrNull() ?: return@forEach
+            prices += Price(
+                assetKey = "fund_${code.lowercase()}",
+                label = code,
+                // Fonda alis kotasyonu yok, tek fiyat vardir.
+                bid = null,
+                ask = quote.price,
+                changePercent = quote.changePercent,
+                timestamp = quote.date,
+                source = PriceSource.Tefas,
+                assetClass = AssetClass.Fund,
+            )
+        }
+
+        return prices
+    }
+
+    /** "2026-07-28 14:47:02" -> "14:47". Ekranda yalniz saat gosteriliyor. */
+    private fun String?.toClockLabel(): String {
+        val text = this ?: return ""
+        val time = text.substringAfter(' ', "")
+        return if (time.length >= 5) time.take(5) else text
+    }
+}
+
+private data class SymbolMapping(
+    val symbol: String,
+    val label: String,
+    val assetClass: AssetClass,
+)
+
+/**
+ * Uygulama anahtari -> kaynak sembolu.
+ *
+ * Etiketler kaynaktan DEGIL buradan gelir: kaynak adlari degisebilir ve
+ * ekrandaki metin tasarima ait bir karardir.
+ */
+private val MetalMapping: Map<String, SymbolMapping> = mapOf(
+    "gold_gram" to SymbolMapping("GRA", "Gram Altın", AssetClass.Gold),
+    "gold_quarter" to SymbolMapping("CEYREKALTIN", "Çeyrek Altın", AssetClass.Gold),
+    "gold_half" to SymbolMapping("YARIMALTIN", "Yarım Altın", AssetClass.Gold),
+    "gold_full" to SymbolMapping("TAMALTIN", "Tam Altın", AssetClass.Gold),
+    "gold_ata" to SymbolMapping("ATAALTIN", "Ata Altın", AssetClass.Gold),
+    "gold_k22" to SymbolMapping("YIA", "22 Ayar", AssetClass.Gold),
+    "gold_k18" to SymbolMapping("18AYARALTIN", "18 Ayar", AssetClass.Gold),
+    "gold_k14" to SymbolMapping("14AYARALTIN", "14 Ayar", AssetClass.Gold),
+    "gold_bullion" to SymbolMapping("HAS", "Has Altın", AssetClass.Gold),
+    "silver_gram" to SymbolMapping("GUMUS", "Gram Gümüş", AssetClass.Silver),
+)
+
+private val CurrencyMapping: Map<String, SymbolMapping> = mapOf(
+    "usd_try" to SymbolMapping("USD", "USD/TRY", AssetClass.Fx),
+    "eur_try" to SymbolMapping("EUR", "EUR/TRY", AssetClass.Fx),
+)
+
+/**
+ * Baslangicta cekilen fonlar.
+ *
+ * Kullanicinin portfoyundeki fonlardan turetilmesi gerekir - simdilik sabit bir
+ * liste, cunku fiyat tablosu portfoyu bilmiyor.
+ */
+val DefaultFundCodes: List<String> = listOf("AFA", "IPV", "TTE")

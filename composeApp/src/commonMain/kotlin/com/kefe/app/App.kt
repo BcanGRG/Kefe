@@ -144,8 +144,6 @@ private fun KefeApp(
     settings: SettingsUiState,
     darkTheme: Boolean,
 ) {
-    // Uygulama girisle acilir. Oturum durumu simdilik BELLEKTE: kimlik dogrulama
-    // katmani (Supabase) gelene kadar uygulama her acilista girise doner.
     val backStack = remember { NavBackStack<NavKey>(LoginKey) }
     var onboardingPage by remember { mutableStateOf(0) }
     var addSheetVisible by remember { mutableStateOf(false) }
@@ -176,15 +174,27 @@ private fun KefeApp(
         if (backStack.firstOrNull() != key) backStack[0] = key
     }
 
+    // Kabuk (nav, ust cubuk, piyasa paneli) portfoy ozetinden beslenir.
+    val summaryVm = koinViewModel<SummaryViewModel>()
+    val summary by summaryVm.state.collectAsState()
+
     /** Giris/onboarding bitti: yigin sifirlanir, geri tusu girise donmez. */
     fun enterApp() {
         while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
         backStack[0] = SummaryKey
+        summaryVm.markOnboarded()
     }
 
-    // Kabuk (nav, ust cubuk, piyasa paneli) portfoy ozetinden beslenir.
-    val summaryVm = koinViewModel<SummaryViewModel>()
-    val summary by summaryVm.state.collectAsState()
+    // Bir kez girildiyse giris ekrani ATLANIR.
+    //
+    // Kimlik dogrulama (Supabase) henuz yok; giris ekrani hicbir seyi
+    // dogrulamiyor ve tek isleyen yolu "yeni portfoy olustur". Her acilista onu
+    // gostermek, uygulamayi her gun acan biri icin uc gereksiz dokunustu.
+    // Gercek oturum gelince bu bayragin yerini oturum durumu alir.
+    val onboarded by summaryVm.onboarded.collectAsState()
+    LaunchedEffect(onboarded) {
+        if (onboarded && backStack.firstOrNull() == LoginKey) enterApp()
+    }
 
     // Hedef duzenleme sheet'i KABUKTA yasar: hem Hedefler listesinden hem de
     // Hedef Detayi'ndan acilabilmesi gerekiyor. Ekranin icine gomulu oldugunda

@@ -1,7 +1,10 @@
 package com.kefe.app.di
 
+import com.kefe.app.data.remote.FreeMarketApi
+import com.kefe.app.data.remote.LivePriceRemoteDataSource
 import com.kefe.app.data.remote.PriceRemoteDataSource
-import com.kefe.app.data.remote.SamplePriceRemoteDataSource
+import com.kefe.app.data.remote.TcmbApi
+import com.kefe.app.data.remote.TefasApi
 import com.kefe.app.data.remote.createKefeHttpClient
 import com.kefe.app.data.repository.SqlDelightPortfolioRepository
 import com.kefe.app.data.repository.SqlDelightPriceRepository
@@ -39,7 +42,10 @@ val appModule = module {
     // Ktor istemcisi tek ornek: baglanti havuzu ve motor paylasilir.
     single { createKefeHttpClient() }
 
-    single<PriceRemoteDataSource> { SamplePriceRemoteDataSource() }
+    single { FreeMarketApi(get()) }
+    single { TcmbApi(get()) }
+    single { TefasApi(get()) }
+    single<PriceRemoteDataSource> { LivePriceRemoteDataSource(get(), get(), get()) }
 
     // Uygulamanin "bugun"u tek yerden gelir - getiri ve projeksiyon hesaplari
     // ayni gune gore calissin diye. Kayitlar diske yazildigi icin cihazin

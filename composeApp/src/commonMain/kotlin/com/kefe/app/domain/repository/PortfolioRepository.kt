@@ -55,6 +55,17 @@ interface PortfolioRepository {
     suspend fun recordSnapshot(snapshot: DailySnapshot)
 
     /**
+     * Kullanici acilis akisini gecti mi?
+     *
+     * Kimlik dogrulama gelene kadar oturumun yerine gecer: bir kez girildikten
+     * sonra uygulama dogrudan Ozet'le acilir. Aksi halde her acilista, hicbir
+     * seyi dogrulamayan bir giris ekrani ve uc gereksiz dokunus gelir.
+     */
+    fun observeOnboarded(): Flow<Boolean>
+
+    suspend fun markOnboarded()
+
+    /**
      * Pozisyonun kimligini/meta bilgisini yazar (ad, sinif, alt tur, ayar, birim,
      * birim fiyat). Miktar ve maliyet buradan DEGIL, islem defterinden gelir.
      */

@@ -72,6 +72,14 @@ class InMemoryPortfolioRepository : PortfolioRepository {
         recomputePosition(removed.positionId)
     }
 
+    private val onboardedState = MutableStateFlow(false)
+
+    override fun observeOnboarded(): Flow<Boolean> = onboardedState.asStateFlow()
+
+    override suspend fun markOnboarded() {
+        onboardedState.value = true
+    }
+
     override suspend fun recordSnapshot(snapshot: DailySnapshot) {
         // Gunde tek satir: ayni gune ikinci yazma satiri tazeler, cogaltmaz.
         snapshotsState.value = snapshotsState.value
