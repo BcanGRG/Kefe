@@ -96,6 +96,7 @@ kotlin {
             implementation(libs.lifecycle.viewmodel.navigation3)
             // navigation3-ui, navigation3-runtime'i gecisli getirir; ayri artifact yok.
             implementation(libs.navigation3.ui)
+            implementation(libs.compose.ui.backhandler)
 
             implementation(libs.koin.core)
             implementation(libs.koin.compose)

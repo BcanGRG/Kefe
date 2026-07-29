@@ -173,6 +173,9 @@ class SupabaseAuthApi(
         "validation_failed", "email_address_invalid" -> "E-posta adresi geçersiz görünüyor"
         "email_address_not_authorized" -> "Bu e-posta adresine gönderim yapılamıyor"
         "signup_disabled" -> "Yeni kayıtlar şu an kapalı"
+        // Sunucu postayi gonderemedi - SMTP ayari ya da gonderen adresi. Bunu
+        // kullanici duzeltemez; adresini degistirip durmasin diye acikca yazariz.
+        "unexpected_failure" -> "E-posta gönderilemedi — sunucu posta ayarlarında bir sorun var"
         else -> null
     }
 

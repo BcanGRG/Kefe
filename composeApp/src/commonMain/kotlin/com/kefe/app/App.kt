@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -154,6 +156,7 @@ fun App(darkTheme: Boolean = true) {
  *   Expanded - solda 240dp genisletilmis nav + ust cubuk + sagda 320dp piyasa paneli
  * Ekranlarin kendisi bu kromu cizmez; yalniz icerigi verir.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun KefeApp(
     windowSize: WindowSize,
@@ -354,6 +357,12 @@ private fun KefeApp(
                         }
 
                         entry<OnboardingKey> {
+                            // Tanitim sayfalari tek gezinme girdisidir; geri tusu
+                            // bunu bilmedigi icin ucuncu sayfadan basilinca uc
+                            // sayfayi birden atlayip giris ekranina donuyordu.
+                            // Ilk sayfada devre disi kalir - orada geri gitmek
+                            // gercekten giris ekranina donmek demektir.
+                            BackHandler(enabled = onboardingPage > 0) { onboardingPage-- }
                             ScreenSurface {
                                 OnboardingScreen(
                                     pageIndex = onboardingPage,

@@ -11,8 +11,18 @@ enum class LoginStage { SignIn, Start, Locked }
 /** Davet kodu tasarimda alti hane; kutu sayisi buradan turetilir. */
 const val InviteCodeLength: Int = 6
 
-/** Supabase e-posta kodu da alti hane. */
+/**
+ * Kod kutusundaki hane sayisi - Supabase panelindeki "Email OTP Length" ile ayni.
+ *
+ * Bu yalniz KUTU SAYISIDIR. Gonderilebilirlik [MinLoginCodeLength] ile olculur;
+ * ikisi ayri tutulur cunku sunucu ayari degistiginde kutu sayisi sasabilir ama
+ * giris calismaya devam etmelidir. Once tam esitlik araniyordu ve ayar sekize
+ * cikinca dugme hic acilmadi - hata da vermeden.
+ */
 const val LoginCodeLength: Int = 6
+
+/** Supabase'in izin verdigi en kisa kod. */
+const val MinLoginCodeLength: Int = 6
 
 data class LoginUiState(
     val stage: LoginStage = LoginStage.SignIn,
@@ -46,7 +56,13 @@ data class LoginUiState(
     /** Bos ya da bicimsiz e-posta ile kod gonderilmez. */
     val canSendCode: Boolean get() = !sendingCode && email.isValidEmail()
 
-    val canVerify: Boolean get() = !verifying && code.length == LoginCodeLength
+    /**
+     * Kod EN AZ [MinLoginCodeLength] hane olunca gonderilebilir - tam esitlik
+     * aranmaz. Sunucudaki uzunluk ayari ile buradaki sabit ayrilinca dugme hic
+     * acilmiyor ve hicbir sey de soylenmiyordu: giris sessizce calismaz oluyordu.
+     * Uzunluk yanlissa artik sunucu soyler, kullanici da en azindan deneyebilir.
+     */
+    val canVerify: Boolean get() = !verifying && code.length >= MinLoginCodeLength
 
     val canJoin: Boolean get() = !joining && inviteCode.length == InviteCodeLength
 }
