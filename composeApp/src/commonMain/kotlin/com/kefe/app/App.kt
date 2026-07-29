@@ -164,7 +164,25 @@ private fun KefeApp(
     settings: SettingsUiState,
     darkTheme: Boolean,
 ) {
-    val backStack = remember { NavBackStack<NavKey>(LoginKey) }
+    // Acilis ekrani KARAR VERILMEDEN cizilmez.
+    //
+    // Yigin once LoginKey ile kuruluyor, "acilis akisi gecilmis" bilgisi diskten
+    // gelince duzeltiliyordu. Arada kalan karelerde giris ekrani goruntuye
+    // giriyordu - kullanicinin gordugu "splash'ten sonra login parliyor" buydu.
+    // Duzeltmeyi hizlandirmak yetmez; dogru olan, karar gelene kadar hicbir sey
+    // cizmemek ve yigini DOGRU kokle kurmaktir.
+    //
+    // null = diske henuz bakilmadi.
+    val onboardingVm = koinViewModel<SummaryViewModel>()
+    val onboarded by onboardingVm.onboarded.collectAsState()
+    if (onboarded == null) {
+        Box(Modifier.fillMaxSize().background(KefeTheme.colors.surface))
+        return
+    }
+
+    val backStack = remember {
+        NavBackStack<NavKey>(if (onboarded == true) SummaryKey else LoginKey)
+    }
     var onboardingPage by remember { mutableStateOf(0) }
     var addSheetVisible by remember { mutableStateOf(false) }
 
@@ -243,13 +261,15 @@ private fun KefeApp(
 
     // Bir kez girildiyse giris ekrani ATLANIR.
     //
-    // Kimlik dogrulama (Supabase) henuz yok; giris ekrani hicbir seyi
-    // dogrulamiyor ve tek isleyen yolu "yeni portfoy olustur". Her acilista onu
-    // gostermek, uygulamayi her gun acan biri icin uc gereksiz dokunustu.
-    // Gercek oturum gelince bu bayragin yerini oturum durumu alir.
-    val onboarded by summaryVm.onboarded.collectAsState()
+    // Giris zorunlu degildir: Kefe tek kisilik ve cevrimdisi de tam calisir,
+    // hesap yalniz senkron ve paylasim icin gerekir. Bu yuzden kapiyi oturum
+    // degil, "acilis akisi gecildi mi" bayragi tutar.
+    //
+    // Yigin dogru kokle kuruldugu icin burada duzeltilecek bir sey kalmaz; bu
+    // etki yalniz oturum ACILDIKTAN sonra (kod dogrulanip bayrak yazilinca)
+    // devreye girer.
     LaunchedEffect(onboarded) {
-        if (onboarded && backStack.firstOrNull() == LoginKey) enterApp()
+        if (onboarded == true && backStack.firstOrNull() == LoginKey) enterApp()
     }
 
     // Hedef duzenleme sheet'i KABUKTA yasar: hem Hedefler listesinden hem de
