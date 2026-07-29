@@ -107,6 +107,8 @@ fun SummaryScreenTablet(
         TabletTopBar(state = state, onIntent = onIntent, onOpenMarket = onOpenMarket)
 
         when (state.freshness) {
+            // Ilk fiyatlar yolday iken serit cizilmez: uyaracak bir sey yok.
+            PriceFreshness.Loading -> Unit
             PriceFreshness.Stale -> KefeStaleBanner(
                 text = "Fiyatlar 2 saatten eski",
                 actionText = "Yenile",

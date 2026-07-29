@@ -124,6 +124,9 @@ fun SummaryScreenDesktop(
                     ),
             ) {
                 when (state.freshness) {
+                    // Ilk fiyatlar yolday iken serit cizilmez: uyaracak bir sey yok.
+                    PriceFreshness.Loading -> Unit
+
                     PriceFreshness.Stale -> {
                         KefeStaleBanner(
                             text = "Fiyatlar 2 saatten eski",

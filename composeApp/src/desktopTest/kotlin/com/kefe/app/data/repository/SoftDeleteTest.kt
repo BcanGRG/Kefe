@@ -34,7 +34,7 @@ import kotlin.test.assertTrue
  * Emulatorde elle denemek de yetmedi: ekran gezinmesi kaydi ve bu kurallarin
  * hangisinin bozuldugunu ayirt edemedi.
  */
-private class NoPrices : PriceRepository {
+internal class NoPrices : PriceRepository {
     override fun observePrices(): Flow<PriceBoard> =
         flowOf(PriceBoard(emptyList(), "", PriceFreshness.Offline))
 

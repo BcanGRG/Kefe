@@ -9,6 +9,8 @@ import com.kefe.app.domain.backup.decodeBackup
 import com.kefe.app.domain.backup.encode
 import com.kefe.app.domain.backup.transactionsCsv
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.repository.AuthRepository
+import com.kefe.app.domain.repository.AuthState
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.domain.repository.PreferencesRepository
@@ -28,12 +30,45 @@ class SettingsViewModel(
     private val preferences: PreferencesRepository,
     private val files: FileTransfer,
     private val clock: KefeClock,
+    private val authRepository: AuthRepository,
 ) : MviViewModel<SettingsUiState, SettingsIntent, SettingsEffect>(
-    SettingsUiState(email = "volkan@ornek.com"),
+    SettingsUiState(),
 ) {
 
     init {
         observe()
+        observeAccount()
+    }
+
+    /**
+     * Hesap satirindaki e-posta OTURUMDAN gelir - once ekranda sabit bir ornek
+     * adres yaziliydi ve kullanici baskasinin adresini kendi hesabi saniyordu.
+     */
+    private fun observeAccount() {
+        viewModelScope.launch {
+            authRepository.observeAuthState().collect { auth ->
+                setState {
+                    copy(
+                        email = (auth as? AuthState.SignedIn)?.session?.email.orEmpty(),
+                        signedIn = auth is AuthState.SignedIn,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Oturumu kapatir. YEREL VERI SILINMEZ - portfoy cihazda kalir, yalniz
+     * hesap baglantisi kesilir.
+     */
+    private fun signOut() {
+        viewModelScope.launch {
+            authRepository.signOut()
+            // Aksi halde "bir kez girildiyse giris ekrani atlanir" kurali
+            // kullaniciyi ayni karede iceri geri alirdi.
+            portfolioRepository.clearOnboarded()
+            emitEffect(SettingsEffect.SignedOut)
+        }
     }
 
     override fun onIntent(intent: SettingsIntent) {
@@ -63,10 +98,11 @@ class SettingsViewModel(
             SettingsIntent.DismissRestoreConfirm -> setState { copy(confirmRestore = false) }
             SettingsIntent.ConfirmRestore -> restore()
 
+            SettingsIntent.SignOut -> signOut()
+
             SettingsIntent.OpenCurrency,
             SettingsIntent.OpenPriceRefresh,
             SettingsIntent.OpenPriceSource,
-            SettingsIntent.SignOut,
             SettingsIntent.OpenPrivacy,
             SettingsIntent.OpenTerms,
             -> emitEffect(SettingsEffect.NotReady)

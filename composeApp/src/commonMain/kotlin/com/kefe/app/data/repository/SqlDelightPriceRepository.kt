@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -100,7 +102,11 @@ class SqlDelightPriceRepository(
      * tasarimdaki "2 saatten eski" kurali.
      */
     private fun freshnessOf(newestFetchSeconds: Long?, failed: Boolean): PriceFreshness {
-        if (newestFetchSeconds == null || newestFetchSeconds <= 0L) return PriceFreshness.Offline
+        // Elde hicbir fiyat yok. Bu tek basina "ag yok" DEMEK DEGILDIR - ilk
+        // cekme yolda olabilir. Ancak denenip basarisiz olduysa cevrimdisiyiz.
+        if (newestFetchSeconds == null || newestFetchSeconds <= 0L) {
+            return if (failed) PriceFreshness.Offline else PriceFreshness.Loading
+        }
         if (failed) return PriceFreshness.Offline
         val ageSeconds = clock.nowEpochMillis() / 1000L - newestFetchSeconds
         return if (ageSeconds > StaleAfterSeconds) PriceFreshness.Stale else PriceFreshness.Fresh
@@ -110,7 +116,37 @@ class SqlDelightPriceRepository(
         priceQueries.selectPriceHistory(assetKey).asFlow().mapToList(dispatcher)
             .map { rows -> rows.map { it.price } }
 
-    override suspend fun refresh(): Result<Unit> = runCatching {
+    /**
+     * Ayni anda tek cekme. Her dokunus kendi coroutine'ini baslatiyordu: arka
+     * arkaya basilan yenile dugmesi ust uste binen istekler aciyor, kaynak da
+     * bir noktada cevap vermeyi birakiyordu - ekrandaki "güncellenemedi" uyarisi
+     * buydu. Kilit istekleri siraya alir, [MinRefreshSeconds] de sirada bekleyeni
+     * bos yere aga cikarmaz.
+     */
+    private val refreshMutex = Mutex()
+
+    /** Son BASARILI cekmenin saniyesi. Sifir ise henuz cekilmedi. */
+    private var lastFetchAtSeconds = 0L
+
+    override suspend fun refresh(): Result<Unit> = refreshMutex.withLock {
+        val now = clock.nowEpochMillis() / 1000L
+
+        // Az once BASARIYLA cekildiyse tekrar cikmayiz: fiyatlar bu arada kurus
+        // oynar, istek ise kaynagin sinirina yaklastirir. Elde olan zaten taze.
+        //
+        // Son deneme PATLADIYSA kisitlama uygulanmaz. Aksi halde ag geri geldigi
+        // anda yenileye basan kullanici otuz saniye boyunca sessizce reddediliyor,
+        // ustelik "basarili" cevabi aliyordu: ekran cevrimdisi kalirken hicbir sey
+        // olmuyordu ve tek yapabildigi tekrar basmakti.
+        val recentlySucceeded = lastFetchAtSeconds > 0L &&
+            now - lastFetchAtSeconds < MinRefreshSeconds
+        if (recentlySucceeded && !lastRefreshFailed.value) {
+            return@withLock Result.success(Unit)
+        }
+        fetchAndStore(now)
+    }
+
+    private suspend fun fetchAndStore(nowSeconds: Long): Result<Unit> = runCatching {
         val prices = remote.fetchPrices()
         fetched.value = prices
         val today = clock.today()
@@ -128,7 +164,7 @@ class SqlDelightPriceRepository(
                         assetClass = price.assetClass,
                         // Tazelik bu damgadan hesaplaniyor; 0 yazildigi surece
                         // "2 saatten eski" kurali isletilemiyordu.
-                        fetchedAtEpochSeconds = clock.nowEpochMillis() / 1000L,
+                        fetchedAtEpochSeconds = nowSeconds,
                     )
                     // Gunun fiyati AYRICA gecmise yazilir: onbellek uzerine
                     // yazildigi icin gecmisi tutamaz, gecmis fiyat da sonradan
@@ -144,6 +180,7 @@ class SqlDelightPriceRepository(
             }
         }
         lastRefreshFailed.value = false
+        lastFetchAtSeconds = nowSeconds
     }.onFailure {
         // Ag yoksa son bilinen fiyatlar ekranda kalir; yalniz tazelik etiketi duser.
         lastRefreshFailed.value = true
@@ -168,3 +205,11 @@ class SqlDelightPriceRepository(
 
 /** Tasarimin "2 saatten eski" esigi. */
 private const val StaleAfterSeconds = 2L * 60 * 60
+
+/**
+ * Iki cekme arasindaki en kisa sure.
+ *
+ * Kaynak dakikada bir damga atiyor; bundan sik cekmek yeni bir sey getirmez,
+ * yalniz kaynagi zorlar.
+ */
+private const val MinRefreshSeconds = 30L

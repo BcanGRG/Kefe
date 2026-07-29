@@ -3,15 +3,19 @@ package com.kefe.app.di
 import com.kefe.app.data.remote.FreeMarketApi
 import com.kefe.app.data.remote.LivePriceRemoteDataSource
 import com.kefe.app.data.remote.PriceRemoteDataSource
+import com.kefe.app.data.remote.AuthApi
+import com.kefe.app.data.remote.SupabaseAuthApi
 import com.kefe.app.data.remote.TcmbApi
 import com.kefe.app.data.remote.TefasApi
 import com.kefe.app.data.remote.createKefeHttpClient
 import com.kefe.app.data.backup.FileTransfer
+import com.kefe.app.data.repository.SqlDelightAuthRepository
 import com.kefe.app.data.repository.SqlDelightPortfolioRepository
 import com.kefe.app.data.repository.SqlDelightPreferencesRepository
 import com.kefe.app.data.repository.SqlDelightPriceRepository
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.SystemKefeClock
+import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.domain.repository.PriceRepository
@@ -63,6 +67,10 @@ val appModule = module {
     single<PriceRepository> { SqlDelightPriceRepository(get(), get(), get()) }
     single<PortfolioRepository> { SqlDelightPortfolioRepository(get(), get(), get()) }
     single<PreferencesRepository> { SqlDelightPreferencesRepository(get()) }
+
+    // Kimlik: Supabase auth ucu + oturumu cihazda tutan depo.
+    single<AuthApi> { SupabaseAuthApi(get()) }
+    single<AuthRepository> { SqlDelightAuthRepository(get(), get(), get()) }
 
     // Dosya paylasimi/secimi platforma iner; Android tarafi Activity ister.
     single { FileTransfer() }

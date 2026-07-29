@@ -44,6 +44,8 @@ data class SettingsUiState(
     // Veri ve hesap
     val lastBackupLabel: String = "",
     val email: String = "",
+    /** Bulut hesabina girilmis mi - "Çıkış yap" satiri buna gore gorunur. */
+    val signedIn: Boolean = false,
     val appVersion: String = "1.0.4",
 
     /** "Tüm verileri sil" onay penceresi acik mi. */
@@ -105,6 +107,9 @@ sealed interface SettingsEffect {
      * olmayinca uygulamanin takildigini dusunuyor.
      */
     data object NotReady : SettingsEffect
+
+    /** Oturum kapandi - kabuk giris ekranina doner. */
+    data object SignedOut : SettingsEffect
 
     /** Dosya kullanicinin sectigi yere gonderildi. */
     data object BackupReady : SettingsEffect
