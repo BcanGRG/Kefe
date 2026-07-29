@@ -16,6 +16,7 @@ import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.domain.repository.PriceRepository
+import com.kefe.app.domain.repository.RefreshOutcome
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -39,7 +40,8 @@ internal class NoPrices : PriceRepository {
         flowOf(PriceBoard(emptyList(), "", PriceFreshness.Offline))
 
     override fun observePriceHistory(assetKey: String): Flow<List<Double>> = flowOf(emptyList())
-    override suspend fun refresh(): Result<Unit> = Result.success(Unit)
+    override suspend fun refresh(): Result<RefreshOutcome> =
+        Result.success(RefreshOutcome.Fetched)
     override suspend fun setManualPrice(assetKey: String, value: Double) = Unit
     override suspend fun clearManualPrice(assetKey: String) = Unit
 }

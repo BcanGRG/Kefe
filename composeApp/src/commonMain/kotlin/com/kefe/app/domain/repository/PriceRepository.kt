@@ -61,10 +61,35 @@ interface PriceRepository {
      */
     fun observePriceHistory(assetKey: String): Flow<List<Double>>
 
-    /** Kaynaktan yeniden ceker. Basarisizlikta son bilinen fiyatlar korunur. */
-    suspend fun refresh(): Result<Unit>
+    /**
+     * Kaynaktan yeniden ceker. Basarisizlikta son bilinen fiyatlar korunur.
+     *
+     * Sonuc [RefreshOutcome] tasir: "cekildi" ile "az once cekilmisti" ayni sey
+     * degil. Ikisi de Result.success donuyordu ve kisitlanan yenileme ekranda
+     * hicbir iz birakmiyordu - kullanicinin gordugu, dokundugu ama hicbir sey
+     * olmayan bir dugmeydi.
+     */
+    suspend fun refresh(): Result<RefreshOutcome>
 
     suspend fun setManualPrice(assetKey: String, value: Double)
 
     suspend fun clearManualPrice(assetKey: String)
+}
+
+/**
+ * Bir yenileme denemesinin sonucu.
+ *
+ * Basarili cekme ile kisitlanmis cekme AYRI TUTULUR. Ikisi de "basarili"
+ * doniyordu; kullanici yenileye basiyor, ag da kaynak da yerinde oluyor ama
+ * ekranda hicbir sey degismiyordu. Tek yapabildigi tekrar basmakti.
+ */
+sealed interface RefreshOutcome {
+    /** Kaynaga cikildi ve fiyatlar yazildi. */
+    data object Fetched : RefreshOutcome
+
+    /**
+     * Son basarili cekmenin uzerinden yeterli sure gecmedi; aga cikilmadi.
+     * [retryInSeconds] kullaniciya soylenecek kalan sure.
+     */
+    data class Throttled(val retryInSeconds: Int) : RefreshOutcome
 }

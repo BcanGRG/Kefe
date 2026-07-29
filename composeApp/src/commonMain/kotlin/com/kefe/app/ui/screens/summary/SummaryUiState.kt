@@ -80,6 +80,14 @@ data class SummaryUiState(
      */
     val refreshError: String? = null,
 
+    /**
+     * Hata olmayan yenileme bilgisi - su an yalniz "az once guncellendi".
+     *
+     * [refreshError] ile AYRI TUTULUR: biri kirmizi bir uyari, digeri notr bir
+     * bilgi. Ayni alandan gecselerdi kisitlama da hata gibi gorunurdu.
+     */
+    val refreshNotice: String? = null,
+
     // --- Uygulama kabugunun (rail / yan nav / ust cubuk) ihtiyaclari ---------
     val positionCount: Int = 0,
     val openGoalCount: Int = 0,
@@ -112,4 +120,5 @@ sealed interface SummaryIntent {
     data class SelectPeriod(val index: Int) : SummaryIntent
     data object Refresh : SummaryIntent
     data object DismissRefreshError : SummaryIntent
+    data object DismissRefreshNotice : SummaryIntent
 }

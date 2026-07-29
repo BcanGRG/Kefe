@@ -12,6 +12,7 @@ import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.PriceSource
 import com.kefe.app.domain.repository.PriceFreshness
+import com.kefe.app.domain.repository.RefreshOutcome
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -159,12 +160,22 @@ class PriceFreshnessTest {
         val remote = FakeRemote()
         val (repo, _) = newRepository(remote, nowSeconds = 10_000L)
 
-        repeat(5) { repo.refresh() }
+        val first = repo.refresh()
+        val second = repo.refresh()
 
-        // Saat sabit, yani hepsi ayni saniyede: ilki cikar, kalani onbellekle
+        // Saat sabit, yani ikisi ayni saniyede: ilki cikar, ikincisi onbellekle
         // yetinir. Once her dokunus ayri istek aciyordu ve ust uste binen
         // cagrilar kaynagi susturuyordu.
         assertEquals(1, remote.calls)
+
+        // SONUC AYIRT EDILEBILIR OLMALI. Ikisi de Result.success donuyordu ve
+        // kisitlanan yenileme ekranda hicbir iz birakmiyordu: kullanicinin
+        // gordugu, dokundugu ama hicbir sey olmayan bir dugmeydi.
+        assertEquals(RefreshOutcome.Fetched, first.getOrNull())
+        val outcome = second.getOrNull()
+        assertTrue(outcome is RefreshOutcome.Throttled, "ikinci cagri kisitlanmali")
+        // Kalan sure kullaniciya yazilacak; sifir olamaz.
+        assertTrue(outcome.retryInSeconds in 1..30)
     }
 
     @Test
