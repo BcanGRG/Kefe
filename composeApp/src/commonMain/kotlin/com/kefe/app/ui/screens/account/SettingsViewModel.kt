@@ -206,6 +206,7 @@ class SettingsViewModel(
                     showCents = prefs.flag(PreferenceKeys.ShowCents, default = false),
                     hideBalanceOnStart = prefs.flag(PreferenceKeys.HideBalanceOnStart, true),
                     biometricLock = prefs.flag(PreferenceKeys.BiometricLock, true),
+                    prefsLoaded = true,
                     notifyPartnerEntry = prefs.flag(PreferenceKeys.NotifyPartnerEntry, true),
                     notifyMonthlyReminder = prefs.flag(PreferenceKeys.NotifyMonthlyReminder, true),
                     notifyMilestone = prefs.flag(PreferenceKeys.NotifyMilestone, false),

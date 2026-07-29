@@ -19,6 +19,7 @@ import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.domain.repository.PriceRepository
+import com.kefe.app.security.BiometricGate
 import com.kefe.app.ui.screens.account.ActivityViewModel
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.SettingsViewModel
@@ -74,6 +75,9 @@ val appModule = module {
 
     // Dosya paylasimi/secimi platforma iner; Android tarafi Activity ister.
     single { FileTransfer() }
+
+    // Cihaz kilidi. Masaustunde karsiligi yok; oradaki actual Unsupported doner.
+    single { BiometricGate() }
 
     viewModelOf(::SummaryViewModel)
     viewModelOf(::AssetsViewModel)

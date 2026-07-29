@@ -37,6 +37,15 @@ data class SettingsUiState(
     val hideBalanceOnStart: Boolean = true,
     val biometricLock: Boolean = true,
 
+    /**
+     * Tercihler DISKTEN OKUNDU mu.
+     *
+     * [biometricLock] varsayilani acik; bayrak olmasaydi uygulama diske hic
+     * bakmadan "kilitli" varsayar ve kilidi hic istememis bir kullaniciya bile
+     * ilk karede parmak izi sorardi. Kilit ancak bu true olunca uygulanir.
+     */
+    val prefsLoaded: Boolean = false,
+
     // Fiyatlar
     val priceRefreshLabel: String = "15 dakikada bir",
     val priceSourceLabel: String = "Serbest piyasa",

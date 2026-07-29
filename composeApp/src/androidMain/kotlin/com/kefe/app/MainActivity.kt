@@ -1,7 +1,7 @@
 package com.kefe.app
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -10,7 +10,7 @@ import com.kefe.app.data.backup.AndroidFileBridge
 import com.kefe.app.data.db.DatabaseDriverFactory
 import com.kefe.app.di.KefePlatform
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     /**
      * Yedek dosyasi secici.

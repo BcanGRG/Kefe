@@ -2,7 +2,7 @@ package com.kefe.app.data.backup
 
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.CompletableDeferred
@@ -72,17 +72,17 @@ actual class FileTransfer actual constructor() {
  */
 object AndroidFileBridge {
 
-    internal var activity: ComponentActivity? = null
+    internal var activity: FragmentActivity? = null
     internal var openLauncher: ActivityResultLauncher<Array<String>>? = null
     internal var pending: CompletableDeferred<Uri?>? = null
 
-    fun attach(activity: ComponentActivity, launcher: ActivityResultLauncher<Array<String>>) {
+    fun attach(activity: FragmentActivity, launcher: ActivityResultLauncher<Array<String>>) {
         this.activity = activity
         this.openLauncher = launcher
     }
 
     /** Activity yok edilirken birakilir - sizinti olmasin. */
-    fun detach(activity: ComponentActivity) {
+    fun detach(activity: FragmentActivity) {
         if (this.activity === activity) {
             this.activity = null
             this.openLauncher = null

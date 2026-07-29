@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.data.remote.AuthException
 import com.kefe.app.domain.repository.AuthRepository
+import com.kefe.app.security.BiometricAvailability
+import com.kefe.app.security.BiometricGate
+import com.kefe.app.security.BiometricResult
 import com.kefe.app.domain.repository.PortfolioRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +24,7 @@ import kotlinx.coroutines.launch
 class LoginViewModel(
     private val portfolioRepository: PortfolioRepository,
     private val authRepository: AuthRepository,
+    private val biometric: BiometricGate,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState())
@@ -68,9 +72,10 @@ class LoginViewModel(
 
             LoginIntent.Join -> join()
 
-            LoginIntent.Unlock -> unlock()
+            LoginIntent.Lock -> _state.value =
+                _state.value.copy(stage = LoginStage.Locked, unlocked = false)
 
-            LoginIntent.UnlockWithPassword -> unlock()
+            LoginIntent.Unlock -> unlock()
         }
     }
 
@@ -131,8 +136,42 @@ class LoginViewModel(
         _state.value = current.copy(joining = false, inviteError = null)
     }
 
+    /**
+     * Cihaz kilidini acar.
+     *
+     * KILIT KAPI DEGIL, PERDEDIR. Cihazda parmak izi tanimli degilse ya da
+     * donanim yoksa kullanici ICERI ALINIR - bakiyeyi baskasindan saklamak
+     * icin konan bir ozellik, kullaniciyi kendi verisinden etmemelidir.
+     *
+     * Yanlis parmak denemesi buraya hic gelmez: sistem istemi acik kalir ve
+     * kullanici tekrar dener. Buraya yalniz sonuc doner.
+     */
     private fun unlock() {
-        _state.value = _state.value.copy(unlocking = false, unlocked = true, unlockError = null)
+        if (_state.value.unlocking) return
+        _state.value = _state.value.copy(unlocking = true, unlockError = null)
+
+        viewModelScope.launch {
+            if (biometric.availability() != BiometricAvailability.Available) {
+                _state.value = _state.value.copy(unlocking = false, unlocked = true)
+                return@launch
+            }
+
+            val result = biometric.authenticate(
+                title = "Kefe kilitli",
+                subtitle = "Bakiyeleri görmek için kimliğinizi doğrulayın",
+            )
+            _state.value = when (result) {
+                BiometricResult.Success ->
+                    _state.value.copy(unlocking = false, unlocked = true, unlockError = null)
+
+                // Vazgecmek hata degil: ekran kilitli kalir, kirmizi yazi cikmaz.
+                BiometricResult.Cancelled ->
+                    _state.value.copy(unlocking = false, unlockError = null)
+
+                is BiometricResult.Failed ->
+                    _state.value.copy(unlocking = false, unlockError = result.message)
+            }
+        }
     }
 }
 

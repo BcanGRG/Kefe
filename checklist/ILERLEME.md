@@ -14,7 +14,7 @@ görüntüsüne bakıp "olmuş" denmez.
 | # | Adım | Durum |
 |---|---|---|
 | 1 | Açılış animasyonu + tema uyumu | ✅ **bitti** |
-| 2 | Parmak izi kilidi | ⬜ sırada |
+| 2 | Parmak izi kilidi | ✅ **bitti** |
 | 3 | Yenileme kısıtlamasının ekranda görünmesi | ⬜ |
 | 4 | İki profil | ⬜ |
 | 5 | Çok kullanıcılı iskeletin sökülmesi | ⬜ |
@@ -75,3 +75,54 @@ parlıyordu. Üstüne, "açılış akışı geçildi mi" bilgisi diskten gelene 
 - Koyu tema, soğuk açılış: aynı sıra, koyu zemin ve açık altın.
 - **Arka plandan dönüş: animasyon oynamıyor**, uygulama doğrudan görünüyor.
   Bayrak süreç ömürlü — ekran dönmesi de tekrar oynatmaz.
+
+---
+
+## 2 · Parmak izi kilidi ✅
+
+**Neydi.** Ayarlardaki "Biyometrik kilit" anahtarı diske yazılıyor ve geri
+okunuyordu — yani açıp kapattığınızda konumunu hatırlıyordu — ama **hiçbir şey
+yapmıyordu**. Projede `androidx.biometric` bağımlılığı bile yoktu. Bu, hiç
+yapılmamış olmaktan daha sinsiydi: "hazır değil" demiyor, çalışıyormuş gibi
+duruyordu. Buna karşılık kilit ekranı (`LoginStage.Locked`) çizilmiş, hazır
+bekliyordu.
+
+**Ne yapıldı.**
+
+- `security/BiometricGate.kt` — `expect class`, `FileTransfer` ile aynı desen.
+  Android `BiometricPrompt`, iOS `LAContext`, masaüstü `Unsupported`.
+  Activity referansı mevcut köprüden alınıyor; ikinci bir köprü, ekran her
+  döndüğünde sızdırılacak ikinci bir Activity demekti.
+- `BIOMETRIC_WEAK` **veya** `DEVICE_CREDENTIAL` isteniyor. Yalnız güçlüyü
+  (STRONG) sormak yüz tanımayla açılan telefonlarda kilidi kullanılamaz kılardı;
+  cihaz kimliğini de kabul etmek kullanıcıya PIN/desen çıkış yolu bırakıyor.
+- **"Şifreyle aç" düğmesi kaldırıldı.** Hesabın parolası yok — giriş tek
+  kullanımlık e-posta koduyla — yani o düğmenin bir gün işleyecek karşılığı da
+  yoktu. Sistem istemi zaten PIN/desen sunuyor.
+- `prefsLoaded` bayrağı: kilit varsayılanı açık, bayrak olmasaydı uygulama
+  diske hiç bakmadan "kilitli" varsayıp ilk karede parmak izi sorardı.
+
+**Yol boyunca çıkan hata — kilit, kilit değildi.** İlk sürümde iptal edince
+uygulama açılıyordu. Sebep eski bir kapıydı: *"bir kez girildiyse giriş ekranı
+atlanır"* etkisi kilidi tanımıyordu. Kullanıcı doğruca Özet'e alınıyor, sistem
+istemi zaten açılmış uygulamanın üstüne biniyordu; istemden vazgeçen kişi arkada
+bekleyen bakiyeyi buluyordu. Etki artık kilide bağlı.
+
+**Kilit kapı değil, perdedir.** Cihazda parmak izi tanımlı değilse ya da donanım
+yoksa kullanıcı **içeri alınır**. Bakiyeyi başkasından saklamak için konan bir
+özellik, kullanıcıyı kendi verisinden etmemeli.
+
+**Doğrulama.** Emülatörde dört yol ayrı ayrı:
+
+- Parmak izi/PIN yokken → kullanıcı içeri alındı, dışarıda kalmadı.
+- PIN kuruldu → kilit ekranı geldi, istem açıldı, PIN girilince uygulama açıldı.
+- İstem iptal edildi → **kilit ekranında kalındı**, bakiye maskeli, "Kilitli".
+- Kilit ekranındaki parmak izi düğmesi → istem yeniden açıldı, açıldı.
+- Ayardan kapatıldı → sonraki açılışta kilit hiç gelmedi.
+
+Test PIN'i emülatörden kaldırıldı.
+
+**Sonraya bırakıldı:** oturum jetonu hâlâ SQLite'ta düz metin. `BiometricPrompt`
+bir UI bileşeni, Keystore ayrı bir şifreleme API'si — "aynı altyapı" değiller.
+Bugün jeton, içinde veri **olmayan** bir hesaba erişim veriyor; senkron açılınca
+tüm birikim geçmişi demek olacak. `SecureStore` işi senkrondan hemen önce.
