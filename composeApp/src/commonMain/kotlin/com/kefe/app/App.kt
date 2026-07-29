@@ -223,6 +223,13 @@ private fun KefeApp(
             is SettingsEffect.DeleteFailed -> saveError = effect.message
             SettingsEffect.NotReady -> saveError = NotReadyMessage
 
+            // Cikis yigini da sifirlar: geri tusuyla ayarlara donebilmek,
+            // oturumu kapatmis birine hala hesap ekranini gostermek olurdu.
+            SettingsEffect.SignedOut -> {
+                while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                backStack[0] = LoginKey
+            }
+
             // Paylasim sayfasi acildi; dosyanin nereye gittigine kullanici karar
             // verir, biz "kaydedildi" diyemeyiz.
             SettingsEffect.BackupReady -> saveError = "Yedek hazır — kaydetmek için bir yer seçin."
@@ -328,19 +335,15 @@ private fun KefeApp(
                         entry<LoginKey> {
                             val vm = koinViewModel<LoginViewModel>()
                             val state by vm.state.collectAsState()
+                            // Kod dogrulanir dogrulanmaz iceri gireriz; ekranda
+                            // ayrica "devam et" dedirtmek bos bir adim olurdu.
+                            LaunchedEffect(state.signedIn) {
+                                if (state.signedIn) enterApp()
+                            }
                             ScreenSurface {
                                 LoginScreen(
                                     state = state,
-                                    // Sifreyle giris kimlik dogrulama katmanina
-                                    // bagli; o gelene kadar dokununca hicbir sey
-                                    // olmamasi hata gibi gorunuyordu.
-                                    onIntent = { intent ->
-                                        if (intent == LoginIntent.SignInWithPassword) {
-                                            saveError = NotReadyMessage
-                                        } else {
-                                            vm.onIntent(intent)
-                                        }
-                                    },
+                                    onIntent = vm::onIntent,
                                     onStartOnboarding = {
                                         onboardingPage = 0
                                         goTo(OnboardingKey)

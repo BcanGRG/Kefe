@@ -156,32 +156,62 @@ private fun SignInStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
             .fillMaxWidth()
             .padding(start = Space.x24, end = Space.x24, top = 36.dp),
     ) {
-        Text("e-posta".trUpper(), style = t.label(11, 0.06), color = c.onSurfaceMuted)
-        Spacer(Modifier.height(6.dp))
+        // Kod gonderilmeden once e-posta, gonderildikten sonra kod kutusu. Ikisi
+        // ayni anda durmaz: kullanicinin o an yapacagi tek bir is var.
+        if (!state.codeSent) {
+            Text("e-posta".trUpper(), style = t.label(11, 0.06), color = c.onSurfaceMuted)
+            Spacer(Modifier.height(6.dp))
 
-        EmailField(
-            value = state.email,
-            onValueChange = { onIntent(LoginIntent.ChangeEmail(it)) },
-            hasError = state.emailError != null,
-        )
+            EmailField(
+                value = state.email,
+                onValueChange = { onIntent(LoginIntent.ChangeEmail(it)) },
+                hasError = state.emailError != null,
+            )
 
-        Spacer(Modifier.height(Space.x12))
-        AccountFilledButton(
-            text = "Giriş bağlantısı gönder",
-            onClick = { onIntent(LoginIntent.SendMagicLink) },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = state.canSendLink,
-        )
+            Spacer(Modifier.height(Space.x12))
+            AccountFilledButton(
+                text = if (state.sendingCode) "Gönderiliyor…" else "Giriş kodu gönder",
+                onClick = { onIntent(LoginIntent.SendCode) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.canSendCode,
+            )
+        } else {
+            Text("giriş kodu".trUpper(), style = t.label(11, 0.06), color = c.onSurfaceMuted)
+            Spacer(Modifier.height(6.dp))
+
+            // Davet kodu kutusuyla AYNI bilesen: ikisi de alti haneli sayi ve
+            // ayni gorunumde. Ikinci bir kopya cikarmak, birinde yapilan
+            // duzeltmenin digerinde eksik kalmasi demekti.
+            InviteCodeInput(
+                code = state.code,
+                onCodeChange = { onIntent(LoginIntent.ChangeCode(it)) },
+            )
+
+            Spacer(Modifier.height(Space.x12))
+            AccountFilledButton(
+                text = if (state.verifying) "Kontrol ediliyor…" else "Giriş yap",
+                onClick = { onIntent(LoginIntent.VerifyCode) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.canVerify,
+            )
+            Spacer(Modifier.height(Space.x8))
+            AccountFlatButton(
+                text = "E-postayı düzelt",
+                onClick = { onIntent(LoginIntent.EditEmail) },
+                contentColor = c.onSurfaceMuted,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         Spacer(Modifier.height(Space.x10))
         // Ayni satir uc bilgiyi tasir: aciklama, hata ve gonderim onayi.
-        val noteIcon = if (state.linkSent) KefeIcons.Check else KefeIcons.Info
+        val noteIcon = if (state.codeSent) KefeIcons.Check else KefeIcons.Info
         val noteColor = if (state.emailError != null) c.negative else c.onSurfaceMuted
         val noteText = state.emailError
-            ?: if (state.linkSent) {
-                "Bağlantı ${state.email} adresine gönderildi. Aynı telefondan açın."
+            ?: if (state.codeSent) {
+                "${state.email} adresine altı haneli bir kod gönderdik."
             } else {
-                "Şifre yok: e-postanıza tek kullanımlık bağlantı gelir. " +
+                "Şifre yok: e-postanıza tek kullanımlık bir kod gelir. " +
                     "Verileriniz iki telefonda da güncel kalsın diye."
             }
 
@@ -196,25 +226,10 @@ private fun SignInStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
             Text(noteText, style = t.micro.copy(lineHeight = 17.sp), color = noteColor)
         }
 
-        Spacer(Modifier.height(Space.x24))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Space.x12),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.weight(1f).height(Sizes.hairline).background(c.outline))
-            Text("veya", style = t.micro, color = c.onSurfaceMuted)
-            Box(Modifier.weight(1f).height(Sizes.hairline).background(c.outline))
-        }
-        Spacer(Modifier.height(Space.x24))
-
-        AccountOutlineButton(
-            text = "Şifreyle giriş yap",
-            onClick = { onIntent(LoginIntent.SignInWithPassword) },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = KefeIcons.Lock,
-        )
-
+        // Tasarimdaki "Şifreyle giriş yap" secenegi KALDIRILDI. Kimlik parolasiz
+        // kuruldu - hesabin parolasi hic yok, dolayisiyla bu dugmenin bir gun
+        // isleyecek bir karsiligi da yok. Dokununca "henüz hazır değil" diyen
+        // kalici bir dugme birakmak, olmayan bir ozellik vaat etmekti.
         Spacer(Modifier.height(Space.x28))
         Row(
             modifier = Modifier.fillMaxWidth(),

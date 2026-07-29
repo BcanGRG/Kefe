@@ -235,6 +235,12 @@ class SqlDelightPortfolioRepository(
         }
     }
 
+    override suspend fun clearOnboarded() {
+        withContext(dispatcher) {
+            settingQueries.deleteSetting(OnboardedKey)
+        }
+    }
+
     // --- Yedekleme ----------------------------------------------------------
 
     /**

@@ -11,14 +11,22 @@ enum class LoginStage { SignIn, Start, Locked }
 /** Davet kodu tasarimda alti hane; kutu sayisi buradan turetilir. */
 const val InviteCodeLength: Int = 6
 
+/** Supabase e-posta kodu da alti hane. */
+const val LoginCodeLength: Int = 6
+
 data class LoginUiState(
     val stage: LoginStage = LoginStage.SignIn,
 
     // Giris
     val email: String = "",
     val emailError: String? = null,
-    val sendingLink: Boolean = false,
-    val linkSent: Boolean = false,
+    val sendingCode: Boolean = false,
+    /** Kod gonderildi - ekran kod kutusuna gecer. */
+    val codeSent: Boolean = false,
+    val code: String = "",
+    val verifying: Boolean = false,
+    /** Dogrulama basarili - cagiran taraf ana ekrana gecirir. */
+    val signedIn: Boolean = false,
 
     // Yeni portfoy / katilma
     val inviteCode: String = "",
@@ -35,8 +43,10 @@ data class LoginUiState(
     val unlocked: Boolean = false,
     val portfolioCreated: Boolean = false,
 ) {
-    /** Bos ya da bicimsiz e-posta ile baglanti gonderilmez. */
-    val canSendLink: Boolean get() = !sendingLink && email.isValidEmail()
+    /** Bos ya da bicimsiz e-posta ile kod gonderilmez. */
+    val canSendCode: Boolean get() = !sendingCode && email.isValidEmail()
+
+    val canVerify: Boolean get() = !verifying && code.length == LoginCodeLength
 
     val canJoin: Boolean get() = !joining && inviteCode.length == InviteCodeLength
 }
@@ -56,8 +66,12 @@ internal fun String.isValidEmail(): Boolean {
 
 sealed interface LoginIntent {
     data class ChangeEmail(val value: String) : LoginIntent
-    data object SendMagicLink : LoginIntent
-    data object SignInWithPassword : LoginIntent
+    data object SendCode : LoginIntent
+    data class ChangeCode(val value: String) : LoginIntent
+    data object VerifyCode : LoginIntent
+
+    /** Kod kutusundan e-posta adimina donus - yanlis adres yazilmis olabilir. */
+    data object EditEmail : LoginIntent
 
     data object GoToStart : LoginIntent
     data object GoToSignIn : LoginIntent

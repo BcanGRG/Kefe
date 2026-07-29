@@ -75,6 +75,16 @@ interface PortfolioRepository {
     suspend fun markOnboarded()
 
     /**
+     * Giris ekranini tekrar gosterilir yapar.
+     *
+     * Cikis yapan kullaniciyi giris ekranina gondermek yetmiyordu: "bir kez
+     * girildiyse giris ekrani atlanir" kurali onu ayni karede iceri geri
+     * aliyordu. Isaret temizlenince kural dogru calisir - veri silinmez, sadece
+     * bu kapi yeniden kurulur.
+     */
+    suspend fun clearOnboarded()
+
+    /**
      * Kullanicinin girdigi HER SEYI siler: pozisyonlar, islem defteri, hedefler,
      * aktivite, gunluk fotograflar, elle girilen fiyatlar ve tercihler.
      *
