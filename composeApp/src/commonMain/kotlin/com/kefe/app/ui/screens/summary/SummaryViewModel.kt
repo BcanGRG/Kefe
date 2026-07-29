@@ -47,9 +47,14 @@ class SummaryViewModel(
     /**
      * Acilis akisi gecildi mi. Ekranin durumuna DEGIL kabuga ait - hangi ekranla
      * acilacagini o karar veriyor - bu yuzden ayri bir akis.
+     *
+     * NULL = HENUZ BILINMIYOR. Once false ile basliyordu ve "diske bakilmadi" ile
+     * "girilmemis" ayirt edilemiyordu: oturumu acik bir kullanicida uygulama
+     * acilisinda bir an giris ekranini gosterip sonra ana ekrana atliyordu.
+     * Kabuk artik null oldugu surece hicbir ekran cizmez.
      */
-    val onboarded: StateFlow<Boolean> = portfolioRepository.observeOnboarded()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val onboarded: StateFlow<Boolean?> = portfolioRepository.observeOnboarded()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** En son yazilan fotograf - ayni degerin tekrar yazilmasini onler. */
     private var lastRecorded: DailySnapshot? = null

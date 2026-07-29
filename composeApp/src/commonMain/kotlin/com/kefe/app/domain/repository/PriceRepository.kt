@@ -8,14 +8,27 @@ import kotlinx.coroutines.flow.Flow
  * bulur: taze -> yalniz saat satiri, bayat -> sari serit, cevrimdisi -> gri serit.
  * Hicbiri rakamlari gizlemez.
  */
+/**
+ * Ekrandaki fiyatlarin durumu.
+ *
+ * [Loading] ile [Offline] AYRI OLMAK ZORUNDA. Once ikisi de "Çevrimdışı" idi:
+ * elinde hic fiyat olmayan bir uygulama - ilk acilis, temizlenmis veri - daha
+ * ilk istegi yolday iken cevrimdisi oldugunu soyluyordu. Kullanicinin "hep hata
+ * veriyor gibi" dedigi sey buydu; oysa istek gidiyor ve basariyla donuyordu.
+ *
+ * Kural: "Çevrimdışı" ancak GERCEKTEN DENENIP BASARISIZ olunca soylenir.
+ */
 enum class PriceFreshness {
+    /** Ilk fiyatlar henuz alinmadi - hata degil, bilgi yoklugu. */
+    Loading,
+
     /** Son guncelleme 2 saatten yeni. */
     Fresh,
 
     /** 2 saatten eski; rakamlar gosterilmeye devam eder, yenile onerilir. */
     Stale,
 
-    /** Ag yok; son bilinen fiyatlarla hesaplaniyor. */
+    /** Deneme yapildi ve basarisiz oldu; son bilinen fiyatlarla hesaplaniyor. */
     Offline,
 }
 

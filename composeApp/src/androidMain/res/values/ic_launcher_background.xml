@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tasarimin "Koyu zemin" ikon varyanti. Ikon her iki temada da koyu zeminde
+     durur: ana ekran duvar kagidi degisken, marka rengi degil. -->
+<resources>
+    <color name="ic_launcher_background">#15120E</color>
+</resources>

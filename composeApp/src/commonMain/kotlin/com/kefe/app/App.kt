@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -154,6 +156,7 @@ fun App(darkTheme: Boolean = true) {
  *   Expanded - solda 240dp genisletilmis nav + ust cubuk + sagda 320dp piyasa paneli
  * Ekranlarin kendisi bu kromu cizmez; yalniz icerigi verir.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun KefeApp(
     windowSize: WindowSize,
@@ -161,7 +164,25 @@ private fun KefeApp(
     settings: SettingsUiState,
     darkTheme: Boolean,
 ) {
-    val backStack = remember { NavBackStack<NavKey>(LoginKey) }
+    // Acilis ekrani KARAR VERILMEDEN cizilmez.
+    //
+    // Yigin once LoginKey ile kuruluyor, "acilis akisi gecilmis" bilgisi diskten
+    // gelince duzeltiliyordu. Arada kalan karelerde giris ekrani goruntuye
+    // giriyordu - kullanicinin gordugu "splash'ten sonra login parliyor" buydu.
+    // Duzeltmeyi hizlandirmak yetmez; dogru olan, karar gelene kadar hicbir sey
+    // cizmemek ve yigini DOGRU kokle kurmaktir.
+    //
+    // null = diske henuz bakilmadi.
+    val onboardingVm = koinViewModel<SummaryViewModel>()
+    val onboarded by onboardingVm.onboarded.collectAsState()
+    if (onboarded == null) {
+        Box(Modifier.fillMaxSize().background(KefeTheme.colors.surface))
+        return
+    }
+
+    val backStack = remember {
+        NavBackStack<NavKey>(if (onboarded == true) SummaryKey else LoginKey)
+    }
     var onboardingPage by remember { mutableStateOf(0) }
     var addSheetVisible by remember { mutableStateOf(false) }
 
@@ -223,6 +244,13 @@ private fun KefeApp(
             is SettingsEffect.DeleteFailed -> saveError = effect.message
             SettingsEffect.NotReady -> saveError = NotReadyMessage
 
+            // Cikis yigini da sifirlar: geri tusuyla ayarlara donebilmek,
+            // oturumu kapatmis birine hala hesap ekranini gostermek olurdu.
+            SettingsEffect.SignedOut -> {
+                while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                backStack[0] = LoginKey
+            }
+
             // Paylasim sayfasi acildi; dosyanin nereye gittigine kullanici karar
             // verir, biz "kaydedildi" diyemeyiz.
             SettingsEffect.BackupReady -> saveError = "Yedek hazır — kaydetmek için bir yer seçin."
@@ -233,13 +261,15 @@ private fun KefeApp(
 
     // Bir kez girildiyse giris ekrani ATLANIR.
     //
-    // Kimlik dogrulama (Supabase) henuz yok; giris ekrani hicbir seyi
-    // dogrulamiyor ve tek isleyen yolu "yeni portfoy olustur". Her acilista onu
-    // gostermek, uygulamayi her gun acan biri icin uc gereksiz dokunustu.
-    // Gercek oturum gelince bu bayragin yerini oturum durumu alir.
-    val onboarded by summaryVm.onboarded.collectAsState()
+    // Giris zorunlu degildir: Kefe tek kisilik ve cevrimdisi de tam calisir,
+    // hesap yalniz senkron ve paylasim icin gerekir. Bu yuzden kapiyi oturum
+    // degil, "acilis akisi gecildi mi" bayragi tutar.
+    //
+    // Yigin dogru kokle kuruldugu icin burada duzeltilecek bir sey kalmaz; bu
+    // etki yalniz oturum ACILDIKTAN sonra (kod dogrulanip bayrak yazilinca)
+    // devreye girer.
     LaunchedEffect(onboarded) {
-        if (onboarded && backStack.firstOrNull() == LoginKey) enterApp()
+        if (onboarded == true && backStack.firstOrNull() == LoginKey) enterApp()
     }
 
     // Hedef duzenleme sheet'i KABUKTA yasar: hem Hedefler listesinden hem de
@@ -254,9 +284,14 @@ private fun KefeApp(
     val navItems = if (windowSize.isExpanded) desktopDestinations else topLevelDestinations
     val navIndex = navItems.indexOfFirst { it.key == current }.coerceAtLeast(0)
     val members = summary.members.mapIndexed { index, m -> m.initials to index }
-    val syncStatus = when (summary.freshness) {
-        PriceFreshness.Offline -> SyncStatus.Offline
-        else -> if (summary.refreshing) SyncStatus.Pending else SyncStatus.Synced
+    // Devam eden bir istek her seyi yener. Once Offline ilk sirada bakiliyordu ve
+    // istek YOLDAYKEN bile "Çevrimdışı" yaziyordu - kullanicinin gordugu ilk sey
+    // buydu, hem de tam calisan bir agda.
+    val syncStatus = when {
+        summary.refreshing -> SyncStatus.Pending
+        summary.freshness == PriceFreshness.Loading -> SyncStatus.Pending
+        summary.freshness == PriceFreshness.Offline -> SyncStatus.Offline
+        else -> SyncStatus.Synced
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -328,19 +363,15 @@ private fun KefeApp(
                         entry<LoginKey> {
                             val vm = koinViewModel<LoginViewModel>()
                             val state by vm.state.collectAsState()
+                            // Kod dogrulanir dogrulanmaz iceri gireriz; ekranda
+                            // ayrica "devam et" dedirtmek bos bir adim olurdu.
+                            LaunchedEffect(state.signedIn) {
+                                if (state.signedIn) enterApp()
+                            }
                             ScreenSurface {
                                 LoginScreen(
                                     state = state,
-                                    // Sifreyle giris kimlik dogrulama katmanina
-                                    // bagli; o gelene kadar dokununca hicbir sey
-                                    // olmamasi hata gibi gorunuyordu.
-                                    onIntent = { intent ->
-                                        if (intent == LoginIntent.SignInWithPassword) {
-                                            saveError = NotReadyMessage
-                                        } else {
-                                            vm.onIntent(intent)
-                                        }
-                                    },
+                                    onIntent = vm::onIntent,
                                     onStartOnboarding = {
                                         onboardingPage = 0
                                         goTo(OnboardingKey)
@@ -351,6 +382,12 @@ private fun KefeApp(
                         }
 
                         entry<OnboardingKey> {
+                            // Tanitim sayfalari tek gezinme girdisidir; geri tusu
+                            // bunu bilmedigi icin ucuncu sayfadan basilinca uc
+                            // sayfayi birden atlayip giris ekranina donuyordu.
+                            // Ilk sayfada devre disi kalir - orada geri gitmek
+                            // gercekten giris ekranina donmek demektir.
+                            BackHandler(enabled = onboardingPage > 0) { onboardingPage-- }
                             ScreenSurface {
                                 OnboardingScreen(
                                     pageIndex = onboardingPage,

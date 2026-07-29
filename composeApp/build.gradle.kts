@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.gradle.internal.os.OperatingSystem
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -9,6 +10,54 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.sqldelight)
+}
+
+/**
+ * Supabase adresi ve yayinlanabilir anahtari KAYNAKTA DURMAZ: local.properties
+ * git tarafindan yok sayilir, buradan okunup uretilen tek bir Kotlin nesnesine
+ * yazilir. Ortam degiskeni de kabul edilir - CI'da local.properties yoktur.
+ *
+ * Anahtar zaten istemcide dagitilmak uzere tasarlanmis "publishable" anahtardir;
+ * veriyi koruyan sey anahtarin gizliligi degil, tablolarin RLS kurallaridir.
+ * Yine de depoya yazmayiz: proje hesabini degistirmek icin kod degistirmek
+ * gerekmesin.
+ */
+val supabaseUrl: String = localOrEnv("SUPABASE_URL")
+val supabaseAnonKey: String = localOrEnv("SUPABASE_ANON_KEY")
+
+fun localOrEnv(key: String): String {
+    val local = rootProject.file("local.properties")
+    if (local.exists()) {
+        val props = Properties()
+        local.inputStream().use { props.load(it) }
+        props.getProperty(key)?.takeIf { it.isNotBlank() }?.let { return it }
+    }
+    return System.getenv(key).orEmpty()
+}
+
+val generateSupabaseConfig by tasks.registering {
+    val outputDir = layout.buildDirectory.dir("generated/supabase")
+    inputs.property("url", supabaseUrl)
+    inputs.property("key", supabaseAnonKey)
+    outputs.dir(outputDir)
+    doLast {
+        val dir = outputDir.get().asFile.resolve("com/kefe/app/data/remote")
+        dir.mkdirs()
+        dir.resolve("SupabaseConfig.kt").writeText(
+            """
+            package com.kefe.app.data.remote
+
+            /** Uretilen dosya - elle duzenlemeyin. Kaynak: local.properties. */
+            object SupabaseConfig {
+                const val Url: String = "$supabaseUrl"
+                const val AnonKey: String = "$supabaseAnonKey"
+
+                /** Anahtarlar girilmemisse bulut ozellikleri kapali kalir. */
+                val isConfigured: Boolean get() = Url.isNotBlank() && AnonKey.isNotBlank()
+            }
+            """.trimIndent() + "\n"
+        )
+    }
 }
 
 kotlin {
@@ -31,6 +80,9 @@ kotlin {
     }
 
     sourceSets {
+        commonMain {
+            kotlin.srcDir(generateSupabaseConfig)
+        }
         commonMain.dependencies {
             implementation(compose.runtime)
             implementation(compose.foundation)
@@ -44,6 +96,7 @@ kotlin {
             implementation(libs.lifecycle.viewmodel.navigation3)
             // navigation3-ui, navigation3-runtime'i gecisli getirir; ayri artifact yok.
             implementation(libs.navigation3.ui)
+            implementation(libs.compose.ui.backhandler)
 
             implementation(libs.koin.core)
             implementation(libs.koin.compose)

@@ -1,0 +1,24 @@
+-- Bkz. 3.sqm: oturum tercihlerden AYRI durur, cunku yedek dosyasi tercihleri
+-- icine alir ve yenileme jetonu paylasilan bir dosyaya girmemelidir.
+CREATE TABLE auth_session (
+    id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+    userId TEXT NOT NULL,
+    email TEXT NOT NULL,
+    accessToken TEXT NOT NULL,
+    refreshToken TEXT NOT NULL,
+    expiresAtEpochSeconds INTEGER NOT NULL
+);
+
+selectSession:
+SELECT *
+FROM auth_session
+WHERE id = 1;
+
+upsertSession:
+INSERT OR REPLACE INTO auth_session(
+    id, userId, email, accessToken, refreshToken, expiresAtEpochSeconds
+)
+VALUES (1, :userId, :email, :accessToken, :refreshToken, :expiresAtEpochSeconds);
+
+deleteSession:
+DELETE FROM auth_session;

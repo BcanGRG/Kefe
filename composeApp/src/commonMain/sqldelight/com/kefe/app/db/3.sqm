@@ -1,0 +1,19 @@
+-- Supabase oturumu.
+--
+-- NEDEN AYRI TABLO: tercihler icin zaten anahtar-deger bir "settings" tablosu
+-- var, ama yedek dosyasi o tablonun TAMAMINI icine aliyor. Oturum oraya
+-- yazilsaydi yenileme jetonu, kullanicinin WhatsApp'tan gonderdigi yedek
+-- dosyasinin icinde gider ve dosyayi eline gecirenin hesaba girmesine yeterdi.
+-- Ayri tablo yedekten disaridadir.
+--
+-- TEK SATIR: id her zaman 1. Bu cihazda ayni anda tek oturum acik olur.
+CREATE TABLE auth_session (
+    id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+    userId TEXT NOT NULL,
+    email TEXT NOT NULL,
+    accessToken TEXT NOT NULL,
+    refreshToken TEXT NOT NULL,
+    -- Erisim jetonunun bittigi an. Yenileme bu damga gecince yapilir; arka
+    -- planda saat isletmeyiz.
+    expiresAtEpochSeconds INTEGER NOT NULL
+);

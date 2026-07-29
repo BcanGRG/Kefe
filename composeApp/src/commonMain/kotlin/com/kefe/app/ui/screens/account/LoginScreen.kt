@@ -30,6 +30,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -71,6 +73,7 @@ import com.kefe.app.ui.theme.tabular
  * Birincil yol sifresiz giristir: e-postaya tek kullanimlik baglanti. Sifre
  * yolu bilerek ikincil butondadir.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LoginScreen(
     state: LoginUiState,
@@ -81,6 +84,24 @@ fun LoginScreen(
 ) {
     LaunchedEffect(state.unlocked) { if (state.unlocked) onEnterApp() }
     LaunchedEffect(state.portfolioCreated) { if (state.portfolioCreated) onStartOnboarding() }
+
+    // Giris ekraninin ASAMALARI ayri gezinme girdisi degil, tek ekranin durumu.
+    // Sistem geri tusu bunu bilmedigi icin kod kutusundayken ya da Başlangıç
+    // adimindayken UYGULAMADAN CIKIYORDU: kullanici bir adim geri gitmek isterken
+    // kendini ana ekranda buluyordu.
+    //
+    // Kilit asamasi bilerek disarida: kilitliyken geri tusu uygulamadan cikarir,
+    // kilidi acmaz. Kapali tutmak da kullaniciyi ekranda hapsederdi.
+    val backStep: (() -> Unit)? = when {
+        state.stage == LoginStage.Start -> {
+            { onIntent(LoginIntent.GoToSignIn) }
+        }
+        state.stage == LoginStage.SignIn && state.codeSent -> {
+            { onIntent(LoginIntent.EditEmail) }
+        }
+        else -> null
+    }
+    BackHandler(enabled = backStep != null) { backStep?.invoke() }
 
     // Form masaustunde pencere boyunca uzarsa alan ve butonlar okunaksiz olur;
     // ust cubuk da icerikle ayni dar kolonda kalsin diye birlikte ortalanir.
@@ -156,32 +177,65 @@ private fun SignInStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
             .fillMaxWidth()
             .padding(start = Space.x24, end = Space.x24, top = 36.dp),
     ) {
-        Text("e-posta".trUpper(), style = t.label(11, 0.06), color = c.onSurfaceMuted)
-        Spacer(Modifier.height(6.dp))
+        // Kod gonderilmeden once e-posta, gonderildikten sonra kod kutusu. Ikisi
+        // ayni anda durmaz: kullanicinin o an yapacagi tek bir is var.
+        if (!state.codeSent) {
+            Text("e-posta".trUpper(), style = t.label(11, 0.06), color = c.onSurfaceMuted)
+            Spacer(Modifier.height(6.dp))
 
-        EmailField(
-            value = state.email,
-            onValueChange = { onIntent(LoginIntent.ChangeEmail(it)) },
-            hasError = state.emailError != null,
-        )
+            EmailField(
+                value = state.email,
+                onValueChange = { onIntent(LoginIntent.ChangeEmail(it)) },
+                hasError = state.emailError != null,
+            )
 
-        Spacer(Modifier.height(Space.x12))
-        AccountFilledButton(
-            text = "Giriş bağlantısı gönder",
-            onClick = { onIntent(LoginIntent.SendMagicLink) },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = state.canSendLink,
-        )
+            Spacer(Modifier.height(Space.x12))
+            AccountFilledButton(
+                text = if (state.sendingCode) "Gönderiliyor…" else "Giriş kodu gönder",
+                onClick = { onIntent(LoginIntent.SendCode) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.canSendCode,
+            )
+        } else {
+            Text("giriş kodu".trUpper(), style = t.label(11, 0.06), color = c.onSurfaceMuted)
+            Spacer(Modifier.height(6.dp))
+
+            // Davet kodu kutusuyla AYNI bilesen: ikisi de alti haneli sayi ve
+            // ayni gorunumde. Ikinci bir kopya cikarmak, birinde yapilan
+            // duzeltmenin digerinde eksik kalmasi demekti.
+            InviteCodeInput(
+                code = state.code,
+                onCodeChange = { onIntent(LoginIntent.ChangeCode(it)) },
+                length = LoginCodeLength,
+            )
+
+            Spacer(Modifier.height(Space.x12))
+            AccountFilledButton(
+                text = if (state.verifying) "Kontrol ediliyor…" else "Giriş yap",
+                onClick = { onIntent(LoginIntent.VerifyCode) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.canVerify,
+            )
+            Spacer(Modifier.height(Space.x8))
+            AccountFlatButton(
+                text = "E-postayı düzelt",
+                onClick = { onIntent(LoginIntent.EditEmail) },
+                contentColor = c.onSurfaceMuted,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         Spacer(Modifier.height(Space.x10))
         // Ayni satir uc bilgiyi tasir: aciklama, hata ve gonderim onayi.
-        val noteIcon = if (state.linkSent) KefeIcons.Check else KefeIcons.Info
+        val noteIcon = if (state.codeSent) KefeIcons.Check else KefeIcons.Info
         val noteColor = if (state.emailError != null) c.negative else c.onSurfaceMuted
         val noteText = state.emailError
-            ?: if (state.linkSent) {
-                "Bağlantı ${state.email} adresine gönderildi. Aynı telefondan açın."
+            ?: if (state.codeSent) {
+                // Hane sayisi metne SABIT yazilmaz: kod uzunlugu Supabase
+                // ayarindan geliyor, ikisi ayrilinca cumle yalan soyler.
+                "${state.email} adresine ${LoginCodeLength} haneli bir kod gönderdik."
             } else {
-                "Şifre yok: e-postanıza tek kullanımlık bağlantı gelir. " +
+                "Şifre yok: e-postanıza tek kullanımlık bir kod gelir. " +
                     "Verileriniz iki telefonda da güncel kalsın diye."
             }
 
@@ -196,25 +250,10 @@ private fun SignInStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
             Text(noteText, style = t.micro.copy(lineHeight = 17.sp), color = noteColor)
         }
 
-        Spacer(Modifier.height(Space.x24))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Space.x12),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.weight(1f).height(Sizes.hairline).background(c.outline))
-            Text("veya", style = t.micro, color = c.onSurfaceMuted)
-            Box(Modifier.weight(1f).height(Sizes.hairline).background(c.outline))
-        }
-        Spacer(Modifier.height(Space.x24))
-
-        AccountOutlineButton(
-            text = "Şifreyle giriş yap",
-            onClick = { onIntent(LoginIntent.SignInWithPassword) },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = KefeIcons.Lock,
-        )
-
+        // Tasarimdaki "Şifreyle giriş yap" secenegi KALDIRILDI. Kimlik parolasiz
+        // kuruldu - hesabin parolasi hic yok, dolayisiyla bu dugmenin bir gun
+        // isleyecek bir karsiligi da yok. Dokununca "henüz hazır değil" diyen
+        // kalici bir dugme birakmak, olmayan bir ozellik vaat etmekti.
         Spacer(Modifier.height(Space.x28))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -398,11 +437,18 @@ private fun StartCard(borderColor: Color, content: @Composable () -> Unit) {
 }
 
 /**
- * Alti haneli davet kodu. Kutular gorseldir; giris gorunmez bir metin alanina
+ * Hane hane kod kutusu. Kutular gorseldir; giris gorunmez bir metin alanina
  * yapilir - boylece sistem klavyesi, yapistirma ve otomatik doldurma calisir.
+ *
+ * Uzunluk PARAMETRE: davet kodu alti hane, Supabase giris kodu sekiz. Sabit
+ * kaldigi surece giris kutusu hicbir zaman dolmuyor ve dugme acilmiyordu.
  */
 @Composable
-private fun InviteCodeInput(code: String, onCodeChange: (String) -> Unit) {
+private fun InviteCodeInput(
+    code: String,
+    onCodeChange: (String) -> Unit,
+    length: Int = InviteCodeLength,
+) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
     val interaction = remember { MutableInteractionSource() }
@@ -410,10 +456,10 @@ private fun InviteCodeInput(code: String, onCodeChange: (String) -> Unit) {
 
     Box(Modifier.fillMaxWidth()) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (index in 0 until InviteCodeLength) {
+            for (index in 0 until length) {
                 val filled = index < code.length
                 // Vurgulu kenarlik siradaki bos haneyi isaret eder.
-                val active = focused && index == code.length.coerceAtMost(InviteCodeLength - 1)
+                val active = focused && index == code.length.coerceAtMost(length - 1)
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -439,7 +485,7 @@ private fun InviteCodeInput(code: String, onCodeChange: (String) -> Unit) {
         // Gorunmez giris katmani kutularin tamamini kaplar.
         BasicTextField(
             value = code,
-            onValueChange = { onCodeChange(it.filter(Char::isDigit).take(InviteCodeLength)) },
+            onValueChange = { onCodeChange(it.filter(Char::isDigit).take(length)) },
             modifier = Modifier.matchParentSize(),
             textStyle = TextStyle(color = Color.Transparent),
             singleLine = true,

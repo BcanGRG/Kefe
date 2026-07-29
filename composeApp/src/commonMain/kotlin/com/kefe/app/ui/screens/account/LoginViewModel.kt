@@ -2,6 +2,8 @@ package com.kefe.app.ui.screens.account
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kefe.app.data.remote.AuthException
+import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.PortfolioRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,12 +13,14 @@ import kotlinx.coroutines.launch
 /**
  * Giris / baslangic / kilit asamalari. MVI-lite: tek [LoginUiState] akisi.
  *
- * Kimlik dogrulama katmani henuz yok; burada yalniz ekranin durum makinesi
- * yasar. Ag cagrisi geldiginde [sendMagicLink] ve [unlock] govdeleri degisir,
- * ekran degismez.
+ * Giris PAROLASIZDIR: e-postaya alti haneli tek kullanimlik kod gider, kullanici
+ * onu yazar. Kod yerine tiklanabilir baglanti kullanmak her platformda ayri is
+ * demekti - Android'de intent filter, iOS'ta universal link, masaustunde dogru
+ * duzgun bir karsiligi yok. Kod uc platformda ayni sekilde calisir.
  */
 class LoginViewModel(
     private val portfolioRepository: PortfolioRepository,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState())
@@ -32,12 +36,23 @@ class LoginViewModel(
                 // Kullanici yazmaya baslayinca hata ve "gonderildi" bilgisi duser.
                 email = intent.value.trim(),
                 emailError = null,
-                linkSent = false,
+                codeSent = false,
             )
 
-            LoginIntent.SendMagicLink -> sendMagicLink()
+            LoginIntent.SendCode -> sendCode()
 
-            LoginIntent.SignInWithPassword -> Unit
+            is LoginIntent.ChangeCode -> _state.value = _state.value.copy(
+                code = intent.value.filter { it.isDigit() }.take(LoginCodeLength),
+                emailError = null,
+            )
+
+            LoginIntent.VerifyCode -> verifyCode()
+
+            LoginIntent.EditEmail -> _state.value = _state.value.copy(
+                codeSent = false,
+                code = "",
+                emailError = null,
+            )
 
             LoginIntent.GoToStart -> _state.value =
                 _state.value.copy(stage = LoginStage.Start, portfolioCreated = false)
@@ -68,13 +83,43 @@ class LoginViewModel(
         }
     }
 
-    private fun sendMagicLink() {
+    private fun sendCode() {
         val current = _state.value
         if (!current.email.isValidEmail()) {
             _state.value = current.copy(emailError = "Geçerli bir e-posta yazın")
             return
         }
-        _state.value = current.copy(sendingLink = false, linkSent = true, emailError = null)
+        _state.value = current.copy(sendingCode = true, emailError = null)
+        viewModelScope.launch {
+            val error = authRepository.sendCode(current.email).exceptionOrNull()
+            _state.value = _state.value.copy(
+                sendingCode = false,
+                // Kod kutusu ancak gonderim BASARILIYSA acilir; yoksa kullanici
+                // hic gelmeyecek bir kodu bekler.
+                codeSent = error == null,
+                emailError = error?.userMessage(),
+            )
+        }
+    }
+
+    private fun verifyCode() {
+        val current = _state.value
+        if (current.code.length != LoginCodeLength) {
+            _state.value = current.copy(emailError = "Kod altı haneli olmalı")
+            return
+        }
+        _state.value = current.copy(verifying = true, emailError = null)
+        viewModelScope.launch {
+            val error = authRepository.verifyCode(current.email, current.code).exceptionOrNull()
+            _state.value = _state.value.copy(
+                verifying = false,
+                signedIn = error == null,
+                // Yanlis kod en sik hata; sebebi sunucudan gelen metinle yazariz
+                // ama bos gelirse kullaniciya ise yarar bir sey soyleriz.
+                emailError = error?.let { it.userMessage() ?: "Kod doğrulanamadı" },
+                code = if (error == null) "" else current.code,
+            )
+        }
     }
 
     private fun join() {
@@ -89,4 +134,16 @@ class LoginViewModel(
     private fun unlock() {
         _state.value = _state.value.copy(unlocking = false, unlocked = true, unlockError = null)
     }
+}
+
+/**
+ * Hatanin kullaniciya gosterilebilir yuzu.
+ *
+ * Ag hatalarinin mesaji ("Failed to connect to /10.0.2.2:443") kullaniciya
+ * hicbir sey anlatmaz; kimlik hatalarininki ("Token has expired or is invalid")
+ * ise dogrudan ise yarar. Ayrimi tur uzerinden yapariz.
+ */
+private fun Throwable.userMessage(): String? = when (this) {
+    is AuthException -> message
+    else -> "Bağlanılamadı — internet bağlantınızı kontrol edin"
 }
