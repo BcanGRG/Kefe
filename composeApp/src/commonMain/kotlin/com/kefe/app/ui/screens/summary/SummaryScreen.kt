@@ -114,6 +114,8 @@ fun SummaryScreen(
 
         // Seritler kaydirma alaninin DISINDA kalir - fiyat guveni her zaman gorunur.
         when (state.freshness) {
+            // Ilk fiyatlar yolday iken serit cizilmez: uyaracak bir sey yok.
+            PriceFreshness.Loading -> Unit
             PriceFreshness.Stale -> KefeStaleBanner(
                 text = "Fiyatlar 2 saatten eski",
                 actionText = "Yenile",
@@ -258,6 +260,11 @@ private fun SummaryTopBar(
 /** Ust bardaki fiyat satiri; yukleme ve bos halde yazilmaz. */
 private fun SummaryUiState.priceLine(): String? = when {
     stage != SummaryStage.Ready -> null
+    // Devam eden istek once yazilir. Satir, istek yolday iken bile eski damgayi
+    // gosterip duruyordu; ekranda hicbir sey degismedigi icin yenileme calismiyor
+    // gibi okunuyordu.
+    refreshing -> "Fiyatlar güncelleniyor…"
+    freshness == PriceFreshness.Loading -> "Fiyatlar alınıyor…"
     pricesUpdatedAt.isBlank() -> null
     freshness == PriceFreshness.Offline -> "Son bilinen fiyatlar · $pricesUpdatedAt"
     else -> "Fiyatlar $pricesUpdatedAt${timeLocative(pricesUpdatedAt)} güncellendi"

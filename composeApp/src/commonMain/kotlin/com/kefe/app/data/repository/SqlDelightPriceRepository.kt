@@ -102,7 +102,11 @@ class SqlDelightPriceRepository(
      * tasarimdaki "2 saatten eski" kurali.
      */
     private fun freshnessOf(newestFetchSeconds: Long?, failed: Boolean): PriceFreshness {
-        if (newestFetchSeconds == null || newestFetchSeconds <= 0L) return PriceFreshness.Offline
+        // Elde hicbir fiyat yok. Bu tek basina "ag yok" DEMEK DEGILDIR - ilk
+        // cekme yolda olabilir. Ancak denenip basarisiz olduysa cevrimdisiyiz.
+        if (newestFetchSeconds == null || newestFetchSeconds <= 0L) {
+            return if (failed) PriceFreshness.Offline else PriceFreshness.Loading
+        }
         if (failed) return PriceFreshness.Offline
         val ageSeconds = clock.nowEpochMillis() / 1000L - newestFetchSeconds
         return if (ageSeconds > StaleAfterSeconds) PriceFreshness.Stale else PriceFreshness.Fresh
@@ -126,9 +130,17 @@ class SqlDelightPriceRepository(
 
     override suspend fun refresh(): Result<Unit> = refreshMutex.withLock {
         val now = clock.nowEpochMillis() / 1000L
-        // Az once cekildiyse tekrar cikmayiz: fiyatlar bu arada kurus oynar,
-        // istek ise kaynagin sinirina yaklastirir. Elde olan zaten taze.
-        if (lastFetchAtSeconds > 0L && now - lastFetchAtSeconds < MinRefreshSeconds) {
+
+        // Az once BASARIYLA cekildiyse tekrar cikmayiz: fiyatlar bu arada kurus
+        // oynar, istek ise kaynagin sinirina yaklastirir. Elde olan zaten taze.
+        //
+        // Son deneme PATLADIYSA kisitlama uygulanmaz. Aksi halde ag geri geldigi
+        // anda yenileye basan kullanici otuz saniye boyunca sessizce reddediliyor,
+        // ustelik "basarili" cevabi aliyordu: ekran cevrimdisi kalirken hicbir sey
+        // olmuyordu ve tek yapabildigi tekrar basmakti.
+        val recentlySucceeded = lastFetchAtSeconds > 0L &&
+            now - lastFetchAtSeconds < MinRefreshSeconds
+        if (recentlySucceeded && !lastRefreshFailed.value) {
             return@withLock Result.success(Unit)
         }
         fetchAndStore(now)

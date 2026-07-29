@@ -607,6 +607,8 @@ private val TableEnd = 28.dp
 // --- Yardimci --------------------------------------------------------------
 
 private fun KefeColors.freshnessDot(freshness: PriceFreshness): Color = when (freshness) {
+    // Yukleniyor: henuz bir sey bilmiyoruz - kirmizi degil, bekleme rengi.
+    PriceFreshness.Loading -> syncPending
     PriceFreshness.Fresh -> syncOk
     PriceFreshness.Stale -> syncPending
     PriceFreshness.Offline -> syncOffline

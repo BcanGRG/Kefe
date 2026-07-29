@@ -88,6 +88,7 @@ data class SummaryUiState(
     /** Masaustu yan navigasyonunun alt satiri: "Eşit · 14:32'de güncellendi". */
     val syncLine: String
         get() = when (freshness) {
+            PriceFreshness.Loading -> "Fiyatlar alınıyor…"
             PriceFreshness.Offline -> "Çevrimdışı · son bilinen fiyatlar"
             PriceFreshness.Stale -> "Fiyatlar 2 saatten eski"
             PriceFreshness.Fresh -> "Eşit · $pricesUpdatedAt'te güncellendi"

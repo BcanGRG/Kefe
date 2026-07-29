@@ -284,9 +284,14 @@ private fun KefeApp(
     val navItems = if (windowSize.isExpanded) desktopDestinations else topLevelDestinations
     val navIndex = navItems.indexOfFirst { it.key == current }.coerceAtLeast(0)
     val members = summary.members.mapIndexed { index, m -> m.initials to index }
-    val syncStatus = when (summary.freshness) {
-        PriceFreshness.Offline -> SyncStatus.Offline
-        else -> if (summary.refreshing) SyncStatus.Pending else SyncStatus.Synced
+    // Devam eden bir istek her seyi yener. Once Offline ilk sirada bakiliyordu ve
+    // istek YOLDAYKEN bile "Çevrimdışı" yaziyordu - kullanicinin gordugu ilk sey
+    // buydu, hem de tam calisan bir agda.
+    val syncStatus = when {
+        summary.refreshing -> SyncStatus.Pending
+        summary.freshness == PriceFreshness.Loading -> SyncStatus.Pending
+        summary.freshness == PriceFreshness.Offline -> SyncStatus.Offline
+        else -> SyncStatus.Synced
     }
 
     Box(Modifier.fillMaxSize()) {
