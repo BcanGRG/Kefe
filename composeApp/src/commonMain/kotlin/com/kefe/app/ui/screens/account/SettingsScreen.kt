@@ -56,7 +56,6 @@ import com.kefe.app.ui.theme.tabular
 fun SettingsScreen(
     state: SettingsUiState,
     onIntent: (SettingsIntent) -> Unit,
-    onBack: () -> Unit,
     onOpenShare: () -> Unit,
     modifier: Modifier = Modifier,
     /** Surum satirina basinca acilan bilesen katalogu - gelistirme araci. */
@@ -71,7 +70,8 @@ fun SettingsScreen(
     Box(modifier.fillMaxSize()) {
 
     Column(Modifier.fillMaxSize()) {
-        AccountTopBar(title = "Ayarlar", onBack = onBack)
+        // Ayarlar bir ALT NAVIGASYON sekmesi: geri gidilecek bir yer yok.
+        AccountTopBar(title = "Ayarlar", onBack = null)
 
         Column(
             Modifier

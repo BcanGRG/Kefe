@@ -48,18 +48,24 @@ class SqlDelightPriceRepository(
     private val fetched = MutableStateFlow<List<Price>?>(null)
 
     /**
-     * Tazelik diske yazilmaz: gercek zaman damgasi uretecek bir saat yok
-     * (KefeClock yalniz gun veriyor). Bu yuzden uygulama her acilista "cevrimdisi"
-     * baslar ve ilk basarili yenilemede tazelenir - bellek ici surumun davranisi.
+     * Son yenileme denemesi basarisiz miydi.
+     *
+     * Tazelik artik ONBELLEGIN YASINDAN hesaplaniyor, oturum bayragindan degil:
+     * uygulama her acilista "Çevrimdışı" ile basliyordu, cunku bayrak Offline
+     * baslayip yalniz basarili bir cekmeyle donuyordu. Bes dakika once alinmis
+     * fiyatlarla acilan bir uygulamanin cevrimdisi oldugunu soylemesi yanlisti.
+     *
+     * Bu bayrak yalnizca su isi yapar: yenileme DENENDI ve basarisiz olduysa,
+     * onbellek hala taze olsa bile kullaniciya bagli olmadigimizi soyleriz.
      */
-    private val freshness = MutableStateFlow(PriceFreshness.Offline)
+    private val lastRefreshFailed = MutableStateFlow(false)
 
     override fun observePrices(): Flow<PriceBoard> = combine(
         priceQueries.selectCachedPrices().asFlow().mapToList(dispatcher),
         priceQueries.selectManualPrices().asFlow().mapToList(dispatcher),
         fetched,
-        freshness,
-    ) { cached, manual, session, state ->
+        lastRefreshFailed,
+    ) { cached, manual, session, failed ->
         val base = session ?: cached.map { it.toDomain() }
         val overrides = manual.associate { it.assetKey to it.price }
         val merged = base.map { price ->
@@ -81,8 +87,23 @@ class SqlDelightPriceRepository(
         PriceBoard(
             prices = merged,
             updatedAtLabel = merged.firstOrNull { !it.isManual }?.timestamp ?: "—",
-            freshness = state,
+            freshness = freshnessOf(cached.maxOfOrNull { it.fetchedAtEpochSeconds }, failed),
         )
+    }
+
+    /**
+     * Onbellegin yasindan tazelik.
+     *
+     * Hic fiyat yoksa cevrimdisiyiz - gosterecek bir sey de yok. Son yenileme
+     * patladiysa yine cevrimdisi: onbellek taze olsa bile kullanici bagli
+     * olmadigimizi bilmeli. Aksi halde yas karar verir; [StaleAfterSeconds]
+     * tasarimdaki "2 saatten eski" kurali.
+     */
+    private fun freshnessOf(newestFetchSeconds: Long?, failed: Boolean): PriceFreshness {
+        if (newestFetchSeconds == null || newestFetchSeconds <= 0L) return PriceFreshness.Offline
+        if (failed) return PriceFreshness.Offline
+        val ageSeconds = clock.nowEpochMillis() / 1000L - newestFetchSeconds
+        return if (ageSeconds > StaleAfterSeconds) PriceFreshness.Stale else PriceFreshness.Fresh
     }
 
     override fun observePriceHistory(assetKey: String): Flow<List<Double>> =
@@ -105,9 +126,9 @@ class SqlDelightPriceRepository(
                         timestamp = price.timestamp,
                         source = price.source,
                         assetClass = price.assetClass,
-                        // Gercek saat kaynagi gelene kadar 0: "2 saatten eski"
-                        // kurali (PriceFreshness.Stale) bugun de isletilmiyor.
-                        fetchedAtEpochSeconds = 0L,
+                        // Tazelik bu damgadan hesaplaniyor; 0 yazildigi surece
+                        // "2 saatten eski" kurali isletilemiyordu.
+                        fetchedAtEpochSeconds = clock.nowEpochMillis() / 1000L,
                     )
                     // Gunun fiyati AYRICA gecmise yazilir: onbellek uzerine
                     // yazildigi icin gecmisi tutamaz, gecmis fiyat da sonradan
@@ -122,10 +143,10 @@ class SqlDelightPriceRepository(
                 }
             }
         }
-        freshness.value = PriceFreshness.Fresh
+        lastRefreshFailed.value = false
     }.onFailure {
         // Ag yoksa son bilinen fiyatlar ekranda kalir; yalniz tazelik etiketi duser.
-        freshness.value = PriceFreshness.Offline
+        lastRefreshFailed.value = true
     }
 
     override suspend fun setManualPrice(assetKey: String, value: Double) {
@@ -144,3 +165,6 @@ class SqlDelightPriceRepository(
         }
     }
 }
+
+/** Tasarimin "2 saatten eski" esigi. */
+private const val StaleAfterSeconds = 2L * 60 * 60

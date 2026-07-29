@@ -24,6 +24,30 @@ data class GoalProjection(
 /** Tahminin uzayabilecegi en uzun sure - sonsuz donguye karsi ust sinir. */
 private const val MaxForecastMonths = 40 * 12
 
+/**
+ * Hedefe kac ay kalir.
+ *
+ * TEK KURAL, tek yerde: bugunku birikime her ay [monthlyContribution] eklenir,
+ * piyasa getirisi varsayilmaz. Hem tahmin egrisi hem senaryo kaydiricisi bunu
+ * kullanir; ayri hesaplar olsaydi ekranin iki yeri farkli tarih soylerdi -
+ * nitekim soyluyordu.
+ *
+ * null: aylik katki yoksa (birikim kendiliginden buyumez) ya da varis
+ * [MaxForecastMonths] disinda kaliyorsa.
+ */
+fun monthsToReach(currentWealth: Double, target: Double, monthlyContribution: Double): Int? {
+    if (currentWealth >= target) return 0
+    if (monthlyContribution <= 0.0) return null
+
+    var value = currentWealth
+    var months = 0
+    while (value < target && months < MaxForecastMonths) {
+        value += monthlyContribution
+        months++
+    }
+    return months.takeIf { value >= target }
+}
+
 fun goalProjection(
     snapshots: List<DailySnapshot>,
     goal: Goal,

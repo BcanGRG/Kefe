@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,6 +55,8 @@ import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.formatLong
 import com.kefe.app.domain.model.label
+import com.kefe.app.ui.components.AmountKeyboard
+import com.kefe.app.ui.components.asAmountInput
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
@@ -550,7 +553,8 @@ private fun KaratPanel(
         FieldRow(height = Sizes.fieldLarge, borderColor = c.accent, gap = Space.x8) {
             SheetInput(
                 value = state.gramText,
-                onValueChange = { onIntent(AddTransactionIntent.ChangeGram(it)) },
+                onValueChange = { onIntent(AddTransactionIntent.ChangeGram(it.asAmountInput())) },
+                keyboardOptions = AmountKeyboard,
                 textStyle = amountStyle(),
                 modifier = Modifier.weight(1f),
                 placeholder = "0",
@@ -782,7 +786,8 @@ private fun StepAmount(
         Text(Money.LIRA, style = t.body, color = c.onSurfaceMuted)
         SheetInput(
             value = state.unitPriceText,
-            onValueChange = { onIntent(AddTransactionIntent.ChangeUnitPrice(it)) },
+            onValueChange = { onIntent(AddTransactionIntent.ChangeUnitPrice(it.asAmountInput())) },
+            keyboardOptions = AmountKeyboard,
             textStyle = t.h2.tabular(),
             modifier = Modifier.weight(1f),
             placeholder = "0",
@@ -880,7 +885,8 @@ private fun QuantityField(
     ) {
         SheetInput(
             value = state.quantityText,
-            onValueChange = { onIntent(AddTransactionIntent.ChangeQuantity(it)) },
+            onValueChange = { onIntent(AddTransactionIntent.ChangeQuantity(it.asAmountInput())) },
+            keyboardOptions = AmountKeyboard,
             textStyle = amountStyle(),
             modifier = Modifier.weight(1f),
             placeholder = "0",
@@ -1056,7 +1062,8 @@ private fun ExtraFields(
                         Spacer(Modifier.width(6.dp))
                         SheetInput(
                             value = state.feeText,
-                            onValueChange = { onIntent(AddTransactionIntent.ChangeFee(it)) },
+                            onValueChange = { onIntent(AddTransactionIntent.ChangeFee(it.asAmountInput())) },
+                            keyboardOptions = AmountKeyboard,
                             textStyle = t.body.tabular(),
                             modifier = Modifier.weight(1f),
                             placeholder = "0",
@@ -1259,6 +1266,7 @@ private fun SheetInput(
     modifier: Modifier = Modifier,
     placeholder: String = "",
     singleLine: Boolean = true,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
 ) {
     val c = KefeTheme.colors
     BasicTextField(
@@ -1268,6 +1276,7 @@ private fun SheetInput(
         textStyle = textStyle.copy(color = c.onSurface),
         singleLine = singleLine,
         cursorBrush = SolidColor(c.accent),
+        keyboardOptions = keyboardOptions,
         decorationBox = { inner ->
             Box(contentAlignment = Alignment.CenterStart) {
                 if (value.isEmpty() && placeholder.isNotEmpty()) {

@@ -543,23 +543,34 @@ private fun LockStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
 @Composable
 internal fun AccountTopBar(
     title: String,
-    onBack: () -> Unit,
+    // null ise geri okU CIZILMEZ. Alt navigasyondan acilan bir sekmede geri
+    // gidilecek bir yer yoktur; ok orada "bir onceki ekrana don" diye bir soz
+    // veriyor ve o soz karsiliksiz.
+    onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
     action: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = Space.x8, end = Space.x8, bottom = Space.x8),
+            .padding(
+                // Geri okU yokken baslik satirin basina gecer; ikon butonunun
+                // negatif dolgusu olmadigi icin sol bosluk elle verilir.
+                start = if (onBack == null) Space.x16 else Space.x8,
+                end = Space.x8,
+                bottom = Space.x8,
+            ),
         horizontalArrangement = Arrangement.spacedBy(Space.x4),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        KefeIconButton(
-            icon = KefeIcons.ArrowBack,
-            contentDescription = "Geri",
-            onClick = onBack,
-            tint = KefeTheme.colors.onSurface,
-        )
+        if (onBack != null) {
+            KefeIconButton(
+                icon = KefeIcons.ArrowBack,
+                contentDescription = "Geri",
+                onClick = onBack,
+                tint = KefeTheme.colors.onSurface,
+            )
+        }
         Text(
             text = title,
             style = KefeTheme.type.h2,
