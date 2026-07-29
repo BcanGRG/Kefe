@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Koyu tema yuzeyi. Bkz. values/colors.xml. -->
+<resources>
+    <color name="window_background">#15120E</color>
+    <color name="splash_background">#15120E</color>
+    <color name="brand_mark">#D9AE5F</color>
+</resources>

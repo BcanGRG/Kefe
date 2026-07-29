@@ -1,10 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Compose kendi temasini cizer; buradaki tema yalniz acilis penceresi icindir.
-         surface (koyu) = #15120E -->
+         Renkler artik sabit degil: values/colors.xml + values-night/colors.xml. -->
     <style name="Theme.Kefe" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">#15120E</item>
-        <item name="android:navigationBarColor">#15120E</item>
-        <item name="android:windowBackground">#15120E</item>
+        <item name="android:statusBarColor">@color/window_background</item>
+        <item name="android:navigationBarColor">@color/window_background</item>
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+
+    <!--
+        Sistemin acilis penceresi.
+
+        Buradaki ikon DURGUNDUR ve yalnizca surec baslarken gecen kisa boslugu
+        (tipik 50-200 ms) doldurur. Iki saniyelik marka animasyonu Compose
+        tarafinda yasar (KefeSplash) - windowSplashScreenAnimationDuration'i
+        uzatmaya calismak sonuc vermez: Android o sureyi kirpar ve karsiliginda
+        soguk acilisi geciktirir.
+
+        postSplashScreenTheme: pencere bu asamadan sonra uygulamanin normal
+        temasina gecer; belirtilmezse acilis temasi ekranda kalir.
+    -->
+    <style name="Theme.Kefe.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_mark</item>
+        <item name="postSplashScreenTheme">@style/Theme.Kefe</item>
     </style>
 </resources>

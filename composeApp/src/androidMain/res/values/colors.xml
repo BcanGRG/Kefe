@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Acilis penceresinin rengi.
+
+    Compose kendi temasini cizer; buradaki degerler yalniz uygulama daha ilk
+    karesini cizmeden once, sistemin gosterdigi pencere icindir.
+
+    ACIK VARSAYILAN: bu dosya acik temanin yuzey rengini tasir, values-night
+    koyusunu. Onceden tek bir koyu renk sabit yaziliydi ve uygulamanin varsayilan
+    temasi acikti - yani her acilista once koyu bir kare parliyor, hemen ardindan
+    ekran acik temaya geciyordu.
+-->
+<resources>
+    <color name="window_background">#FAF7F1</color>
+    <color name="splash_background">#FAF7F1</color>
+
+    <!-- Isaretin altini. Acik temada koyu altin okunur, kremde kaybolur. -->
+    <color name="brand_mark">#8C5E16</color>
+</resources>

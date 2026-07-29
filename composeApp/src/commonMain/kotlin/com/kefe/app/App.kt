@@ -55,6 +55,7 @@ import com.kefe.app.navigation.ShareKey
 import com.kefe.app.navigation.SummaryKey
 import com.kefe.app.navigation.desktopDestinations
 import com.kefe.app.navigation.topLevelDestinations
+import com.kefe.app.ui.brand.KefeSplash
 import com.kefe.app.ui.components.KefeBottomNav
 import com.kefe.app.ui.components.SyncStatus
 import com.kefe.app.ui.gallery.DesignSystemGallery
@@ -118,8 +119,13 @@ import org.koin.dsl.koinConfiguration
  */
 private const val NotReadyMessage = "Bu bölüm henüz hazır değil."
 
+/**
+ * [onReady] uygulamanin ilk gercek karesini cizmeye hazir oldugunu bildirir.
+ * Android'de sistemin acilis penceresi bu ana kadar ekranda tutulur; masaustu ve
+ * iOS varsayilanla gecer, oralarda karsiligi yok.
+ */
 @Composable
-fun App(darkTheme: Boolean = true) {
+fun App(onReady: () -> Unit = {}) {
     KoinApplication(
         configuration = koinConfiguration(declaration = { modules(appModule) }),
     ) {
@@ -143,6 +149,7 @@ fun App(darkTheme: Boolean = true) {
                     settingsVm = settingsVm,
                     settings = settings,
                     darkTheme = dark,
+                    onReady = onReady,
                 )
             }
         }
@@ -163,6 +170,7 @@ private fun KefeApp(
     settingsVm: SettingsViewModel,
     settings: SettingsUiState,
     darkTheme: Boolean,
+    onReady: () -> Unit,
 ) {
     // Acilis ekrani KARAR VERILMEDEN cizilmez.
     //
@@ -175,8 +183,23 @@ private fun KefeApp(
     // null = diske henuz bakilmadi.
     val onboardingVm = koinViewModel<SummaryViewModel>()
     val onboarded by onboardingVm.onboarded.collectAsState()
-    if (onboarded == null) {
-        Box(Modifier.fillMaxSize().background(KefeTheme.colors.surface))
+
+    // Marka animasyonu YALNIZ SOGUK ACILISTA oynar. Bayrak surec omurludur:
+    // arka plandan geri donuste uygulama hemen gorunur, cunku her gecis icin iki
+    // saniye beklemek gunde onlarca kez acilan bir uygulamada bedel olur.
+    var splashDone by remember { mutableStateOf(SplashAlreadyPlayed) }
+
+    if (onboarded == null || !splashDone) {
+        // Diskten cevap gelene kadar cizecek bir sey yok; animasyon o beklemeyi
+        // zaten dolduruyor, ikisi ARDISIK degil PARALEL yurur.
+        KefeSplash(
+            onFinished = {
+                splashDone = true
+                SplashAlreadyPlayed = true
+            },
+        )
+        // Sistemin acilis penceresi ancak Compose bir sey cizebildiginde birakilir.
+        LaunchedEffect(Unit) { onReady() }
         return
     }
 
@@ -744,3 +767,12 @@ private fun BoxScope.AutoDismissBanner(message: String, onDismiss: () -> Unit) {
     }
     ErrorBanner(message = message, onDismiss = onDismiss)
 }
+
+/**
+ * Marka animasyonu bu surecte oynadi mi.
+ *
+ * Compose durumu degil, SUREC durumu: Activity yeniden yaratilsa da (ekran
+ * donmesi, tema degisimi) animasyon tekrar oynamamali. Yalniz uygulama gercekten
+ * kapanip acildiginda sifirlanir.
+ */
+private var SplashAlreadyPlayed: Boolean = false
