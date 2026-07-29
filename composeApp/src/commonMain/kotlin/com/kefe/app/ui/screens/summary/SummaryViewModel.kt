@@ -18,6 +18,7 @@ import com.kefe.app.domain.model.topGainer
 import com.kefe.app.domain.model.topLoser
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PriceRepository
+import com.kefe.app.domain.repository.RefreshOutcome
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.layout.KefeMarketRow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,6 +82,9 @@ class SummaryViewModel(
             SummaryIntent.Refresh -> refresh()
             SummaryIntent.DismissRefreshError -> _state.value =
                 _state.value.copy(refreshError = null)
+
+            SummaryIntent.DismissRefreshNotice ->
+                _state.value = _state.value.copy(refreshNotice = null)
         }
     }
 
@@ -233,8 +237,13 @@ class SummaryViewModel(
      */
     private fun refresh() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(refreshing = true, refreshError = null)
-            val error = priceRepository.refresh().exceptionOrNull()
+            _state.value = _state.value.copy(
+                refreshing = true,
+                refreshError = null,
+                refreshNotice = null,
+            )
+            val result = priceRepository.refresh()
+            val error = result.exceptionOrNull()
             _state.value = _state.value.copy(
                 refreshing = false,
                 // Sebep de yazilir. "Güncellenemedi" tek basina ne kullaniciya
@@ -243,6 +252,12 @@ class SummaryViewModel(
                 refreshError = error?.let {
                     "Fiyatlar güncellenemedi — son bilinen değerler gösteriliyor. " +
                         "(${it.shortReason()})"
+                },
+                // Kisitlanan yenileme HATA DEGIL. Ayri bir alanda tasinir ve
+                // ekranda kirmizi degil vurgu renginde cikar; kullanici yanlis
+                // bir sey yapmadi, elindeki zaten taze.
+                refreshNotice = (result.getOrNull() as? RefreshOutcome.Throttled)?.let {
+                    "Fiyatlar az önce güncellendi — ${it.retryInSeconds} sn sonra tekrar denenebilir."
                 },
             )
         }

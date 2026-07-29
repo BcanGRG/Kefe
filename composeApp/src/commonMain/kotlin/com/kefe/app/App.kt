@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
@@ -681,6 +682,16 @@ private fun KefeApp(
                 onDismiss = { summaryVm.onIntent(SummaryIntent.DismissRefreshError) },
             )
         }
+
+        // Kisitlanan yenileme. Hata DEGIL - vurgu renginde cizilir; kullanici
+        // dogru bir sey yapti, elindeki fiyat zaten taze.
+        summary.refreshNotice?.let { message ->
+            AutoDismissBanner(
+                message = message,
+                onDismiss = { summaryVm.onIntent(SummaryIntent.DismissRefreshNotice) },
+                tone = KefeTheme.colors.accent,
+            )
+        }
     }
 }
 
@@ -691,8 +702,15 @@ private fun KefeApp(
  * kacirmamali. Kapatmayi kendisi secer.
  */
 @Composable
-private fun BoxScope.ErrorBanner(message: String, onDismiss: () -> Unit) {
+private fun BoxScope.ErrorBanner(
+    message: String,
+    onDismiss: () -> Unit,
+    // Ton PARAMETRE: her serit hata degil. Kisitlanan yenileme bir bilgidir ve
+    // kirmizi cizilirse kullanici yanlis bir sey yaptigini sanir.
+    tone: Color? = null,
+) {
     val c = KefeTheme.colors
+    val accentTone = tone ?: c.negative
     Row(
         modifier = Modifier
             .align(Alignment.BottomCenter)
@@ -700,7 +718,7 @@ private fun BoxScope.ErrorBanner(message: String, onDismiss: () -> Unit) {
             .widthIn(max = Sizes.formMaxWidth)
             .clip(KefeShapes.card)
             .background(c.surfaceElevated)
-            .border(Sizes.hairline, c.negative, KefeShapes.card)
+            .border(Sizes.hairline, accentTone, KefeShapes.card)
             .padding(horizontal = Space.x16, vertical = Space.x12),
         horizontalArrangement = Arrangement.spacedBy(Space.x12),
         verticalAlignment = Alignment.CenterVertically,
@@ -714,7 +732,7 @@ private fun BoxScope.ErrorBanner(message: String, onDismiss: () -> Unit) {
         Text(
             text = "Kapat",
             style = KefeTheme.type.caption.copy(fontWeight = FontWeight.SemiBold),
-            color = c.negative,
+            color = accentTone,
             modifier = Modifier
                 .clip(KefeShapes.button)
                 .clickable(onClick = onDismiss)
@@ -784,7 +802,11 @@ private const val BannerVisibleMillis = 4_000L
  * birbirinin suresini yemez.
  */
 @Composable
-private fun BoxScope.AutoDismissBanner(message: String, onDismiss: () -> Unit) {
+private fun BoxScope.AutoDismissBanner(
+    message: String,
+    onDismiss: () -> Unit,
+    tone: Color? = null,
+) {
     // rememberUpdatedState olmadan, kapatma islevi her bestelemede degisirse
     // bekleme yeniden baslar ve serit hic kapanmayabilir.
     val dismiss by rememberUpdatedState(onDismiss)
@@ -792,7 +814,7 @@ private fun BoxScope.AutoDismissBanner(message: String, onDismiss: () -> Unit) {
         delay(BannerVisibleMillis)
         dismiss()
     }
-    ErrorBanner(message = message, onDismiss = onDismiss)
+    ErrorBanner(message = message, onDismiss = onDismiss, tone = tone)
 }
 
 /**

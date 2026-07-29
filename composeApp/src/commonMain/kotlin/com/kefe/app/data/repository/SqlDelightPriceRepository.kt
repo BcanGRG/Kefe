@@ -11,6 +11,7 @@ import com.kefe.app.domain.model.PriceSource
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.domain.repository.PriceRepository
+import com.kefe.app.domain.repository.RefreshOutcome
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -128,7 +129,7 @@ class SqlDelightPriceRepository(
     /** Son BASARILI cekmenin saniyesi. Sifir ise henuz cekilmedi. */
     private var lastFetchAtSeconds = 0L
 
-    override suspend fun refresh(): Result<Unit> = refreshMutex.withLock {
+    override suspend fun refresh(): Result<RefreshOutcome> = refreshMutex.withLock {
         val now = clock.nowEpochMillis() / 1000L
 
         // Az once BASARIYLA cekildiyse tekrar cikmayiz: fiyatlar bu arada kurus
@@ -141,9 +142,15 @@ class SqlDelightPriceRepository(
         val recentlySucceeded = lastFetchAtSeconds > 0L &&
             now - lastFetchAtSeconds < MinRefreshSeconds
         if (recentlySucceeded && !lastRefreshFailed.value) {
-            return@withLock Result.success(Unit)
+            // Kalan sure kullaniciya soylenir. En az bir saniye: "0 sn sonra
+            // deneyin" demek, hemen denenebilecegini ama denenemedigini soylemek
+            // olurdu.
+            val remaining = (MinRefreshSeconds - (now - lastFetchAtSeconds))
+                .toInt()
+                .coerceAtLeast(1)
+            return@withLock Result.success(RefreshOutcome.Throttled(remaining))
         }
-        fetchAndStore(now)
+        fetchAndStore(now).map { RefreshOutcome.Fetched }
     }
 
     private suspend fun fetchAndStore(nowSeconds: Long): Result<Unit> = runCatching {
