@@ -189,7 +189,9 @@ private fun KefeApp(
     // saniye beklemek gunde onlarca kez acilan bir uygulamada bedel olur.
     var splashDone by remember { mutableStateOf(SplashAlreadyPlayed) }
 
-    if (onboarded == null || !splashDone) {
+    // Tercihler de beklenir: kilit acik mi bilmeden ekran cizilirse ya kilitli
+    // olmayan bir uygulama bir kare kilitli goruntu verir ya da tersi.
+    if (onboarded == null || !settings.prefsLoaded || !splashDone) {
         // Diskten cevap gelene kadar cizecek bir sey yok; animasyon o beklemeyi
         // zaten dolduruyor, ikisi ARDISIK degil PARALEL yurur.
         KefeSplash(
@@ -203,8 +205,15 @@ private fun KefeApp(
         return
     }
 
+    // Cihaz kilidi. Oturum ya da veri kapisi DEGIL - yalniz bu acilista bakiyeyi
+    // gorunmez tutar; kullanici bir kez actiktan sonra uygulama kapanana kadar
+    // tekrar sorulmaz.
+    var unlockedThisLaunch by remember { mutableStateOf(false) }
+    val locked = settings.biometricLock && !unlockedThisLaunch
+
+    // Kilitliyken de kok LoginKey'dir: kilit ekrani o ekranin bir asamasi.
     val backStack = remember {
-        NavBackStack<NavKey>(if (onboarded == true) SummaryKey else LoginKey)
+        NavBackStack<NavKey>(if (onboarded == true && !locked) SummaryKey else LoginKey)
     }
     var onboardingPage by remember { mutableStateOf(0) }
     var addSheetVisible by remember { mutableStateOf(false) }
@@ -291,8 +300,12 @@ private fun KefeApp(
     // Yigin dogru kokle kuruldugu icin burada duzeltilecek bir sey kalmaz; bu
     // etki yalniz oturum ACILDIKTAN sonra (kod dogrulanip bayrak yazilinca)
     // devreye girer.
-    LaunchedEffect(onboarded) {
-        if (onboarded == true && backStack.firstOrNull() == LoginKey) enterApp()
+    // KILIT BU ETKIYI DURDURUR. Aksi halde kilitli acilista bu satir kullaniciyi
+    // dogruca Ozet'e aliyordu: kilit ekrani hic gorunmuyor, sistem istemi zaten
+    // acilmis uygulamanin ustune biniyor ve istemden vazgecen kullanici arkada
+    // bekleyen bakiyeyi buluyordu. Kilit, kilit olmaktan cikiyordu.
+    LaunchedEffect(onboarded, locked) {
+        if (onboarded == true && !locked && backStack.firstOrNull() == LoginKey) enterApp()
     }
 
     // Hedef duzenleme sheet'i KABUKTA yasar: hem Hedefler listesinden hem de
@@ -390,6 +403,20 @@ private fun KefeApp(
                             // ayrica "devam et" dedirtmek bos bir adim olurdu.
                             LaunchedEffect(state.signedIn) {
                                 if (state.signedIn) enterApp()
+                            }
+                            // Kilitliyse giris ekrani KILIT asamasiyla acilir.
+                            // Ayri bir gezinme girdisi degil: kilit, hesap girisi
+                            // gibi bir kapi degil, ayni ekranin bir hali.
+                            LaunchedEffect(locked) {
+                                if (locked) vm.onIntent(LoginIntent.Lock)
+                            }
+                            // Kilit acilinca uygulama gorunur. unlockedThisLaunch
+                            // kabukta yasar: ekran dolasirken tekrar sorulmaz.
+                            LaunchedEffect(state.unlocked) {
+                                if (state.unlocked) {
+                                    unlockedThisLaunch = true
+                                    enterApp()
+                                }
                             }
                             ScreenSurface {
                                 LoginScreen(

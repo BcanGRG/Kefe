@@ -537,6 +537,11 @@ private fun LockStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
             .padding(start = Space.x24, end = Space.x24, top = 56.dp, bottom = Space.x24),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // Kilit ekrani acilir acilmaz istem gosterilir: kullanicinin buraya
+        // gelme sebebi zaten kilidi acmak. Iptal ederse ekran kilitli kalir ve
+        // asagidaki buyuk parmak izi dugmesiyle tekrar deneyebilir.
+        LaunchedEffect(Unit) { onIntent(LoginIntent.Unlock) }
+
         val unlockInteraction = remember { MutableInteractionSource() }
         val hovered by unlockInteraction.collectIsHoveredAsState()
 
@@ -569,14 +574,10 @@ private fun LockStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(max = 280.dp),
         )
-        Spacer(Modifier.height(Space.x24))
-        AccountOutlineButton(
-            text = "Şifreyle aç",
-            onClick = { onIntent(LoginIntent.UnlockWithPassword) },
-            height = Sizes.touchTarget,
-            horizontalPadding = 18.dp,
-            textStyle = KefeTheme.type.caption.copy(fontWeight = FontWeight.SemiBold),
-        )
+        // Tasarimdaki "Şifreyle aç" dugmesi KALDIRILDI. Hesabin parolasi yok -
+        // giris tek kullanimlik e-posta koduyla yapiliyor - yani bu dugmenin bir
+        // gun isleyecek karsiligi da yok. Sistem istemi zaten PIN/desen secenegi
+        // sunuyor: cihaz kimligi de kabul ediliyor.
     }
 }
 

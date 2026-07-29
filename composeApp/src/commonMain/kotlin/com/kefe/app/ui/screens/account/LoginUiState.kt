@@ -96,6 +96,8 @@ sealed interface LoginIntent {
     data class ChangeInviteCode(val value: String) : LoginIntent
     data object Join : LoginIntent
 
+    /** Kilit asamasina gec - kabuk acilista cagirir. */
+    data object Lock : LoginIntent
+
     data object Unlock : LoginIntent
-    data object UnlockWithPassword : LoginIntent
 }
