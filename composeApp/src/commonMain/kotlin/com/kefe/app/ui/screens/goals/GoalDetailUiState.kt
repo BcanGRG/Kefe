@@ -74,10 +74,12 @@ data class GoalDetailUiState(
     /** Senaryo kaydiricisi: aylik katki, BIN TL cinsinden (30..120). */
     val scenarioContribution: Float = ScenarioMinThousands,
     val baseContribution: Double = 0.0,
-    /** Senaryonun verdigi varis ayi etiketi: "Ekim 2028". */
+    /** Senaryonun verdigi varis ayi etiketi: "Ekim 2028". Hesaplanamazsa bos. */
     val scenarioArrival: String = "",
-    /** Senaryo varisinin hedef tarihine gore farki (ay). */
-    val scenarioDiffMonths: Int = 0,
+    /** Senaryoya gore hedefe kalan ay. Katki 0 ise null - varis yok. */
+    val scenarioMonths: Int? = null,
+    /** Senaryonun SIMDIKI PLANA gore farki (ay). Kiyaslanamazsa null. */
+    val scenarioDiffMonths: Int? = null,
 ) {
     /** Hedefe ulasildi - fazlasi birikimde kalir. */
     val exceeded: Boolean get() = progress >= 1f

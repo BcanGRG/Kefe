@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +48,8 @@ import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.formatMonthYear
 import com.kefe.app.domain.model.monthName
+import com.kefe.app.ui.components.AmountKeyboard
+import com.kefe.app.ui.components.asAmountInput
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeSwitch
@@ -183,7 +186,8 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
     Spacer(Modifier.height(6.dp))
     SheetTextField(
         value = state.amountText,
-        onValueChange = { onIntent(GoalsIntent.EditorAmount(it)) },
+        onValueChange = { onIntent(GoalsIntent.EditorAmount(it.asAmountInput())) },
+        keyboardOptions = AmountKeyboard,
         placeholder = "0",
         height = Sizes.fieldLarge,
         textStyle = t.h1.copy(letterSpacing = 0.em).tabular(),
@@ -274,7 +278,8 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
             Spacer(Modifier.height(6.dp))
             SheetTextField(
                 value = state.contributionText,
-                onValueChange = { onIntent(GoalsIntent.EditorContribution(it)) },
+                onValueChange = { onIntent(GoalsIntent.EditorContribution(it.asAmountInput())) },
+                keyboardOptions = AmountKeyboard,
                 placeholder = "0",
                 textStyle = t.body.tabular(),
                 // Tasarimda alan tek parca "₺50.000" gosterir - araya bosluk girmez.
@@ -540,6 +545,7 @@ private fun SheetTextField(
     spacing: Dp = Space.x8,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
 ) {
     val c = KefeTheme.colors
     val interaction = remember { MutableInteractionSource() }
@@ -568,6 +574,7 @@ private fun SheetTextField(
             textStyle = textStyle.copy(color = c.onSurface),
             singleLine = true,
             cursorBrush = SolidColor(c.accent),
+            keyboardOptions = keyboardOptions,
             interactionSource = interaction,
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {

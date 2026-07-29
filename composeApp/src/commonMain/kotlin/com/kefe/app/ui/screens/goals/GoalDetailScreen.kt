@@ -766,9 +766,7 @@ private fun ScenarioCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) 
                 .padding(Space.x12),
         ) {
             Text(
-                text = "Aylık katkıyı ${Money.tl(state.baseContribution)} → " +
-                    "${Money.tl(amount)} yaparsanız: ${state.scenarioArrival} · " +
-                    scenarioComparison(state.scenarioDiffMonths),
+                text = scenarioSentence(state, amount),
                 style = t.caption.copy(lineHeight = 20.sp),
                 color = c.onSurface,
             )
@@ -776,10 +774,36 @@ private fun ScenarioCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) 
     }
 }
 
-private fun scenarioComparison(diffMonths: Int): String = when {
-    diffMonths == 0 -> "hedef tarihine tam yetişir"
-    diffMonths < 0 -> "${-diffMonths} ay önce"
-    else -> "$diffMonths ay sonra"
+/**
+ * Senaryo cumlesi.
+ *
+ * KAC AY SURDUGU de yazilir - "Ağustos 2029" tek basina uzakligi hissettirmiyor.
+ * Kiyas SIMDIKI PLANA gore: "3 ay erken" derken neye gore erken oldugu belli
+ * olmali. Once hedef TARIHINE gore kiyaslaniyordu ve katkiyi artirmak "8 ay
+ * sonra" diyebiliyordu.
+ */
+private fun scenarioSentence(state: GoalDetailUiState, amount: Double): String {
+    val head = "Aylık katkıyı ${Money.tl(state.baseContribution)} → ${Money.tl(amount)} yaparsanız: "
+
+    val months = state.scenarioMonths
+        ?: return head + "hedefe varış yine de hesaplanamıyor."
+
+    val arrival = "${state.scenarioArrival}, ${months.monthsLabel()}"
+    val diff = state.scenarioDiffMonths ?: return "$head$arrival."
+
+    return head + arrival + when {
+        diff < 0 -> " — şimdikinden ${(-diff).monthsLabel()} önce."
+        diff > 0 -> " — şimdikinden ${diff.monthsLabel()} sonra."
+        else -> " — şimdikiyle aynı."
+    }
+}
+
+/** "8 ay", "1 yıl 2 ay" - uzun surelerde ay sayisi tek basina okunmuyor. */
+private fun Int.monthsLabel(): String {
+    if (this < 12) return "$this ay"
+    val years = this / 12
+    val rest = this % 12
+    return if (rest == 0) "$years yıl" else "$years yıl $rest ay"
 }
 
 // --- Kilometre taslari -----------------------------------------------------

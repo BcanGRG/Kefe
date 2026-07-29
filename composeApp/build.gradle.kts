@@ -79,6 +79,14 @@ kotlin {
             implementation(libs.ktor.client.cio)
             implementation(libs.sqldelight.driver.jvm)
         }
+        // Depo testleri GERCEK bir veritabanina ihtiyac duyar: mezar tasi ve
+        // yeniden hesap kurallari SQL'de yasiyor, sahte bir depoyla dogrulanamaz.
+        // JDBC surucusu bellekte calisir, dosya birakmaz.
+        val desktopTest by getting
+        desktopTest.dependencies {
+            implementation(libs.sqldelight.driver.jvm)
+            implementation(libs.kotlinx.coroutines.test)
+        }
     }
 }
 

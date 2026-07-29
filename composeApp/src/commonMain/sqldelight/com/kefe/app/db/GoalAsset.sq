@@ -14,19 +14,23 @@
 -- kadar ayri bir hesap defteri gerektirir. Once tam varlik.
 CREATE TABLE goal_assets (
     positionId TEXT NOT NULL PRIMARY KEY REFERENCES positions(id) ON DELETE CASCADE,
-    goalId TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE
+    goalId TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+    updatedAt INTEGER NOT NULL DEFAULT 0,
+    deletedAt INTEGER
 );
 
 CREATE INDEX goal_assets_goal ON goal_assets(goalId);
 
 selectGoalAssets:
 SELECT *
-FROM goal_assets;
+FROM goal_assets
+WHERE deletedAt IS NULL;
 
 assignPositionToGoal:
-INSERT OR REPLACE INTO goal_assets(positionId, goalId)
-VALUES (:positionId, :goalId);
+INSERT OR REPLACE INTO goal_assets(positionId, goalId, updatedAt, deletedAt)
+VALUES (:positionId, :goalId, :updatedAt, NULL);
 
 clearPositionAssignment:
-DELETE FROM goal_assets
+UPDATE goal_assets
+SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE positionId = :positionId;

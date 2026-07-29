@@ -43,7 +43,9 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.kefe.app.domain.model.color
 import com.kefe.app.domain.repository.PriceFreshness
+import com.kefe.app.ui.components.AmountKeyboard
 import com.kefe.app.ui.components.KefeBottomSheet
+import com.kefe.app.ui.components.asAmountInput
 import com.kefe.app.ui.components.KefeDashedCard
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefePullToRefresh
@@ -567,7 +569,8 @@ private fun ManualPriceSheet(
     ) {
         KefeTextField(
             value = current?.input.orEmpty(),
-            onValueChange = { onIntent(MarketIntent.ChangeManualPrice(it)) },
+            onValueChange = { onIntent(MarketIntent.ChangeManualPrice(it.asAmountInput())) },
+            keyboardOptions = AmountKeyboard,
             modifier = Modifier.fillMaxWidth(),
             label = "Satış fiyatı",
             placeholder = "0,00",

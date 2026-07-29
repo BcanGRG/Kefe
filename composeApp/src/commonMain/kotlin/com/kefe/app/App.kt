@@ -499,7 +499,6 @@ private fun KefeApp(
                                 SettingsScreen(
                                     state = settings,
                                     onIntent = settingsVm::onIntent,
-                                    onBack = { goBack() },
                                     onOpenShare = { goTo(ShareKey) },
                                     onOpenGallery = { goTo(GalleryKey) },
                                 )

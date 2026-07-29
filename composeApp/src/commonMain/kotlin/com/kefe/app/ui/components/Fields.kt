@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -72,6 +74,7 @@ fun KefeTextField(
     trailingContent: (@Composable () -> Unit)? = null,
     singleLine: Boolean = true,
     textStyle: TextStyle = KefeTheme.type.body,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
 ) {
     val colors = KefeTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
@@ -125,6 +128,7 @@ fun KefeTextField(
                     textStyle = textStyle.copy(color = colors.onSurface),
                     singleLine = singleLine,
                     cursorBrush = SolidColor(colors.accent),
+                    keyboardOptions = keyboardOptions,
                     interactionSource = interactionSource,
                     decorationBox = { innerTextField ->
                         Box(contentAlignment = Alignment.CenterStart) {
@@ -291,4 +295,45 @@ fun KefeSearchField(
         leadingIcon = searchIcon,
         trailingContent = if (value.isEmpty()) null else clearButton,
     )
+}
+
+// --- Klavye turleri ---------------------------------------------------------
+
+/**
+ * Tutar/miktar alanlari icin ONDALIKLI SAYI klavyesi.
+ *
+ * Butun alanlar tam metin klavyesi aciyordu: kullanici tutar yazmak icin once
+ * sayi sekmesine gecmek zorunda kaliyor ve harf yazabiliyordu.
+ *
+ * Sayi tuslari ekranda kalsin diye `Decimal`; tr-TR'de ondalik ayirici virgul
+ * oldugu icin klavye onu da gosterir.
+ */
+val AmountKeyboard: KeyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+
+/** Ondalik istemeyen alanlar (adet, kod) icin. */
+val IntegerKeyboard: KeyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+
+/**
+ * Tutar girisini temizler: yalniz rakam ve TEK ondalik ayirici kalir.
+ *
+ * Klavye turu yeterli DEGIL - donanim klavyesi, yapistirma ve bazi ekran
+ * klavyeleri harf gonderebiliyor. Ayrica ikinci bir virgul "12,3,4" gibi
+ * ayristirilamayan bir metin uretirdi.
+ *
+ * Nokta virgule cevrilir: kullanici hangi tusa basarsa bassin ayni sey demek
+ * istiyor ve ayristirici tr-TR bekliyor.
+ */
+fun String.asAmountInput(): String {
+    val builder = StringBuilder()
+    var separatorUsed = false
+    for (ch in this) {
+        when {
+            ch.isDigit() -> builder.append(ch)
+            (ch == ',' || ch == '.') && !separatorUsed && builder.isNotEmpty() -> {
+                separatorUsed = true
+                builder.append(',')
+            }
+        }
+    }
+    return builder.toString()
 }

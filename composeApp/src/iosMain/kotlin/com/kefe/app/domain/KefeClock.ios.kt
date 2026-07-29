@@ -19,3 +19,7 @@ actual fun currentDate(): KefeDate {
         day = parts.day.toInt(),
     )
 }
+
+/** NSDate saniye doner; milisaniyeye cevrilir. */
+actual fun currentEpochMillis(): Long =
+    (NSDate().timeIntervalSince1970 * 1000.0).toLong()

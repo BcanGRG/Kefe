@@ -7,3 +7,5 @@ actual fun currentDate(): KefeDate {
     val now = LocalDate.now()
     return KefeDate(year = now.year, month = now.monthValue, day = now.dayOfMonth)
 }
+
+actual fun currentEpochMillis(): Long = System.currentTimeMillis()

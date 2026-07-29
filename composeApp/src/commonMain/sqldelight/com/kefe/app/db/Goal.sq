@@ -30,28 +30,33 @@ CREATE TABLE goals (
     sortOrder INTEGER NOT NULL DEFAULT 0,
     estimatedYear INTEGER,
     estimatedMonth INTEGER,
-    estimatedDay INTEGER
+    estimatedDay INTEGER,
+    -- Esitleme alanlari; bkz. 2.sqm.
+    updatedAt INTEGER NOT NULL DEFAULT 0,
+    deletedAt INTEGER
 );
 
 -- observeGoals() siralamayi VAAT EDIYOR - sira SQL'de kalmali, ekranda degil.
 selectGoals:
 SELECT *
 FROM goals
+WHERE deletedAt IS NULL
 ORDER BY sortOrder, name;
 
 selectGoalById:
 SELECT *
 FROM goals
-WHERE id = :id;
+WHERE id = :id AND deletedAt IS NULL;
 
 countGoals:
 SELECT count(*)
-FROM goals;
+FROM goals
+WHERE deletedAt IS NULL;
 
 -- Hedefin cocuk tablosu yok; REPLACE burada guvenli (silinecek bagli satir yok).
 upsertGoal:
-INSERT OR REPLACE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, allocation, status, sortOrder, estimatedYear, estimatedMonth, estimatedDay)
-VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :allocation, :status, :sortOrder, :estimatedYear, :estimatedMonth, :estimatedDay);
+INSERT OR REPLACE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, allocation, status, sortOrder, estimatedYear, estimatedMonth, estimatedDay, updatedAt)
+VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :allocation, :status, :sortOrder, :estimatedYear, :estimatedMonth, :estimatedDay, :updatedAt);
 
 -- reorderGoals: verilen kimlik listesi tek transaction icinde indeksleriyle
 -- yazilir. Listede olmayan hedefler sortOrder'ini korur.
@@ -71,7 +76,8 @@ SET status = :status
 WHERE id = :id;
 
 deleteGoalById:
-DELETE FROM goals
+UPDATE goals
+SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE id = :id;
 
 deleteAllGoals:

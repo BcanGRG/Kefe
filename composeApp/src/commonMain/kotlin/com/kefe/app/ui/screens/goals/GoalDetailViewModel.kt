@@ -17,6 +17,7 @@ import com.kefe.app.domain.model.monthLabel
 import com.kefe.app.domain.model.monthName
 import com.kefe.app.domain.model.monthOrdinal
 import com.kefe.app.domain.model.monthlyContributions
+import com.kefe.app.domain.model.monthsToReach
 import com.kefe.app.domain.model.otherGoalOf
 import com.kefe.app.domain.model.plusMonths
 import com.kefe.app.domain.model.progress
@@ -26,7 +27,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 /** Katki gecmisi tablosunun penceresi - tasarimdaki gibi son 12 ay. */
 private const val ContributionMonths = 12
@@ -40,11 +40,8 @@ private const val ContributionMonths = 12
  * gunluk fotograflardan, katkilar islem defterinden, tahmin bugunku birikim ile
  * hedefin aylik katkisindan.
  *
- * Senaryo egrisi tasarimdaki degerleri birebir uretir. Formul
- *   ay = K / (aylik katki [bin TL] + ScenarioInertia)
- * seklindedir ve K hedefin KENDI verisinden turetilir: hedefin bugunku aylik
- * katkisi verildiginde hedefin kendi tahmini varis ayini dondurmelidir. Boylece
- * sabit bir demo katsayisi yerine her hedefte tutarli bir egri cikar.
+ * Senaryo kaydiricisi da AYNI kurali kullanir: bugunku birikim + secilen aylik
+ * katki. Onceden ayri, uydurma bir formulu vardi.
  */
 class GoalDetailViewModel(
     private val portfolioRepository: PortfolioRepository,
@@ -238,30 +235,39 @@ class GoalDetailViewModel(
 
 // --- Senaryo ---------------------------------------------------------------
 
-/**
- * Katkisiz da olsa birikimin kendi getirisiyle ilerledigini temsil eden atalet
- * terimi (bin TL). Paydanin sifirlanmasini da engeller.
- */
-private const val ScenarioInertia = 31.0
-
 /** Kaydirici acilis konumu: mevcut katkinin 15 bin TL uzeri. */
 private const val ScenarioOpeningStep = 15f
 
+/**
+ * Kaydiricinin verdigi katkiyla hedefe varis.
+ *
+ * Tahmin egrisiyle AYNI kurali kullanir ([monthsToReach]). Once ayri bir formul
+ * vardi - `K / (katki + atalet)` - ve icindeki "atalet" terimi birikimin
+ * kendiliginden buyudugunu varsayiyordu. Uydurmaydi ve sonucu da yanlisti:
+ * aylik katkiyi ikiye katlamak "8 ay SONRA" diyebiliyordu, cunku karsilastirma
+ * hedef tarihine gore yapiliyordu, bugunku tahmine gore degil.
+ *
+ * Karsilastirma artik SIMDIKI PLANA gore: "bu kadar ay erken/gec" derken neye
+ * gore erken oldugu bellidir.
+ */
 private fun GoalDetailUiState.withScenario(thousands: Float): GoalDetailUiState {
     val goal = goal ?: return copy(scenarioContribution = thousands)
 
-    // Referans nokta hedefin KENDI tahmini varisi; boylece kaydirici mevcut
-    // katkida birakildiginda ekranin ustundeki tarihi tekrar eder.
-    val arrivalMonths = ((projectedArrival ?: goal.targetDate).monthIndex() -
-        today.monthIndex()).coerceAtLeast(1)
-    val k = arrivalMonths * (goal.monthlyContribution / 1000.0 + ScenarioInertia)
-
-    val months = (k / (thousands + ScenarioInertia)).roundToInt().coerceAtLeast(1)
-    val arrival = today.plusMonths(months)
+    val months = monthsToReach(currentWealth, goal.amount, thousands * 1000.0)
+    val baseMonths = monthsToReach(currentWealth, goal.amount, goal.monthlyContribution)
 
     return copy(
         scenarioContribution = thousands,
-        scenarioArrival = "${arrival.monthName()} ${arrival.year}",
-        scenarioDiffMonths = months - (goal.targetDate.monthIndex() - today.monthIndex()),
+        scenarioMonths = months,
+        scenarioArrival = months
+            ?.let { today.plusMonths(it) }
+            ?.let { "${it.monthName()} ${it.year}" }
+            .orEmpty(),
+        // Ikisinden biri hesaplanamiyorsa kiyas da yapilamaz.
+        scenarioDiffMonths = if (months != null && baseMonths != null) {
+            months - baseMonths
+        } else {
+            null
+        },
     )
 }

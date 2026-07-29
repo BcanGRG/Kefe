@@ -8,6 +8,7 @@ import com.kefe.app.domain.model.GoalAllocation
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.goalWealth
+import com.kefe.app.domain.model.newId
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.plusMonths
 import com.kefe.app.domain.model.toEpochDay
@@ -194,7 +195,12 @@ class GoalsViewModel(
         val all = _state.value.goals + _state.value.completed
         val existing = all.firstOrNull { it.id == editor.goalId }
         val goal = Goal(
-            id = editor.goalId ?: newGoalId(editor.iconKey, all),
+            // Yeni hedef UUID alir. Once "goal_<ikon>_<sayi>" idi ve silme sonrasi
+            // tekrar ediyordu; INSERT OR REPLACE yuzunden yasayan bir hedefi
+            // sessizce eziyordu. Sayaci "kullanilmayan ilk sirayi bul" diye
+            // duzeltmistik ama o cozum TEK CIHAZA gore: iki telefon ayni sirayi
+            // bagimsiz olarak uretir ve esitlemede yine carpisirlar.
+            id = editor.goalId ?: newId(),
             name = editor.name.trim(),
             iconKey = editor.iconKey,
             amount = amount,
@@ -220,23 +226,6 @@ class GoalsViewModel(
         update { it.copy(editor = null) }
     }
 
-    /**
-     * Kullanilmayan ilk kimligi bulur.
-     *
-     * Onceden "goal_<ikon>_<hedef sayisi + 1>" uretiliyordu ve SILME sonRASI
-     * tekrar ediyordu: uc hedeften biri silinince sayac geriye dusuyor, uretilen
-     * kimlik hayattaki bir hedefinkiyle cakisiyordu. Kayit INSERT OR REPLACE
-     * oldugu icin de o hedef SESSIZCE eziliyordu. Bellekteyken veri zaten
-     * ucucuydu; diske yazildigindan beri geri donusu yok.
-     *
-     * Tamamlananlar da sayilir - onlar da tabloda duruyor.
-     */
-    private fun newGoalId(iconKey: String, existing: List<Goal>): String {
-        val taken = existing.mapTo(mutableSetOf()) { it.id }
-        var index = 1
-        while ("goal_${iconKey}_$index" in taken) index++
-        return "goal_${iconKey}_$index"
-    }
 
     private fun delete() {
         val id = _state.value.editor?.goalId ?: return

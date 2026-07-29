@@ -13,6 +13,7 @@ CREATE TABLE daily_snapshots (
     dateDay INTEGER NOT NULL,
     totalValue REAL NOT NULL,
     principal REAL NOT NULL,
+    updatedAt INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (dateYear, dateMonth, dateDay)
 );
 
@@ -39,8 +40,8 @@ SELECT count(*)
 FROM daily_snapshots;
 
 upsertSnapshot:
-INSERT OR REPLACE INTO daily_snapshots(dateYear, dateMonth, dateDay, totalValue, principal)
-VALUES (:dateYear, :dateMonth, :dateDay, :totalValue, :principal);
+INSERT OR REPLACE INTO daily_snapshots(dateYear, dateMonth, dateDay, totalValue, principal, updatedAt)
+VALUES (:dateYear, :dateMonth, :dateDay, :totalValue, :principal, :updatedAt);
 
 deleteAllSnapshots:
 DELETE FROM daily_snapshots;
