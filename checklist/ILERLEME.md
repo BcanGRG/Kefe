@@ -15,8 +15,8 @@ görüntüsüne bakıp "olmuş" denmez.
 |---|---|---|
 | 1 | Açılış animasyonu + tema uyumu | ✅ **bitti** |
 | 2 | Parmak izi kilidi | ✅ **bitti** |
-| 3 | Yenileme kısıtlamasının ekranda görünmesi | ⬜ |
-| 4 | İki profil | ⬜ |
+| 3 | Yenileme kısıtlamasının ekranda görünmesi | ✅ **bitti** |
+| 4 | İki profil | ⬜ sırada |
 | 5 | Çok kullanıcılı iskeletin sökülmesi | ⬜ |
 | 6 | Ayarlar temizliği ve tamamlanması | ⬜ |
 
