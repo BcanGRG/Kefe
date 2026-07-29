@@ -217,7 +217,7 @@ class SettingsViewModel(
 
 /** Taninmayan deger varsayilana duser - eski bir kayit uygulamayi dusurmemeli. */
 private fun Map<String, String>.themeMode(): ThemeMode =
-    ThemeMode.entries.firstOrNull { it.name == this[PreferenceKeys.ThemeMode] } ?: ThemeMode.Light
+    ThemeMode.entries.firstOrNull { it.name == this[PreferenceKeys.ThemeMode] } ?: ThemeMode.System
 
 private fun Map<String, String>.flag(key: String, default: Boolean): Boolean =
     this[key]?.toBooleanStrictOrNull() ?: default

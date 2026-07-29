@@ -24,7 +24,12 @@ data class SettingsUiState(
     val members: List<SettingsMember> = emptyList(),
 
     // Gorunum
-    val themeMode: ThemeMode = ThemeMode.Light,
+    /**
+     * Varsayilan SISTEM. Once Acik idi ve acilis penceresi koyu sabitti; cihazi
+     * koyu modda olan biri her acilista once koyu bir kare, sonra acik bir ekran
+     * goruyordu. Sistemi izlemek ikisini kendiliginden hizalar.
+     */
+    val themeMode: ThemeMode = ThemeMode.System,
     val currencyLabel: String = "₺ Türk lirası",
     val showCents: Boolean = false,
 
