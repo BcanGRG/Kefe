@@ -21,6 +21,9 @@ interface PortfolioRepository {
 
     fun observeMembers(): Flow<List<Member>>
 
+    /** Profilin adini ve bas harfini degistirir; satirin geri kalanina dokunmaz. */
+    suspend fun renameMember(memberId: String, name: String, initials: String)
+
     fun observePositions(): Flow<List<Position>>
 
     fun observeGoals(): Flow<List<Goal>>

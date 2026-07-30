@@ -46,6 +46,9 @@ data class SettingsUiState(
      */
     val prefsLoaded: Boolean = false,
 
+    /** Bu cihazin profili. null ise "bu telefon kimin" adimi henuz gecilmedi. */
+    val activeMemberId: String? = null,
+
     // Fiyatlar
     val priceRefreshLabel: String = "15 dakikada bir",
     val priceSourceLabel: String = "Serbest piyasa",

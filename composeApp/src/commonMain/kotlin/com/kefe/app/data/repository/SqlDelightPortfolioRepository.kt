@@ -40,6 +40,7 @@ import com.kefe.app.domain.model.costBasis
 import com.kefe.app.domain.model.priceKey
 import com.kefe.app.domain.model.valuedAt
 import com.kefe.app.domain.repository.PortfolioRepository
+import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.domain.repository.PriceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -109,6 +110,12 @@ class SqlDelightPortfolioRepository(
     override fun observeMembers(): Flow<List<Member>> =
         portfolioQueries.selectMembers().asFlow().mapToList(dispatcher)
             .map { rows -> rows.map { it.toDomain() } }
+
+    override suspend fun renameMember(memberId: String, name: String, initials: String) {
+        withContext(dispatcher) {
+            portfolioQueries.renameMember(id = memberId, name = name, initials = initials)
+        }
+    }
 
     /**
      * Pozisyonlar - GUNCEL FIYATLA degerlenmis.
@@ -341,12 +348,27 @@ class SqlDelightPortfolioRepository(
     override suspend fun restoreBackup(file: BackupFile) {
         withContext(dispatcher) {
             database.transaction {
+                // Cihaza ait tercihler silme-yeniden yazma boyunca KORUNUR.
+                // deleteAllSettings hepsini siliyor; yedekten de atlandiklari
+                // icin, korunmasalar Ayse'nin "bu telefon kimin" secimi Volkan'in
+                // yedegini yukleyince tamamen kaybolurdu - ne yedekten gelir ne
+                // de eskisi kalir.
+                val preserved = DeviceOnlySettings.associateWith { key ->
+                    settingQueries.selectSetting(key).executeAsOneOrNull()
+                }
+
                 transactionQueries.deleteAllTransactions()
                 positionQueries.deleteAllPositions()
                 goalQueries.deleteAllGoals()
                 activityQueries.deleteAllActivity()
                 snapshotQueries.deleteAllSnapshots()
                 settingQueries.deleteAllSettings()
+
+                preserved.forEach { (key, value) ->
+                    if (value != null) {
+                        settingQueries.upsertSetting(settingKey = key, settingValue = value)
+                    }
+                }
 
                 portfolioQueries.updatePortfolio(
                     name = file.portfolioName,
@@ -447,7 +469,13 @@ class SqlDelightPortfolioRepository(
                 }
 
                 file.settings.forEach { (key, value) ->
-                    settingQueries.upsertSetting(settingKey = key, settingValue = value)
+                    // CIHAZA AIT tercihler geri yuklenmez. Yedek, dosyayi ALAN
+                    // cihazin verisidir: Volkan'in yedegi Ayse'nin telefonuna
+                    // yuklendiginde o telefon Volkan'in profili olmamali. Onun
+                    // hangi profil oldugu kendi kararidir, yedekle gelmez.
+                    if (key !in DeviceOnlySettings) {
+                        settingQueries.upsertSetting(settingKey = key, settingValue = value)
+                    }
                 }
             }
         }
@@ -655,3 +683,14 @@ class SqlDelightPortfolioRepository(
 
 /** Acilis akisinin gecildigini isaretleyen ayar anahtari. */
 private const val OnboardedKey = "onboarded"
+
+/**
+ * Geri yuklemede ATLANACAK tercihler.
+ *
+ * Bunlar veriye degil CIHAZA aittir: yedek dosyasi tercihler tablosunu oldugu
+ * gibi tasidigi icin, atlanmasalar Volkan'in yedegini yukleyen Ayse'nin telefonu
+ * kendini Volkan'in profili sanardi.
+ */
+private val DeviceOnlySettings = setOf(
+    PreferenceKeys.ActiveMemberId,
+)

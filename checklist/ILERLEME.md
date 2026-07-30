@@ -16,8 +16,8 @@ görüntüsüne bakıp "olmuş" denmez.
 | 1 | Açılış animasyonu + tema uyumu | ✅ **bitti** |
 | 2 | Parmak izi kilidi | ✅ **bitti** |
 | 3 | Yenileme kısıtlamasının ekranda görünmesi | ✅ **bitti** |
-| 4 | İki profil | ⬜ sırada |
-| 5 | Çok kullanıcılı iskeletin sökülmesi | ⬜ |
+| 4 | İki profil | ✅ **bitti** |
+| 5 | Çok kullanıcılı iskeletin sökülmesi | ⬜ sırada |
 | 6 | Ayarlar temizliği ve tamamlanması | ⬜ |
 
 ## Senkron (sonraki tur)
@@ -136,3 +136,38 @@ Kullanıcı isteğiyle: kısıtlanan yenileme uyarısı Piyasa ekranına da ekle
 Piyasa'da "Yenile"ye arka arkaya basınca altın renkli şerit çıkıyor:
 *"Fiyatlar az önce güncellendi — 24 sn sonra tekrar denenebilir."*
 Emülatörde doğrulandı.
+
+---
+
+## 4 · İki profil ✅
+
+**Karar.** Tek Supabase hesabı, iki cihaz aynı e-postayla girer, her cihaz bir
+profile sabitlenir. Bu, davet akışını ve alan adı ihtiyacını ortadan kaldırır.
+
+**Ne yapıldı.**
+
+- Bootstrap artık **iki** profil kuruyor: `member_owner` + yeni `member_partner`.
+  Kimlikler SABIT — iki cihaz kendi bootstrap'ını çalıştırıyor; deterministik id,
+  senkron gelince çakışma değil birleşme üretir.
+- `PreferenceKeys.ActiveMemberId` — bu cihazın hangi profil olduğu. Cihaza
+  aittir, senkronlanmaz.
+- `renameMember` — dar bir sorgu; yalnız ad ve baş harfi değiştirir, sortOrder
+  ve rolü korur.
+- `AddTransactionViewModel` işlemi artık **aktif profile** yazıyor, koşulsuz
+  Owner'a değil. Çevrimdışı notundaki isim de "aktif olmayan profil".
+- Yeni `ProfileSetupScreen` — "Bu telefon kimin?". İki ad + bu cihazın seçimi.
+  Onboarding'e dokunulmadı.
+- Kabuk kök seçimi: `activeMemberId == null → ProfileSetup`. `onboarded`'dan
+  bağımsız, çünkü iki giriş yolu var ve biri onboarding'i hiç görmüyor.
+
+**Yedek tuzağı (kritik).** Yedek dosyası `settings` tablosunu olduğu gibi
+taşıyor. Restore önce tüm settings'i siliyor. İlk düzeltmemde `activeMemberId`
+atlanıyordu ama **silme adımı** yüzünden cihazın kendi seçimi de kayboluyordu —
+test bunu yakaladı. Artık restore, cihaza ait tercihleri silmeden önce koruyup
+sonra geri yazıyor. Beş test bu kuralı kilitliyor; en önemlisi *"Ayşe, Volkan'ın
+yedeğini yükleyince telefonu hâlâ Ayşe kalır"*.
+
+**Doğrulama.** 92 test (5 yeni). Emülatörde uçtan uca: temiz kurulumda ProfileSetup
+geldi, "Burak Can" / "Merve" girildi, bu telefon **Merve** seçildi, bir çeyrek
+eklendi — Son hareketler'de **"Merve · 1 Çeyrek ekledi"** göründü. Kayıt Owner'a
+değil aktif profile yazıldı.

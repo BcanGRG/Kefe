@@ -9,7 +9,6 @@ import com.kefe.app.domain.model.Currency
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.Karat
 import com.kefe.app.domain.model.Member
-import com.kefe.app.domain.model.MemberRole
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.QuantityUnit
@@ -21,6 +20,8 @@ import com.kefe.app.domain.model.newId
 import com.kefe.app.domain.model.priceKey
 import com.kefe.app.domain.model.sellPrice
 import com.kefe.app.domain.repository.PortfolioRepository
+import com.kefe.app.domain.repository.PreferenceKeys
+import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.domain.repository.PriceRepository
@@ -41,6 +42,7 @@ import kotlinx.coroutines.launch
 class AddTransactionViewModel(
     private val portfolioRepository: PortfolioRepository,
     private val priceRepository: PriceRepository,
+    private val preferences: PreferencesRepository,
     private val clock: KefeClock,
 ) : MviViewModel<AddTransactionUiState, AddTransactionIntent, AddTransactionEffect>(
     // Tarih varsayilani sabit YAZILAMAZ: kayit artik diske gidiyor, yanlis tarih
@@ -51,6 +53,13 @@ class AddTransactionViewModel(
     private var board: PriceBoard? = null
     private var positions: List<Position> = emptyList()
     private var members: List<Member> = emptyList()
+
+    /**
+     * Bu cihazin profili. Eklenen islem BUNA yazilir - once kosulsuz Owner'a
+     * yaziliyordu, yani es kendi telefonundan girse bile kayit "Ben" gorunuyordu.
+     * Bos ise (kurulum yarim) Owner'a duseriz.
+     */
+    private var activeMemberId: String = ""
 
     init {
         observePortfolio()
@@ -157,13 +166,19 @@ class AddTransactionViewModel(
                 portfolioRepository.observePositions(),
                 portfolioRepository.observeMembers(),
                 portfolioRepository.observeActivity(),
-            ) { positionList, memberList, activity ->
+                preferences.observeAll(),
+            ) { positionList, memberList, activity, prefs ->
                 positions = positionList
                 members = memberList
+                activeMemberId = prefs[PreferenceKeys.ActiveMemberId]
+                    ?: memberList.firstOrNull()?.id.orEmpty()
                 _state.value.copy(
                     lastAdded = lastAddedOf(activity, positionList),
-                    partnerName = memberList.firstOrNull { it.role != MemberRole.Owner }?.name
-                        ?: memberList.getOrNull(1)?.name.orEmpty(),
+                    // Cevrimdisi notundaki isim AKTIF OLMAYAN profildir: "baglaninca
+                    // ESIN telefonunda gorunur" derken kastedilen o. Once hep
+                    // Owner-disi aliniyordu; es kendi telefonundan girince kendi
+                    // adini "esiniz" gibi gormesi tuhaf oluyordu.
+                    partnerName = memberList.firstOrNull { it.id != activeMemberId }?.name.orEmpty(),
                 )
             }.collect { _state.value = withPrices(it) }
         }
@@ -355,8 +370,11 @@ class AddTransactionViewModel(
                     fee = s.fee,
                     note = s.note.takeIf { it.isNotBlank() },
                     storage = s.storage.takeIf { it.isNotBlank() },
-                    addedByMemberId = members.firstOrNull { it.role == MemberRole.Owner }?.id
-                        ?: members.firstOrNull()?.id.orEmpty(),
+                    // Aktif profile yazilir. Bos ise (kurulum yarim kalmis)
+                    // ilk uyeye duseriz - kayit kimliksiz kalmasin.
+                    addedByMemberId = activeMemberId.ifBlank {
+                        members.firstOrNull()?.id.orEmpty()
+                    },
                     // Cevrimdisi kayit cihazda bekler; baglaninca esitlenir.
                     syncState = if (s.offline) SyncState.Pending else SyncState.Synced,
                 )

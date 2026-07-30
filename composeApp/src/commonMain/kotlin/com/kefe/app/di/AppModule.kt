@@ -22,6 +22,7 @@ import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.security.BiometricGate
 import com.kefe.app.ui.screens.account.ActivityViewModel
 import com.kefe.app.ui.screens.account.LoginViewModel
+import com.kefe.app.ui.screens.account.ProfileSetupViewModel
 import com.kefe.app.ui.screens.account.SettingsViewModel
 import com.kefe.app.ui.screens.account.ShareViewModel
 import com.kefe.app.ui.screens.assets.AssetDetailViewModel
@@ -88,6 +89,7 @@ val appModule = module {
     viewModelOf(::ShareViewModel)
     viewModelOf(::SettingsViewModel)
     viewModelOf(::LoginViewModel)
+    viewModelOf(::ProfileSetupViewModel)
 
     // Detay ekranlari hedef/pozisyon kimligini calisma aninda alir.
     viewModel { (positionId: String) -> AssetDetailViewModel(get(), get(), get(), positionId) }

@@ -91,6 +91,13 @@ SET portfolioId = :portfolioId,
     sortOrder = :sortOrder
 WHERE id = :id;
 
+-- Yalniz ad ve bas harf. sortOrder, role, permission KORUNUR: profil kurulumu
+-- yalniz ismi degistirir, satirin geri kalanina dokunmamali.
+renameMember:
+UPDATE members
+SET name = :name, initials = :initials
+WHERE id = :id;
+
 deleteMemberById:
 DELETE FROM members
 WHERE id = :id;
