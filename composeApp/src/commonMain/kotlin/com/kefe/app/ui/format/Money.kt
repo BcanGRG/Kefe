@@ -29,9 +29,18 @@ object Money {
     /** `3.180.400` - simgesiz gruplanmis sayi. */
     fun number(value: Double, decimals: Int = 0): String = format(value, decimals, forceSign = false)
 
-    /** `₺3.180.400` / `₺ 3.180.400` */
+    /**
+     * `₺3.180.400` / `₺ 3.180.400`
+     *
+     * Sub-lira tutari tam-TL'ye yuvarlamak yaniltir (₺0,76 -> ₺1, hatta ₺0);
+     * caller acikca ondalik istememisse (decimals=0) kucuk bir tutarda kurus
+     * gosterilir. Buyuk sayilar (>=1 TL) etkilenmez - kahraman rakamlar tam kalir.
+     * Boylece bir fon payi (< ₺1) her ekranda gercek degeriyle gorunur.
+     */
     fun tl(value: Double, spaced: Boolean = false, decimals: Int = 0): String {
-        val body = format(abs(value), decimals, forceSign = false)
+        val effectiveDecimals =
+            if (decimals == 0 && value != 0.0 && abs(value) < 1.0) 2 else decimals
+        val body = format(abs(value), effectiveDecimals, forceSign = false)
         val sign = if (value < 0) MINUS.toString() else ""
         return sign + LIRA + (if (spaced) " " else "") + body
     }
