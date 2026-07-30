@@ -1,0 +1,26 @@
+-- Surum 4 -> 5: son iki senkron tablosunu da esitlemeye hazirla.
+--
+-- members ve activity_events, 2.sqm'deki esitleme alanlarini almamisti - o zaman
+-- senkronun disindaydilar. Iki profil karari (member_owner/member_partner sabit
+-- kimlik) ve "hepsi senkronlansin" secimiyle ikisi de iceri girdi.
+--
+-- members: yalniz updatedAt. Iki cihaz ayni profili yeniden adlandirdiginda hangi
+-- adin gecerli oldugunu soyleyen tek sey bu (son yazan kazanir). Mezar tasi YOK:
+-- iki profil sabittir, silinmez.
+--
+-- activity_events: updatedAt + mezar tasi. Akis eklemeli gorunse de silme var
+-- (bir islem geri alininca turetilen satir gider); mezar tasi olmadan es
+-- cevrimdisiyken silinen olay, o dondugunde geri dirilirdi - transactions ile
+-- ayni kural.
+--
+-- Var olan satirlar updatedAt = 0 ile baslar; ilk esitleme PUSH yonunde calisip
+-- yereldeki her seyi sunucuya yazacagi icin bu guvenli.
+
+ALTER TABLE members ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE activity_events ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE activity_events ADD COLUMN deletedAt INTEGER;
+
+-- Esitleme "su tarihten sonra degisenler" diye soracak; indekssiz tam tarama olurdu.
+CREATE INDEX activity_events_updated ON activity_events(updatedAt);
+CREATE INDEX members_updated ON members(updatedAt);

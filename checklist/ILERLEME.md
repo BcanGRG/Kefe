@@ -28,7 +28,7 @@ erişim demek. Düz metin jeton + açık senkron = sızıntı. Bu yüzden 8, 7'd
 | # | Adım | Durum |
 |---|---|---|
 | 8 | Jeton Keystore/Keychain'e | ✅ **bitti** (7'den önce) |
-| 7 | Supabase tabloları + RLS | ⬜ |
+| 7 | Supabase tabloları + RLS | ✅ **bitti** (SQL kullanıcı çalıştırır) |
 | 9 | Push | ⬜ |
 | 10 | Pull | ⬜ |
 | 11 | Gerçek zamanlı | ⬜ |
@@ -294,3 +294,52 @@ Koin grafiği `SecureStore`'u üretip repoya enjekte etti (yanlış olsa açıl�
 şifrelemenin gerçekten çalıştığı ve diskte `enc1:` görünüp `eyJ…` (JWT) düz metni
 kalmadığı — bu, bir sonraki gerçek girişte yakalanacak (auth_session şu an boş;
 giriş zaten senkron için şart). Keystore yolu ilk `protect`/`reveal`'de işler.
+
+---
+
+## 7 · Supabase tabloları + RLS ✅
+
+**Neydi.** Senkron için sunucu tarafı boştu: veri koyacak tablo, onları hesaba
+kilitleyecek politika yok. Tablo, politikası yazılmadan AÇILMAMALI - RLS'siz bir
+tablo, publishable anahtarı eline geçiren herkese açıktır.
+
+**Ne senkronlanır (kullanıcı "hepsi" dedi → 7 tablo).**
+
+- `members`, `positions`, `transactions`, `goals`, `goal_assets` — çekirdek: girilen
+  gerçek veri.
+- `daily_snapshots` — geçmiş grafiği. Geçmiş fiyatlar hiçbir yerde tutulmadığı
+  için turetilemez; ikinci telefon bunlar olmadan geçmişi çizemez.
+- `activity_events` — "kim ne ekledi" akışı. Bir kısmı (elle fiyat, hedef
+  güncelleme) defterde iz bırakmaz, o yüzden turetmek yetmez.
+
+**Ne YAZILMAZ (turetilir ya da cihaz-yerel).** Pozisyonun miktar/maliyet/değeri
+(defterden), canlı fiyat ve günlük değişim (cihazın kendi çekimi), hedefin tahmini
+varış tarihi (hesaplanır), işlemdeki `syncState` (bu cihazın "gönderdim mi"
+işareti), `members.role/permission/lastSeen` (çok kullanıcılıdan ölü kalıntı),
+`portfolios` (sabit `portfolio_local`, iki cihazda birebir aynı — bootstrap kurar,
+senkrona gerek yok). Ayrıca jeton, ayarlar, fiyat önbelleği hiç uğramaz.
+
+**Güvenlik modeli.** Tek hesap, iki cihaz aynı e-posta → aynı `auth.uid()`. Her
+satır `user_id` ile sahibine bağlı; varsayılanı `auth.uid()` olduğu için istemci
+onu göndermez, PostgREST doldurur. RLS `auth.uid() = user_id` hem okumayı hem
+yazmayı o hesaba kilitler — anahtar sızsa da RLS olmadan tek satır okunmaz.
+Tablolar arası yabancı anahtar YOK (push sırası serbest kalsın); tek FK
+`user_id → auth.users` (hesap silinince temizlensin). SQL tekrar çalıştırılabilir
+(`if not exists` + `drop policy if exists`). Dosya: `supabase/schema.sql`.
+
+**Yerel taraf (4.sqm, v4→v5).** `members` ve `activity_events` 2.sqm'deki esitleme
+alanlarını almamıştı. `members += updatedAt` (yeniden adlandırmada son yazan
+kazanır; mezar taşı yok, iki profil silinmez). `activity_events += updatedAt +
+deletedAt` (akışta silme var, mezar taşı olmadan es çevrimdışıyken silinen olay
+dirilir). `daily_snapshots` zaten `updatedAt`'liydi, dokunulmadı.
+
+**Doğrulama.** `verifyCommonMainKefeDatabaseMigration` geçiyor — migration TAM
+olarak `.sq` şemasını üretiyor (v4→v5 tutarlı). 92 test geçiyor. Emülatörde
+mevcut veriyle (altın pozisyonu + işlemler) migration çalıştı: çökme yok,
+`members.updatedAt` şema metninde yerinde, `members_updated`/`activity_events_updated`
+indeksleri oluştu, veri sağ kaldı (Özet "Altın %100"). **Sunucu tarafı:** kullanıcı
+`supabase/schema.sql`'i Supabase SQL editöründe çalıştırır (idempotent).
+
+**Sonraya (adım 9, push).** `renameMember` ve `insertActivity` henüz `updatedAt`
+yazmıyor (kolon hazır, değer 0); `deleteActivityById` hâlâ hard delete. Push
+wiring'inde bunlar gerçek zaman damgası + soft-delete'e bağlanacak.
