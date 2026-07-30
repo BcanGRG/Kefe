@@ -58,19 +58,7 @@ class LoginViewModel(
                 emailError = null,
             )
 
-            LoginIntent.GoToStart -> _state.value =
-                _state.value.copy(stage = LoginStage.Start, portfolioCreated = false)
-
-            LoginIntent.GoToSignIn -> _state.value = _state.value.copy(stage = LoginStage.SignIn)
-
             LoginIntent.CreatePortfolio -> _state.value = _state.value.copy(portfolioCreated = true)
-
-            is LoginIntent.ChangeInviteCode -> _state.value = _state.value.copy(
-                inviteCode = intent.value.filter { it.isDigit() }.take(InviteCodeLength),
-                inviteError = null,
-            )
-
-            LoginIntent.Join -> join()
 
             LoginIntent.Lock -> _state.value =
                 _state.value.copy(stage = LoginStage.Locked, unlocked = false)
@@ -125,15 +113,6 @@ class LoginViewModel(
                 code = if (error == null) "" else current.code,
             )
         }
-    }
-
-    private fun join() {
-        val current = _state.value
-        if (current.inviteCode.length != InviteCodeLength) {
-            _state.value = current.copy(inviteError = "Kod altı haneli olmalı")
-            return
-        }
-        _state.value = current.copy(joining = false, inviteError = null)
     }
 
     /**

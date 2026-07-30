@@ -1,5 +1,3 @@
-import com.kefe.app.domain.model.MemberPermission;
-import com.kefe.app.domain.model.MemberRole;
 
 -- Portfoy ve uyeleri.
 --
@@ -21,8 +19,10 @@ CREATE TABLE members (
     portfolioId TEXT NOT NULL,
     name TEXT NOT NULL,
     initials TEXT NOT NULL,
-    role TEXT AS MemberRole NOT NULL,
-    permission TEXT AS MemberPermission NOT NULL,
+    -- role/permission: cok kullanicili modelden kalma. Kolonlar YERINDE durur
+    -- (SQLite 3.18 DROP COLUMN desteklemiyor) ama artik sabit yazilir, okunmaz.
+    role TEXT NOT NULL,
+    permission TEXT NOT NULL,
     lastSeen TEXT NOT NULL,
     -- Portfolio.memberIds bir LISTE; sirasi ekranda avatar sirasini belirledigi
     -- icin saklanmali.
@@ -78,21 +78,10 @@ ORDER BY sortOrder, name;
 
 insertOrIgnoreMember:
 INSERT OR IGNORE INTO members(id, portfolioId, name, initials, role, permission, lastSeen, sortOrder)
-VALUES (:id, :portfolioId, :name, :initials, :role, :permission, :lastSeen, :sortOrder);
+VALUES (:id, :portfolioId, :name, :initials, 'Owner', 'CanEdit', '', :sortOrder);
 
-updateMember:
-UPDATE members
-SET portfolioId = :portfolioId,
-    name = :name,
-    initials = :initials,
-    role = :role,
-    permission = :permission,
-    lastSeen = :lastSeen,
-    sortOrder = :sortOrder
-WHERE id = :id;
-
--- Yalniz ad ve bas harf. sortOrder, role, permission KORUNUR: profil kurulumu
--- yalniz ismi degistirir, satirin geri kalanina dokunmamali.
+-- Yalniz ad ve bas harf. sortOrder korunur: profil kurulumu yalniz ismi
+-- degistirir, satirin geri kalanina dokunmamali.
 renameMember:
 UPDATE members
 SET name = :name, initials = :initials

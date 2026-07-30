@@ -39,8 +39,6 @@ data class BackupMember(
     val id: String,
     val name: String,
     val initials: String,
-    val role: String,
-    val permission: String,
 )
 
 @Serializable

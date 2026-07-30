@@ -8,31 +8,16 @@ data class Portfolio(
     val memberIds: List<String>,
 )
 
+/**
+ * Profil.
+ *
+ * ROL ve IZIN KALDIRILDI: uygulama iki kisilik, tek hesap. "Sahip / uye" ve
+ * "duzenleyebilir / sadece goruntuler" ayrimi cok kullanicili bir modelin
+ * kalintisiydi - iki esit profilde karsiligi yok. lastSeen de gitti: gercek bir
+ * zaman damgasi degil, hicbir yerde yazilmayan bir ekran metniydi.
+ */
 data class Member(
     val id: String,
     val name: String,
     val initials: String,
-    val role: MemberRole,
-    val permission: MemberPermission,
-    val lastSeen: String,
 )
-
-enum class MemberRole {
-    Owner,
-    Member;
-
-    fun label(): String = when (this) {
-        Owner -> "Sahip"
-        Member -> "Üye"
-    }
-}
-
-enum class MemberPermission {
-    CanEdit,
-    ViewOnly;
-
-    fun label(): String = when (this) {
-        CanEdit -> "Düzenleyebilir"
-        ViewOnly -> "Sadece görüntüler"
-    }
-}

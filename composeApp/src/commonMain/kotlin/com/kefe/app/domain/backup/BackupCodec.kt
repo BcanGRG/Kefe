@@ -6,8 +6,6 @@ import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.Karat
-import com.kefe.app.domain.model.MemberPermission
-import com.kefe.app.domain.model.MemberRole
 import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.TradeSide
 import kotlinx.serialization.json.Json
@@ -102,12 +100,6 @@ internal fun String.toGoalAllocation(): GoalAllocation =
 
 internal fun String.toGoalStatus(): GoalStatus =
     GoalStatus.entries.firstOrNull { it.name == this } ?: GoalStatus.Active
-
-internal fun String.toMemberRole(): MemberRole =
-    MemberRole.entries.firstOrNull { it.name == this } ?: MemberRole.Member
-
-internal fun String.toMemberPermission(): MemberPermission =
-    MemberPermission.entries.firstOrNull { it.name == this } ?: MemberPermission.entries.first()
 
 /**
  * Yedekten dogrudan CSV uretir.

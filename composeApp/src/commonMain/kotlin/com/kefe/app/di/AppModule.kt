@@ -24,7 +24,7 @@ import com.kefe.app.ui.screens.account.ActivityViewModel
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.ProfileSetupViewModel
 import com.kefe.app.ui.screens.account.SettingsViewModel
-import com.kefe.app.ui.screens.account.ShareViewModel
+import com.kefe.app.ui.screens.account.ProfilesViewModel
 import com.kefe.app.ui.screens.assets.AssetDetailViewModel
 import com.kefe.app.ui.screens.assets.AssetsViewModel
 import com.kefe.app.ui.screens.goals.GoalDetailViewModel
@@ -86,7 +86,7 @@ val appModule = module {
     viewModelOf(::MarketViewModel)
     viewModelOf(::AddTransactionViewModel)
     viewModelOf(::ActivityViewModel)
-    viewModelOf(::ShareViewModel)
+    viewModelOf(::ProfilesViewModel)
     viewModelOf(::SettingsViewModel)
     viewModelOf(::LoginViewModel)
     viewModelOf(::ProfileSetupViewModel)
