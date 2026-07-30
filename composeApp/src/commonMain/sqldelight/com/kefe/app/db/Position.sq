@@ -71,6 +71,23 @@ FROM positions
 WHERE updatedAt >= :since
 ORDER BY updatedAt;
 
+-- Pull: sunucudan gelen meta. positions'ta OR REPLACE KULLANILMAZ - satiri once
+-- silip CASCADE ile o varligin tum defterini goturur. Iki adim: yoksa
+-- insertOrIgnorePosition kurar, sonra bu meta'yi yazar. Miktar/maliyet/deger
+-- YAZILMAZ - defterden yeniden hesaplanir. dailyChangePercent cihaz-yerel, gelmez.
+applyPositionMetaPull:
+UPDATE positions
+SET name = :name,
+    assetClass = :assetClass,
+    subtype = :subtype,
+    karat = :karat,
+    unit = :unit,
+    unitPrice = :unitPrice,
+    manualPrice = :manualPrice,
+    updatedAt = :updatedAt,
+    deletedAt = :deletedAt
+WHERE id = :id;
+
 -- upsertPosition YALNIZ metayi yazar. Iki adim, cunku:
 -- 1) INSERT OR REPLACE once satiri siler -> transactions'a giden CASCADE
 --    tetiklenir ve pozisyonun tum defteri ucar.

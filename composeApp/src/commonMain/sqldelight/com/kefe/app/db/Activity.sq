@@ -74,6 +74,12 @@ FROM activity_events
 WHERE updatedAt >= :since
 ORDER BY updatedAt;
 
+-- Pull: sunucudan gelen olay. activity_events bir YAPRAK, OR REPLACE guvenli;
+-- seq yeniden atanir (yerel siralama, onemsiz). deletedAt de tasinir.
+applyActivityPull:
+INSERT OR REPLACE INTO activity_events(id, memberId, kind, description, amount, isManualPrice, occurredYear, occurredMonth, occurredDay, timeLabel, updatedAt, deletedAt)
+VALUES (:id, :memberId, :kind, :description, :amount, :isManualPrice, :occurredYear, :occurredMonth, :occurredDay, :timeLabel, :updatedAt, :deletedAt);
+
 -- Bagli tablo yok, REPLACE guvenli. Cakisan kimlik (act_<islem kimligi>) ayni
 -- olayin tekrar yazilmasi demektir; yeni satir seq'in sonuna gecer.
 insertActivity:

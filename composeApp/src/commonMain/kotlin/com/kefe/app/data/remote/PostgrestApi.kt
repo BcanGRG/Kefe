@@ -2,6 +2,7 @@ package com.kefe.app.data.remote
 
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.expectSuccess
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -30,6 +31,14 @@ interface PostgrestApi {
      * ilerletmez ve bir sonraki tetikte yeniden dener.
      */
     suspend fun upsert(table: String, rowsJson: String, accessToken: String)
+
+    /**
+     * Tablonun TUM satirlarini (mezar taslari dahil) JSON dizisi olarak ceker.
+     * RLS zaten satirlari o hesaba kisitlar; ayrica filtre gerekmez. Kucuk veri
+     * icin tam cekim, artan cekimin saat-kaymasi/gec-gelen tuzaklarini atlar.
+     * Basarisizsa [SyncException] atar.
+     */
+    suspend fun selectAll(table: String, accessToken: String): String
 }
 
 class SupabasePostgrestApi(
@@ -55,6 +64,19 @@ class SupabasePostgrestApi(
             val body = runCatching { response.bodyAsText() }.getOrNull().orEmpty()
             throw SyncException("$table upsert ${response.status.value}: ${body.take(300)}")
         }
+    }
+
+    override suspend fun selectAll(table: String, accessToken: String): String {
+        val response = client.get("$baseUrl/rest/v1/$table?select=*") {
+            header("apikey", anonKey)
+            header("Authorization", "Bearer $accessToken")
+            expectSuccess = false
+        }
+        if (!response.status.isSuccess()) {
+            val body = runCatching { response.bodyAsText() }.getOrNull().orEmpty()
+            throw SyncException("$table select ${response.status.value}: ${body.take(300)}")
+        }
+        return response.bodyAsText()
     }
 }
 

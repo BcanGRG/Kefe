@@ -80,6 +80,13 @@ FROM members
 WHERE updatedAt >= :since
 ORDER BY updatedAt;
 
+-- Pull: sunucudan gelen profil adi/sirasi. Uyeler bootstrap'ta zaten kuruldu
+-- (sabit id), o yuzden yalniz guncelleme yeter; mezar tasi yok.
+applyMemberPull:
+UPDATE members
+SET name = :name, initials = :initials, sortOrder = :sortOrder, updatedAt = :updatedAt
+WHERE id = :id;
+
 selectMemberById:
 SELECT *
 FROM members

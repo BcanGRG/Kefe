@@ -15,8 +15,10 @@ import com.kefe.app.data.repository.SqlDelightAuthRepository
 import com.kefe.app.data.repository.SqlDelightPortfolioRepository
 import com.kefe.app.data.repository.SqlDelightPreferencesRepository
 import com.kefe.app.data.repository.SqlDelightPriceRepository
+import com.kefe.app.data.sync.PullEngine
 import com.kefe.app.data.sync.PushEngine
 import com.kefe.app.data.sync.SyncCoordinator
+import com.kefe.app.data.sync.SyncLocalSink
 import com.kefe.app.data.sync.SyncLocalSource
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.SystemKefeClock
@@ -87,8 +89,10 @@ val appModule = module {
     // upsert eder (RLS o hesaba kilitler).
     single<PostgrestApi> { SupabasePostgrestApi(get()) }
     single { SyncLocalSource(get()) }
+    single { SyncLocalSink(get()) }
     single { PushEngine(get(), get(), get(), get(), get()) }
-    single { SyncCoordinator(get(), get(), get()) }
+    single { PullEngine(get(), get(), get()) }
+    single { SyncCoordinator(get(), get(), get(), get()) }
 
     // Dosya paylasimi/secimi platforma iner; Android tarafi Activity ister.
     single { FileTransfer() }

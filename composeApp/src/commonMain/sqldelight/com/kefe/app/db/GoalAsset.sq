@@ -38,6 +38,11 @@ FROM goal_assets
 WHERE updatedAt >= :since
 ORDER BY updatedAt;
 
+-- Pull: sunucudan gelen atama. goal_assets bir YAPRAK, OR REPLACE guvenli.
+applyGoalAssetPull:
+INSERT OR REPLACE INTO goal_assets(positionId, goalId, updatedAt, deletedAt)
+VALUES (:positionId, :goalId, :updatedAt, :deletedAt);
+
 assignPositionToGoal:
 INSERT OR REPLACE INTO goal_assets(positionId, goalId, updatedAt, deletedAt)
 VALUES (:positionId, :goalId, :updatedAt, NULL);

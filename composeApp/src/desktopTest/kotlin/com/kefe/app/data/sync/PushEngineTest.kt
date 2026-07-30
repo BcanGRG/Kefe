@@ -62,6 +62,8 @@ private class RecordingPostgrest(var failTable: String? = null) : PostgrestApi {
         if (table == failTable) throw SyncException("boom $table")
         calls += table to rowsJson
     }
+    // Push testinde cekim kullanilmaz.
+    override suspend fun selectAll(table: String, accessToken: String): String = "[]"
     fun tables(): List<String> = calls.map { it.first }
     fun jsonFor(table: String): String = calls.first { it.first == table }.second
     fun clear() = calls.clear()
