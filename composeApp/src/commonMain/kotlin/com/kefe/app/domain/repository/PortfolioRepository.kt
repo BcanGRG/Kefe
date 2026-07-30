@@ -31,8 +31,8 @@ interface PortfolioRepository {
     /**
      * Varlik -> hedef atamasi (positionId -> goalId).
      *
-     * Atama YAPILMAMIS bir hedef tum birikimi sayar; bkz. [goalWealth]. Bir
-     * varlik en fazla bir hedefe atanir - kural semada.
+     * Hedef YALNIZ kendine atanan varliklari sayar (kati atama); atama yoksa
+     * ilerleme %0; bkz. [goalWealth]. Bir varlik en fazla bir hedefe atanir.
      */
     fun observeGoalAssets(): Flow<Map<String, String>>
 

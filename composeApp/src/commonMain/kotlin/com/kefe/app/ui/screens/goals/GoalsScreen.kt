@@ -68,8 +68,8 @@ import com.kefe.app.ui.theme.tabular
 private val GoalGap = Space.x10
 
 /**
- * Hedefler ekrani. Uc hedef ayni birikimi paylasir; ilerleme TOPLAM birikime
- * gore olculur. Siralama uzun basip surukleyerek yapilir.
+ * Hedefler ekrani. Her hedefin ilerlemesi YALNIZ kendine atanan varliklardan
+ * olculur (kati atama); atama yoksa %0. Siralama uzun basip surukleyerek yapilir.
  */
 @Composable
 fun GoalsScreen(
@@ -118,8 +118,8 @@ private fun GoalsHeader(state: GoalsUiState, onIntent: (GoalsIntent) -> Unit) {
         if (ready) {
             Spacer(Modifier.height(Space.x4))
             Text(
-                "${trCount(state.goals.size)} hedef aynı birikimi paylaşıyor · " +
-                    "Kartları sürükleyerek sıralayın",
+                "${trCount(state.goals.size)} hedef · Her biri kendine atanan " +
+                    "varlıkları sayar · Kartları sürükleyerek sıralayın",
                 style = t.caption,
                 color = c.onSurfaceMuted,
             )

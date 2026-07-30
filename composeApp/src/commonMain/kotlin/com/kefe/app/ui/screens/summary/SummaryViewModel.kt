@@ -142,8 +142,8 @@ class SummaryViewModel(
                     ),
                     allocation = positions.allocation(),
                     mainGoal = main,
-                    // Ana hedefe varlik atanmissa ilerlemesi TOPLAM birikimden
-                    // degil, kendi varliklarindan hesaplanir.
+                    // Kati atama: ana hedef ilerlemesi YALNIZ kendine atanan
+                    // varliklardan; atama yoksa 0 (kart %0 gosterir).
                     mainGoalWealth = main
                         ?.let { goalWealth(it, positions, assignments) }
                         ?: 0.0,
