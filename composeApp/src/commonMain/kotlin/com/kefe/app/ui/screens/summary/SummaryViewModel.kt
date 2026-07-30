@@ -17,6 +17,8 @@ import com.kefe.app.domain.model.portfolioTotals
 import com.kefe.app.domain.model.topGainer
 import com.kefe.app.domain.model.topLoser
 import com.kefe.app.domain.repository.PortfolioRepository
+import com.kefe.app.domain.repository.PreferenceKeys
+import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.domain.repository.RefreshOutcome
 import com.kefe.app.ui.format.Money
@@ -39,10 +41,20 @@ import kotlinx.coroutines.launch
 class SummaryViewModel(
     private val portfolioRepository: PortfolioRepository,
     private val priceRepository: PriceRepository,
+    private val preferences: PreferencesRepository,
     private val clock: KefeClock,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SummaryUiState())
+
+    /**
+     * "Açılışta bakiyeyi gizle" tercihi yalniz ILK emisyonda uygulanir.
+     *
+     * preferences.observeAll() her ayar degisiminde emisyon yapiyor; kosulsuz
+     * baglansaydi kullanicinin goz simgesine dokunup actigi bakiye, bir sonraki
+     * tercih emisyonunda tekrar kapanirdi. Bu bayrak ilk okumadan sonra kilitler.
+     */
+    private var maskInitialized = false
     val state: StateFlow<SummaryUiState> = _state.asStateFlow()
 
     /**
@@ -64,7 +76,20 @@ class SummaryViewModel(
         observeData()
         observeHistory()
         observePrices()
+        observeMaskPreference()
         refresh()
+    }
+
+    private fun observeMaskPreference() {
+        viewModelScope.launch {
+            preferences.observeAll().collect { prefs ->
+                if (maskInitialized) return@collect
+                maskInitialized = true
+                // Varsayilan GIZLI: bakiye omuz ustunden bakisa kapali baslasin.
+                val hide = prefs[PreferenceKeys.HideBalanceOnStart]?.toBooleanStrictOrNull() ?: true
+                _state.value = _state.value.copy(masked = hide)
+            }
+        }
     }
 
     /** Giris/onboarding tamamlandi - bir daha sorulmayacak. */

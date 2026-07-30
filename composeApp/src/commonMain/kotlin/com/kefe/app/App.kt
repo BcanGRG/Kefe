@@ -141,7 +141,7 @@ fun App(onReady: () -> Unit = {}) {
             ThemeMode.System -> systemDark
         }
 
-        KefeTheme(darkTheme = dark) {
+        KefeTheme(darkTheme = dark, showCents = settings.showCents) {
             ProvideWindowSize { windowSize ->
                 KefeApp(
                     windowSize = windowSize,

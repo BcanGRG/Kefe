@@ -26,6 +26,17 @@ val LocalKefeTypography: ProvidableCompositionLocal<KefeTypography> =
     staticCompositionLocalOf { KefeDefaultTypography }
 
 /**
+ * Kurus gosterimi tercihi. Varsayilan KAPALI - tam liraya yuvarlanir.
+ *
+ * Ayar 116'dan fazla yerde kullanilan Money.tl'ye tek tek parametre gecmek
+ * yerine bir CompositionLocal ile tasinir; yalniz satir ici tutarlar
+ * ([com.kefe.app.ui.format.moneyTl]) buna bakar, hero toplamlar 0 ondalikta
+ * kalir.
+ */
+val LocalShowCents: ProvidableCompositionLocal<Boolean> =
+    staticCompositionLocalOf { false }
+
+/**
  * Kefe tasarim sistemi. Renk/tipografi jetonlarina `KefeTheme.colors` ve
  * `KefeTheme.type` uzerinden erisilir.
  *
@@ -44,6 +55,7 @@ object KefeTheme {
 @Composable
 fun KefeTheme(
     darkTheme: Boolean = true,
+    showCents: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val colors = if (darkTheme) KefeDarkColors else KefeLightColors
@@ -90,6 +102,7 @@ fun KefeTheme(
     CompositionLocalProvider(
         LocalKefeColors provides colors,
         LocalKefeTypography provides KefeDefaultTypography,
+        LocalShowCents provides showCents,
         LocalContentColor provides colors.onSurface,
         LocalIndication provides indication,
     ) {

@@ -94,12 +94,6 @@ fun SettingsScreen(
                     )
                 }
                 KefeHairline()
-                SettingsValueRow(
-                    title = "Para birimi",
-                    value = state.currencyLabel,
-                    onClick = { onIntent(SettingsIntent.OpenCurrency) },
-                )
-                KefeHairline()
                 SettingsSwitchRow(
                     title = "Kuruşları göster",
                     subtitle = "Ana toplamlarda yine gizli kalır",
@@ -126,43 +120,14 @@ fun SettingsScreen(
                 )
             }
 
+            // Fiyat satirlari SALT OKUNUR: ayarlanabilir bir aralik ya da
+            // secilebilir kaynak yok. Once dokununca "henüz hazır değil" diyen
+            // birer chevron'du; simdi gercegi yazan bilgi satirlari.
             SectionLabel("Fiyatlar")
             AccountGroupCard {
-                SettingsValueRow(
-                    title = "Otomatik güncelleme",
-                    value = state.priceRefreshLabel,
-                    onClick = { onIntent(SettingsIntent.OpenPriceRefresh) },
-                )
+                SettingsValueRow(title = "Güncelleme", value = state.priceRefreshLabel)
                 KefeHairline()
-                SettingsValueRow(
-                    title = "Kaynak",
-                    value = state.priceSourceLabel,
-                    onClick = { onIntent(SettingsIntent.OpenPriceSource) },
-                )
-            }
-
-            SectionLabel("Bildirimler")
-            AccountGroupCard {
-                SettingsSwitchRow(
-                    title = "Eş kayıt ekleyince",
-                    subtitle = null,
-                    checked = state.notifyPartnerEntry,
-                    onCheckedChange = { onIntent(SettingsIntent.SetNotifyPartnerEntry(it)) },
-                )
-                KefeHairline()
-                SettingsSwitchRow(
-                    title = "Aylık hatırlatıcı",
-                    subtitle = "Ayın son günü, tek bildirim",
-                    checked = state.notifyMonthlyReminder,
-                    onCheckedChange = { onIntent(SettingsIntent.SetNotifyMonthlyReminder(it)) },
-                )
-                KefeHairline()
-                SettingsSwitchRow(
-                    title = "Kilometre taşı geçilince",
-                    subtitle = null,
-                    checked = state.notifyMilestone,
-                    onCheckedChange = { onIntent(SettingsIntent.SetNotifyMilestone(it)) },
-                )
+                SettingsValueRow(title = "Kaynak", value = state.priceSourceLabel)
             }
 
             SectionLabel("Veri")
@@ -205,15 +170,20 @@ fun SettingsScreen(
                 }
             }
 
-            SectionLabel("Hesap")
-            AccountGroupCard {
-                SettingsRow(onClick = null) {
-                    Text("E-posta", style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
-                    Text(state.email, style = t.caption, color = c.onSurfaceMuted)
-                }
-                KefeHairline()
-                SettingsRow(onClick = { onIntent(SettingsIntent.SignOut) }) {
-                    Text("Çıkış yap", style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
+            // Hesap bolumu YALNIZ GIRIS YAPILMISSA cizilir. Cikis yapmis (ya da
+            // hic girmemis) bir kullanicida ne gosterilecek e-posta ne de
+            // kapatilacak oturum var.
+            if (state.signedIn) {
+                SectionLabel("Hesap")
+                AccountGroupCard {
+                    SettingsRow(onClick = null) {
+                        Text("E-posta", style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
+                        Text(state.email, style = t.caption, color = c.onSurfaceMuted)
+                    }
+                    KefeHairline()
+                    SettingsRow(onClick = { onIntent(SettingsIntent.SignOut) }) {
+                        Text("Çıkış yap", style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
+                    }
                 }
             }
 
@@ -224,6 +194,10 @@ fun SettingsScreen(
             ) {
                 // Surum satiri bilesen katalogunu acar: tasarim karsilastirmasini
                 // ve acik/koyu tema kontrolunu tek ekranda yapmak icin.
+                //
+                // Gizlilik/Koşullar baglantilari KALDIRILDI: iki kisilik, magazaya
+                // cikmayan bir uygulamada olmayan bir belgeye baglanti vermek yanlis.
+                // Play'e cikma ani gelince (gercek bir URL gerektiginde) geri gelir.
                 Text(
                     text = "Kefe ${state.appVersion}",
                     style = t.micro,
@@ -234,10 +208,6 @@ fun SettingsScreen(
                         onClick = onOpenGallery,
                     ),
                 )
-                FooterDot()
-                FooterLink("Gizlilik") { onIntent(SettingsIntent.OpenPrivacy) }
-                FooterDot()
-                FooterLink("Koşullar") { onIntent(SettingsIntent.OpenTerms) }
             }
         }
     }
@@ -306,7 +276,7 @@ private fun ShareCard(state: SettingsUiState, onClick: () -> Unit) {
         }
 
         Column(Modifier.weight(1f)) {
-            Text("Paylaşım", style = t.bodyStrong, color = c.onSurface)
+            Text("Profiller", style = t.bodyStrong, color = c.onSurface)
             Spacer(Modifier.height(2.dp))
             Text(state.shareSummary, style = t.micro, color = c.onSurfaceMuted)
         }
@@ -365,7 +335,7 @@ private fun SettingsRow(
 }
 
 @Composable
-private fun SettingsValueRow(title: String, value: String?, onClick: () -> Unit) {
+private fun SettingsValueRow(title: String, value: String?, onClick: (() -> Unit)? = null) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
@@ -374,7 +344,11 @@ private fun SettingsValueRow(title: String, value: String?, onClick: () -> Unit)
         if (value != null) {
             Text(value, style = t.caption, color = c.onSurfaceMuted)
         }
-        KefeIcon(KefeIcons.ChevronRight, null, size = 18.dp, tint = c.onSurfaceMuted)
+        // Chevron yalniz DOKUNULABILIR satirda. Salt okunur bilgi satirinda
+        // (fiyat kaynagi gibi) ok koymak "buraya girilebilir" yalanidir.
+        if (onClick != null) {
+            KefeIcon(KefeIcons.ChevronRight, null, size = 18.dp, tint = c.onSurfaceMuted)
+        }
     }
 }
 
