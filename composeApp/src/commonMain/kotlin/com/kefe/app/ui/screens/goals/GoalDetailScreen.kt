@@ -25,6 +25,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -233,6 +237,11 @@ private fun AssignedAssetsCard(
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
+    // Cok varlik olunca liste sonsuz uzamasin: ilk birkaci gorunur, gerisi
+    // "tumunu gor" ile acilir.
+    var showAllComposing by remember { mutableStateOf(false) }
+    val shown = if (showAllComposing) state.composingAssets
+    else state.composingAssets.take(ComposingAssetCap)
 
     KefeCard(modifier = Modifier.padding(horizontal = Space.x16)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -252,15 +261,27 @@ private fun AssignedAssetsCard(
 
         Spacer(Modifier.height(Space.x10))
 
-        if (state.assignedAssets.isEmpty()) {
+        // Atama yoksa hedef TUM birikimi sayar; yine de olusturan varliklar tek
+        // tek listelenir - kullanici "bu hedefi hangi varliklar olusturuyor"
+        // sorusunu her durumda gorur. Not yalniz atama-yok halinde cikar.
+        if (state.assignedAssets.isEmpty() && state.composingAssets.isNotEmpty()) {
             Text(
-                "Varlık atanmadı — tüm birikiminiz bu hedefe sayılıyor. " +
-                    "Belirli varlıkları ayırmak isterseniz seçin.",
+                "Tüm birikiminiz bu hedefe sayılıyor. Belirli varlıkları ayırmak " +
+                    "isterseniz seçin.",
+                style = t.caption,
+                color = c.onSurfaceMuted,
+            )
+            Spacer(Modifier.height(Space.x10))
+        }
+
+        if (state.composingAssets.isEmpty()) {
+            Text(
+                "Henüz varlık yok — birikim ekledikçe burada görünür.",
                 style = t.caption,
                 color = c.onSurfaceMuted,
             )
         } else {
-            state.assignedAssets.forEachIndexed { index, position ->
+            shown.forEachIndexed { index, position ->
                 if (index > 0) KefeHairline()
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = Space.x10),
@@ -300,9 +321,31 @@ private fun AssignedAssetsCard(
                     )
                 }
             }
+            if (state.composingAssets.size > ComposingAssetCap) {
+                KefeHairline()
+                Text(
+                    text = if (showAllComposing) {
+                        "Daha az göster"
+                    } else {
+                        "Tümünü gör (${state.composingAssets.size})"
+                    },
+                    style = t.caption,
+                    color = c.accent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = Space.x10)
+                        .clickable(
+                            indication = null,
+                            interactionSource = null,
+                        ) { showAllComposing = !showAllComposing },
+                )
+            }
         }
     }
 }
+
+/** Hedef detayinda "Bu hedefi karsilayanlar" listesinde once gosterilen varlik sayisi. */
+private const val ComposingAssetCap = 5
 
 /**
  * Varlik secici.

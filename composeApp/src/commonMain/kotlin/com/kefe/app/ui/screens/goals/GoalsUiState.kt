@@ -46,6 +46,13 @@ data class GoalEditorState(
     val isMain: Boolean = false,
     val advancedExpanded: Boolean = true,
 
+    /**
+     * Kaydet'e basildiginda bos bulunan zorunlu alanlar. Ekran o alani kirmizi
+     * cizip ilkine kaydirir; kullanici yazmaya baslayinca temizlenir.
+     */
+    val nameError: Boolean = false,
+    val amountError: Boolean = false,
+
     /** Tarih secici acik mi. Alan ay-yil gosterdigi icin secici de o inceliktedir. */
     val datePickerOpen: Boolean = false,
     val goldGramPrice: Double = 0.0,
@@ -56,8 +63,10 @@ data class GoalEditorState(
 }
 
 /** Alanlarda binlik noktali metin tutulur; sayiya cevirirken ayraclar atilir. */
+// Ham metin ("3000000" / "2,5") sayiya. Binlik ayrac (nokta) atilir, ondalik
+// virgul noktaya cevrilir - boylece "2,5 gram" gibi degerler dogru okunur.
 fun String.parseAmount(): Double =
-    filter { it.isDigit() }.takeIf { it.isNotEmpty() }?.toDoubleOrNull() ?: 0.0
+    filter { it.isDigit() || it == ',' }.replace(',', '.').toDoubleOrNull() ?: 0.0
 
 /** Secili birimin TL karsiligi. Fiyat yoksa 1.0 - bolme hatasi olmasin. */
 fun GoalEditorState.rateOf(target: GoalUnit): Double = when (target) {

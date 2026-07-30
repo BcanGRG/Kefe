@@ -15,6 +15,7 @@ import com.kefe.app.domain.model.toEpochDay
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.rawAmount
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,6 +37,13 @@ class GoalsViewModel(
 
     private val _state = MutableStateFlow(GoalsUiState())
     val state: StateFlow<GoalsUiState> = _state.asStateFlow()
+
+    // Editor tutar cevrimi icin son bilinen kur. observePrices bunlari surekli
+    // tazeler; newEditor/editorOf editor'u bunlarla tohumlar. Aksi halde editor
+    // kur GELMEDEN acilirsa (fiyat emisyonu editor'den once oldu) altin/dolar
+    // hedefinde 0 kurla acilir ve onizleme "₺0 · gram ₺0" gosterir.
+    private var latestGoldPrice = 0.0
+    private var latestUsdPrice = 0.0
 
     init {
         observeData()
@@ -66,15 +74,18 @@ class GoalsViewModel(
 
             GoalsIntent.DismissEditor -> update { it.copy(editor = null) }
 
-            is GoalsIntent.EditorName -> editor { it.copy(name = intent.value) }
+            is GoalsIntent.EditorName -> editor { it.copy(name = intent.value, nameError = false) }
             is GoalsIntent.EditorIcon -> editor { it.copy(iconKey = intent.key) }
+            // Deger HAM tutulur (ayraçsız); binlik ayraci ekranda
+            // ThousandsSeparatorTransformation ekler. Metne yazilsaydi imlec her
+            // tusta sona atlar, ortadaki rakam duzenlenemezdi.
             is GoalsIntent.EditorAmount -> editor {
-                it.copy(amountText = groupDigits(intent.value))
+                it.copy(amountText = intent.value, amountError = false)
             }
 
             is GoalsIntent.EditorUnit -> editor { it.convertTo(intent.unit) }
             is GoalsIntent.EditorContribution -> editor {
-                it.copy(contributionText = groupDigits(intent.value))
+                it.copy(contributionText = intent.value)
             }
 
             is GoalsIntent.EditorAllocation -> editor { it.copy(allocation = intent.allocation) }
@@ -129,10 +140,16 @@ class GoalsViewModel(
     private fun observePrices() {
         viewModelScope.launch {
             priceRepository.observePrices().collect { board ->
-                val gold = board.byKey("gold_gram")?.ask ?: 0.0
-                val usd = board.byKey("usd_try")?.ask ?: 0.0
+                // Gecerli kur geldiginde sakla; gecici bos emisyon iyi degeri silmesin.
+                board.byKey("gold_gram")?.ask?.takeIf { it > 0.0 }?.let { latestGoldPrice = it }
+                board.byKey("usd_try")?.ask?.takeIf { it > 0.0 }?.let { latestUsdPrice = it }
                 update { current ->
-                    current.copy(editor = current.editor?.copy(goldGramPrice = gold, usdPrice = usd))
+                    current.copy(
+                        editor = current.editor?.copy(
+                            goldGramPrice = latestGoldPrice,
+                            usdPrice = latestUsdPrice,
+                        ),
+                    )
                 }
             }
         }
@@ -151,8 +168,8 @@ class GoalsViewModel(
         allocation = GoalAllocation.AllWealth,
         isMain = current.goals.none { it.isMain },
         advancedExpanded = true,
-        goldGramPrice = current.editor?.goldGramPrice ?: 0.0,
-        usdPrice = current.editor?.usdPrice ?: 0.0,
+        goldGramPrice = latestGoldPrice,
+        usdPrice = latestUsdPrice,
         openGoalCount = current.goals.size,
     )
 
@@ -161,15 +178,15 @@ class GoalsViewModel(
             goalId = goal.id,
             name = goal.name,
             iconKey = goal.iconKey,
-            amountText = Money.number(goal.amount),
+            amountText = rawAmount(goal.amount),
             unit = GoalUnit.Try,
             targetDate = goal.targetDate,
-            contributionText = Money.number(goal.monthlyContribution),
+            contributionText = rawAmount(goal.monthlyContribution),
             allocation = goal.allocation,
             isMain = goal.isMain,
             advancedExpanded = true,
-            goldGramPrice = current.editor?.goldGramPrice ?: 0.0,
-            usdPrice = current.editor?.usdPrice ?: 0.0,
+            goldGramPrice = latestGoldPrice,
+            usdPrice = latestUsdPrice,
             openGoalCount = current.goals.size,
         )
         // Hedef TL disi bir birime sabitlenmisse tutar o birime cevrilerek acilir.
@@ -179,14 +196,23 @@ class GoalsViewModel(
     /** Tutari TL uzerinden yeni birime cevirir; yazilan deger anlamini korur. */
     private fun GoalEditorState.convertTo(target: GoalUnit): GoalEditorState {
         if (target == unit) return this
-        val converted = amountInTry() / rateOf(target)
-        return copy(unit = target, amountText = Money.number(converted))
+        // Cevrim uzun ondalik uretebilir (22 TL -> 0,003523162... gr altin);
+        // birime yakisan inceliğe yuvarlanir, yoksa alanda 18 haneli sayi belirir.
+        val converted = (amountInTry() / rateOf(target)).roundTo(target.editDecimals())
+        return copy(unit = target, amountText = rawAmount(converted))
     }
 
     private fun save() {
         val editor = _state.value.editor ?: return
         val amount = editor.amountInTry()
-        if (editor.name.isBlank() || amount <= 0.0) return
+        // Bos zorunlu alan SESSIZCE yutulmaz: hangisiyse isaretlenir (ekran kirmizi
+        // cizip o alana kaydirir) ve kayit yapilmaz.
+        val nameBlank = editor.name.isBlank()
+        val amountEmpty = amount <= 0.0
+        if (nameBlank || amountEmpty) {
+            this.editor { it.copy(nameError = nameBlank, amountError = amountEmpty) }
+            return
+        }
 
         // TAMAMLANANLAR DA ARANIR. Duzenleme tamamlanmis bir hedeften de
         // acilabiliyor (bkz. EditGoal); yalniz aciklara bakilinca `existing` null
@@ -245,12 +271,16 @@ class GoalsViewModel(
     }
 }
 
-/**
- * Girisi rakamlara indirger ve binlik noktalarini yeniden kurar; alanlarda
- * tutar her zaman `7.800.000` bicimindedir.
- */
-private fun groupDigits(raw: String): String {
-    val digits = raw.filter { it.isDigit() }.trimStart('0')
-    if (digits.isEmpty()) return ""
-    return Money.number(digits.toDouble())
+/** Birim degistirince cevrilen tutarin yuvarlanacagi ondalik hane sayisi. */
+private fun GoalUnit.editDecimals(): Int = when (this) {
+    GoalUnit.Try -> 0
+    GoalUnit.GoldGram -> 4
+    GoalUnit.Usd -> 2
+}
+
+/** [decimals] haneye yuvarlar - cevrimdeki kayan nokta kuyrugunu keser. */
+private fun Double.roundTo(decimals: Int): Double {
+    var factor = 1.0
+    repeat(decimals) { factor *= 10.0 }
+    return kotlin.math.round(this * factor) / factor
 }

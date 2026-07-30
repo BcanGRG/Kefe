@@ -26,6 +26,7 @@ import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.rawAmount
 import com.kefe.app.ui.mvi.MviViewModel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -83,6 +84,11 @@ class AddTransactionViewModel(
 
             is AddTransactionIntent.SelectSubtype -> update(s.copy(selectedSubtype = intent.subtype))
 
+            // Ayni hedefe tekrar dokunmak secimi KALDIRIR (hedefsiz'e doner).
+            is AddTransactionIntent.SelectGoal -> update(
+                s.copy(selectedGoalId = intent.goalId.takeIf { it != s.selectedGoalId }),
+            )
+
             is AddTransactionIntent.SelectKarat -> update(s.copy(karat = intent.karat))
 
             is AddTransactionIntent.SelectCurrency -> update(s.copy(currency = intent.currency))
@@ -129,7 +135,7 @@ class AddTransactionViewModel(
 
             AddTransactionIntent.ResetPriceToMarket -> _state.value = s.copy(
                 priceManual = false,
-                unitPriceText = Money.number(s.marketPrice, s.priceDecimals),
+                unitPriceText = rawAmount(s.marketPrice),
             )
 
             AddTransactionIntent.ToggleExtra ->
@@ -167,13 +173,17 @@ class AddTransactionViewModel(
                 portfolioRepository.observeMembers(),
                 portfolioRepository.observeActivity(),
                 preferences.observeAll(),
-            ) { positionList, memberList, activity, prefs ->
+                portfolioRepository.observeGoals(),
+            ) { positionList, memberList, activity, prefs, goalList ->
                 positions = positionList
                 members = memberList
                 activeMemberId = prefs[PreferenceKeys.ActiveMemberId]
                     ?: memberList.firstOrNull()?.id.orEmpty()
                 _state.value.copy(
                     lastAdded = lastAddedOf(activity, positionList),
+                    // Hedef seciciye dokulen hedefler; hic yoksa secici cizilmez ve
+                    // varlik dogrudan toplam birikime eklenir.
+                    availableGoals = goalList,
                     // Cevrimdisi notundaki isim AKTIF OLMAYAN profildir: "baglaninca
                     // ESIN telefonunda gorunur" derken kastedilen o. Once hep
                     // Owner-disi aliniyordu; es kendi telefonundan girince kendi
@@ -227,7 +237,7 @@ class AddTransactionViewModel(
                 s.priceManual -> s.unitPriceText
                 // Fiyat yoksa alan BOS kalir - "0" yazmak fiyatin sifir oldugunu
                 // soyler ve kullanici ustune yazmak icin once silmek zorunda.
-                market > 0.0 -> Money.number(market, s.priceDecimals)
+                market > 0.0 -> rawAmount(market)
                 else -> ""
             },
             offline = prices.freshness == PriceFreshness.Offline,
@@ -267,15 +277,13 @@ class AddTransactionViewModel(
                     currency = Currency.fromPriceKey(position.id.removePrefix("pos_"))
                         ?: s.currency,
                     side = transaction.side,
-                    quantityText = Money.number(
-                        transaction.quantity,
-                        if (position.unit == QuantityUnit.Gram) 1 else 0,
-                    ),
-                    unitPriceText = Money.number(transaction.unitPrice, s.priceDecimals),
+                    // Ham deger (ayrac cizimde eklenir); imlec duzenlenirken yerinde durur.
+                    quantityText = rawAmount(transaction.quantity),
+                    unitPriceText = rawAmount(transaction.unitPrice),
                     priceManual = true,
                     date = transaction.date,
                     isToday = false,
-                    feeText = transaction.fee.takeIf { it > 0.0 }?.let { Money.number(it, 0) }
+                    feeText = transaction.fee.takeIf { it > 0.0 }?.let { rawAmount(it) }
                         .orEmpty(),
                     note = transaction.note.orEmpty(),
                     storage = transaction.storage.orEmpty(),
@@ -379,6 +387,12 @@ class AddTransactionViewModel(
                     syncState = if (s.offline) SyncState.Pending else SyncState.Synced,
                 )
             )
+
+            // Hedef secildiyse varlik o hedefe atanir - hedefin "karsilayanlar"
+            // listesine duser. Secilmezse dokunulmaz (toplam birikime eklenmis kalir).
+            s.selectedGoalId?.let { goalId ->
+                portfolioRepository.assignPositionToGoal(positionId = positionId, goalId = goalId)
+            }
         }
 
         if (replaced != null) portfolioRepository.deleteTransaction(replaced)
@@ -406,9 +420,8 @@ private fun AddTransactionUiState.toAmountStep(
 /** -/+ butonlari: gramda 0,1 kademe, digerlerinde 1 adet. Taban 0. */
 private fun stepQuantity(s: AddTransactionUiState, up: Boolean): String {
     val stepSize = if (s.quantityUnit == QuantityUnit.Gram) 0.1 else 1.0
-    val decimals = if (s.quantityUnit == QuantityUnit.Gram) 1 else 0
     val next = (s.quantity + if (up) stepSize else -stepSize).coerceAtLeast(0.0)
-    return Money.number(next, decimals)
+    return rawAmount(next)
 }
 
 // --- Fiyat eslemesi ----------------------------------------------------------

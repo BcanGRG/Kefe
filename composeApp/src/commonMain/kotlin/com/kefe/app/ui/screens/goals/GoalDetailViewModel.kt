@@ -156,6 +156,10 @@ class GoalDetailViewModel(
             collapsedRows = collapseRows(rows),
             baseContribution = goal.monthlyContribution,
             assignedAssets = assetsOf(goal, positions, assignments),
+            // Hedefi OLUSTURAN varliklar: atanmis varlik varsa onlar, yoksa (tum
+            // birikim modu) TUM varliklar - kullanici "bu hedefi hangi varliklar
+            // olusturuyor" sorusunu her iki durumda da tek tek gorur.
+            composingAssets = assetsOf(goal, positions, assignments).ifEmpty { positions },
             // Secici: her varlik, varsa baska hedefin adiyla. Secmek TASIR;
             // kullanici bunu okumadan yapmamali.
             assignableAssets = positions.map { position ->
