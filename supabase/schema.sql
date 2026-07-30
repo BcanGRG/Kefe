@@ -212,6 +212,51 @@ create index if not exists activity_events_user_updated on public.activity_event
 grant select, insert, update, delete on public.activity_events to authenticated;
 
 -- =========================================================================
+-- LWW KORUMA (adim 10, pull ile geldi). Push, PostgREST upsert'iyle satiri
+-- KOSULSUZ ezer - son push kazanir, zaman damgasina bakmaz. Bos ya da eski bir
+-- cihazin push'u sunucudaki yeni veriyi ezerdi. Bu trigger gelen satir
+-- sunucudakinden ESKI/esitse guncellemeyi yok sayar; boylece cakisma cozumu hem
+-- push'ta hem pull'da AYNI olur: updated_at buyuk olan kazanir. INSERT'e gerek
+-- yok - yeni satirda OLD yoktur.
+-- =========================================================================
+create or replace function public.kefe_lww_guard() returns trigger as $$
+begin
+    if NEW.updated_at <= OLD.updated_at then
+        return OLD;   -- gelen daha eski/esit: sunucudakini koru
+    end if;
+    return NEW;
+end;
+$$ language plpgsql;
+
+drop trigger if exists members_lww on public.members;
+create trigger members_lww before update on public.members
+    for each row execute function public.kefe_lww_guard();
+
+drop trigger if exists positions_lww on public.positions;
+create trigger positions_lww before update on public.positions
+    for each row execute function public.kefe_lww_guard();
+
+drop trigger if exists transactions_lww on public.transactions;
+create trigger transactions_lww before update on public.transactions
+    for each row execute function public.kefe_lww_guard();
+
+drop trigger if exists goals_lww on public.goals;
+create trigger goals_lww before update on public.goals
+    for each row execute function public.kefe_lww_guard();
+
+drop trigger if exists goal_assets_lww on public.goal_assets;
+create trigger goal_assets_lww before update on public.goal_assets
+    for each row execute function public.kefe_lww_guard();
+
+drop trigger if exists daily_snapshots_lww on public.daily_snapshots;
+create trigger daily_snapshots_lww before update on public.daily_snapshots
+    for each row execute function public.kefe_lww_guard();
+
+drop trigger if exists activity_events_lww on public.activity_events;
+create trigger activity_events_lww before update on public.activity_events
+    for each row execute function public.kefe_lww_guard();
+
+-- =========================================================================
 -- Gercek zamanli (adim 11) ve bildirimler (adim 12) BU DOSYADA YOK - kendi
--- adimlarinda eklenir. Burada yalniz tablolar ve onlari o hesaba kilitleyen RLS.
+-- adimlarinda eklenir.
 -- =========================================================================

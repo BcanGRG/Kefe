@@ -34,11 +34,15 @@ class SyncCoordinator(
     private val authRepository: AuthRepository,
     private val localSource: SyncLocalSource,
     private val pushEngine: PushEngine,
+    private val pullEngine: PullEngine,
 ) {
 
     // Conflated: bekleyen istek zaten varken gelen yenisi eskiyi duser - kuyruk
     // sismez, her tetik "en guncel haliyle bir kez daha push'la" demek.
     private val pushRequests = Channel<String>(Channel.CONFLATED)
+
+    // Pull istekleri ayri kanal: giriste ve her push'tan sonra tetiklenir.
+    private val pullRequests = Channel<Unit>(Channel.CONFLATED)
 
     @OptIn(FlowPreview::class)
     fun start() {
@@ -48,20 +52,33 @@ class SyncCoordinator(
         // ilerlemedigi icin veri kaybi yok, degisim bir sonraki tetikte yeniden
         // denenir. Yalniz tanisal bir satir birakiriz (logcat/stdout): sessiz bir
         // senkron, calisan bir senkrondan ayirt edilemez olurdu.
+        //
+        // Push'tan SONRA pull tetiklenir: benimkini gonderdim, simdi seninkini al.
         processScope.launch {
             for (userId in pushRequests) {
                 runCatching { pushEngine.pushOnce(userId) }
                     .onFailure { println("Kefe senkron: push basarisiz - ${it.message}") }
+                pullRequests.trySend(Unit)
             }
         }
 
-        // Oturum acikken degisimleri dinle, kapaninca birak.
+        // Tek tuketici: seri pull. Ayni gerekce - hata yutulur, tanisal log kalir.
+        processScope.launch {
+            for (unit in pullRequests) {
+                runCatching { pullEngine.pullOnce() }
+                    .onFailure { println("Kefe senkron: pull basarisiz - ${it.message}") }
+            }
+        }
+
+        // Oturum acikken degisimleri dinle, kapaninca birak. Girer girmez BIR pull
+        // istenir: yerel degisiklik olmasa da (bos ikinci telefon) sunucudakini ceker.
         processScope.launch {
             var listener: Job? = null
             authRepository.observeAuthState().collect { state ->
                 val userId = (state as? AuthState.SignedIn)?.session?.userId?.takeIf { it.isNotBlank() }
                 if (userId != null) {
                     if (listener == null) {
+                        pullRequests.trySend(Unit)
                         listener = processScope.launch {
                             localSource.localChanges()
                                 .debounce(DebounceMillis)

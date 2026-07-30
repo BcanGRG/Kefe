@@ -31,8 +31,8 @@ erişim demek. Düz metin jeton + açık senkron = sızıntı. Bu yüzden 8, 7'd
 | 7 | Supabase tabloları + RLS | ✅ **bitti + canlı doğrulandı** (upsert 2xx) |
 | 9 | Push | ✅ **bitti + canlı doğrulandı** (watermark ilerledi) |
 | 9b | Bulut girişi + giriş/kilit fix + boş-durum + resend | ✅ **bitti** |
-| 10 | Pull | ⬜ (sıradaki) |
-| 11 | Gerçek zamanlı | ⬜ |
+| 10 | Pull | ✅ **bitti** (LWW guard SQL kullanıcı tekrar çalıştırır) |
+| 11 | Gerçek zamanlı | ⬜ (sıradaki) |
 | 12 | Bildirimler | ⬜ (11'den sonra anlamlı) |
 
 **Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
@@ -446,3 +446,39 @@ boşluklu girilmesindendi.
 ekranı artık kilit yerine e-posta/kod gösteriyor (stack-trace + DBG ile
 doğrulandı). Gerçek cihaz + gerçek Supabase'de giriş → adım 8/9 canlı kanıtı
 (yukarı bkz). `SyncCoordinator` push hatasında artık tanısal log bırakıyor.
+
+---
+
+## 10 · Pull ✅
+
+**Neydi.** Push tek yon (cihaz → sunucu). Ikinci telefonun senkronu gorunmuyordu:
+bir cihazda eklenen altin digerinde belirmiyordu.
+
+**Tam cekim + LWW.** Tetikte her tablonun TUM satirlari cekilir (`selectAll`; RLS o
+hesaba kisitlar), gelenler **son-yazan-kazanir** ile uygulanir: satir ancak
+yereldekinden yeni (`server.updatedAt > local.updatedAt`) ya da yerelde yoksa
+yazilir. Watermark yerine tam cekim - kucuk veride saat-kaymasi/gec-gelen tuzagini
+bastan atlar (`SyncLocalSink`). Mezar tasi da uygulanir (gelen `deletedAt` doluysa
+yerelde silinir). Turetilen (pozisyon miktar/maliyet/deger) defterden yeniden
+kurulur. Hepsi TEK transaction.
+
+**CASCADE tuzagi.** `positions`/`goals` uygulanirken OR REPLACE KULLANILMAZ - satiri
+silip CASCADE ile defteri/atamalari goturur. Iki adim: insertOrIgnore + meta
+guncelle. Yaprak tablolar (transactions, goal_assets, activity) OR REPLACE guvenli.
+
+**LWW guard (sunucu).** Push, PostgREST upsert'iyle satiri KOSULSUZ ezer - son push
+kazanir, damgaya bakmaz. Bos/eski bir cihazin push'u sunucudaki yeni veriyi ezerdi.
+`schema.sql`'e BEFORE UPDATE trigger (`kefe_lww_guard`) eklendi: gelen eski/esitse
+guncelleme yok sayilir. Boylece cakisma cozumu push'ta da pull'da da AYNI:
+updated_at buyuk kazanir. **Kullanici `supabase/schema.sql`'i tekrar calistirir**
+(idempotent - trigger'i ekler).
+
+**Tetik.** Giriste bir kez (bos ikinci telefon icin) + her push'tan SONRA (benimkini
+gonderdim, seninkini al). Ayri conflated kanal, tek tuketici - seri. Realtime (11)
+canli tetigi ekleyecek.
+
+**Dogrulama.** **103 masaustu testi** (5 yeni pull): bos cihaz sunucudan ceker
+(pozisyon+islem, miktar defterden hesaplanir); yerel yeni ise korunur (LWW); sunucu
+yeni ise uygulanir; mezar tasi silinmis uygulanir; jeton yoksa cekmez. Iki platform
+derleniyor, emulatorde temiz acildi. **Canli:** ikinci (bos) cihaz giris yapinca
+altin portfoy buluttan gelir - kullaniciyla dogrulanacak.

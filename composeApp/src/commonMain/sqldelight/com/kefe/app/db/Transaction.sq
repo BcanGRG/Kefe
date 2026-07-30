@@ -92,6 +92,13 @@ FROM transactions
 WHERE updatedAt >= :since
 ORDER BY updatedAt;
 
+-- Pull: sunucudan gelen satiri uygular. transactions bir YAPRAK (cocugu yok),
+-- OR REPLACE guvenli. syncState 'Synced': cekilen satir zaten sunucuda, yerelde
+-- "gonderilecek" degil. LWW karari (yeni mi) cagiran tarafta yapilir.
+applyTransactionPull:
+INSERT OR REPLACE INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState, updatedAt, deletedAt)
+VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, 'Synced', :updatedAt, :deletedAt);
+
 -- Kimlik artik UUID (bkz. 7.1): iceriginden turetilmiyor, dolayisiyla ayni gun
 -- ayni miktarda ikinci alim kendi satirini alir. Duz INSERT bilerek: "OR REPLACE"
 -- bir cakismada kullanicinin islemini sessizce ezerdi.

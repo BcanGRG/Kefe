@@ -60,6 +60,30 @@ FROM goals
 WHERE updatedAt >= :since
 ORDER BY updatedAt;
 
+-- Pull: sunucudan gelen hedef. goals'ta OR REPLACE KULLANILMAZ - goal_assets
+-- goalId'ye CASCADE bagli, silinip yeniden yazilinca atamalar ucar. Iki adim.
+insertOrIgnoreGoalPull:
+INSERT OR IGNORE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, allocation, status, sortOrder, updatedAt)
+VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :allocation, :status, :sortOrder, :updatedAt);
+
+applyGoalMetaPull:
+UPDATE goals
+SET name = :name,
+    iconKey = :iconKey,
+    amount = :amount,
+    unit = :unit,
+    targetYear = :targetYear,
+    targetMonth = :targetMonth,
+    targetDay = :targetDay,
+    monthlyContribution = :monthlyContribution,
+    isMain = :isMain,
+    allocation = :allocation,
+    status = :status,
+    sortOrder = :sortOrder,
+    updatedAt = :updatedAt,
+    deletedAt = :deletedAt
+WHERE id = :id;
+
 -- Hedefin cocuk tablosu yok; REPLACE burada guvenli (silinecek bagli satir yok).
 upsertGoal:
 INSERT OR REPLACE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, allocation, status, sortOrder, estimatedYear, estimatedMonth, estimatedDay, updatedAt)
