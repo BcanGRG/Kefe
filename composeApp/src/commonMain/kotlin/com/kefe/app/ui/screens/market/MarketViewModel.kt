@@ -6,6 +6,7 @@ import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.label
 import com.kefe.app.domain.repository.PriceRepository
+import com.kefe.app.domain.repository.RefreshOutcome
 import com.kefe.app.ui.format.Money
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +36,8 @@ class MarketViewModel(
     fun onIntent(intent: MarketIntent) {
         when (intent) {
             MarketIntent.Refresh -> refresh()
+
+            MarketIntent.DismissNotice -> _state.value = _state.value.copy(notice = null)
 
             is MarketIntent.OpenManualPrice -> openEdit(intent.assetKey)
 
@@ -70,9 +73,17 @@ class MarketViewModel(
 
     private fun refresh() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(refreshing = true)
-            priceRepository.refresh()
-            _state.value = _state.value.copy(refreshing = false)
+            _state.value = _state.value.copy(refreshing = true, notice = null)
+            val outcome = priceRepository.refresh().getOrNull()
+            _state.value = _state.value.copy(
+                refreshing = false,
+                // Kisitlanan yenileme Ozet'teki ile AYNI: kullanici yenileye
+                // basiyor, ekranda hicbir sey degismiyordu. Fiyat zaten taze,
+                // uyari da hata degil - vurgu renginde bir bilgidir.
+                notice = (outcome as? RefreshOutcome.Throttled)?.let {
+                    "Fiyatlar az önce güncellendi — ${it.retryInSeconds} sn sonra tekrar denenebilir."
+                },
+            )
         }
     }
 

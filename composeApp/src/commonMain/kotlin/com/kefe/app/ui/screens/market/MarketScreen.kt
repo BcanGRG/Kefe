@@ -46,6 +46,7 @@ import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.ui.components.AmountKeyboard
 import com.kefe.app.ui.components.KefeBottomSheet
 import com.kefe.app.ui.components.asAmountInput
+import com.kefe.app.ui.components.KefeAutoDismissBanner
 import com.kefe.app.ui.components.KefeDashedCard
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefePullToRefresh
@@ -104,6 +105,16 @@ fun MarketScreen(
                     item { MarketSafetyValveNote() }
                 }
             }
+        }
+
+        // Kisitlanan yenileme - Ozet'teki serit, ayni bilesen. Kendiliginden
+        // kapanir; hata degil, vurgu renginde bir bilgi.
+        state.notice?.let { message ->
+            KefeAutoDismissBanner(
+                message = message,
+                onDismiss = { onIntent(MarketIntent.DismissNotice) },
+                tone = KefeTheme.colors.accent,
+            )
         }
 
         ManualPriceSheet(edit = state.edit, onIntent = onIntent)

@@ -43,11 +43,14 @@ data class MarketUiState(
     val updatedAtLabel: String = "",
     val freshness: PriceFreshness = PriceFreshness.Offline,
     val refreshing: Boolean = false,
+    /** Kisitlanan yenileme bilgisi - hata degil, Ozet ile ayni. */
+    val notice: String? = null,
     val edit: MarketPriceEdit? = null,
 )
 
 sealed interface MarketIntent {
     data object Refresh : MarketIntent
+    data object DismissNotice : MarketIntent
     data class OpenManualPrice(val assetKey: String) : MarketIntent
     data object DismissManualPrice : MarketIntent
     data class ChangeManualPrice(val text: String) : MarketIntent

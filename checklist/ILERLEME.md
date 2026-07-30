@@ -126,3 +126,13 @@ Test PIN'i emülatörden kaldırıldı.
 bir UI bileşeni, Keystore ayrı bir şifreleme API'si — "aynı altyapı" değiller.
 Bugün jeton, içinde veri **olmayan** bir hesaba erişim veriyor; senkron açılınca
 tüm birikim geçmişi demek olacak. `SecureStore` işi senkrondan hemen önce.
+
+### 3b · Aynı şerit Piyasa'da da ✅
+
+Kullanıcı isteğiyle: kısıtlanan yenileme uyarısı Piyasa ekranına da eklendi.
+Özet'teki `AutoDismissBanner` ortak bir bileşene taşındı
+(`KefeAutoDismissBanner` / `KefeBottomBanner`, `Banners.kt`) ve iki ekran da
+**aynı** bileşeni kullanıyor — Özet ile Piyasa arasında ikinci bir kopya yok.
+Piyasa'da "Yenile"ye arka arkaya basınca altın renkli şerit çıkıyor:
+*"Fiyatlar az önce güncellendi — 24 sn sonra tekrar denenebilir."*
+Emülatörde doğrulandı.
