@@ -264,7 +264,13 @@ private fun CurrentValueBlock(position: Position, holdingLabel: String?) {
         )
         Spacer(Modifier.height(Space.x4))
         Text(
-            text = Money.tl(position.value, spaced = true),
+            // Sub-lira degerde tam-TL yuvarlama yaniltir (₺0,76 -> ₺1); o zaman
+            // kurus gosterilir. Buyuk degerlerde kahraman rakam tam TL kalir.
+            text = Money.tl(
+                position.value,
+                spaced = true,
+                decimals = if (position.value < 1.0) 2 else 0,
+            ),
             style = t.display.tabular(),
             color = c.onSurface,
         )
