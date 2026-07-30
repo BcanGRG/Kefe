@@ -261,22 +261,12 @@ private fun AssignedAssetsCard(
 
         Spacer(Modifier.height(Space.x10))
 
-        // Atama yoksa hedef TUM birikimi sayar; yine de olusturan varliklar tek
-        // tek listelenir - kullanici "bu hedefi hangi varliklar olusturuyor"
-        // sorusunu her durumda gorur. Not yalniz atama-yok halinde cikar.
-        if (state.assignedAssets.isEmpty() && state.composingAssets.isNotEmpty()) {
-            Text(
-                "Tüm birikiminiz bu hedefe sayılıyor. Belirli varlıkları ayırmak " +
-                    "isterseniz seçin.",
-                style = t.caption,
-                color = c.onSurfaceMuted,
-            )
-            Spacer(Modifier.height(Space.x10))
-        }
-
+        // Kati atama: hedef YALNIZ kendine atanan varliklari sayar. Atama yoksa
+        // liste bos ve ilerleme %0 kalir - kullanici "Varlik sec" ile atayana kadar.
         if (state.composingAssets.isEmpty()) {
             Text(
-                "Henüz varlık yok — birikim ekledikçe burada görünür.",
+                "Bu hedefe henüz varlık atanmadı; ilerleme %0. Yukarıdaki " +
+                    "\"Varlık seç\" ile bu hedefi karşılayacak varlıkları belirle.",
                 style = t.caption,
                 color = c.onSurfaceMuted,
             )
@@ -386,7 +376,7 @@ private fun AssetPickerSheet(
             Text("Varlık seç", style = t.h2, color = c.onSurface)
             Spacer(Modifier.height(Space.x8))
             Text(
-                "Seçilenler bu hedefe sayılır. Hiçbiri seçilmezse tüm birikim sayılır.",
+                "Seçilenler bu hedefe sayılır. Hiçbiri seçilmezse hedef %0 kalır.",
                 style = t.caption,
                 color = c.onSurfaceMuted,
             )

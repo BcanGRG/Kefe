@@ -1,5 +1,6 @@
 package com.kefe.app.di
 
+import com.kefe.app.data.remote.DefaultFundCodes
 import com.kefe.app.data.remote.FreeMarketApi
 import com.kefe.app.data.remote.LivePriceRemoteDataSource
 import com.kefe.app.data.remote.PriceRemoteDataSource
@@ -11,6 +12,9 @@ import com.kefe.app.data.remote.TcmbApi
 import com.kefe.app.data.remote.TefasApi
 import com.kefe.app.data.remote.createKefeHttpClient
 import com.kefe.app.data.backup.FileTransfer
+import com.kefe.app.db.KefeDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.kefe.app.data.repository.SqlDelightAuthRepository
 import com.kefe.app.data.repository.SqlDelightPortfolioRepository
 import com.kefe.app.data.repository.SqlDelightPreferencesRepository
@@ -62,7 +66,14 @@ val appModule = module {
     single { FreeMarketApi(get()) }
     single { TcmbApi(get()) }
     single { TefasApi(get()) }
-    single<PriceRemoteDataSource> { LivePriceRemoteDataSource(get(), get(), get()) }
+    // Cekilecek fonlar CALISMA ANINDA portfoyden gelir: kullanicinin tuttugu
+    // fonlar (miktar > 0) gunluk tazelenir, satilan fon bosuna cekilmez. Portfoy
+    // deposu fiyat deposuna bagli oldugu icin DONGUYE girmemek adina kodlar
+    // dogrudan veritabanindan okunur.
+    single<PriceRemoteDataSource> {
+        val database = get<KefeDatabase>()
+        LivePriceRemoteDataSource(get(), get(), get(), fundCodes = { heldFundCodes(database) })
+    }
 
     // Uygulamanin "bugun"u tek yerden gelir - getiri ve projeksiyon hesaplari
     // ayni gune gore calissin diye. Kayitlar diske yazildigi icin cihazin
@@ -115,3 +126,14 @@ val appModule = module {
     viewModel { (positionId: String) -> AssetDetailViewModel(get(), get(), get(), positionId) }
     viewModel { (goalId: String) -> GoalDetailViewModel(get(), get(), goalId) }
 }
+
+/**
+ * Kullanicinin HALA TUTTUGU fon kodlari - gunluk tazeleme bunlari ceker.
+ * Portfoy deposunu DEGIL dogrudan veritabanini okur: portfoy deposu fiyat
+ * deposuna baglidir, tersine bagimlilik donguye sokar. "pos_fund_mac" -> "MAC".
+ */
+private suspend fun heldFundCodes(database: KefeDatabase): List<String> =
+    withContext(Dispatchers.Default) {
+        database.positionQueries.selectHeldFundIds().executeAsList()
+            .map { it.removePrefix("pos_fund_").uppercase() }
+    }

@@ -23,7 +23,10 @@ class LivePriceRemoteDataSource(
     private val freeMarket: FreeMarketApi,
     private val tcmb: TcmbApi,
     private val tefas: TefasApi,
-    private val fundCodes: List<String> = DefaultFundCodes,
+    // Cekilecek fon kodlari CALISMA ANINDA belli olur: kullanicinin tuttugu
+    // fonlar (bkz. DI). Sabit liste yalniz varsayilan/test icin. Boylece eklenen
+    // fon gunluk tazelenir, satilan fon bosuna cekilmez.
+    private val fundCodes: suspend () -> List<String> = { DefaultFundCodes },
 ) : PriceRemoteDataSource {
 
     override suspend fun fetchPrices(): List<Price> {
@@ -83,7 +86,10 @@ class LivePriceRemoteDataSource(
             )
         }
 
-        fundCodes.forEach { code ->
+        // Okuma patlarsa sabit listeye duseriz - yenileme fonsuz da olsa altin
+        // ve doviz gelsin.
+        val codes = runCatching { fundCodes() }.getOrDefault(DefaultFundCodes)
+        codes.distinct().forEach { code ->
             // Tek fonun dusmesi butun yenilemeyi dusurmemeli: altin ve doviz
             // gelmisken tablo bos kalmasin.
             val quote = runCatching { tefas.fetchFund(code) }.getOrNull() ?: return@forEach

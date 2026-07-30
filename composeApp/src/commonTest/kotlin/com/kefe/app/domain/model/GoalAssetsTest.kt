@@ -39,10 +39,9 @@ private val positions = listOf(
 class GoalAssetsTest {
 
     @Test
-    fun atamaYoksaTumBirikimSayilir() {
-        // Eski davranis korunur: atamayla ugrasmak istemeyen kullanici
-        // hedeflerinin bir anda %0'a dusmesini gormez.
-        assertEquals(28_000.0, goalWealth(ev, positions, emptyMap()), EPS)
+    fun atamaYoksaSifir() {
+        // Kati atama: atama yapilmamis hedef 0 sayar - tum birikim GELMEZ.
+        assertEquals(0.0, goalWealth(ev, positions, emptyMap()), EPS)
     }
 
     @Test
@@ -58,11 +57,10 @@ class GoalAssetsTest {
     }
 
     @Test
-    fun baskaHedefinAtamasiBunuEtkilemez() {
-        // Araba'ya atama yapilmis ama Ev'e yapilmamis: Ev hala tum birikimi
-        // sayar. Aksi halde bir hedefe atama yapmak digerini sifirlardi.
+    fun herHedefYalnizKendiAtamasiniSayar() {
+        // Araba'ya atama var, Ev'e yok: Ev 0 (kati atama), araba yalniz altini.
         val assignments = mapOf("altin" to "araba")
-        assertEquals(28_000.0, goalWealth(ev, positions, assignments), EPS)
+        assertEquals(0.0, goalWealth(ev, positions, assignments), EPS)
         assertEquals(20_000.0, goalWealth(araba, positions, assignments), EPS)
     }
 
@@ -84,7 +82,7 @@ class GoalAssetsTest {
 
     @Test
     fun atamaYoksaListeBos() {
-        // Bos liste "tum birikim sayiliyor" demek; ekran bunu yaziyla soyler.
+        // Kati atama: atama yoksa hedefi olusturan varlik yok, ilerleme %0.
         assertTrue(assetsOf(ev, positions, emptyMap()).isEmpty())
     }
 

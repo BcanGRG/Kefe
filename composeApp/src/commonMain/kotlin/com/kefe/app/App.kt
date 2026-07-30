@@ -542,7 +542,11 @@ private fun KefeApp(
                         }
 
                         entry<AssetDetailKey> { key ->
-                            val vm = koinViewModel<AssetDetailViewModel> {
+                            // key = positionId: her varlik AYRI VM alir. Aksi halde
+                            // Koin ayni tur icin ILK olusan VM'i (ilk positionId ile)
+                            // tum AssetDetailKey girislerinde geri veriyordu - neye
+                            // basilirsa ayni varlik (ilk acilan) aciliyordu.
+                            val vm = koinViewModel<AssetDetailViewModel>(key = key.positionId) {
                                 parametersOf(key.positionId)
                             }
                             val state by vm.state.collectAsState()

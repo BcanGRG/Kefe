@@ -68,6 +68,10 @@ data class AddTransactionUiState(
     val fundQuery: String = "",
     val fundResults: List<FundResult> = emptyList(),
     val selectedFundKey: String? = null,
+    /** TEFAS'ta canli fon aramasi surerken - buton yerine donen halka. */
+    val fundSearching: Boolean = false,
+    /** Canli arama sonuc getirmediyse alanin altindaki uyari. */
+    val fundSearchError: String? = null,
     /** Doviz secimi. Once secim yoktu ve her kayit sessizce USD oluyordu. */
     val currency: Currency = Currency.Usd,
     val currencyOptions: List<CurrencyOption> = emptyList(),
@@ -138,6 +142,8 @@ sealed interface AddTransactionIntent {
     data class ChangeGram(val text: String) : AddTransactionIntent
     data class ChangeFundQuery(val text: String) : AddTransactionIntent
     data class SelectFund(val assetKey: String) : AddTransactionIntent
+    /** Yereldeki 5 fonda yoksa girilen kodu TEFAS'tan canli cek. */
+    data object SearchFundOnline : AddTransactionIntent
 
     data object Continue : AddTransactionIntent
     data object Back : AddTransactionIntent
@@ -210,6 +216,19 @@ val AddTransactionUiState.selectionName: String
 
 val AddTransactionUiState.selectedFund: FundResult?
     get() = fundResults.firstOrNull { it.assetKey == selectedFundKey }
+
+/**
+ * TEFAS'ta canli aranabilecek fon kodu - yoksa null (arama satiri gizli).
+ * Kosul: 2-6 harfli bir kod ve yerel sonuclarda TAM kod eslesmesi yok - zaten
+ * listede olani ya da "22" gibi bir sayiyi aratmanin anlami yok.
+ */
+val AddTransactionUiState.fundSearchCode: String?
+    get() {
+        val q = fundQuery.trim()
+        if (q.length !in 2..6 || !q.all { it.isLetter() }) return null
+        if (fundResults.any { it.code.equals(q, ignoreCase = true) }) return null
+        return q.uppercase()
+    }
 
 /** Miktarin birimi secime bagli: cil altin adet, bilezik gram, fon pay. */
 val AddTransactionUiState.quantityUnit: QuantityUnit

@@ -1,6 +1,7 @@
 package com.kefe.app.ui.screens.transaction
 
 import androidx.lifecycle.viewModelScope
+import com.kefe.app.data.remote.TefasApi
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.ActivityKind
@@ -45,6 +46,9 @@ class AddTransactionViewModel(
     private val priceRepository: PriceRepository,
     private val preferences: PreferencesRepository,
     private val clock: KefeClock,
+    // Fon adiminda girilen kodu TEFAS'tan canli cekmek icin - yereldeki 5 fonun
+    // disindaki fonlar da eklenebilsin.
+    private val tefas: TefasApi,
 ) : MviViewModel<AddTransactionUiState, AddTransactionIntent, AddTransactionEffect>(
     // Tarih varsayilani sabit YAZILAMAZ: kayit artik diske gidiyor, yanlis tarih
     // kalici olur ve duzeltme ekrani yok.
@@ -54,6 +58,10 @@ class AddTransactionViewModel(
     private var board: PriceBoard? = null
     private var positions: List<Position> = emptyList()
     private var members: List<Member> = emptyList()
+
+    // Bu oturumda TEFAS'tan canli cekilen fonlar. fundResults her withPrices'ta
+    // yeniden kuruldugu icin ayri saklanir; katalog ile birlestirilir.
+    private var liveFunds: List<FundResult> = emptyList()
 
     /**
      * Bu cihazin profili. Eklenen islem BUNA yazilir - once kosulsuz Owner'a
@@ -95,9 +103,13 @@ class AddTransactionViewModel(
 
             is AddTransactionIntent.ChangeGram -> update(s.copy(gramText = intent.text))
 
-            is AddTransactionIntent.ChangeFundQuery -> update(s.copy(fundQuery = intent.text))
+            // Yazmaya baslayinca onceki "bulunamadi" uyarisi silinir.
+            is AddTransactionIntent.ChangeFundQuery ->
+                update(s.copy(fundQuery = intent.text, fundSearchError = null))
 
             is AddTransactionIntent.SelectFund -> update(s.copy(selectedFundKey = intent.assetKey))
+
+            AddTransactionIntent.SearchFundOnline -> searchFundOnline()
 
             AddTransactionIntent.Continue -> if (s.canContinue) update(s.toAmountStep())
 
@@ -231,7 +243,7 @@ class AddTransactionViewModel(
                         .orEmpty(),
                 )
             },
-            fundResults = fundCatalog(prices).filter { it.matches(s.fundQuery) },
+            fundResults = mergedFunds(prices).filter { it.matches(s.fundQuery) },
             marketPrice = market,
             unitPriceText = when {
                 s.priceManual -> s.unitPriceText
@@ -242,6 +254,63 @@ class AddTransactionViewModel(
             },
             offline = prices.freshness == PriceFreshness.Offline,
         )
+    }
+
+    /**
+     * Fon oneri listesi: kullanicinin TUTTUGU fonlar (degere gore ilk 5) + bu
+     * oturumda canli cekilenler. Hic fon yoksa BOS - once elle yazilmis 5 fon
+     * gosteriliyordu, artik yalniz kullanicinin kendi fonlari onerilir.
+     */
+    private fun mergedFunds(prices: PriceBoard): List<FundResult> {
+        val held = heldFundResults(positions, prices)
+        val live = liveFunds.map { entry ->
+            val onBoard = prices.byKey(entry.assetKey)
+            entry.copy(
+                price = onBoard?.ask ?: entry.price,
+                changePercent = onBoard?.changePercent ?: entry.changePercent,
+            )
+        }
+        // Tutulan fon hem oneride hem canlida olabilir; tutulan kazanir (once gelir).
+        return (held + live).distinctBy { it.assetKey }
+    }
+
+    /**
+     * Yereldeki 5 fonda olmayan bir kodu TEFAS'tan canli ceker. Bulunca sonucu
+     * listeye katip secer; bulamayinca alanin altina uyari yazar. TEFAS ucu
+     * ad-arama yapmaz, kod dogrudan sorgulanir.
+     */
+    private fun searchFundOnline() {
+        val code = _state.value.fundSearchCode ?: return
+        if (_state.value.fundSearching) return
+        _state.value = _state.value.copy(fundSearching = true, fundSearchError = null)
+        viewModelScope.launch {
+            val quote = runCatching { tefas.fetchFund(code) }.getOrNull()
+            if (quote == null || quote.price <= 0.0) {
+                _state.value = _state.value.copy(
+                    fundSearching = false,
+                    fundSearchError = "'$code' bulunamadı. Kodu kontrol edin.",
+                )
+                return@launch
+            }
+            val result = FundResult(
+                assetKey = "fund_${quote.code.lowercase()}",
+                code = quote.code,
+                name = quote.name.ifBlank { quote.code },
+                issuer = "TEFAS",
+                price = quote.price,
+                changePercent = quote.changePercent,
+            )
+            // Ayni fon tekrar aranirsa cogaltma; en son cekileni tut.
+            liveFunds = liveFunds.filter { it.assetKey != result.assetKey } + result
+            // Bulunani listeye kat ve dogrudan sec - kullanici Devam'a gecebilsin.
+            _state.value = withPrices(
+                _state.value.copy(
+                    fundSearching = false,
+                    fundSearchError = null,
+                    selectedFundKey = result.assetKey,
+                ),
+            )
+        }
     }
 
     // --- Duzenleme ---------------------------------------------------------
@@ -468,41 +537,32 @@ private fun marketPriceOf(s: AddTransactionUiState, board: PriceBoard): Double =
         AssetClass.Cash -> 1.0
     }
 
-// --- Fon kataloğu ------------------------------------------------------------
+// --- Fon onerileri -----------------------------------------------------------
 
 /**
- * Aranabilir fon listesi. Kod/ad/kurucu bilgisi urun katalogundan gelir; fiyat
- * ve gunluk degisim fiyat tablosunda varsa oradan EZILIR - iki ekran arasinda
- * kotasyon farki olmasin diye.
+ * Oneri listesi kullanicinin fon POZISYONLARINDAN turer: en cok tuttugu (degere
+ * gore) ilk 5 fon. Hic fon yoksa BOS doner - once elle yazilmis sabit 5 fon
+ * gosteriliyordu. Fiyat/degisim once fiyat tablosundan (canli), yoksa pozisyonun
+ * son bilinen degerinden gelir.
  */
-private data class FundEntry(
-    val assetKey: String,
-    val code: String,
-    val name: String,
-    val issuer: String,
-    val price: Double,
-    val changePercent: Double,
-)
-
-private val FundCatalog: List<FundEntry> = listOf(
-    FundEntry("fund_tte", "TTE", "Türkiye Teknoloji Değişim Fonu", "İş Portföy", 21.40, -2.40),
-    FundEntry("fund_tkf", "TKF", "Teknoloji Katılım Fonu", "Ziraat Portföy", 13.86, 0.74),
-    FundEntry("fund_ytd", "YTD", "Yeni Teknolojiler Değişken Fon", "Yapı Kredi Portföy", 9.72, 0.31),
-    FundEntry("fund_afa", "AFA", "Ak Portföy Altın Fonu", "Ak Portföy", 24.60, 0.52),
-    FundEntry("fund_ipv", "IPV", "İş Portföy Değişken Fon", "İş Portföy", 24.41, 0.18),
-)
-
-private fun fundCatalog(board: PriceBoard): List<FundResult> = FundCatalog.map { entry ->
-    val live = board.byKey(entry.assetKey)
-    FundResult(
-        assetKey = entry.assetKey,
-        code = entry.code,
-        name = entry.name,
-        issuer = entry.issuer,
-        price = live?.ask ?: entry.price,
-        changePercent = live?.changePercent ?: entry.changePercent,
-    )
-}
+private fun heldFundResults(positions: List<Position>, board: PriceBoard): List<FundResult> =
+    positions
+        .filter { it.assetClass == AssetClass.Fund && it.quantity > 0.0 }
+        .sortedByDescending { it.value }
+        .take(5)
+        .map { pos ->
+            val assetKey = pos.id.removePrefix("pos_")
+            val onBoard = board.byKey(assetKey)
+            FundResult(
+                assetKey = assetKey,
+                code = assetKey.removePrefix("fund_").uppercase(),
+                // Pozisyon adi "KOD · Tam Ad"; oneride tam ad gosterilir.
+                name = pos.name.substringAfter(" · ", pos.name),
+                issuer = "",
+                price = onBoard?.ask ?: pos.unitPrice,
+                changePercent = onBoard?.changePercent ?: pos.dailyChangePercent,
+            )
+        }
 
 // --- Son eklenen -------------------------------------------------------------
 

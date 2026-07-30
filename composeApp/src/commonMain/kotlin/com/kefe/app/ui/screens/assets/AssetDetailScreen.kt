@@ -264,6 +264,7 @@ private fun CurrentValueBlock(position: Position, holdingLabel: String?) {
         )
         Spacer(Modifier.height(Space.x4))
         Text(
+            // Sub-lira degerde kurus gosterimi Money.tl icinde; ₺0,76 -> ₺1 olmaz.
             text = Money.tl(position.value, spaced = true),
             style = t.display.tabular(),
             color = c.onSurface,

@@ -25,7 +25,8 @@ import kotlinx.coroutines.launch
 /**
  * Hedefler listesi. MVI-lite: tek [GoalsUiState] akisi + tek [onIntent] girisi.
  *
- * Ilerleme TOPLAM birikime gore olculur - hedefler ayni birikimi paylasir.
+ * Ilerleme her hedefin KENDINE atanan varliklarindan olculur (kati atama);
+ * atama yoksa %0. Hedefsiz varlik hicbir hedefe sayilmaz.
  * Fiyat deposu yalniz sayfadaki birim cevrimi icin gerekir (gram altin / USD
  * cinsinden hedef); boylece cevrim piyasa tablosuyla ayni kaynaktan beslenir.
  */

@@ -1,28 +1,20 @@
 package com.kefe.app.domain.model
 
 /**
- * Bir hedefi hangi varliklarin karsiladigi.
+ * Bir hedefi hangi varliklarin karsiladigi = YALNIZ o hedefe atanan varliklar.
  *
- * Ilerlemeyi olcen kural TEK cumleyle: hedefe varlik atanmissa yalniz onlar
- * sayilir, atanmamissa tum birikim sayilir.
- *
- * Ikinci yarisi onemli: atama isteyen bir kullanicinin yaninda atamayla
- * ugrasmak istemeyen biri var (ayni portfoyu paylasiyorlar). Atama zorunlu
- * olsaydi hicbir sey atamamis kisi butun hedeflerini bir anda %0'a duserdi.
+ * Kati atama: atama yoksa 0 doner, hedef %0 kalir - kullanici varlik atayana
+ * kadar dolmaz. (Once "atama yoksa tum birikim sayilir" fallback'i vardi; ama
+ * o zaman hedefsiz eklenen bir varlik atama yapilmamis her hedefin
+ * "karsilayanlar" listesinde beliriyordu ve karmasa yaratiyordu. Kullanici bu
+ * yuzden kati atamayi secti.)
  */
 fun goalWealth(
     goal: Goal,
     positions: List<Position>,
     /** positionId -> goalId. */
     assignments: Map<String, String>,
-): Double {
-    val assigned = positions.filter { assignments[it.id] == goal.id }
-    if (assigned.isEmpty() && assignments.none { it.value == goal.id }) {
-        // Bu hedefe hic atama yok: tum birikim sayilir (eski davranis).
-        return positions.sumOf { it.value }
-    }
-    return assigned.sumOf { it.value }
-}
+): Double = positions.filter { assignments[it.id] == goal.id }.sumOf { it.value }
 
 /** Hedefe atanmis varliklar - detay ekranindaki liste. */
 fun assetsOf(

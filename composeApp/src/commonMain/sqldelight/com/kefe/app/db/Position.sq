@@ -55,6 +55,17 @@ FROM positions
 WHERE deletedAt IS NULL
 ORDER BY name;
 
+-- Gunluk fiyat tazelemesi icin: kullanicinin HALA TUTTUGU fonlarin id'leri.
+-- Miktari sifirlanan (tamamen satilan) ya da silinen fon istenmez - bosuna
+-- TEFAS'a gidilmesin ve satilan fon Piyasa'da yeniden belirmesin. Kod id'den
+-- turer: "pos_fund_mac" -> "MAC".
+selectHeldFundIds:
+SELECT id
+FROM positions
+WHERE id LIKE 'pos_fund_%'
+AND quantity > 0.0
+AND deletedAt IS NULL;
+
 selectPositionById:
 SELECT *
 FROM positions
