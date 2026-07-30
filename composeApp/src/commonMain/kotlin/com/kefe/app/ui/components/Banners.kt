@@ -3,7 +3,9 @@ package com.kefe.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,10 +15,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.kefe.app.ui.theme.IconSize
 import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
@@ -256,3 +263,75 @@ fun KefeSyncChip(
 /** Esitleme cipi olculeri - handoff: 7px nokta, 5px bosluk. */
 private val SyncDotSize = 7.dp
 private val SyncChipGap = 5.dp
+
+/** Serit ekranda kaldigi sure. Okunacak kadar uzun, engel olmayacak kadar kisa. */
+private const val BannerVisibleMillis = 4_000L
+
+/**
+ * Ekranin altinda beliren, kapatilabilir serit.
+ *
+ * Kendiliginden KAYBOLMAZ: yazma hatasi gibi kacirilmamasi gereken bilgiler
+ * icin. Kendiliginden kapanmasi gereken bilgiler [AutoDismissBanner] kullanir.
+ *
+ * [tone] PARAMETRE: her serit hata degil. Kisitlanan yenileme bir bilgidir ve
+ * kirmizi cizilirse kullanici yanlis bir sey yaptigini sanir.
+ */
+@Composable
+fun BoxScope.KefeBottomBanner(
+    message: String,
+    onDismiss: () -> Unit,
+    tone: Color? = null,
+) {
+    val c = KefeTheme.colors
+    val accentTone = tone ?: c.negative
+    Row(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(Space.x16)
+            .widthIn(max = Sizes.formMaxWidth)
+            .clip(KefeShapes.card)
+            .background(c.surfaceElevated)
+            .border(Sizes.hairline, accentTone, KefeShapes.card)
+            .padding(horizontal = Space.x16, vertical = Space.x12),
+        horizontalArrangement = Arrangement.spacedBy(Space.x12),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = message,
+            style = KefeTheme.type.caption,
+            color = c.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "Kapat",
+            style = KefeTheme.type.caption.copy(fontWeight = FontWeight.SemiBold),
+            color = accentTone,
+            modifier = Modifier
+                .clip(KefeShapes.button)
+                .clickable(onClick = onDismiss)
+                .padding(horizontal = Space.x8, vertical = Space.x4),
+        )
+    }
+}
+
+/**
+ * Kendiliginden kapanan bilgi seridi.
+ *
+ * [message] her degistiginde sayac bastan baslar; art arda gelen iki bildirim
+ * birbirinin suresini yemez.
+ */
+@Composable
+fun BoxScope.KefeAutoDismissBanner(
+    message: String,
+    onDismiss: () -> Unit,
+    tone: Color? = null,
+) {
+    // rememberUpdatedState olmadan, kapatma islevi her bestelemede degisirse
+    // bekleme yeniden baslar ve serit hic kapanmayabilir.
+    val dismiss by rememberUpdatedState(onDismiss)
+    LaunchedEffect(message) {
+        delay(BannerVisibleMillis)
+        dismiss()
+    }
+    KefeBottomBanner(message = message, onDismiss = onDismiss, tone = tone)
+}

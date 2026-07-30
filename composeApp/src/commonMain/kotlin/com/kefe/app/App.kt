@@ -8,9 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -27,13 +25,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
@@ -58,6 +54,7 @@ import com.kefe.app.navigation.desktopDestinations
 import com.kefe.app.navigation.topLevelDestinations
 import com.kefe.app.ui.brand.KefeSplash
 import com.kefe.app.ui.components.KefeBottomNav
+import com.kefe.app.ui.components.KefeAutoDismissBanner
 import com.kefe.app.ui.components.SyncStatus
 import com.kefe.app.ui.gallery.DesignSystemGallery
 import com.kefe.app.ui.layout.KefeNavItem
@@ -106,7 +103,6 @@ import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
 import com.kefe.app.ui.theme.Space
-import kotlinx.coroutines.delay
 import org.koin.compose.KoinApplication
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -671,13 +667,13 @@ private fun KefeApp(
         // uygulama bozuk gorunuyordu. Bilgi bir kez okunur; okunmadiysa da
         // kullaniciyi kilitlemez.
         saveError?.let { message ->
-            AutoDismissBanner(message = message, onDismiss = { saveError = null })
+            KefeAutoDismissBanner(message = message, onDismiss = { saveError = null })
         }
 
         // Basarisiz fiyat yenilemesi. Sessiz kalinca basarili yenilemeden ayirt
         // edilemiyordu ve "yenileme calismiyor" gibi gorunuyordu.
         summary.refreshError?.let { message ->
-            AutoDismissBanner(
+            KefeAutoDismissBanner(
                 message = message,
                 onDismiss = { summaryVm.onIntent(SummaryIntent.DismissRefreshError) },
             )
@@ -686,58 +682,12 @@ private fun KefeApp(
         // Kisitlanan yenileme. Hata DEGIL - vurgu renginde cizilir; kullanici
         // dogru bir sey yapti, elindeki fiyat zaten taze.
         summary.refreshNotice?.let { message ->
-            AutoDismissBanner(
+            KefeAutoDismissBanner(
                 message = message,
                 onDismiss = { summaryVm.onIntent(SummaryIntent.DismissRefreshNotice) },
                 tone = KefeTheme.colors.accent,
             )
         }
-    }
-}
-
-/**
- * Yazma hatasi seridi - her seyin ustunde, altta.
- *
- * Kendiliginden KAYBOLMAZ: kullanicinin girdigi islem kaydedilemedi, bunu
- * kacirmamali. Kapatmayi kendisi secer.
- */
-@Composable
-private fun BoxScope.ErrorBanner(
-    message: String,
-    onDismiss: () -> Unit,
-    // Ton PARAMETRE: her serit hata degil. Kisitlanan yenileme bir bilgidir ve
-    // kirmizi cizilirse kullanici yanlis bir sey yaptigini sanir.
-    tone: Color? = null,
-) {
-    val c = KefeTheme.colors
-    val accentTone = tone ?: c.negative
-    Row(
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(Space.x16)
-            .widthIn(max = Sizes.formMaxWidth)
-            .clip(KefeShapes.card)
-            .background(c.surfaceElevated)
-            .border(Sizes.hairline, accentTone, KefeShapes.card)
-            .padding(horizontal = Space.x16, vertical = Space.x12),
-        horizontalArrangement = Arrangement.spacedBy(Space.x12),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = message,
-            style = KefeTheme.type.caption,
-            color = c.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = "Kapat",
-            style = KefeTheme.type.caption.copy(fontWeight = FontWeight.SemiBold),
-            color = accentTone,
-            modifier = Modifier
-                .clip(KefeShapes.button)
-                .clickable(onClick = onDismiss)
-                .padding(horizontal = Space.x8, vertical = Space.x4),
-        )
     }
 }
 
@@ -790,31 +740,6 @@ private fun RowScope.SheetSideScrim(onDismiss: () -> Unit) {
                 onClick = onDismiss,
             ),
     )
-}
-
-/** Serit ekranda kaldigi sure. Okunacak kadar uzun, engel olmayacak kadar kisa. */
-private const val BannerVisibleMillis = 4_000L
-
-/**
- * Kendiliginden kapanan bilgi seridi.
- *
- * [message] her degistiginde sayac bastan baslar; art arda gelen iki bildirim
- * birbirinin suresini yemez.
- */
-@Composable
-private fun BoxScope.AutoDismissBanner(
-    message: String,
-    onDismiss: () -> Unit,
-    tone: Color? = null,
-) {
-    // rememberUpdatedState olmadan, kapatma islevi her bestelemede degisirse
-    // bekleme yeniden baslar ve serit hic kapanmayabilir.
-    val dismiss by rememberUpdatedState(onDismiss)
-    LaunchedEffect(message) {
-        delay(BannerVisibleMillis)
-        dismiss()
-    }
-    ErrorBanner(message = message, onDismiss = onDismiss, tone = tone)
 }
 
 /**
