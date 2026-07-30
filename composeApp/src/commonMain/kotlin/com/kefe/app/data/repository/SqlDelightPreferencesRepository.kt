@@ -26,4 +26,9 @@ class SqlDelightPreferencesRepository(
             settingQueries.upsertSetting(settingKey = key, settingValue = value)
         }
     }
+
+    override suspend fun get(key: String): String? =
+        withContext(dispatcher) {
+            settingQueries.selectSetting(key).executeAsOneOrNull()
+        }
 }

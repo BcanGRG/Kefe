@@ -26,6 +26,18 @@ SELECT *
 FROM goal_assets
 WHERE deletedAt IS NULL;
 
+-- Yerel degisim tetikleyicisi.
+countGoalAssets:
+SELECT count(*)
+FROM goal_assets;
+
+-- Push: son esitlemeden beri degisenler (mezar tasi dahil).
+selectGoalAssetsChangedSince:
+SELECT *
+FROM goal_assets
+WHERE updatedAt >= :since
+ORDER BY updatedAt;
+
 assignPositionToGoal:
 INSERT OR REPLACE INTO goal_assets(positionId, goalId, updatedAt, deletedAt)
 VALUES (:positionId, :goalId, :updatedAt, NULL);

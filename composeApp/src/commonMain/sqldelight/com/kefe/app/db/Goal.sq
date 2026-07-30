@@ -53,16 +53,24 @@ SELECT count(*)
 FROM goals
 WHERE deletedAt IS NULL;
 
+-- Push: son esitlemeden beri degisenler (mezar tasi dahil).
+selectGoalsChangedSince:
+SELECT *
+FROM goals
+WHERE updatedAt >= :since
+ORDER BY updatedAt;
+
 -- Hedefin cocuk tablosu yok; REPLACE burada guvenli (silinecek bagli satir yok).
 upsertGoal:
 INSERT OR REPLACE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, allocation, status, sortOrder, estimatedYear, estimatedMonth, estimatedDay, updatedAt)
 VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :allocation, :status, :sortOrder, :estimatedYear, :estimatedMonth, :estimatedDay, :updatedAt);
 
 -- reorderGoals: verilen kimlik listesi tek transaction icinde indeksleriyle
--- yazilir. Listede olmayan hedefler sortOrder'ini korur.
+-- yazilir. Listede olmayan hedefler sortOrder'ini korur. updatedAt bumped:
+-- yoksa yeniden siralama push'ta gorunmez.
 updateGoalOrder:
 UPDATE goals
-SET sortOrder = :sortOrder
+SET sortOrder = :sortOrder, updatedAt = :updatedAt
 WHERE id = :id;
 
 -- Ana hedef tektir: yenisi isaretlenmeden once digerleri temizlenir.

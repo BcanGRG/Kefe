@@ -18,6 +18,9 @@ interface PreferencesRepository {
     fun observeAll(): Flow<Map<String, String>>
 
     suspend fun put(key: String, value: String)
+
+    /** Tek seferlik okuma. Senkron watermark'i gibi akis istemeyen yerler icin. */
+    suspend fun get(key: String): String?
 }
 
 /**
@@ -45,4 +48,13 @@ object PreferenceKeys {
 
     /** Son yedegin alindigi tarih ("2026-07-28"). Ayarlar satirinin sagi. */
     const val LastBackupAt = "lastBackupAt"
+
+    /**
+     * Push watermark'i: bu cihazin sunucuya en son ittigi ana kadarki epoch ms.
+     * Bir sonraki push yalniz updatedAt >= bu deger olan satirlari gonderir.
+     *
+     * CIHAZA AITTIR: her cihazin kendi ilerlemesi. Senkronlanmaz, yedege girmez,
+     * geri yuklemede korunur (bkz. DeviceOnlySettings).
+     */
+    const val LastPushedAt = "lastPushedAt"
 }

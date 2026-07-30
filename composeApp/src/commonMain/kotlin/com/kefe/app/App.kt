@@ -34,6 +34,7 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
+import com.kefe.app.data.sync.SyncCoordinator
 import com.kefe.app.di.appModule
 import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.repository.PriceFreshness
@@ -106,6 +107,7 @@ import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
 import com.kefe.app.ui.theme.Space
 import org.koin.compose.KoinApplication
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.koinConfiguration
@@ -182,6 +184,11 @@ private fun KefeApp(
     // null = diske henuz bakilmadi.
     val onboardingVm = koinViewModel<SummaryViewModel>()
     val onboarded by onboardingVm.onboarded.collectAsState()
+
+    // Senkron/push kordinatoru. Girisliyken yerel degisimleri Supabase'e iter;
+    // kendi surec-omurlu scope'unda calisir, start() idempotent (bir kez baslar).
+    val syncCoordinator = koinInject<SyncCoordinator>()
+    LaunchedEffect(Unit) { syncCoordinator.start() }
 
     // Marka animasyonu YALNIZ SOGUK ACILISTA oynar. Bayrak surec omurludur:
     // arka plandan geri donuste uygulama hemen gorunur, cunku her gecis icin iki

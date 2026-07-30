@@ -84,6 +84,14 @@ SELECT count(*)
 FROM transactions
 WHERE deletedAt IS NULL;
 
+-- Push: son esitlemeden beri degisenler. deletedAt FILTRELENMEZ - silinen kayit
+-- da (mezar tasi) sunucuya gitmeli ki es cihaz onu dusursun.
+selectTransactionsChangedSince:
+SELECT *
+FROM transactions
+WHERE updatedAt >= :since
+ORDER BY updatedAt;
+
 -- Kimlik artik UUID (bkz. 7.1): iceriginden turetilmiyor, dolayisiyla ayni gun
 -- ayni miktarda ikinci alim kendi satirini alir. Duz INSERT bilerek: "OR REPLACE"
 -- bir cakismada kullanicinin islemini sessizce ezerdi.

@@ -39,6 +39,14 @@ countSnapshots:
 SELECT count(*)
 FROM daily_snapshots;
 
+-- Push: son esitlemeden beri degisen fotograflar. Mezar tasi yok - fotograf
+-- silinmez, gun icinde tazelenir.
+selectSnapshotsChangedSince:
+SELECT *
+FROM daily_snapshots
+WHERE updatedAt >= :since
+ORDER BY updatedAt;
+
 upsertSnapshot:
 INSERT OR REPLACE INTO daily_snapshots(dateYear, dateMonth, dateDay, totalValue, principal, updatedAt)
 VALUES (:dateYear, :dateMonth, :dateDay, :totalValue, :principal, :updatedAt);

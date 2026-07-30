@@ -124,6 +124,8 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 occurredMonth = today.month.toLong(),
                 occurredDay = today.day.toLong(),
                 timeLabel = event.timeLabel,
+                // Ornek veri: zaman damgasi 0, esitlemede en eski sayilir.
+                updatedAt = 0L,
             )
         }
 
