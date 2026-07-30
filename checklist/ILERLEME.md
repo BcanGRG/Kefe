@@ -29,7 +29,7 @@ erişim demek. Düz metin jeton + açık senkron = sızıntı. Bu yüzden 8, 7'd
 |---|---|---|
 | 8 | Jeton Keystore/Keychain'e | ✅ **bitti** (7'den önce) |
 | 7 | Supabase tabloları + RLS | ✅ **bitti** (SQL kullanıcı çalıştırır) |
-| 9 | Push | ⬜ |
+| 9 | Push | ✅ **bitti** (canlı doğrulama girişte) |
 | 10 | Pull | ⬜ |
 | 11 | Gerçek zamanlı | ⬜ |
 | 12 | Bildirimler | ⬜ (11'den sonra anlamlı) |
@@ -343,3 +343,54 @@ indeksleri oluştu, veri sağ kaldı (Özet "Altın %100"). **Sunucu tarafı:** 
 **Sonraya (adım 9, push).** `renameMember` ve `insertActivity` henüz `updatedAt`
 yazmıyor (kolon hazır, değer 0); `deleteActivityById` hâlâ hard delete. Push
 wiring'inde bunlar gerçek zaman damgası + soft-delete'e bağlanacak.
+
+---
+
+## 9 · Push ✅
+
+**Neydi.** Sema ve RLS hazırdı ama yereldeki değişiklikleri sunucuya taşıyan bir
+şey yoktu. 2.sqm'deki karar netti: **ilk esitleme PUSH yönünde** — yerel gerçek,
+sunucu boş.
+
+**Mekanizma — watermark.** Her satırın `updatedAt`'i var. Cihaz "en son şuraya
+kadar ittim" damgasını (`LastPushedAt`, cihaz-yerel) tutar; push yalnız o damgadan
+yeni satırları gönderir. İlk push'ta damga 0, yani her şey gider. Tablo başına
+`selectXChangedSince` sorgusu **mezar taşlarını da** getirir (silme de ese
+gitmeli). Watermark okumadan ÖNCE `syncStart` yakalanır: push sürerken yazılanlar
+bir sonraki tura kalır.
+
+**Bütünlük.** Watermark ancak TÜM tablolar başarıyla gittikten sonra ilerler. İlk
+upsert patlarsa (`PostgrestApi` fırlatır) damga durur, bir sonraki tetik baştan
+dener. Upsert `merge-duplicates` (idempotent) olduğu için tekrar zararsız — kısmi
+gönderim veri bozmaz.
+
+**Tetik — olay güdümlü, ARKA PLAN TICKER'I YOK.** `SyncCoordinator` girişliyken
+`SyncLocalSource.localChanges()`'i dinler; bu, 7 senkron tablosunun sayaç-flow'unun
+combine'ı — SQLDelight tablo bildirimi olduğu için ekleme kadar **düzenleme ve
+silme de** yakalanır. `debounce(1500ms)` ard arda yazmaları (işlem + pozisyon
+yeniden hesabı + aktivite) tek push'a toplar. İlk emisyon açılış/giriş push'ini de
+kapsar. Cikinca dinleme durur. Push'lar conflated kanaldan **tek tüketici** ile
+seri gider.
+
+**Süreç ömürlü.** Koin, Compose ağacında kurulu (Activity yeniden yaratılınca
+yeniden kurulur). Coordinator işleri companion'daki tek scope'ta tek sefer başlar
+(`claimStart`), yoksa her dönüşte yeni dinleyici sızar ve aynı değişiklik defalarca
+push'lanırdı — veritabanının `KefePlatform`'da tutulmasıyla aynı gerekçe.
+
+**Bearer = KULLANICININ jetonu**, anonKey değil: RLS `auth.uid() = user_id` ancak
+isteğin kimin adına geldiğini bilirse çalışır. Jeton `validAccessToken()`'dan
+gelir (süresi dolduysa yeniler). `user_id` her satırda açıkça gönderilir (bileşik
+anahtarlı `daily_snapshots`'ta upsert hedefi tam olsun; RLS zaten yanlışı reddeder).
+
+**Yerel yazma düzeltmeleri.** Push'un "değişti" görebilmesi için: `renameMember`,
+`updateGoalOrder`, `insertActivity` artık `updatedAt` yazıyor; `deleteActivityById`
+hard delete'ten **soft-delete**'e döndü (feed filtresi `deletedAt IS NULL`).
+
+**Doğrulama.** **98 test** (6 yeni push testi): ilk push tüm tabloları gönderir;
+değişiklik yoksa ikinci push boş; watermark sonrası değişen satır yeniden gider;
+silinen satır mezar taşıyla gider; jeton yoksa hiçbir şey gitmez; upsert patlarsa
+watermark durur ve sonraki push yeniden dener. İki platform derleniyor. Emülatörde
+uygulama temiz açıldı (Koin 33 tanım, sync grafiği kuruldu, çökme yok); oturum
+olmadığı için henüz push denemiyor. **Açık kalan:** verinin gerçekten Supabase'e
+düştüğünün canlı kanıtı — bir sonraki girişte yakalanacak (adım 8'in `enc1:`
+kanıtıyla aynı oturum).

@@ -4,7 +4,9 @@ import com.kefe.app.data.remote.FreeMarketApi
 import com.kefe.app.data.remote.LivePriceRemoteDataSource
 import com.kefe.app.data.remote.PriceRemoteDataSource
 import com.kefe.app.data.remote.AuthApi
+import com.kefe.app.data.remote.PostgrestApi
 import com.kefe.app.data.remote.SupabaseAuthApi
+import com.kefe.app.data.remote.SupabasePostgrestApi
 import com.kefe.app.data.remote.TcmbApi
 import com.kefe.app.data.remote.TefasApi
 import com.kefe.app.data.remote.createKefeHttpClient
@@ -13,6 +15,9 @@ import com.kefe.app.data.repository.SqlDelightAuthRepository
 import com.kefe.app.data.repository.SqlDelightPortfolioRepository
 import com.kefe.app.data.repository.SqlDelightPreferencesRepository
 import com.kefe.app.data.repository.SqlDelightPriceRepository
+import com.kefe.app.data.sync.PushEngine
+import com.kefe.app.data.sync.SyncCoordinator
+import com.kefe.app.data.sync.SyncLocalSource
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.SystemKefeClock
 import com.kefe.app.domain.repository.AuthRepository
@@ -76,6 +81,14 @@ val appModule = module {
     single { SecureStore() }
     single<AuthApi> { SupabaseAuthApi(get()) }
     single<AuthRepository> { SqlDelightAuthRepository(get(), get(), get(), get()) }
+
+    // Senkron/push: yereldeki degisiklikleri Supabase'e iten yon. Kordinator
+    // girisliyken yerel degisimleri dinler; PostgrestApi kullanicinin jetonuyla
+    // upsert eder (RLS o hesaba kilitler).
+    single<PostgrestApi> { SupabasePostgrestApi(get()) }
+    single { SyncLocalSource(get()) }
+    single { PushEngine(get(), get(), get(), get(), get()) }
+    single { SyncCoordinator(get(), get(), get()) }
 
     // Dosya paylasimi/secimi platforma iner; Android tarafi Activity ister.
     single { FileTransfer() }

@@ -64,6 +64,13 @@ countPositions:
 SELECT count(*)
 FROM positions;
 
+-- Push: son esitlemeden beri degisenler (mezar tasi dahil).
+selectPositionsChangedSince:
+SELECT *
+FROM positions
+WHERE updatedAt >= :since
+ORDER BY updatedAt;
+
 -- upsertPosition YALNIZ metayi yazar. Iki adim, cunku:
 -- 1) INSERT OR REPLACE once satiri siler -> transactions'a giden CASCADE
 --    tetiklenir ve pozisyonun tum defteri ucar.

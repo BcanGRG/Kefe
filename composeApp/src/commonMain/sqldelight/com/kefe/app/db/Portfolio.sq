@@ -67,6 +67,19 @@ SELECT *
 FROM members
 ORDER BY sortOrder, name;
 
+-- Yerel degisim tetikleyicisi bu sayaci dinler: yazma olunca push istenir.
+countMembers:
+SELECT count(*)
+FROM members;
+
+-- Push: son esitlemeden beri degisenler. Mezar tasi yok (uye silinmez), ama
+-- filtre digerleriyle ayni bicimde tutulur.
+selectMembersChangedSince:
+SELECT *
+FROM members
+WHERE updatedAt >= :since
+ORDER BY updatedAt;
+
 selectMemberById:
 SELECT *
 FROM members
@@ -84,10 +97,11 @@ INSERT OR IGNORE INTO members(id, portfolioId, name, initials, role, permission,
 VALUES (:id, :portfolioId, :name, :initials, 'Owner', 'CanEdit', '', :sortOrder);
 
 -- Yalniz ad ve bas harf. sortOrder korunur: profil kurulumu yalniz ismi
--- degistirir, satirin geri kalanina dokunmamali.
+-- degistirir, satirin geri kalanina dokunmamali. updatedAt bumped: yoksa yeniden
+-- adlandirma push'ta "degismemis" sayilir ve ese gitmez.
 renameMember:
 UPDATE members
-SET name = :name, initials = :initials
+SET name = :name, initials = :initials, updatedAt = :updatedAt
 WHERE id = :id;
 
 deleteMemberById:

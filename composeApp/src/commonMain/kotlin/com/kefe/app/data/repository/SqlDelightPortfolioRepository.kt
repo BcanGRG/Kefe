@@ -111,7 +111,12 @@ class SqlDelightPortfolioRepository(
 
     override suspend fun renameMember(memberId: String, name: String, initials: String) {
         withContext(dispatcher) {
-            portfolioQueries.renameMember(id = memberId, name = name, initials = initials)
+            portfolioQueries.renameMember(
+                id = memberId,
+                name = name,
+                initials = initials,
+                updatedAt = clock.nowEpochMillis(),
+            )
         }
     }
 
@@ -220,11 +225,13 @@ class SqlDelightPortfolioRepository(
             database.transaction {
                 val removed = transactionQueries.selectTransactionById(transactionId)
                     .executeAsOneOrNull() ?: return@transaction
-                transactionQueries.deleteTransactionById(deletedAt = clock.nowEpochMillis(), id = transactionId)
+                val now = clock.nowEpochMillis()
+                transactionQueries.deleteTransactionById(deletedAt = now, id = transactionId)
                 // Aktivite satiri da gider. Kalirsa Aktivite akisi silinmis bir
                 // islemi "ekledi" diye gostermeye devam eder ve Islem Ekle'deki
                 // "son eklediginiz" kisayolu artik var olmayan bir kaydi onerir.
-                activityQueries.deleteActivityById("act_${removed.id}")
+                // Soft-delete: mezar tasi ese de gider.
+                activityQueries.deleteActivityById(deletedAt = now, id = "act_${removed.id}")
                 recomputePosition(removed.positionId)
             }
         }
@@ -569,6 +576,7 @@ class SqlDelightPortfolioRepository(
             occurredDay = today.day.toLong(),
             // Gercek saat kaynagi yok; okurken bos etiket uretilir.
             timeLabel = null,
+            updatedAt = clock.nowEpochMillis(),
         )
     }
 
@@ -666,8 +674,9 @@ class SqlDelightPortfolioRepository(
     override suspend fun reorderGoals(orderedIds: List<String>) {
         withContext(dispatcher) {
             database.transaction {
+                val now = clock.nowEpochMillis()
                 orderedIds.forEachIndexed { index, goalId ->
-                    goalQueries.updateGoalOrder(sortOrder = index.toLong(), id = goalId)
+                    goalQueries.updateGoalOrder(sortOrder = index.toLong(), updatedAt = now, id = goalId)
                 }
             }
         }
@@ -686,4 +695,7 @@ private const val OnboardedKey = "onboarded"
  */
 private val DeviceOnlySettings = setOf(
     PreferenceKeys.ActiveMemberId,
+    // Push watermark'i cihaza ait: geri yukleme onu sifirlamamali, yoksa restore
+    // sonrasi butun defter yeniden itilir (zararsiz ama gereksiz trafik).
+    PreferenceKeys.LastPushedAt,
 )

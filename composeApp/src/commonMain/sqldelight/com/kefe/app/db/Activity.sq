@@ -40,32 +40,51 @@ CREATE TABLE activity_events (
 
 CREATE INDEX activity_events_occurred ON activity_events(occurredYear, occurredMonth, occurredDay);
 
--- observeActivity() en yeni ustte bekliyor.
+-- observeActivity() en yeni ustte bekliyor. Silinen (mezar tasli) olay akista
+-- gorunmez.
 selectActivity:
 SELECT *
 FROM activity_events
+WHERE deletedAt IS NULL
 ORDER BY occurredYear DESC, occurredMonth DESC, occurredDay DESC, seq DESC;
 
 -- Ozet ekrani yalniz ilk birkac satiri gosteriyor; tum akisi okuyup atmasin.
 selectRecentActivity:
 SELECT *
 FROM activity_events
+WHERE deletedAt IS NULL
 ORDER BY occurredYear DESC, occurredMonth DESC, occurredDay DESC, seq DESC
 LIMIT :limit;
 
 selectActivityById:
 SELECT *
 FROM activity_events
-WHERE id = :id;
+WHERE id = :id AND deletedAt IS NULL;
+
+-- Yerel degisim tetikleyicisi.
+countActivity:
+SELECT count(*)
+FROM activity_events
+WHERE deletedAt IS NULL;
+
+-- Push: son esitlemeden beri degisenler (mezar tasi dahil).
+selectActivityChangedSince:
+SELECT *
+FROM activity_events
+WHERE updatedAt >= :since
+ORDER BY updatedAt;
 
 -- Bagli tablo yok, REPLACE guvenli. Cakisan kimlik (act_<islem kimligi>) ayni
 -- olayin tekrar yazilmasi demektir; yeni satir seq'in sonuna gecer.
 insertActivity:
-INSERT OR REPLACE INTO activity_events(id, memberId, kind, description, amount, isManualPrice, occurredYear, occurredMonth, occurredDay, timeLabel)
-VALUES (:id, :memberId, :kind, :description, :amount, :isManualPrice, :occurredYear, :occurredMonth, :occurredDay, :timeLabel);
+INSERT OR REPLACE INTO activity_events(id, memberId, kind, description, amount, isManualPrice, occurredYear, occurredMonth, occurredDay, timeLabel, updatedAt)
+VALUES (:id, :memberId, :kind, :description, :amount, :isManualPrice, :occurredYear, :occurredMonth, :occurredDay, :timeLabel, :updatedAt);
 
+-- SILME BIR YAZMADIR: satir yerinde kalir, deletedAt doldurulur. Hard delete
+-- cogaltilamaz - es cevrimdisiyken silinen olay, o dondugunde geri dirilirdi.
 deleteActivityById:
-DELETE FROM activity_events
+UPDATE activity_events
+SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE id = :id;
 
 deleteAllActivity:
