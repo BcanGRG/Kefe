@@ -57,6 +57,8 @@ fun SettingsScreen(
     state: SettingsUiState,
     onIntent: (SettingsIntent) -> Unit,
     onOpenShare: () -> Unit,
+    /** Bulut bolumundeki "Giriş yap" - giris ekranina goturur. */
+    onOpenLogin: () -> Unit,
     modifier: Modifier = Modifier,
     /** Surum satirina basinca acilan bilesen katalogu - gelistirme araci. */
     onOpenGallery: () -> Unit = {},
@@ -170,19 +172,37 @@ fun SettingsScreen(
                 }
             }
 
-            // Hesap bolumu YALNIZ GIRIS YAPILMISSA cizilir. Cikis yapmis (ya da
-            // hic girmemis) bir kullanicida ne gosterilecek e-posta ne de
-            // kapatilacak oturum var.
-            if (state.signedIn) {
-                SectionLabel("Hesap")
-                AccountGroupCard {
+            // Bulut: senkron ve hesap. Iki hali de var - once "Hesap" bolumu
+            // YALNIZ girisliyken ciziliyordu, yani onboarding'i gecmis ve oturumu
+            // kapanmis bir kullanicinin (ozellikle ikinci telefonun) GIRIS yolu
+            // hic yoktu. Senkron o giristen sonra baslar.
+            SectionLabel("Bulut")
+            AccountGroupCard {
+                if (state.signedIn) {
                     SettingsRow(onClick = null) {
                         Text("E-posta", style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
                         Text(state.email, style = t.caption, color = c.onSurfaceMuted)
                     }
                     KefeHairline()
+                    // Push watermark'i son ne zaman ilerledi. "En son ne zaman
+                    // sunucuya ulastik" - senkron acikliginin kanit satiri.
+                    SettingsValueRow(title = "Son senkron", value = state.syncStatusLabel)
+                    KefeHairline()
                     SettingsRow(onClick = { onIntent(SettingsIntent.SignOut) }) {
                         Text("Çıkış yap", style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
+                    }
+                } else {
+                    SettingsRow(onClick = onOpenLogin) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Giriş yap ve senkronu aç", style = t.body, color = c.onSurface)
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "Aynı hesap, iki telefon — birikim iki cihazda aynı",
+                                style = t.micro,
+                                color = c.onSurfaceMuted,
+                            )
+                        }
+                        KefeIcon(KefeIcons.ChevronRight, null, size = 20.dp, tint = c.onSurfaceMuted)
                     }
                 }
             }

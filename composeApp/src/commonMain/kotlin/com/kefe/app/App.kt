@@ -69,6 +69,7 @@ import com.kefe.app.ui.screens.account.ActivityScreen
 import com.kefe.app.ui.screens.account.ActivityViewModel
 import com.kefe.app.ui.screens.account.LoginIntent
 import com.kefe.app.ui.screens.account.LoginScreen
+import com.kefe.app.ui.screens.account.LoginStage
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.OnboardingPageCount
 import com.kefe.app.ui.screens.account.OnboardingScreen
@@ -294,11 +295,11 @@ private fun KefeApp(
             is SettingsEffect.DeleteFailed -> saveError = effect.message
             SettingsEffect.NotReady -> saveError = NotReadyMessage
 
-            // Cikis yigini da sifirlar: geri tusuyla ayarlara donebilmek,
-            // oturumu kapatmis birine hala hesap ekranini gostermek olurdu.
+            // Cikis artik giris ekranina ATMAZ: giris istege bagli, uygulama
+            // cevrimdisi tam calisir. Kullanici Ayarlar'da kalir; Bulut bolumu
+            // signedIn=false ile yeniden "Giriş yap" satirina doner.
             SettingsEffect.SignedOut -> {
-                while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-                backStack[0] = LoginKey
+                saveError = "Çıkış yapıldı — senkron kapatıldı."
             }
 
             // Paylasim sayfasi acildi; dosyanin nereye gittigine kullanici karar
@@ -416,20 +417,39 @@ private fun KefeApp(
                     entryProvider = entryProvider {
                         entry<LoginKey> {
                             val vm = koinViewModel<LoginViewModel>()
-                            val state by vm.state.collectAsState()
+                            val vmState by vm.state.collectAsState()
+
+                            // LoginKey CIFT GOREVLI: acilis KILIDI (yigin koku iken)
+                            // ve bulut GIRISI (Ayarlar'dan itilince). AYNI VM iki
+                            // baglama da hizmet ettigi icin kilitten arta kalan durum
+                            // (stage=Locked, unlocked=true) itilmis girise siziyordu:
+                            // "Giriş yap" bir an kilit ekranini -dolayisiyla parmak izi
+                            // istemini- acip, unlocked etkisiyle enterApp cagirip Ozet'e
+                            // geri atiyordu. Cozum: itilmis LoginKey HER ZAMAN temiz
+                            // SignIn gosterir; kilit kalintisini (stage/unlocked) yok
+                            // sayar. Boylece ne kilit ekrani cizilir ne de enterApp
+                            // tetiklenir - dogrudan e-posta/kod asamasi gelir.
+                            val asRoot = backStack.firstOrNull() == LoginKey
+                            val state = if (asRoot) vmState else vmState.copy(
+                                stage = LoginStage.SignIn,
+                                unlocked = false,
+                                unlockError = null,
+                            )
+
                             // Kod dogrulanir dogrulanmaz iceri gireriz; ekranda
                             // ayrica "devam et" dedirtmek bos bir adim olurdu.
                             LaunchedEffect(state.signedIn) {
                                 if (state.signedIn) enterApp()
                             }
-                            // Kilitliyse giris ekrani KILIT asamasiyla acilir.
-                            // Ayri bir gezinme girdisi degil: kilit, hesap girisi
-                            // gibi bir kapi degil, ayni ekranin bir hali.
-                            LaunchedEffect(locked) {
-                                if (locked) vm.onIntent(LoginIntent.Lock)
+                            // Kilit YALNIZ kok iken: itilmis (Ayarlar'dan giris)
+                            // LoginKey kilit istemez.
+                            LaunchedEffect(locked, asRoot) {
+                                if (locked && asRoot) vm.onIntent(LoginIntent.Lock)
                             }
                             // Kilit acilinca uygulama gorunur. unlockedThisLaunch
-                            // kabukta yasar: ekran dolasirken tekrar sorulmaz.
+                            // kabukta yasar: ekran dolasirken tekrar sorulmaz. Itilmis
+                            // giriste state.unlocked yukarida false'a zorlandigi icin
+                            // burasi yalniz gercek acilis kilidinde calisir.
                             LaunchedEffect(state.unlocked) {
                                 if (state.unlocked) {
                                     unlockedThisLaunch = true
@@ -613,6 +633,7 @@ private fun KefeApp(
                                     state = settings,
                                     onIntent = settingsVm::onIntent,
                                     onOpenShare = { goTo(ProfilesKey) },
+                                    onOpenLogin = { goTo(LoginKey) },
                                     onOpenGallery = { goTo(GalleryKey) },
                                 )
                             }

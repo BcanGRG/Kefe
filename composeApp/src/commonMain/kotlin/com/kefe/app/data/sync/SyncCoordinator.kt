@@ -44,11 +44,14 @@ class SyncCoordinator(
     fun start() {
         if (!claimStart()) return
 
-        // Tek tuketici: seri push. Hata YUTULUR - watermark ilerlemedigi icin veri
-        // kaybi yok, degisim bir sonraki tetikte yeniden denenir.
+        // Tek tuketici: seri push. Hata kullaniciya YANSIMAZ - watermark
+        // ilerlemedigi icin veri kaybi yok, degisim bir sonraki tetikte yeniden
+        // denenir. Yalniz tanisal bir satir birakiriz (logcat/stdout): sessiz bir
+        // senkron, calisan bir senkrondan ayirt edilemez olurdu.
         processScope.launch {
             for (userId in pushRequests) {
                 runCatching { pushEngine.pushOnce(userId) }
+                    .onFailure { println("Kefe senkron: push basarisiz - ${it.message}") }
             }
         }
 

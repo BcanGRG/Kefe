@@ -138,26 +138,30 @@ fun SummaryScreen(
             PriceFreshness.Fresh -> Unit
         }
 
-        // Asagi cekip yenileme - fiyat tazelemenin telefondaki refleks hareketi.
-        // Ust bardaki dugme duruyor; bu onun yerine degil yanina.
-        KefePullToRefresh(
-            refreshing = state.refreshing,
-            onRefresh = { onIntent(SummaryIntent.Refresh) },
-        ) {
-            when (state.stage) {
-                SummaryStage.Loading -> SummarySkeleton()
-                SummaryStage.Empty -> SummaryEmpty(
-                    onOpenGoals = onOpenGoals,
-                    onAddAsset = onAddAsset,
-                )
-                SummaryStage.Ready -> SummaryContent(
-                    state = state,
-                    onIntent = onIntent,
-                    onOpenGoal = onOpenGoal,
-                    onOpenGoals = onOpenGoals,
-                    onOpenActivity = onOpenActivity,
-                    onOpenMarket = onOpenMarket,
-                )
+        // Bos durumda cekip-yenileme YOK: tazelenecek fiyat yok, jest anlamsiz.
+        // Ilk kayittan sonra (Loading/Ready) devreye girer.
+        if (state.stage == SummaryStage.Empty) {
+            SummaryEmpty(onOpenGoals = onOpenGoals, onAddAsset = onAddAsset)
+        } else {
+            // Asagi cekip yenileme - fiyat tazelemenin telefondaki refleks hareketi.
+            // Ust bardaki dugme duruyor; bu onun yerine degil yanina.
+            KefePullToRefresh(
+                refreshing = state.refreshing,
+                onRefresh = { onIntent(SummaryIntent.Refresh) },
+            ) {
+                when (state.stage) {
+                    SummaryStage.Loading -> SummarySkeleton()
+                    SummaryStage.Ready -> SummaryContent(
+                        state = state,
+                        onIntent = onIntent,
+                        onOpenGoal = onOpenGoal,
+                        onOpenGoals = onOpenGoals,
+                        onOpenActivity = onOpenActivity,
+                        onOpenMarket = onOpenMarket,
+                    )
+                    // Bos durum yukarida ayrildi; buraya dusmez.
+                    SummaryStage.Empty -> Unit
+                }
             }
         }
     }
@@ -214,29 +218,34 @@ private fun SummaryTopBar(
                 }
             }
 
-            Spacer(Modifier.width(Space.x8))
-            KefeSyncChip(
-                state = when (state.freshness) {
-                    PriceFreshness.Offline -> SyncStatus.Offline
-                    else -> if (state.refreshing) SyncStatus.Pending else SyncStatus.Synced
-                },
-            )
+            // Bos durumda (ilk kayittan once) senkron cipi, gizle ve yenile
+            // CIZILMEZ: eslenecek veri, gizlenecek bakiye, tazeleyip
+            // gorunur kilacak fiyat yok. Ilk varlik eklenince hepsi gelir.
+            if (state.stage != SummaryStage.Empty) {
+                Spacer(Modifier.width(Space.x8))
+                KefeSyncChip(
+                    state = when (state.freshness) {
+                        PriceFreshness.Offline -> SyncStatus.Offline
+                        else -> if (state.refreshing) SyncStatus.Pending else SyncStatus.Synced
+                    },
+                )
 
-            Spacer(Modifier.width(Space.x8))
-            KefeIconButton(
-                icon = if (state.masked) KefeIcons.EyeOff else KefeIcons.Eye,
-                contentDescription = if (state.masked) "Bakiyeleri göster" else "Bakiyeleri gizle",
-                onClick = { onIntent(SummaryIntent.ToggleMask) },
-                modifier = Modifier.requiredSize(Sizes.touchTarget),
-            )
-            // Goz butonunun `margin-right:-4px` degeri araligi 8'den 4'e indirir.
-            Spacer(Modifier.width(Space.x4))
-            KefeIconButton(
-                icon = KefeIcons.Refresh,
-                contentDescription = "Fiyatları yenile",
-                onClick = { onIntent(SummaryIntent.Refresh) },
-                modifier = Modifier.requiredSize(Sizes.touchTarget),
-            )
+                Spacer(Modifier.width(Space.x8))
+                KefeIconButton(
+                    icon = if (state.masked) KefeIcons.EyeOff else KefeIcons.Eye,
+                    contentDescription = if (state.masked) "Bakiyeleri göster" else "Bakiyeleri gizle",
+                    onClick = { onIntent(SummaryIntent.ToggleMask) },
+                    modifier = Modifier.requiredSize(Sizes.touchTarget),
+                )
+                // Goz butonunun `margin-right:-4px` degeri araligi 8'den 4'e indirir.
+                Spacer(Modifier.width(Space.x4))
+                KefeIconButton(
+                    icon = KefeIcons.Refresh,
+                    contentDescription = "Fiyatları yenile",
+                    onClick = { onIntent(SummaryIntent.Refresh) },
+                    modifier = Modifier.requiredSize(Sizes.touchTarget),
+                )
+            }
         }
 
         state.priceLine()?.let { line ->
