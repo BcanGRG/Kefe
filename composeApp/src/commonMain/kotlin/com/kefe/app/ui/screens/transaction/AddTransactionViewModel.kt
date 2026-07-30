@@ -59,6 +59,12 @@ class AddTransactionViewModel(
     private var positions: List<Position> = emptyList()
     private var members: List<Member> = emptyList()
 
+    // Varlik -> hedef atamasi (positionId -> goalId). Hedef secici bir pozisyonun
+    // MEVCUT hedefini onceden secsin ve "Hedefsiz" secilince atama kaldirilabilsin
+    // diye tutulur. Yoksa mevcut hedefe atanmis varlik, seciciye dokunulmadigi
+    // icin o hedefte kaliyor ("Hedefsiz sectim ama Ev'de duruyor").
+    private var assignments: Map<String, String> = emptyMap()
+
     // Bu oturumda TEFAS'tan canli cekilen fonlar. fundResults her withPrices'ta
     // yeniden kuruldugu icin ayri saklanir; katalog ile birlestirilir.
     private var liveFunds: List<FundResult> = emptyList()
@@ -73,6 +79,7 @@ class AddTransactionViewModel(
     init {
         observePortfolio()
         observePrices()
+        observeAssignments()
     }
 
     override fun onIntent(intent: AddTransactionIntent) {
@@ -111,7 +118,10 @@ class AddTransactionViewModel(
 
             AddTransactionIntent.SearchFundOnline -> searchFundOnline()
 
-            AddTransactionIntent.Continue -> if (s.canContinue) update(s.toAmountStep())
+            // 2. adima gecerken secici, varlik zaten portfoydeyse onun MEVCUT
+            // hedefini gosterir (yeni varlikta Hedefsiz).
+            AddTransactionIntent.Continue ->
+                if (s.canContinue) update(s.toAmountStep().withCurrentGoal())
 
             AddTransactionIntent.Back -> update(s.copy(step = AddTransactionStep.Asset))
 
@@ -122,7 +132,7 @@ class AddTransactionViewModel(
                         selectedSubtype = last.subtype,
                         karat = last.karat,
                         selectedFundKey = null,
-                    ).toAmountStep(quantityText = last.quantityText)
+                    ).toAmountStep(quantityText = last.quantityText).withCurrentGoal()
                 )
             }
 
@@ -213,6 +223,23 @@ class AddTransactionViewModel(
                 _state.value = withPrices(_state.value)
             }
         }
+    }
+
+    private fun observeAssignments() {
+        viewModelScope.launch {
+            portfolioRepository.observeGoalAssets().collect { assignments = it }
+        }
+    }
+
+    /**
+     * Varlik bir pozisyonla eslesiyorsa hedef seciciyi o pozisyonun MEVCUT
+     * hedefine ayarlar (yeni varlikta null = Hedefsiz). Boylece Ev'e atanmis bir
+     * varliga daha ekleyen kullanici seciciyi "Ev" gorur; dokunmadan kaydederse
+     * atama korunur, "Hedefsiz"e alirsa kaldirilir.
+     */
+    private fun AddTransactionUiState.withCurrentGoal(): AddTransactionUiState {
+        val matched = positions.firstOrNull { it.matches(this) }
+        return copy(selectedGoalId = matched?.let { assignments[it.id] })
     }
 
     /** Secimi degistiren her intent fiyat tablosunu yeniden uygular. */
@@ -356,6 +383,9 @@ class AddTransactionViewModel(
                         .orEmpty(),
                     note = transaction.note.orEmpty(),
                     storage = transaction.storage.orEmpty(),
+                    // Secici pozisyonun MEVCUT hedefini gosterir; kullanici
+                    // duzenlerken varligin hangi hedefte oldugunu gorur.
+                    selectedGoalId = assignments[position.id],
                     // Not, iscilik veya saklama doluysa alan kapali kalmamali.
                     extraExpanded = transaction.fee > 0.0 ||
                         !transaction.note.isNullOrBlank() ||
@@ -457,11 +487,17 @@ class AddTransactionViewModel(
                 )
             )
 
-            // Hedef secildiyse varlik o hedefe atanir - hedefin "karsilayanlar"
-            // listesine duser. Secilmezse dokunulmaz (toplam birikime eklenmis kalir).
-            s.selectedGoalId?.let { goalId ->
-                portfolioRepository.assignPositionToGoal(positionId = positionId, goalId = goalId)
-            }
+            // Secici ne diyorsa O uygulanir: secili hedefe ata, "Hedefsiz" (null)
+            // ise atamayi KALDIR. Once yalniz atama YAPILIYORDU (null gecince
+            // dokunulmuyordu); o yuzden Ev'e atanmis bir varliga "Hedefsiz" ile
+            // ekleyen kullanici, varlik Ev'de kaldigi icin "hedefsiz sectim ama
+            // gene Ev'e yazildi" diyordu. Secici artik mevcut hedefi onceden
+            // gosterdigi icin (bkz. withCurrentGoal) dokunmadan kaydeden atamasini
+            // yanlislikla silmez.
+            portfolioRepository.assignPositionToGoal(
+                positionId = positionId,
+                goalId = s.selectedGoalId,
+            )
         }
 
         if (replaced != null) portfolioRepository.deleteTransaction(replaced)
