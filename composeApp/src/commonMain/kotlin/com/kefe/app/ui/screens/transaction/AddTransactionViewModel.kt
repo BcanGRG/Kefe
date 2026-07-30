@@ -256,8 +256,13 @@ class AddTransactionViewModel(
         )
     }
 
-    /** Katalogdaki 5 fon + bu oturumda canli cekilenler; fiyat tablodan EZILIR. */
+    /**
+     * Fon oneri listesi: kullanicinin TUTTUGU fonlar (degere gore ilk 5) + bu
+     * oturumda canli cekilenler. Hic fon yoksa BOS - once elle yazilmis 5 fon
+     * gosteriliyordu, artik yalniz kullanicinin kendi fonlari onerilir.
+     */
     private fun mergedFunds(prices: PriceBoard): List<FundResult> {
+        val held = heldFundResults(positions, prices)
         val live = liveFunds.map { entry ->
             val onBoard = prices.byKey(entry.assetKey)
             entry.copy(
@@ -265,8 +270,8 @@ class AddTransactionViewModel(
                 changePercent = onBoard?.changePercent ?: entry.changePercent,
             )
         }
-        // Ayni kod hem katalogda hem canlida olursa katalog kazanir (once gelir).
-        return (fundCatalog(prices) + live).distinctBy { it.assetKey }
+        // Tutulan fon hem oneride hem canlida olabilir; tutulan kazanir (once gelir).
+        return (held + live).distinctBy { it.assetKey }
     }
 
     /**
@@ -532,41 +537,32 @@ private fun marketPriceOf(s: AddTransactionUiState, board: PriceBoard): Double =
         AssetClass.Cash -> 1.0
     }
 
-// --- Fon kataloğu ------------------------------------------------------------
+// --- Fon onerileri -----------------------------------------------------------
 
 /**
- * Aranabilir fon listesi. Kod/ad/kurucu bilgisi urun katalogundan gelir; fiyat
- * ve gunluk degisim fiyat tablosunda varsa oradan EZILIR - iki ekran arasinda
- * kotasyon farki olmasin diye.
+ * Oneri listesi kullanicinin fon POZISYONLARINDAN turer: en cok tuttugu (degere
+ * gore) ilk 5 fon. Hic fon yoksa BOS doner - once elle yazilmis sabit 5 fon
+ * gosteriliyordu. Fiyat/degisim once fiyat tablosundan (canli), yoksa pozisyonun
+ * son bilinen degerinden gelir.
  */
-private data class FundEntry(
-    val assetKey: String,
-    val code: String,
-    val name: String,
-    val issuer: String,
-    val price: Double,
-    val changePercent: Double,
-)
-
-private val FundCatalog: List<FundEntry> = listOf(
-    FundEntry("fund_tte", "TTE", "Türkiye Teknoloji Değişim Fonu", "İş Portföy", 21.40, -2.40),
-    FundEntry("fund_tkf", "TKF", "Teknoloji Katılım Fonu", "Ziraat Portföy", 13.86, 0.74),
-    FundEntry("fund_ytd", "YTD", "Yeni Teknolojiler Değişken Fon", "Yapı Kredi Portföy", 9.72, 0.31),
-    FundEntry("fund_afa", "AFA", "Ak Portföy Altın Fonu", "Ak Portföy", 24.60, 0.52),
-    FundEntry("fund_ipv", "IPV", "İş Portföy Değişken Fon", "İş Portföy", 24.41, 0.18),
-)
-
-private fun fundCatalog(board: PriceBoard): List<FundResult> = FundCatalog.map { entry ->
-    val live = board.byKey(entry.assetKey)
-    FundResult(
-        assetKey = entry.assetKey,
-        code = entry.code,
-        name = entry.name,
-        issuer = entry.issuer,
-        price = live?.ask ?: entry.price,
-        changePercent = live?.changePercent ?: entry.changePercent,
-    )
-}
+private fun heldFundResults(positions: List<Position>, board: PriceBoard): List<FundResult> =
+    positions
+        .filter { it.assetClass == AssetClass.Fund && it.quantity > 0.0 }
+        .sortedByDescending { it.value }
+        .take(5)
+        .map { pos ->
+            val assetKey = pos.id.removePrefix("pos_")
+            val onBoard = board.byKey(assetKey)
+            FundResult(
+                assetKey = assetKey,
+                code = assetKey.removePrefix("fund_").uppercase(),
+                // Pozisyon adi "KOD · Tam Ad"; oneride tam ad gosterilir.
+                name = pos.name.substringAfter(" · ", pos.name),
+                issuer = "",
+                price = onBoard?.ask ?: pos.unitPrice,
+                changePercent = onBoard?.changePercent ?: pos.dailyChangePercent,
+            )
+        }
 
 // --- Son eklenen -------------------------------------------------------------
 

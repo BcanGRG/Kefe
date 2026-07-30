@@ -713,13 +713,17 @@ private fun FundResults(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = fund.issuer,
-                        style = t.micro,
-                        color = c.onSurfaceMuted,
-                        maxLines = 1,
-                    )
+                    // Kurucu yalniz katalog/canli sonuclarda var; tutulan fon
+                    // onerisinde bos kalir, o zaman satir hic cizilmez.
+                    if (fund.issuer.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = fund.issuer,
+                            style = t.micro,
+                            color = c.onSurfaceMuted,
+                            maxLines = 1,
+                        )
+                    }
                 }
                 Spacer(Modifier.width(Space.x12))
                 Column(horizontalAlignment = Alignment.End) {
