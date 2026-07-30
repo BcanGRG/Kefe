@@ -49,7 +49,9 @@ import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.formatMonthYear
 import com.kefe.app.domain.model.monthName
 import com.kefe.app.ui.components.AmountKeyboard
+import com.kefe.app.ui.components.ThousandsSeparatorTransformation
 import com.kefe.app.ui.components.asAmountInput
+import androidx.compose.ui.text.input.VisualTransformation
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeSwitch
@@ -188,6 +190,7 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
         value = state.amountText,
         onValueChange = { onIntent(GoalsIntent.EditorAmount(it.asAmountInput())) },
         keyboardOptions = AmountKeyboard,
+        visualTransformation = ThousandsSeparatorTransformation(),
         placeholder = "0",
         height = Sizes.fieldLarge,
         textStyle = t.h1.copy(letterSpacing = 0.em).tabular(),
@@ -280,6 +283,7 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
                 value = state.contributionText,
                 onValueChange = { onIntent(GoalsIntent.EditorContribution(it.asAmountInput())) },
                 keyboardOptions = AmountKeyboard,
+                visualTransformation = ThousandsSeparatorTransformation(),
                 placeholder = "0",
                 textStyle = t.body.tabular(),
                 // Tasarimda alan tek parca "₺50.000" gosterir - araya bosluk girmez.
@@ -297,8 +301,10 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
         )
     }
 
-    Spacer(Modifier.height(Space.x16 + 2.dp))
-    AdvancedSection(state, onIntent)
+    // "Gelismis > ayrilan pay" (allocation) KALDIRILDI: toggle hicbir seyi
+    // degistirmiyordu (goalWealth atamaya gore calisir, allocation'a degil) ve
+    // kafa karistiriyordu. Hedefi olusturan varliklar Hedef Detayi'nda gorulur;
+    // atama yoksa tum birikim sayilir.
 
     Spacer(Modifier.height(Space.x16 + 2.dp))
     Row(
@@ -326,157 +332,6 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
         )
     }
     Spacer(Modifier.height(Space.x24))
-}
-
-// --- Gelismis --------------------------------------------------------------
-
-@Composable
-private fun AdvancedSection(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
-    val c = KefeTheme.colors
-    val t = KefeTheme.type
-
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(KefeShapes.button)
-            .background(c.surface)
-            .border(Sizes.hairline, c.outline, KefeShapes.button),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onIntent(GoalsIntent.ToggleEditorAdvanced) }
-                .padding(Space.x14),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            KefeIcon(
-                icon = if (state.advancedExpanded) KefeIcons.ChevronDown else KefeIcons.ChevronRight,
-                contentDescription = null,
-                size = IconSize.small,
-                tint = c.onSurfaceMuted,
-            )
-            Spacer(Modifier.width(Space.x10))
-            Text("Gelişmiş", style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(Space.x8))
-            Text(state.allocation.label(), style = t.caption, color = c.onSurfaceMuted)
-        }
-
-        if (state.advancedExpanded) {
-            Column(Modifier.padding(start = Space.x14, end = Space.x14, bottom = Space.x14)) {
-                Text(
-                    "Bu hedefe ayrılan pay",
-                    style = t.caption,
-                    color = c.onSurfaceMuted,
-                )
-                Spacer(Modifier.height(Space.x10))
-
-                AllocationRow(
-                    title = "Tüm birikim",
-                    selected = state.allocation == GoalAllocation.AllWealth,
-                    onClick = {
-                        onIntent(GoalsIntent.EditorAllocation(GoalAllocation.AllWealth))
-                    },
-                )
-                Spacer(Modifier.height(Space.x8))
-                AllocationRow(
-                    title = "Belirli bir pay",
-                    selected = state.allocation == GoalAllocation.FixedShare,
-                    onClick = {
-                        onIntent(GoalsIntent.EditorAllocation(GoalAllocation.FixedShare))
-                    },
-                    trailing = { SharePillGroup() },
-                )
-
-                Spacer(Modifier.height(Space.x12))
-                SheetInfoBox(
-                    text = "Hedefler aynı birikimi paylaşıyor. " +
-                        "${trCount(state.openGoalCount)} hedef de \"tüm birikim\" modunda.",
-                    background = c.surfaceSunken,
-                    bordered = false,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AllocationRow(
-    title: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    trailing: (@Composable () -> Unit)? = null,
-) {
-    val c = KefeTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(KefeShapes.button)
-            .background(if (selected) c.accentMuted else Color.Transparent)
-            .border(
-                Sizes.hairline,
-                if (selected) c.accent else c.outline,
-                KefeShapes.button,
-            )
-            .clickable(onClick = onClick)
-            .padding(Space.x12),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(if (selected) c.surface else Color.Transparent)
-                .border(
-                    width = if (selected) 6.dp else 1.5.dp,
-                    color = if (selected) c.accent else c.onSurfaceMuted,
-                    shape = CircleShape,
-                ),
-        )
-        Spacer(Modifier.width(Space.x10))
-        Text(title, style = KefeTheme.type.body, color = c.onSurface, modifier = Modifier.weight(1f))
-        if (trailing != null) {
-            Spacer(Modifier.width(Space.x8))
-            trailing()
-        }
-    }
-}
-
-/** "Belirli bir pay" secilmediginde soluk duran ₺/% secici. */
-@Composable
-private fun SharePillGroup() {
-    val c = KefeTheme.colors
-    Row(
-        modifier = Modifier
-            .alpha(0.5f)
-            .clip(KefeShapes.pill)
-            .background(c.surfaceSunken)
-            .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(Space.x4),
-    ) {
-        SharePill("₺", active = true)
-        SharePill("%", active = false)
-    }
-}
-
-@Composable
-private fun SharePill(text: String, active: Boolean) {
-    val c = KefeTheme.colors
-    Box(
-        modifier = Modifier
-            .height(26.dp)
-            .clip(KefeShapes.pill)
-            .background(if (active) c.surfaceElevated else Color.Transparent)
-            .padding(horizontal = Space.x10),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = KefeTheme.type.micro.copy(
-                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-            ),
-            color = if (active) c.onSurface else c.onSurfaceMuted,
-        )
-    }
 }
 
 // --- Altlik ----------------------------------------------------------------
@@ -546,6 +401,8 @@ private fun SheetTextField(
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    /** Tutar alanlari icin binlik ayrac (deger ham kalir; bkz. imlec sorunu). */
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     val c = KefeTheme.colors
     val interaction = remember { MutableInteractionSource() }
@@ -575,6 +432,7 @@ private fun SheetTextField(
             singleLine = true,
             cursorBrush = SolidColor(c.accent),
             keyboardOptions = keyboardOptions,
+            visualTransformation = visualTransformation,
             interactionSource = interaction,
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {

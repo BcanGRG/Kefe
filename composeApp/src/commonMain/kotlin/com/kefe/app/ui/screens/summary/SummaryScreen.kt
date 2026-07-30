@@ -816,23 +816,32 @@ private fun MonthCard(
                         color = c.onSurface,
                         modifier = Modifier.alignByBaseline(),
                     )
-                    Spacer(Modifier.width(DeltaGap))
-                    Text(
-                        text = "/ ${Money.tl(totals.monthTarget)} hedef",
-                        style = t.caption.tabular(),
-                        color = c.onSurfaceMuted,
-                        modifier = Modifier.alignByBaseline(),
-                    )
+                    // Hedef kismi YALNIZ ana hedef varken: hedef yokken aylik bir
+                    // katki hedefi de yok, "/ ₺0 hedef" gurultuydu.
+                    if (totals.monthTarget > 0.0) {
+                        Spacer(Modifier.width(DeltaGap))
+                        Text(
+                            text = "/ ${Money.tl(totals.monthTarget)} hedef",
+                            style = t.caption.tabular(),
+                            color = c.onSurfaceMuted,
+                            modifier = Modifier.alignByBaseline(),
+                        )
+                    }
                 }
             }
-            Text(
-                text = Money.ratioOf(progress.toDouble()),
-                style = t.caption.tabular(),
-                color = c.onSurfaceMuted,
-            )
+            if (totals.monthTarget > 0.0) {
+                Text(
+                    text = Money.ratioOf(progress.toDouble()),
+                    style = t.caption.tabular(),
+                    color = c.onSurfaceMuted,
+                )
+            }
         }
-        Spacer(Modifier.height(Space.x12))
-        KefeProgressBarThin(progress = progress)
+        // Ilerleme cubugu da hedefe baglidir; hedef yokken cizilmez.
+        if (totals.monthTarget > 0.0) {
+            Spacer(Modifier.height(Space.x12))
+            KefeProgressBarThin(progress = progress)
+        }
     }
 }
 

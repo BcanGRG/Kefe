@@ -67,6 +67,11 @@ data class GoalDetailUiState(
 
     /** Bu hedefe atanmis varliklar. Bos ise hedef tum birikimi sayiyor. */
     val assignedAssets: List<Position> = emptyList(),
+    /**
+     * Hedefi OLUSTURAN varliklar: atanmis varlik varsa onlar; yoksa (tum birikim
+     * modu) tum varliklar. "Bu hedefi karsilayanlar" listesi bunu gosterir.
+     */
+    val composingAssets: List<Position> = emptyList(),
     /** Seciciye dokulen tum varliklar. */
     val assignableAssets: List<AssignableAsset> = emptyList(),
     val assetPickerOpen: Boolean = false,

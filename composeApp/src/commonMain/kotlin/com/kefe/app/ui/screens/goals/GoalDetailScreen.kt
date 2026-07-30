@@ -252,15 +252,27 @@ private fun AssignedAssetsCard(
 
         Spacer(Modifier.height(Space.x10))
 
-        if (state.assignedAssets.isEmpty()) {
+        // Atama yoksa hedef TUM birikimi sayar; yine de olusturan varliklar tek
+        // tek listelenir - kullanici "bu hedefi hangi varliklar olusturuyor"
+        // sorusunu her durumda gorur. Not yalniz atama-yok halinde cikar.
+        if (state.assignedAssets.isEmpty() && state.composingAssets.isNotEmpty()) {
             Text(
-                "Varlık atanmadı — tüm birikiminiz bu hedefe sayılıyor. " +
-                    "Belirli varlıkları ayırmak isterseniz seçin.",
+                "Tüm birikiminiz bu hedefe sayılıyor. Belirli varlıkları ayırmak " +
+                    "isterseniz seçin.",
+                style = t.caption,
+                color = c.onSurfaceMuted,
+            )
+            Spacer(Modifier.height(Space.x10))
+        }
+
+        if (state.composingAssets.isEmpty()) {
+            Text(
+                "Henüz varlık yok — birikim ekledikçe burada görünür.",
                 style = t.caption,
                 color = c.onSurfaceMuted,
             )
         } else {
-            state.assignedAssets.forEachIndexed { index, position ->
+            state.composingAssets.forEachIndexed { index, position ->
                 if (index > 0) KefeHairline()
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = Space.x10),

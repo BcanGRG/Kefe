@@ -89,6 +89,7 @@ import com.kefe.app.ui.screens.assets.AssetDetailViewModel
 import com.kefe.app.ui.screens.assets.AssetsScreen
 import com.kefe.app.ui.screens.assets.AssetsViewModel
 import com.kefe.app.ui.screens.goals.GoalDetailScreen
+import com.kefe.app.ui.screens.goals.GoalDetailStage
 import com.kefe.app.ui.screens.goals.GoalDetailViewModel
 import com.kefe.app.ui.screens.goals.GoalEditSheet
 import com.kefe.app.ui.screens.goals.GoalsIntent
@@ -578,8 +579,24 @@ private fun KefeApp(
                         }
 
                         entry<GoalDetailKey> { key ->
-                            val vm = koinViewModel<GoalDetailViewModel> { parametersOf(key.goalId) }
+                            // key = goalId: her hedef AYRI VM alir. Aksi halde Koin
+                            // ayni tur icin ILK olusan VM'i (ilk goalId ile) tum
+                            // GoalDetailKey girislerinde geri veriyordu - hangi hedefe
+                            // basilirsa ayni hedef aciliyordu.
+                            val vm = koinViewModel<GoalDetailViewModel>(key = key.goalId) {
+                                parametersOf(key.goalId)
+                            }
                             val state by vm.state.collectAsState()
+                            // Hedef silinince (detay Missing'e duser) elle geri
+                            // donmek gerekmesin: kendiliginden listeye doner. AMA
+                            // yalniz bir kez YUKLENDIYSE (Ready gorduyse) - aksi
+                            // halde acilistaki gecici Missing "Hedef bulunamadı"yi
+                            // parlatip geri atardi.
+                            var wasReady by remember { mutableStateOf(false) }
+                            LaunchedEffect(state.stage) {
+                                if (state.stage == GoalDetailStage.Ready) wasReady = true
+                                if (state.stage == GoalDetailStage.Missing && wasReady) goBack()
+                            }
                             ContentWidth {
                                 GoalDetailScreen(
                                     state = state,

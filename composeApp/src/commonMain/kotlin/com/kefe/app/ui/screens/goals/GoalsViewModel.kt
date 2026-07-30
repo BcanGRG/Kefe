@@ -68,13 +68,16 @@ class GoalsViewModel(
 
             is GoalsIntent.EditorName -> editor { it.copy(name = intent.value) }
             is GoalsIntent.EditorIcon -> editor { it.copy(iconKey = intent.key) }
+            // Deger HAM tutulur (ayraçsız); binlik ayraci ekranda
+            // ThousandsSeparatorTransformation ekler. Metne yazilsaydi imlec her
+            // tusta sona atlar, ortadaki rakam duzenlenemezdi.
             is GoalsIntent.EditorAmount -> editor {
-                it.copy(amountText = groupDigits(intent.value))
+                it.copy(amountText = intent.value)
             }
 
             is GoalsIntent.EditorUnit -> editor { it.convertTo(intent.unit) }
             is GoalsIntent.EditorContribution -> editor {
-                it.copy(contributionText = groupDigits(intent.value))
+                it.copy(contributionText = intent.value)
             }
 
             is GoalsIntent.EditorAllocation -> editor { it.copy(allocation = intent.allocation) }
@@ -161,10 +164,10 @@ class GoalsViewModel(
             goalId = goal.id,
             name = goal.name,
             iconKey = goal.iconKey,
-            amountText = Money.number(goal.amount),
+            amountText = rawAmount(goal.amount),
             unit = GoalUnit.Try,
             targetDate = goal.targetDate,
-            contributionText = Money.number(goal.monthlyContribution),
+            contributionText = rawAmount(goal.monthlyContribution),
             allocation = goal.allocation,
             isMain = goal.isMain,
             advancedExpanded = true,
@@ -180,7 +183,7 @@ class GoalsViewModel(
     private fun GoalEditorState.convertTo(target: GoalUnit): GoalEditorState {
         if (target == unit) return this
         val converted = amountInTry() / rateOf(target)
-        return copy(unit = target, amountText = Money.number(converted))
+        return copy(unit = target, amountText = rawAmount(converted))
     }
 
     private fun save() {
@@ -249,8 +252,13 @@ class GoalsViewModel(
  * Girisi rakamlara indirger ve binlik noktalarini yeniden kurar; alanlarda
  * tutar her zaman `7.800.000` bicimindedir.
  */
-private fun groupDigits(raw: String): String {
-    val digits = raw.filter { it.isDigit() }.trimStart('0')
-    if (digits.isEmpty()) return ""
-    return Money.number(digits.toDouble())
+/**
+ * Sayiyi alana yazilacak HAM metne cevirir: binlik ayrac YOK (onu cizimde
+ * [com.kefe.app.ui.components.ThousandsSeparatorTransformation] ekler), ondalik
+ * virgullu. Tam sayida ondalik gosterilmez.
+ */
+private fun rawAmount(value: Double): String = when {
+    value <= 0.0 -> ""
+    value % 1.0 == 0.0 -> value.toLong().toString()
+    else -> value.toString().replace('.', ',')
 }
