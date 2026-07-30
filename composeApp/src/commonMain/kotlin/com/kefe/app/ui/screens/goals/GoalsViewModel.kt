@@ -15,6 +15,7 @@ import com.kefe.app.domain.model.toEpochDay
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.rawAmount
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -252,13 +253,3 @@ class GoalsViewModel(
  * Girisi rakamlara indirger ve binlik noktalarini yeniden kurar; alanlarda
  * tutar her zaman `7.800.000` bicimindedir.
  */
-/**
- * Sayiyi alana yazilacak HAM metne cevirir: binlik ayrac YOK (onu cizimde
- * [com.kefe.app.ui.components.ThousandsSeparatorTransformation] ekler), ondalik
- * virgullu. Tam sayida ondalik gosterilmez.
- */
-private fun rawAmount(value: Double): String = when {
-    value <= 0.0 -> ""
-    value % 1.0 == 0.0 -> value.toLong().toString()
-    else -> value.toString().replace('.', ',')
-}

@@ -135,3 +135,15 @@ object Money {
         return sb.toString()
     }
 }
+
+/**
+ * Sayiyi bir tutar ALANINA yazilacak HAM metne cevirir: binlik ayrac YOK (onu
+ * cizimde [com.kefe.app.ui.components.ThousandsSeparatorTransformation] ekler),
+ * ondalik virgullu. Ham deger sayesinde String tabanli alanda imlec yerinde
+ * durur ve ortadaki rakam duzenlenebilir. Tam sayida ondalik gosterilmez.
+ */
+fun rawAmount(value: Double): String = when {
+    value <= 0.0 -> ""
+    value % 1.0 == 0.0 -> value.toLong().toString()
+    else -> value.toString().replace('.', ',')
+}
