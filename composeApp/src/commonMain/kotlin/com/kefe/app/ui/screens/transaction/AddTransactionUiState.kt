@@ -2,6 +2,7 @@ package com.kefe.app.ui.screens.transaction
 
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.Currency
+import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.Karat
 import com.kefe.app.domain.model.KefeDate
@@ -102,6 +103,14 @@ data class AddTransactionUiState(
     /** Alt notta adi gecen diger uye - kayit ona da gorunecek. */
     val partnerName: String = "",
     val saving: Boolean = false,
+
+    /** Hedef seciciye dokulen hedefler. Bos ise secici hic cizilmez. */
+    val availableGoals: List<Goal> = emptyList(),
+    /**
+     * Bu varligin atanacagi hedef. null = hedefsiz (dogrudan toplam birikime).
+     * Secilirse kayit sonrasi varlik o hedefe atanir ve "karsilayanlar"a duser.
+     */
+    val selectedGoalId: String? = null,
 )
 
 /**
@@ -122,6 +131,8 @@ sealed interface AddTransactionEffect {
 sealed interface AddTransactionIntent {
     data class SelectAssetClass(val assetClass: AssetClass) : AddTransactionIntent
     data class SelectSubtype(val subtype: GoldSubtype) : AddTransactionIntent
+    /** Varligi bir hedefe ata (ya da tekrar dokununca kaldir). null = hedefsiz. */
+    data class SelectGoal(val goalId: String?) : AddTransactionIntent
     data class SelectKarat(val karat: Karat) : AddTransactionIntent
     data class SelectCurrency(val currency: Currency) : AddTransactionIntent
     data class ChangeGram(val text: String) : AddTransactionIntent

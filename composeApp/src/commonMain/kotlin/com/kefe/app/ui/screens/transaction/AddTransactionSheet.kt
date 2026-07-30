@@ -8,6 +8,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -826,9 +828,87 @@ private fun StepAmount(
     Spacer(Modifier.height(6.dp))
     DateField(state.date, state.isToday)
 
+    // Hedef secici YALNIZ hedef varken cizilir. Secilirse varlik o hedefe atanir;
+    // secilmezse dogrudan toplam birikime eklenir.
+    if (state.availableGoals.isNotEmpty()) {
+        Spacer(Modifier.height(18.dp))
+        GoalPicker(state, onIntent)
+    }
+
     Spacer(Modifier.height(18.dp))
     ExtraFields(state, onIntent)
     Spacer(Modifier.height(Space.x16))
+}
+
+/**
+ * Varligi bir hedefe atamak icin cip seridi. "Hedefsiz" + her hedef. Bu, hedef
+ * detayindaki "Varlık seç" ile ayni atamayi ONDEN yapar - kullanici varligi
+ * eklerken hangi hedefe saydigina karar verir.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GoalPicker(
+    state: AddTransactionUiState,
+    onIntent: (AddTransactionIntent) -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    SectionLabel("Hedef")
+    Spacer(Modifier.height(6.dp))
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(Space.x8),
+        verticalArrangement = Arrangement.spacedBy(Space.x8),
+    ) {
+        GoalChip(
+            label = "Hedefsiz",
+            selected = state.selectedGoalId == null,
+            onClick = { onIntent(AddTransactionIntent.SelectGoal(null)) },
+        )
+        state.availableGoals.forEach { goal ->
+            GoalChip(
+                label = goal.name,
+                selected = state.selectedGoalId == goal.id,
+                onClick = { onIntent(AddTransactionIntent.SelectGoal(goal.id)) },
+            )
+        }
+    }
+    Spacer(Modifier.height(6.dp))
+    Text(
+        text = if (state.selectedGoalId == null) {
+            "Toplam birikime eklenir."
+        } else {
+            "Seçilen hedefin \"karşılayanlar\" listesine sayılır."
+        },
+        style = t.caption,
+        color = c.onSurfaceMuted,
+    )
+}
+
+@Composable
+private fun GoalChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val c = KefeTheme.colors
+    Box(
+        modifier = Modifier
+            .clip(KefeShapes.pill)
+            .background(if (selected) c.accentMuted else c.surface)
+            .border(
+                Sizes.hairline,
+                if (selected) c.accent else c.outline,
+                KefeShapes.pill,
+            )
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = Space.x14, vertical = Space.x8),
+    ) {
+        Text(
+            text = label,
+            style = KefeTheme.type.caption.copy(
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            ),
+            color = if (selected) c.accent else c.onSurface,
+            maxLines = 1,
+        )
+    }
 }
 
 @Composable

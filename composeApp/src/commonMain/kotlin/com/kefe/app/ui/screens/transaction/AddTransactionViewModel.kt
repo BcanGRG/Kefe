@@ -83,6 +83,11 @@ class AddTransactionViewModel(
 
             is AddTransactionIntent.SelectSubtype -> update(s.copy(selectedSubtype = intent.subtype))
 
+            // Ayni hedefe tekrar dokunmak secimi KALDIRIR (hedefsiz'e doner).
+            is AddTransactionIntent.SelectGoal -> update(
+                s.copy(selectedGoalId = intent.goalId.takeIf { it != s.selectedGoalId }),
+            )
+
             is AddTransactionIntent.SelectKarat -> update(s.copy(karat = intent.karat))
 
             is AddTransactionIntent.SelectCurrency -> update(s.copy(currency = intent.currency))
@@ -167,13 +172,17 @@ class AddTransactionViewModel(
                 portfolioRepository.observeMembers(),
                 portfolioRepository.observeActivity(),
                 preferences.observeAll(),
-            ) { positionList, memberList, activity, prefs ->
+                portfolioRepository.observeGoals(),
+            ) { positionList, memberList, activity, prefs, goalList ->
                 positions = positionList
                 members = memberList
                 activeMemberId = prefs[PreferenceKeys.ActiveMemberId]
                     ?: memberList.firstOrNull()?.id.orEmpty()
                 _state.value.copy(
                     lastAdded = lastAddedOf(activity, positionList),
+                    // Hedef seciciye dokulen hedefler; hic yoksa secici cizilmez ve
+                    // varlik dogrudan toplam birikime eklenir.
+                    availableGoals = goalList,
                     // Cevrimdisi notundaki isim AKTIF OLMAYAN profildir: "baglaninca
                     // ESIN telefonunda gorunur" derken kastedilen o. Once hep
                     // Owner-disi aliniyordu; es kendi telefonundan girince kendi
@@ -379,6 +388,12 @@ class AddTransactionViewModel(
                     syncState = if (s.offline) SyncState.Pending else SyncState.Synced,
                 )
             )
+
+            // Hedef secildiyse varlik o hedefe atanir - hedefin "karsilayanlar"
+            // listesine duser. Secilmezse dokunulmaz (toplam birikime eklenmis kalir).
+            s.selectedGoalId?.let { goalId ->
+                portfolioRepository.assignPositionToGoal(positionId = positionId, goalId = goalId)
+            }
         }
 
         if (replaced != null) portfolioRepository.deleteTransaction(replaced)
