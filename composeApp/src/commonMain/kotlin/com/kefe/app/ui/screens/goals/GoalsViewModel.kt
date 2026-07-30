@@ -38,6 +38,13 @@ class GoalsViewModel(
     private val _state = MutableStateFlow(GoalsUiState())
     val state: StateFlow<GoalsUiState> = _state.asStateFlow()
 
+    // Editor tutar cevrimi icin son bilinen kur. observePrices bunlari surekli
+    // tazeler; newEditor/editorOf editor'u bunlarla tohumlar. Aksi halde editor
+    // kur GELMEDEN acilirsa (fiyat emisyonu editor'den once oldu) altin/dolar
+    // hedefinde 0 kurla acilir ve onizleme "₺0 · gram ₺0" gosterir.
+    private var latestGoldPrice = 0.0
+    private var latestUsdPrice = 0.0
+
     init {
         observeData()
         observePrices()
@@ -133,10 +140,16 @@ class GoalsViewModel(
     private fun observePrices() {
         viewModelScope.launch {
             priceRepository.observePrices().collect { board ->
-                val gold = board.byKey("gold_gram")?.ask ?: 0.0
-                val usd = board.byKey("usd_try")?.ask ?: 0.0
+                // Gecerli kur geldiginde sakla; gecici bos emisyon iyi degeri silmesin.
+                board.byKey("gold_gram")?.ask?.takeIf { it > 0.0 }?.let { latestGoldPrice = it }
+                board.byKey("usd_try")?.ask?.takeIf { it > 0.0 }?.let { latestUsdPrice = it }
                 update { current ->
-                    current.copy(editor = current.editor?.copy(goldGramPrice = gold, usdPrice = usd))
+                    current.copy(
+                        editor = current.editor?.copy(
+                            goldGramPrice = latestGoldPrice,
+                            usdPrice = latestUsdPrice,
+                        ),
+                    )
                 }
             }
         }
@@ -155,8 +168,8 @@ class GoalsViewModel(
         allocation = GoalAllocation.AllWealth,
         isMain = current.goals.none { it.isMain },
         advancedExpanded = true,
-        goldGramPrice = current.editor?.goldGramPrice ?: 0.0,
-        usdPrice = current.editor?.usdPrice ?: 0.0,
+        goldGramPrice = latestGoldPrice,
+        usdPrice = latestUsdPrice,
         openGoalCount = current.goals.size,
     )
 
@@ -172,8 +185,8 @@ class GoalsViewModel(
             allocation = goal.allocation,
             isMain = goal.isMain,
             advancedExpanded = true,
-            goldGramPrice = current.editor?.goldGramPrice ?: 0.0,
-            usdPrice = current.editor?.usdPrice ?: 0.0,
+            goldGramPrice = latestGoldPrice,
+            usdPrice = latestUsdPrice,
             openGoalCount = current.goals.size,
         )
         // Hedef TL disi bir birime sabitlenmisse tutar o birime cevrilerek acilir.
@@ -183,7 +196,9 @@ class GoalsViewModel(
     /** Tutari TL uzerinden yeni birime cevirir; yazilan deger anlamini korur. */
     private fun GoalEditorState.convertTo(target: GoalUnit): GoalEditorState {
         if (target == unit) return this
-        val converted = amountInTry() / rateOf(target)
+        // Cevrim uzun ondalik uretebilir (22 TL -> 0,003523162... gr altin);
+        // birime yakisan inceliğe yuvarlanir, yoksa alanda 18 haneli sayi belirir.
+        val converted = (amountInTry() / rateOf(target)).roundTo(target.editDecimals())
         return copy(unit = target, amountText = rawAmount(converted))
     }
 
@@ -256,7 +271,16 @@ class GoalsViewModel(
     }
 }
 
-/**
- * Girisi rakamlara indirger ve binlik noktalarini yeniden kurar; alanlarda
- * tutar her zaman `7.800.000` bicimindedir.
- */
+/** Birim degistirince cevrilen tutarin yuvarlanacagi ondalik hane sayisi. */
+private fun GoalUnit.editDecimals(): Int = when (this) {
+    GoalUnit.Try -> 0
+    GoalUnit.GoldGram -> 4
+    GoalUnit.Usd -> 2
+}
+
+/** [decimals] haneye yuvarlar - cevrimdeki kayan nokta kuyrugunu keser. */
+private fun Double.roundTo(decimals: Int): Double {
+    var factor = 1.0
+    repeat(decimals) { factor *= 10.0 }
+    return kotlin.math.round(this * factor) / factor
+}
