@@ -20,12 +20,15 @@ görüntüsüne bakıp "olmuş" denmez.
 | 5 | Çok kullanıcılı iskeletin sökülmesi | ✅ **bitti** |
 | 6 | Ayarlar temizliği ve tamamlanması | ✅ **bitti** |
 
-## Senkron (sonraki tur)
+## Senkron (bu tur)
+
+Sıra bilerek "jeton önce": senkron açılınca oturum jetonu tüm birikim geçmişine
+erişim demek. Düz metin jeton + açık senkron = sızıntı. Bu yüzden 8, 7'den önce.
 
 | # | Adım | Durum |
 |---|---|---|
+| 8 | Jeton Keystore/Keychain'e | ✅ **bitti** (7'den önce) |
 | 7 | Supabase tabloları + RLS | ⬜ |
-| 8 | Jeton Keystore/Keychain'e | ⬜ (7'den önce) |
 | 9 | Push | ⬜ |
 | 10 | Pull | ⬜ |
 | 11 | Gerçek zamanlı | ⬜ |
@@ -252,3 +255,42 @@ salt-okunur fiyat satırları, "Henüz alınmadı", "Kefe 1.0.0", Gizlilik/Koşu
 yok, Hesap bölümü yok). Kuruş anahtarı açıldı → işlem satırı "₺10.101,00" (iki
 ondalık), hero "₺9.873" (0 ondalık). Bakiye gizleme açık → yeniden başlatınca
 Özet toplamı maskeli geldi.
+
+---
+
+## 8 · Jeton Keystore'a ✅
+
+**Neydi.** Oturum jetonu (erişim + yenileme) `auth_session` tablosunda **düz
+metin** duruyordu. İçinde veri olmayan bir hesaba erişim verdiği sürece bu kabul
+edilebilirdi; senkron açılınca aynı jeton tüm birikim geçmişi demek olacak.
+Cihazdan bir yedek/adb kopyası jetonu ele geçirmeye yeterdi.
+
+**Ne yapıldı.**
+
+- `security/SecureStore.kt` — `expect class`, `BiometricGate` ile aynı desen.
+  `protect(plain)` şifreler, `reveal(stored)` çözer.
+- **Android** actual: AndroidKeyStore'da AES/GCM. Anahtar Keystore'da doğar ve
+  **oradan çıkmaz** — uygulama yalnız şifreleme ister, anahtarı hiç görmez. Bu
+  yüzden jeton başka cihaza kopyalansa da çözülemez. GCM her yazımda yeni IV
+  üretir; IV gizli değil, şifreli metnin başına yazılır. `enc1:` öneki hangi
+  metnin şifreli olduğunu söyler.
+- **Geriye uyum.** `reveal`, çözemediği (öneksiz) metni **olduğu gibi** döndürür.
+  Bu sürümden önceki düz-metin oturumlar böylece patlamaz; ilk yenilemede
+  kendiliğinden şifreliye döner. Yeni tablo yok, migration yok — aynı kolonlara
+  şifreli metin yazılır.
+- **Anahtar biyometriye bağlanmadı.** `setUserAuthenticationRequired` konsaydı
+  arka plandaki sessiz jeton yenileme de parmak izi isterdi. Kilit ayrı özellik.
+- Masaüstü/iOS actual şimdilik passthrough (belgelenmiş): JVM'den DPAPI'ye
+  güvenilir köprü yok, sahte şifreleme güvenlik yanılsaması verirdi; iOS Keychain
+  köprüsü bu makinede derlenmiyor. Asıl hedef cihaz Android.
+- Repoya `SecureStore` enjekte edildi: `store()` yazarken `protect`, tüm okuma
+  yolları (`observeAuthState`, `validAccessToken`, `signOut`, yenileme) `reveal`.
+
+**Doğrulama.** 92 masaüstü testi geçiyor — round-trip (yaz→oku bütünlüğü)
+korunuyor; masaüstü passthrough olduğu için bunlar **kabloyu** doğruluyor. Her
+iki platform da derleniyor (desktop + Android). Emülatörde uygulama temiz açıldı:
+Koin grafiği `SecureStore`'u üretip repoya enjekte etti (yanlış olsa açılışta
+`observeAuthState` çağrısında patlardı). **Açık kalan tek doğrulama:** cihazda
+şifrelemenin gerçekten çalıştığı ve diskte `enc1:` görünüp `eyJ…` (JWT) düz metni
+kalmadığı — bu, bir sonraki gerçek girişte yakalanacak (auth_session şu an boş;
+giriş zaten senkron için şart). Keystore yolu ilk `protect`/`reveal`'de işler.

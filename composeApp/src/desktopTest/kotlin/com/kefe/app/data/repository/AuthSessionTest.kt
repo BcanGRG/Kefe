@@ -8,6 +8,7 @@ import com.kefe.app.data.remote.AuthApi
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.domain.FixedKefeClock
 import com.kefe.app.domain.repository.AuthState
+import com.kefe.app.security.SecureStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -56,7 +57,8 @@ private fun newRepository(
     val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
     KefeDatabase.Schema.create(driver)
     val database = createKefeDatabase(driver)
-    val repo = SqlDelightAuthRepository(database, api, FixedKefeClock(millis = nowMillis))
+    // Masaustu SecureStore passthrough; testler duz-metin gidis-gelisi dogrular.
+    val repo = SqlDelightAuthRepository(database, api, FixedKefeClock(millis = nowMillis), SecureStore())
     return repo to database
 }
 

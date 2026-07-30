@@ -11,6 +11,7 @@ import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.AuthSession
 import com.kefe.app.domain.repository.AuthState
+import com.kefe.app.security.SecureStore
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -28,14 +29,16 @@ import kotlinx.coroutines.withContext
  * attigi ya da WhatsApp'tan gonderdigi yedek dosyasinin icinde giderdi. Ayri
  * tablo (bkz. 3.sqm) yedegin disindadir.
  *
- * SAKLAMA SERTLIGI: jeton su an veritabaninda duz metin duruyor - portfoyun
- * kendisi de oyle. Android Keystore / iOS Keychain'e tasima isi biyometrik kilit
- * (7.7) ile birlikte yapilacak; ikisi ayni altyapiyi kullanir.
+ * JETON SERTLESTIRME: erisim ve yenileme jetonu artik [SecureStore] ile
+ * sifrelenip yle saklanir - Android'de Keystore, kolonlar sifreli metin tutar.
+ * Bu surumden onceki duz-metin oturumlar patlamaz: [SecureStore.reveal] cozemedigi
+ * metni oldugu gibi dondurur, ilk yenilemede kendiliginden sifreliye doner.
  */
 class SqlDelightAuthRepository(
     private val database: KefeDatabase,
     private val api: AuthApi,
     private val clock: KefeClock,
+    private val secureStore: SecureStore,
     private val dispatcher: CoroutineContext = Dispatchers.Default,
 ) : AuthRepository {
 
@@ -61,8 +64,8 @@ class SqlDelightAuthRepository(
                         AuthSession(
                             userId = row.userId,
                             email = row.email,
-                            accessToken = row.accessToken,
-                            refreshToken = row.refreshToken,
+                            accessToken = secureStore.reveal(row.accessToken),
+                            refreshToken = secureStore.reveal(row.refreshToken),
                             expiresAtEpochSeconds = row.expiresAtEpochSeconds,
                         )
                     )
@@ -90,9 +93,11 @@ class SqlDelightAuthRepository(
         val now = clock.nowEpochMillis() / 1000L
         // Tam bitis aninda degil, biraz ONCE yenileriz: istek yolda iken jetonun
         // dolmasi tek basina bir 401 demektir.
-        if (now < row.expiresAtEpochSeconds - ExpiryMarginSeconds) return@withLock row.accessToken
+        if (now < row.expiresAtEpochSeconds - ExpiryMarginSeconds) {
+            return@withLock secureStore.reveal(row.accessToken)
+        }
 
-        runCatching { api.refreshSession(row.refreshToken) }
+        runCatching { api.refreshSession(secureStore.reveal(row.refreshToken)) }
             .onSuccess { store(it, fallbackEmail = row.email, fallbackUserId = row.userId) }
             .map { it.accessToken }
             // Yenileme jetonu da gecersizse geri donusu yok: oturum kapanir ve
@@ -110,7 +115,7 @@ class SqlDelightAuthRepository(
         // degil; ag yokken "cikis yapamadiniz" demek kullaniciyi hesabinda esir
         // birakirdi.
         clearSession()
-        row?.let { api.signOut(it.accessToken) }
+        row?.let { api.signOut(secureStore.reveal(it.accessToken)) }
     }
 
     private suspend fun store(
@@ -122,8 +127,9 @@ class SqlDelightAuthRepository(
             queries.upsertSession(
                 userId = tokens.userId.ifBlank { fallbackUserId },
                 email = tokens.email.ifBlank { fallbackEmail },
-                accessToken = tokens.accessToken,
-                refreshToken = tokens.refreshToken,
+                // Kolonlara SIFRELI metin yazariz; okurken reveal ile cozeriz.
+                accessToken = secureStore.protect(tokens.accessToken),
+                refreshToken = secureStore.protect(tokens.refreshToken),
                 expiresAtEpochSeconds = clock.nowEpochMillis() / 1000L + tokens.expiresInSeconds,
             )
         }
