@@ -42,4 +42,7 @@ object PreferenceKeys {
      * telefonuna yuklenince o telefon Volkan olmamali (bkz. restoreBackup).
      */
     const val ActiveMemberId = "activeMemberId"
+
+    /** Son yedegin alindigi tarih ("2026-07-28"). Ayarlar satirinin sagi. */
+    const val LastBackupAt = "lastBackupAt"
 }

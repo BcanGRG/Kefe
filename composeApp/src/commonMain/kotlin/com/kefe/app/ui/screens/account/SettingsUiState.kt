@@ -30,7 +30,6 @@ data class SettingsUiState(
      * goruyordu. Sistemi izlemek ikisini kendiliginden hizalar.
      */
     val themeMode: ThemeMode = ThemeMode.System,
-    val currencyLabel: String = "₺ Türk lirası",
     val showCents: Boolean = false,
 
     // Gizlilik
@@ -49,21 +48,19 @@ data class SettingsUiState(
     /** Bu cihazin profili. null ise "bu telefon kimin" adimi henuz gecilmedi. */
     val activeMemberId: String? = null,
 
-    // Fiyatlar
-    val priceRefreshLabel: String = "15 dakikada bir",
-    val priceSourceLabel: String = "Serbest piyasa",
-
-    // Bildirimler
-    val notifyPartnerEntry: Boolean = true,
-    val notifyMonthlyReminder: Boolean = true,
-    val notifyMilestone: Boolean = false,
+    // Fiyatlar - salt okunur bilgi satirlari. Fiyatlar acilista ve elle
+    // yenilendiginde cekilir; ayarlanabilir bir aralik ya da secilebilir kaynak
+    // yok, o yuzden bu satirlar dokunulamaz. Gercegi yazarlar.
+    val priceRefreshLabel: String = "Açılışta ve elle yenilendiğinde",
+    val priceSourceLabel: String = "Serbest piyasa · TCMB · TEFAS",
 
     // Veri ve hesap
+    /** Son yedek tarihi ("29 Temmuz 2026"); bos ise henuz yedek alinmadi. */
     val lastBackupLabel: String = "",
     val email: String = "",
     /** Bulut hesabina girilmis mi - "Çıkış yap" satiri buna gore gorunur. */
     val signedIn: Boolean = false,
-    val appVersion: String = "1.0.4",
+    val appVersion: String = "",
 
     /** "Tüm verileri sil" onay penceresi acik mi. */
     val confirmDelete: Boolean = false,
@@ -73,27 +70,17 @@ data class SettingsUiState(
     /** Yedekleme ya da geri yukleme suruyor. */
     val working: Boolean = false,
 ) {
-    /** Paylasim kartinin alt satiri: "Ortak Birikim · Volkan, Ayşe". */
+    /** Profiller kartinin alt satiri: iki profilin adi ("Burak Can, Merve"). */
     val shareSummary: String
-        get() = listOf(portfolioName, members.joinToString(", ") { it.name })
-            .filter { it.isNotBlank() }
-            .joinToString(" · ")
+        get() = members.joinToString(", ") { it.name }
 }
 
 sealed interface SettingsIntent {
     data class SelectTheme(val mode: ThemeMode) : SettingsIntent
-    data object OpenCurrency : SettingsIntent
     data class SetShowCents(val value: Boolean) : SettingsIntent
 
     data class SetHideBalanceOnStart(val value: Boolean) : SettingsIntent
     data class SetBiometricLock(val value: Boolean) : SettingsIntent
-
-    data object OpenPriceRefresh : SettingsIntent
-    data object OpenPriceSource : SettingsIntent
-
-    data class SetNotifyPartnerEntry(val value: Boolean) : SettingsIntent
-    data class SetNotifyMonthlyReminder(val value: Boolean) : SettingsIntent
-    data class SetNotifyMilestone(val value: Boolean) : SettingsIntent
 
     data object Backup : SettingsIntent
     data object Restore : SettingsIntent
@@ -109,8 +96,6 @@ sealed interface SettingsIntent {
     data object ConfirmDeleteAllData : SettingsIntent
 
     data object SignOut : SettingsIntent
-    data object OpenPrivacy : SettingsIntent
-    data object OpenTerms : SettingsIntent
 }
 
 sealed interface SettingsEffect {

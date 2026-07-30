@@ -38,6 +38,7 @@ import com.kefe.app.ui.components.KefeManualBadge
 import com.kefe.app.ui.components.KefeSectionHeader
 import com.kefe.app.ui.components.KefeSkeletonBlock
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.moneyTl
 import com.kefe.app.ui.format.quantityLabel
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcons
@@ -214,7 +215,7 @@ private fun AssetGroupCard(
         KefeSectionHeader(
             dotColor = c.assetClass(group.assetClass.color()),
             title = group.assetClass.label(),
-            total = Money.tl(group.total),
+            total = moneyTl(group.total),
             percent = Money.ratio(group.percent, 1),
             expanded = expanded,
             onToggle = onToggle,
@@ -244,7 +245,7 @@ private fun AssetRow(position: Position, onClick: () -> Unit) {
     KefeListRow(
         title = position.name,
         subtitle = position.quantityLabel(),
-        value = Money.tl(position.value),
+        value = moneyTl(position.value),
         delta = position.dailyChangePercent,
         leadingIcon = position.assetClass.icon(),
         leadingTint = c.assetClass(position.assetClass.color()),

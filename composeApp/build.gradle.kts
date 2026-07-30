@@ -25,6 +25,13 @@ plugins {
 val supabaseUrl: String = localOrEnv("SUPABASE_URL")
 val supabaseAnonKey: String = localOrEnv("SUPABASE_ANON_KEY")
 
+/**
+ * Uygulama surumu TEK YERDE. Hem Android paketine (versionName) hem uretilen
+ * SupabaseConfig'e buradan gider - once Ayarlar'daki "Kefe 1.0.4" sabit
+ * yaziliydi ve paketin gercek surumuyle (1.0.0) uyusmuyordu.
+ */
+val appVersionName = "1.0.0"
+
 fun localOrEnv(key: String): String {
     val local = rootProject.file("local.properties")
     if (local.exists()) {
@@ -39,6 +46,7 @@ val generateSupabaseConfig by tasks.registering {
     val outputDir = layout.buildDirectory.dir("generated/supabase")
     inputs.property("url", supabaseUrl)
     inputs.property("key", supabaseAnonKey)
+    inputs.property("version", appVersionName)
     outputs.dir(outputDir)
     doLast {
         val dir = outputDir.get().asFile.resolve("com/kefe/app/data/remote")
@@ -47,10 +55,11 @@ val generateSupabaseConfig by tasks.registering {
             """
             package com.kefe.app.data.remote
 
-            /** Uretilen dosya - elle duzenlemeyin. Kaynak: local.properties. */
+            /** Uretilen dosya - elle duzenlemeyin. Kaynak: local.properties + build.gradle. */
             object SupabaseConfig {
                 const val Url: String = "$supabaseUrl"
                 const val AnonKey: String = "$supabaseAnonKey"
+                const val AppVersion: String = "$appVersionName"
 
                 /** Anahtarlar girilmemisse bulut ozellikleri kapali kalir. */
                 val isConfigured: Boolean get() = Url.isNotBlank() && AnonKey.isNotBlank()
@@ -178,7 +187,7 @@ android {
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = appVersionName
     }
 
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")

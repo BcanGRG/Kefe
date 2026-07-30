@@ -13,6 +13,7 @@ import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.AuthState
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferenceKeys
+import com.kefe.app.data.remote.SupabaseConfig
 import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.ui.mvi.MviViewModel
 import kotlinx.coroutines.flow.combine
@@ -78,11 +79,6 @@ class SettingsViewModel(
             is SettingsIntent.SetHideBalanceOnStart ->
                 put(PreferenceKeys.HideBalanceOnStart, intent.value)
             is SettingsIntent.SetBiometricLock -> put(PreferenceKeys.BiometricLock, intent.value)
-            is SettingsIntent.SetNotifyPartnerEntry ->
-                put(PreferenceKeys.NotifyPartnerEntry, intent.value)
-            is SettingsIntent.SetNotifyMonthlyReminder ->
-                put(PreferenceKeys.NotifyMonthlyReminder, intent.value)
-            is SettingsIntent.SetNotifyMilestone -> put(PreferenceKeys.NotifyMilestone, intent.value)
 
             // Silme ONAY ISTER. Dogrudan silen bir satir, yanlislikla dokunulunca
             // geri donusu olmayan bir kayip demekti.
@@ -90,8 +86,6 @@ class SettingsViewModel(
             SettingsIntent.DismissDeleteConfirm -> setState { copy(confirmDelete = false) }
             SettingsIntent.ConfirmDeleteAllData -> deleteAll()
 
-            // Henuz karsiligi olmayanlar. Sessizce yutmak yerine kullaniciya
-            // soylenir - dokununca hicbir sey olmamasi hata gibi gorunuyordu.
             SettingsIntent.Backup -> exportBackup()
             SettingsIntent.ExportCsv -> exportCsv()
             SettingsIntent.Restore -> setState { copy(confirmRestore = true) }
@@ -99,13 +93,6 @@ class SettingsViewModel(
             SettingsIntent.ConfirmRestore -> restore()
 
             SettingsIntent.SignOut -> signOut()
-
-            SettingsIntent.OpenCurrency,
-            SettingsIntent.OpenPriceRefresh,
-            SettingsIntent.OpenPriceSource,
-            SettingsIntent.OpenPrivacy,
-            SettingsIntent.OpenTerms,
-            -> emitEffect(SettingsEffect.NotReady)
         }
     }
 
@@ -134,6 +121,9 @@ class SettingsViewModel(
                     mimeType = JsonMimeType,
                     content = file.encode(),
                 )
+                // Paylasim penceresi acildi; dosyanin nereye gittigini bilemeyiz
+                // ama yedegi URETTIK. Satirin sagindaki tarih bunu gosterir.
+                preferences.put(PreferenceKeys.LastBackupAt, today.stamp())
             }
                 .onSuccess { emitEffect(SettingsEffect.BackupReady) }
                 .onFailure { emitEffect(SettingsEffect.BackupFailed(it.reason())) }
@@ -208,14 +198,32 @@ class SettingsViewModel(
                     biometricLock = prefs.flag(PreferenceKeys.BiometricLock, true),
                     prefsLoaded = true,
                     activeMemberId = prefs[PreferenceKeys.ActiveMemberId],
-                    notifyPartnerEntry = prefs.flag(PreferenceKeys.NotifyPartnerEntry, true),
-                    notifyMonthlyReminder = prefs.flag(PreferenceKeys.NotifyMonthlyReminder, true),
-                    notifyMilestone = prefs.flag(PreferenceKeys.NotifyMilestone, false),
+                    // Yedek satirinin sagi: son yedek tarihi. Bos ise "Henüz
+                    // alınmadı" - once bu etiket hicbir zaman yazilmiyor ve yedek
+                    // alindiktan sonra bile bos kaliyordu.
+                    lastBackupLabel = prefs[PreferenceKeys.LastBackupAt]?.toBackupLabel()
+                        ?: "Henüz alınmadı",
+                    appVersion = SupabaseConfig.AppVersion,
                 )
             }.collect { next -> setState { next } }
         }
     }
 }
+
+/** "2026-07-28" -> "28 Temmuz 2026". Bicimsizse bos. */
+private fun String.toBackupLabel(): String {
+    val parts = split("-")
+    val year = parts.getOrNull(0)
+    val month = parts.getOrNull(1)?.toIntOrNull()
+    val day = parts.getOrNull(2)?.toIntOrNull()
+    if (year == null || month == null || day == null || month !in 1..12) return ""
+    return "$day ${BackupMonthNames[month - 1]} $year"
+}
+
+private val BackupMonthNames = listOf(
+    "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+    "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
+)
 
 /** Taninmayan deger varsayilana duser - eski bir kayit uygulamayi dusurmemeli. */
 private fun Map<String, String>.themeMode(): ThemeMode =

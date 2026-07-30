@@ -18,7 +18,7 @@ görüntüsüne bakıp "olmuş" denmez.
 | 3 | Yenileme kısıtlamasının ekranda görünmesi | ✅ **bitti** |
 | 4 | İki profil | ✅ **bitti** |
 | 5 | Çok kullanıcılı iskeletin sökülmesi | ✅ **bitti** |
-| 6 | Ayarlar temizliği ve tamamlanması | ⬜ sırada |
+| 6 | Ayarlar temizliği ve tamamlanması | ✅ **bitti** |
 
 ## Senkron (sonraki tur)
 
@@ -208,3 +208,47 @@ zaten iki kişiye göreydi.
 işareti Merve'ye ve geri Burak Can'a taşındı, yeniden adlandırma sheet'i açıldı.
 Giriş ekranında "Yeni portföy oluştur" doğrudan tanıtıma gidiyor, araya "Başlangıç"
 adımı girmiyor.
+
+---
+
+## 6 · Ayarlar temizliği ve tamamlanması ✅
+
+**Kaldırılanlar.**
+
+- **Bildirimler bölümü** (Eş kayıt / Aylık hatırlatıcı / Kilometre taşı) — hiçbir
+  altyapı yok, `POST_NOTIFICATIONS` izni bile yoktu. Üç anahtar diske yazılıp
+  hiçbir şey yapmıyordu. Gerçek zamanlı senkron gelince geri döner.
+- **Para birimi** satırı — `Portfolio.currency` sabit "TRY", hiçbir yerde
+  okunmuyordu.
+- **Gizlilik / Koşullar** bağlantıları — iki kişilik, mağazaya çıkmayan bir
+  uygulamada olmayan bir belgeye bağlantı vermek yanlış. Play'e çıkma anında
+  (gerçek URL gerektiğinde) geri gelir.
+
+**Uygulananlar (önce diske yazılıp etkisiz duran anahtarlar).**
+
+- **Kuruşları göster** → `LocalShowCents` CompositionLocal + `moneyTl` yardımcısı.
+  Yalnız SATIR İÇİ tutarlar (varlık değerleri, işlem satırları) buna bakar; ana
+  toplamlar 0 ondalıkta kalır — ayarın alt metninin sözü bu.
+- **Açılışta bakiyeyi gizle** → SummaryViewModel'e bağlandı. Tuzak: `observeAll()`
+  her tercih değişiminde emisyon yapıyor; naif bağlama kullanıcının elle açtığı
+  bakiyeyi bir sonraki emisyonda kapatırdı. Yalnız İLK emisyonda uygulanır.
+
+**Salt-okunur yapılanlar.** Otomatik güncelleme / Kaynak satırları artık gerçeği
+yazan bilgi satırları (chevron yok): "Açılışta ve elle yenilendiğinde",
+"Serbest piyasa · TCMB · TEFAS".
+
+**Doldurulan boşluklar.**
+
+- **Son yedek tarihi** — yeni `LastBackupAt` anahtarı; yedek alınınca yazılır,
+  satırın sağında "28 Temmuz 2026" gösterilir, yoksa "Henüz alınmadı". Önce hep
+  boştu.
+- **Sürüm** — "1.0.4" sabiti gitti. build.gradle'de tek `appVersionName`
+  değişkeni hem paketin `versionName`'ine hem üretilen `SupabaseConfig.AppVersion`'a
+  gidiyor. Ayarlar artık "Kefe 1.0.0" — paketle eşleşiyor.
+- **Hesap bölümü** yalnız giriş yapılmışsa çizilir (`signedIn`); önce ölü alandı.
+
+**Doğrulama.** 92 test geçiyor. Emülatörde: Ayarlar'ın yeni hali (Profiller kartı,
+salt-okunur fiyat satırları, "Henüz alınmadı", "Kefe 1.0.0", Gizlilik/Koşullar
+yok, Hesap bölümü yok). Kuruş anahtarı açıldı → işlem satırı "₺10.101,00" (iki
+ondalık), hero "₺9.873" (0 ondalık). Bakiye gizleme açık → yeniden başlatınca
+Özet toplamı maskeli geldi.

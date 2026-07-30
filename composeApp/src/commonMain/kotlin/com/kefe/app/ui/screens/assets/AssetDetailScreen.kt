@@ -48,6 +48,7 @@ import com.kefe.app.ui.components.KefeSellBadge
 import com.kefe.app.ui.components.KefeSkeletonBlock
 import com.kefe.app.ui.components.KefeSwipeableRow
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.moneyTl
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
@@ -270,7 +271,7 @@ private fun CurrentValueBlock(position: Position, holdingLabel: String?) {
         Spacer(Modifier.height(Space.x8))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "Maliyet ${Money.tl(position.cost)}",
+                text = "Maliyet ${moneyTl(position.cost)}",
                 style = t.caption.tabular(),
                 color = c.onSurfaceMuted,
             )
@@ -547,7 +548,7 @@ private fun TransactionRow(
         Spacer(Modifier.width(Space.x10))
         Text(
             // Tasarimda satir tutari isciligi icermez: iscilik alt satirda ayrica yazilir.
-            text = Money.tl(transaction.quantity * transaction.unitPrice),
+            text = moneyTl(transaction.quantity * transaction.unitPrice),
             style = t.body.tabular(),
             color = c.onSurface,
         )
