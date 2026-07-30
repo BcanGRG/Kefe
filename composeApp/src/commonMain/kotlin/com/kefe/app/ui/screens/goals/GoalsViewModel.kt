@@ -67,13 +67,13 @@ class GoalsViewModel(
 
             GoalsIntent.DismissEditor -> update { it.copy(editor = null) }
 
-            is GoalsIntent.EditorName -> editor { it.copy(name = intent.value) }
+            is GoalsIntent.EditorName -> editor { it.copy(name = intent.value, nameError = false) }
             is GoalsIntent.EditorIcon -> editor { it.copy(iconKey = intent.key) }
             // Deger HAM tutulur (ayraçsız); binlik ayraci ekranda
             // ThousandsSeparatorTransformation ekler. Metne yazilsaydi imlec her
             // tusta sona atlar, ortadaki rakam duzenlenemezdi.
             is GoalsIntent.EditorAmount -> editor {
-                it.copy(amountText = intent.value)
+                it.copy(amountText = intent.value, amountError = false)
             }
 
             is GoalsIntent.EditorUnit -> editor { it.convertTo(intent.unit) }
@@ -190,7 +190,14 @@ class GoalsViewModel(
     private fun save() {
         val editor = _state.value.editor ?: return
         val amount = editor.amountInTry()
-        if (editor.name.isBlank() || amount <= 0.0) return
+        // Bos zorunlu alan SESSIZCE yutulmaz: hangisiyse isaretlenir (ekran kirmizi
+        // cizip o alana kaydirir) ve kayit yapilmaz.
+        val nameBlank = editor.name.isBlank()
+        val amountEmpty = amount <= 0.0
+        if (nameBlank || amountEmpty) {
+            this.editor { it.copy(nameError = nameBlank, amountError = amountEmpty) }
+            return
+        }
 
         // TAMAMLANANLAR DA ARANIR. Duzenleme tamamlanmis bir hedeften de
         // acilabiliyor (bkz. EditGoal); yalniz aciklara bakilinca `existing` null

@@ -20,7 +20,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -154,10 +158,20 @@ fun GoalEditSheet(
 
 // --- Govde -----------------------------------------------------------------
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
+
+    // Bos zorunlu alan uyarisi: hataliysa alan kirmizi cizilir, altina mesaj yazilir
+    // ve o alana kaydirilir. Ad hem ilk zorunlu alan; iki alan da bossa ona gidilir.
+    val nameRequester = remember { BringIntoViewRequester() }
+    val amountRequester = remember { BringIntoViewRequester() }
+    LaunchedEffect(state.nameError) { if (state.nameError) nameRequester.bringIntoView() }
+    LaunchedEffect(state.amountError) {
+        if (state.amountError && !state.nameError) amountRequester.bringIntoView()
+    }
 
     SheetLabel("Ad")
     Spacer(Modifier.height(6.dp))
@@ -165,7 +179,13 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
         value = state.name,
         onValueChange = { onIntent(GoalsIntent.EditorName(it)) },
         placeholder = "Örneğin: Ev",
+        isError = state.nameError,
+        modifier = Modifier.bringIntoViewRequester(nameRequester),
     )
+    if (state.nameError) {
+        Spacer(Modifier.height(6.dp))
+        Text("Hedefe bir isim verin.", style = t.caption, color = c.negative)
+    }
 
     Spacer(Modifier.height(Space.x16 + 2.dp))
     SheetLabel("İkon")
@@ -194,10 +214,16 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
         placeholder = "0",
         height = Sizes.fieldLarge,
         textStyle = t.h1.copy(letterSpacing = 0.em).tabular(),
+        isError = state.amountError,
+        modifier = Modifier.bringIntoViewRequester(amountRequester),
         trailing = {
             Text(state.unit.suffix(), style = t.body, color = c.onSurfaceMuted)
         },
     )
+    if (state.amountError) {
+        Spacer(Modifier.height(6.dp))
+        Text("Bir hedef tutarı girin.", style = t.caption, color = c.negative)
+    }
 
     Spacer(Modifier.height(Space.x16 + 2.dp))
     SheetLabel("Hedef birimi")
@@ -403,6 +429,8 @@ private fun SheetTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     /** Tutar alanlari icin binlik ayrac (deger ham kalir; bkz. imlec sorunu). */
     visualTransformation: VisualTransformation = VisualTransformation.None,
+    /** Bos birakilip kaydedilmeye calisilan zorunlu alan: kirmizi cerceve. */
+    isError: Boolean = false,
 ) {
     val c = KefeTheme.colors
     val interaction = remember { MutableInteractionSource() }
@@ -416,7 +444,11 @@ private fun SheetTextField(
             .background(c.surface)
             .border(
                 Sizes.hairline,
-                if (focused) c.accent else c.outline,
+                when {
+                    isError -> c.negative
+                    focused -> c.accent
+                    else -> c.outline
+                },
                 KefeShapes.button,
             )
             .padding(horizontal = Space.x14),

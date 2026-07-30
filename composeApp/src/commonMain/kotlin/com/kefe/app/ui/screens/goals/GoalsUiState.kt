@@ -46,6 +46,13 @@ data class GoalEditorState(
     val isMain: Boolean = false,
     val advancedExpanded: Boolean = true,
 
+    /**
+     * Kaydet'e basildiginda bos bulunan zorunlu alanlar. Ekran o alani kirmizi
+     * cizip ilkine kaydirir; kullanici yazmaya baslayinca temizlenir.
+     */
+    val nameError: Boolean = false,
+    val amountError: Boolean = false,
+
     /** Tarih secici acik mi. Alan ay-yil gosterdigi icin secici de o inceliktedir. */
     val datePickerOpen: Boolean = false,
     val goldGramPrice: Double = 0.0,
