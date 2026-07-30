@@ -20,6 +20,7 @@ import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.security.BiometricGate
+import com.kefe.app.security.SecureStore
 import com.kefe.app.ui.screens.account.ActivityViewModel
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.ProfileSetupViewModel
@@ -71,8 +72,10 @@ val appModule = module {
     single<PreferencesRepository> { SqlDelightPreferencesRepository(get()) }
 
     // Kimlik: Supabase auth ucu + oturumu cihazda tutan depo.
+    // SecureStore jetonu cihaza sertlestirerek yazar (Android Keystore).
+    single { SecureStore() }
     single<AuthApi> { SupabaseAuthApi(get()) }
-    single<AuthRepository> { SqlDelightAuthRepository(get(), get(), get()) }
+    single<AuthRepository> { SqlDelightAuthRepository(get(), get(), get(), get()) }
 
     // Dosya paylasimi/secimi platforma iner; Android tarafi Activity ister.
     single { FileTransfer() }
