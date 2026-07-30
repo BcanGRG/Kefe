@@ -348,6 +348,8 @@ private fun StepAsset(
             FundSearchField(state, onIntent)
             Spacer(Modifier.height(Space.x10))
             FundResults(state, onIntent)
+            // Girilen kod yereldeki 5 fonda yoksa TEFAS'ta canli arama satiri.
+            FundOnlineSearch(state, onIntent)
             Spacer(Modifier.height(Space.x10))
             InfoLine("Fon fiyatları günde bir kez, TEFAS kapanışıyla güncellenir.")
         }
@@ -736,6 +738,64 @@ private fun FundResults(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Girilen kod yereldeki 5 fonda yoksa TEFAS'ta canli arama. Uc hal: aranirken
+ * metin, sonuc yoksa uyari, aksi halde "ara" satiri. Bosta hicbir sey cizmez -
+ * kendi ust boslugunu da yalniz icerik varken ekler.
+ */
+@Composable
+private fun FundOnlineSearch(
+    state: AddTransactionUiState,
+    onIntent: (AddTransactionIntent) -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    val hasContent = state.fundSearching ||
+        state.fundSearchError != null ||
+        state.fundSearchCode != null
+    if (!hasContent) return
+
+    Spacer(Modifier.height(Space.x10))
+    when {
+        state.fundSearching -> Text(
+            "TEFAS'ta aranıyor…",
+            style = t.caption,
+            color = c.onSurfaceMuted,
+        )
+
+        state.fundSearchError != null -> Text(
+            state.fundSearchError,
+            style = t.caption,
+            color = c.negative,
+        )
+
+        state.fundSearchCode != null -> Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(KefeShapes.button)
+                .border(Sizes.hairline, c.accent, KefeShapes.button)
+                .clickable(role = Role.Button) {
+                    onIntent(AddTransactionIntent.SearchFundOnline)
+                }
+                .padding(horizontal = Space.x14, vertical = Space.x12),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            KefeIcon(
+                icon = KefeIcons.Search,
+                contentDescription = null,
+                size = IconSize.medium,
+                tint = c.accent,
+            )
+            Spacer(Modifier.width(Space.x10))
+            Text(
+                "TEFAS'ta \"${state.fundSearchCode}\" ara",
+                style = t.caption.copy(fontWeight = FontWeight.Bold),
+                color = c.accent,
+            )
         }
     }
 }
