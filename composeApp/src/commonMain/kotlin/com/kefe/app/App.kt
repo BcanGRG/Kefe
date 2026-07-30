@@ -47,6 +47,7 @@ import com.kefe.app.navigation.KefeKey
 import com.kefe.app.navigation.LoginKey
 import com.kefe.app.navigation.MarketKey
 import com.kefe.app.navigation.OnboardingKey
+import com.kefe.app.navigation.ProfileSetupKey
 import com.kefe.app.navigation.SettingsKey
 import com.kefe.app.navigation.ShareKey
 import com.kefe.app.navigation.SummaryKey
@@ -70,6 +71,8 @@ import com.kefe.app.ui.screens.account.LoginScreen
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.OnboardingPageCount
 import com.kefe.app.ui.screens.account.OnboardingScreen
+import com.kefe.app.ui.screens.account.ProfileSetupScreen
+import com.kefe.app.ui.screens.account.ProfileSetupViewModel
 import com.kefe.app.ui.screens.account.SettingsEffect
 import com.kefe.app.ui.screens.account.SettingsIntent
 import com.kefe.app.ui.screens.account.SettingsScreen
@@ -208,9 +211,15 @@ private fun KefeApp(
     var unlockedThisLaunch by remember { mutableStateOf(false) }
     val locked = settings.biometricLock && !unlockedThisLaunch
 
-    // Kilitliyken de kok LoginKey'dir: kilit ekrani o ekranin bir asamasi.
+    // Acilistaki kok: giris yapilmamis ya da kilitliyse Login; profil secilmemisse
+    // "bu telefon kimin"; aksi halde Ozet. Kilit ekrani Login'in bir asamasidir.
     val backStack = remember {
-        NavBackStack<NavKey>(if (onboarded == true && !locked) SummaryKey else LoginKey)
+        val root: NavKey = when {
+            onboarded != true || locked -> LoginKey
+            settings.activeMemberId == null -> ProfileSetupKey
+            else -> SummaryKey
+        }
+        NavBackStack<NavKey>(root)
     }
     var onboardingPage by remember { mutableStateOf(0) }
     var addSheetVisible by remember { mutableStateOf(false) }
@@ -254,10 +263,16 @@ private fun KefeApp(
     val summaryVm = koinViewModel<SummaryViewModel>()
     val summary by summaryVm.state.collectAsState()
 
-    /** Giris/onboarding bitti: yigin sifirlanir, geri tusu girise donmez. */
+    /**
+     * Giris/onboarding bitti: yigin sifirlanir, geri tusu girise donmez.
+     *
+     * "Bu telefon kimin" adimi henuz gecilmediyse ONA gideriz: kayitlar bir
+     * profile yazilacak, cihazin hangi profil oldugu bilinmeden ana ekrana
+     * girmek erken olur.
+     */
     fun enterApp() {
         while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-        backStack[0] = SummaryKey
+        backStack[0] = if (settings.activeMemberId == null) ProfileSetupKey else SummaryKey
         summaryVm.markOnboarded()
     }
 
@@ -313,7 +328,7 @@ private fun KefeApp(
 
     val current = backStack.firstOrNull()
     // Giris ve onboarding'da navigasyon kromu cizilmez.
-    val inShell = current != LoginKey && current != OnboardingKey
+    val inShell = current != LoginKey && current != OnboardingKey && current != ProfileSetupKey
     val navItems = if (windowSize.isExpanded) desktopDestinations else topLevelDestinations
     val navIndex = navItems.indexOfFirst { it.key == current }.coerceAtLeast(0)
     val members = summary.members.mapIndexed { index, m -> m.initials to index }
@@ -446,6 +461,23 @@ private fun KefeApp(
                                         }
                                     },
                                     onSkip = { enterApp() },
+                                )
+                            }
+                        }
+
+                        entry<ProfileSetupKey> {
+                            val vm = koinViewModel<ProfileSetupViewModel>()
+                            val profileState by vm.state.collectAsState()
+                            ScreenSurface {
+                                ProfileSetupScreen(
+                                    state = profileState,
+                                    onIntent = vm::onIntent,
+                                    // Kaydedilince Ozet'e. activeMemberId yazildigi
+                                    // icin enterApp artik ProfileSetup'a donmez.
+                                    onDone = {
+                                        while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                                        backStack[0] = SummaryKey
+                                    },
                                 )
                             }
                         }

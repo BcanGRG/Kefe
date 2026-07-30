@@ -34,6 +34,9 @@ data object LoginKey : KefeKey
 
 data object OnboardingKey : KefeKey
 
+/** "Bu telefon kimin?" - iki profilin adi ve bu cihazin hangisi oldugu. */
+data object ProfileSetupKey : KefeKey
+
 /** Bilesen katalogu - Ayarlar'in altindaki gizli girisle acilir. */
 data object GalleryKey : KefeKey
 

@@ -33,4 +33,13 @@ object PreferenceKeys {
     const val NotifyPartnerEntry = "notifyPartnerEntry"
     const val NotifyMonthlyReminder = "notifyMonthlyReminder"
     const val NotifyMilestone = "notifyMilestone"
+
+    /**
+     * Bu cihazin hangi profil oldugu. "Bu telefon Volkan'in" - eklenen her islem
+     * bu profile yazilir.
+     *
+     * CIHAZA AITTIR, senkronlanmaz ve yedege GIRMEZ: Volkan'in yedegi Ayse'nin
+     * telefonuna yuklenince o telefon Volkan olmamali (bkz. restoreBackup).
+     */
+    const val ActiveMemberId = "activeMemberId"
 }

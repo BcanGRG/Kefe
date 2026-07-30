@@ -54,6 +54,16 @@ const val LocalPortfolioId: String = "portfolio_local"
 /** Ilk acilisin kurdugu sahip uye - islemlerin "kim ekledi" alani buna baglanir. */
 const val LocalOwnerMemberId: String = "member_owner"
 
+/**
+ * Ikinci profil.
+ *
+ * KIMLIKLER SABIT olmali: iki cihaz da kendi bootstrap'ini calistiriyor. Id'ler
+ * deterministik oldugu icin senkron geldiginde iki cihazin "es" profili ayni
+ * satira dusuyor - birlesme, cakisma degil. Rastgele bir kimlik verseydik iki
+ * cihazda dort profil olurdu.
+ */
+const val LocalPartnerMemberId: String = "member_partner"
+
 internal const val DefaultPortfolioName: String = "Birikimlerim"
 internal const val DefaultCurrency: String = "TRY"
 
@@ -81,6 +91,10 @@ fun KefeDatabase.bootstrapIfNeeded() {
             name = DefaultPortfolioName,
             currency = DefaultCurrency,
         )
+        // Iki profil de bastan kurulur. Isimler VARSAYILAN - "bu telefon kimin"
+        // adimi (ProfileSetup) gercek adlari yazar ve hangisinin bu cihaz oldugunu
+        // secer. Iki profili burada kurmak, ikinci telefonun senkrondan once bile
+        // dogru iskeleti gormesini saglar.
         portfolioQueries.insertOrIgnoreMember(
             id = LocalOwnerMemberId,
             portfolioId = LocalPortfolioId,
@@ -91,6 +105,16 @@ fun KefeDatabase.bootstrapIfNeeded() {
             // Serbest metin - gercek zaman damgasi degil.
             lastSeen = "şu anda çevrimiçi",
             sortOrder = 0L,
+        )
+        portfolioQueries.insertOrIgnoreMember(
+            id = LocalPartnerMemberId,
+            portfolioId = LocalPortfolioId,
+            name = "Eşim",
+            initials = "E",
+            role = MemberRole.Member,
+            permission = MemberPermission.CanEdit,
+            lastSeen = "",
+            sortOrder = 1L,
         )
         settingQueries.upsertSetting(
             settingKey = BootstrapKey,
