@@ -17,8 +17,8 @@ görüntüsüne bakıp "olmuş" denmez.
 | 2 | Parmak izi kilidi | ✅ **bitti** |
 | 3 | Yenileme kısıtlamasının ekranda görünmesi | ✅ **bitti** |
 | 4 | İki profil | ✅ **bitti** |
-| 5 | Çok kullanıcılı iskeletin sökülmesi | ⬜ sırada |
-| 6 | Ayarlar temizliği ve tamamlanması | ⬜ |
+| 5 | Çok kullanıcılı iskeletin sökülmesi | ✅ **bitti** |
+| 6 | Ayarlar temizliği ve tamamlanması | ⬜ sırada |
 
 ## Senkron (sonraki tur)
 
@@ -171,3 +171,40 @@ yedeğini yükleyince telefonu hâlâ Ayşe kalır"*.
 geldi, "Burak Can" / "Merve" girildi, bu telefon **Merve** seçildi, bir çeyrek
 eklendi — Son hareketler'de **"Merve · 1 Çeyrek ekledi"** göründü. Kayıt Owner'a
 değil aktif profile yazıldı.
+
+---
+
+## 5 · Çok kullanıcılı iskeletin sökülmesi ✅
+
+Adım 4 iki profili kurdu; artık işlevsiz kalan N-kişilik iskelet söküldü.
+
+**Kaldırılanlar.**
+
+- `MemberRole` (Sahip/Üye) ve `MemberPermission` (Düzenleyebilir/Sadece görüntüler)
+  — iki eşit profilde karşılıksız. `Member` modelinden `role`, `permission`,
+  `lastSeen` alanları gitti.
+- `ShareScreen` / `ShareViewModel` / `ShareUiState` → **Profiller** ekranına
+  dönüştü: iki profil satırı, ada dokununca yeniden adlandırma, satıra dokununca
+  bu telefonu o profile bağlama. Davet kodu (sabit "472915"), elle çizilmiş QR,
+  izin segmenti, üye çıkarma — hepsi gitti. Bellek içi `permissionOverrides`/
+  `removedMemberIds` hilesi de; artık gerçek yazma var.
+- `LoginStage.Start` (yeni portföy / davet kodu adımı) → tek seçenek "yeni
+  portföy" olduğu için ayrı adım bir boş duraktı. "Yeni portföy oluştur" artık
+  doğrudan tanıtıma geçiyor. Davet alanları (`inviteCode`, `Join`, `canJoin`…)
+  temizlendi.
+
+**`DROP COLUMN` yok.** SQLDelight lehçesi sqlite-3-18. `role`/`permission`/
+`lastSeen` kolonları tabloda **yerinde kaldı**, yalnız Kotlin tipi (`AS
+MemberRole`) düz `TEXT`'e indi ve sorgularda sabit yazıldı. Migration gerekmedi;
+diskteki eski değerler ölü veri.
+
+**Korunanlar.** `InviteCodeInput` (kod kutusu) kaldı — Supabase giriş kodu
+kullanıyor. Eski yedekler güvende: `BackupCodec` `ignoreUnknownKeys = true`, eski
+`role`/`permission` alanları sessizce yok sayılır. Avatar paleti ve `take(2)`
+zaten iki kişiye göreydi.
+
+**Doğrulama.** 92 test geçiyor. Emülatörde: temiz kurulumda profil ekranı geldi
+(Burak Can / Merve), Özet'e geçildi; Ayarlar → **Profiller** açıldı, "Bu telefon"
+işareti Merve'ye ve geri Burak Can'a taşındı, yeniden adlandırma sheet'i açıldı.
+Giriş ekranında "Yeni portföy oluştur" doğrudan tanıtıma gidiyor, araya "Başlangıç"
+adımı girmiyor.

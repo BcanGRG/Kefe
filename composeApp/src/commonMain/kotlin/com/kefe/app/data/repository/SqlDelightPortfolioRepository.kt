@@ -22,8 +22,6 @@ import com.kefe.app.domain.backup.toGoalStatus
 import com.kefe.app.domain.backup.toGoalUnit
 import com.kefe.app.domain.backup.toGoldSubtype
 import com.kefe.app.domain.backup.toKarat
-import com.kefe.app.domain.backup.toMemberPermission
-import com.kefe.app.domain.backup.toMemberRole
 import com.kefe.app.domain.backup.toQuantityUnit
 import com.kefe.app.domain.backup.toTradeSide
 import com.kefe.app.domain.model.ActivityEvent
@@ -269,8 +267,6 @@ class SqlDelightPortfolioRepository(
                         id = it.id,
                         name = it.name,
                         initials = it.initials,
-                        role = it.role.name,
-                        permission = it.permission.name,
                     )
                 },
                 positions = positionQueries.selectAllPositions().executeAsList().map {
@@ -382,9 +378,6 @@ class SqlDelightPortfolioRepository(
                         portfolioId = LocalPortfolioId,
                         name = member.name,
                         initials = member.initials,
-                        role = member.role.toMemberRole(),
-                        permission = member.permission.toMemberPermission(),
-                        lastSeen = "",
                         sortOrder = index.toLong(),
                     )
                 }

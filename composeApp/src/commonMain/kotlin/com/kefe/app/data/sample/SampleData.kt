@@ -12,8 +12,6 @@ import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.Karat
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Member
-import com.kefe.app.domain.model.MemberPermission
-import com.kefe.app.domain.model.MemberRole
 import com.kefe.app.domain.model.Portfolio
 import com.kefe.app.domain.model.PortfolioTotals
 import com.kefe.app.domain.model.Position
@@ -31,22 +29,8 @@ object SampleData {
     const val MemberAyseId: String = "m_ayse"
 
     val members: List<Member> = listOf(
-        Member(
-            id = MemberVolkanId,
-            name = "Volkan",
-            initials = "VK",
-            role = MemberRole.Owner,
-            permission = MemberPermission.CanEdit,
-            lastSeen = "şu anda çevrimiçi",
-        ),
-        Member(
-            id = MemberAyseId,
-            name = "Ayşe",
-            initials = "AY",
-            role = MemberRole.Member,
-            permission = MemberPermission.CanEdit,
-            lastSeen = "2 saat önce görüldü",
-        ),
+        Member(id = MemberVolkanId, name = "Volkan", initials = "VK"),
+        Member(id = MemberAyseId, name = "Ayşe", initials = "AY"),
     )
 
     val portfolio: Portfolio = Portfolio(

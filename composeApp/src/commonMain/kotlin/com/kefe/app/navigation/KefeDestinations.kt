@@ -26,7 +26,7 @@ data object MarketKey : KefeKey
 
 data object ActivityKey : KefeKey
 
-data object ShareKey : KefeKey
+data object ProfilesKey : KefeKey
 
 // --- Hesap akisi -----------------------------------------------------------
 

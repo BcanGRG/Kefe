@@ -49,7 +49,7 @@ import com.kefe.app.navigation.MarketKey
 import com.kefe.app.navigation.OnboardingKey
 import com.kefe.app.navigation.ProfileSetupKey
 import com.kefe.app.navigation.SettingsKey
-import com.kefe.app.navigation.ShareKey
+import com.kefe.app.navigation.ProfilesKey
 import com.kefe.app.navigation.SummaryKey
 import com.kefe.app.navigation.desktopDestinations
 import com.kefe.app.navigation.topLevelDestinations
@@ -78,9 +78,8 @@ import com.kefe.app.ui.screens.account.SettingsIntent
 import com.kefe.app.ui.screens.account.SettingsScreen
 import com.kefe.app.ui.screens.account.SettingsUiState
 import com.kefe.app.ui.screens.account.SettingsViewModel
-import com.kefe.app.ui.screens.account.ShareIntent
-import com.kefe.app.ui.screens.account.ShareScreen
-import com.kefe.app.ui.screens.account.ShareViewModel
+import com.kefe.app.ui.screens.account.ProfilesScreen
+import com.kefe.app.ui.screens.account.ProfilesViewModel
 import com.kefe.app.ui.screens.account.ThemeMode
 import com.kefe.app.ui.screens.assets.AssetDetailEffect
 import com.kefe.app.ui.screens.assets.AssetDetailScreen
@@ -589,22 +588,13 @@ private fun KefeApp(
                             }
                         }
 
-                        entry<ShareKey> {
-                            val vm = koinViewModel<ShareViewModel>()
+                        entry<ProfilesKey> {
+                            val vm = koinViewModel<ProfilesViewModel>()
                             val state by vm.state.collectAsState()
                             ContentWidth {
-                                ShareScreen(
+                                ProfilesScreen(
                                     state = state,
-                                    // Sistem paylasim sayfasi platforma ozgu ve
-                                    // paylasilacak gercek bir davet baglantisi
-                                    // henuz yok - sessiz kalmak yerine soyler.
-                                    onIntent = { intent ->
-                                        if (intent == ShareIntent.ShareLink) {
-                                            saveError = NotReadyMessage
-                                        } else {
-                                            vm.onIntent(intent)
-                                        }
-                                    },
+                                    onIntent = vm::onIntent,
                                     onBack = { goBack() },
                                 )
                             }
@@ -615,7 +605,7 @@ private fun KefeApp(
                                 SettingsScreen(
                                     state = settings,
                                     onIntent = settingsVm::onIntent,
-                                    onOpenShare = { goTo(ShareKey) },
+                                    onOpenShare = { goTo(ProfilesKey) },
                                     onOpenGallery = { goTo(GalleryKey) },
                                 )
                             }

@@ -6,11 +6,8 @@ import com.kefe.app.db.Activity_events
 import com.kefe.app.db.Cached_prices
 import com.kefe.app.db.Goals
 import com.kefe.app.db.KefeDatabase
-import com.kefe.app.db.Members
 import com.kefe.app.db.Positions
 import com.kefe.app.db.Transactions
-import com.kefe.app.domain.model.MemberPermission
-import com.kefe.app.domain.model.MemberRole
 
 /**
  * Veritabani nesnesini kurar.
@@ -31,10 +28,6 @@ fun createKefeDatabase(driver: SqlDriver): KefeDatabase = KefeDatabase(
         unitAdapter = EnumColumnAdapter(),
         allocationAdapter = EnumColumnAdapter(),
         statusAdapter = EnumColumnAdapter(),
-    ),
-    membersAdapter = Members.Adapter(
-        roleAdapter = EnumColumnAdapter(),
-        permissionAdapter = EnumColumnAdapter(),
     ),
     positionsAdapter = Positions.Adapter(
         assetClassAdapter = EnumColumnAdapter(),
@@ -95,15 +88,12 @@ fun KefeDatabase.bootstrapIfNeeded() {
         // adimi (ProfileSetup) gercek adlari yazar ve hangisinin bu cihaz oldugunu
         // secer. Iki profili burada kurmak, ikinci telefonun senkrondan once bile
         // dogru iskeleti gormesini saglar.
+        // role/permission/lastSeen sorguda sabit; bkz. Portfolio.sq.
         portfolioQueries.insertOrIgnoreMember(
             id = LocalOwnerMemberId,
             portfolioId = LocalPortfolioId,
             name = "Ben",
             initials = "B",
-            role = MemberRole.Owner,
-            permission = MemberPermission.CanEdit,
-            // Serbest metin - gercek zaman damgasi degil.
-            lastSeen = "şu anda çevrimiçi",
             sortOrder = 0L,
         )
         portfolioQueries.insertOrIgnoreMember(
@@ -111,9 +101,6 @@ fun KefeDatabase.bootstrapIfNeeded() {
             portfolioId = LocalPortfolioId,
             name = "Eşim",
             initials = "E",
-            role = MemberRole.Member,
-            permission = MemberPermission.CanEdit,
-            lastSeen = "",
             sortOrder = 1L,
         )
         settingQueries.upsertSetting(

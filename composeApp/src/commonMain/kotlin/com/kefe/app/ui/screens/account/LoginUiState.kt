@@ -1,15 +1,15 @@
 package com.kefe.app.ui.screens.account
 
 /**
- * Giris akisinin ucuncu asamasi. Tasarimda ayri cerceveler olarak duruyor:
- * `login` (e-posta ile giris), `join` (yeni portfoy / davet kodu) ve `lock`
- * (cihaz kilidi). Kilit hesap girisi DEGILDIR: oturum acikken de her acilista
- * gelebilir, bu yuzden ayni ekranin bir asamasi olarak tutulur.
+ * Giris ekraninin asamasi: `SignIn` (e-posta ile giris) ve `Locked` (cihaz
+ * kilidi). Kilit hesap girisi DEGILDIR: oturum acikken de her acilista gelebilir,
+ * bu yuzden ayni ekranin bir asamasi olarak tutulur.
+ *
+ * Eski `Start` (yeni portfoy / davet kodu) asamasi kaldirildi: davet akisi iki
+ * kisilik tek hesap modelinde karsiliksiz, tek secenek "yeni portfoy" oldugu
+ * icin ayri bir adim da bos bir duraktı.
  */
-enum class LoginStage { SignIn, Start, Locked }
-
-/** Davet kodu tasarimda alti hane; kutu sayisi buradan turetilir. */
-const val InviteCodeLength: Int = 6
+enum class LoginStage { SignIn, Locked }
 
 /**
  * Kod kutusundaki hane sayisi - Supabase panelindeki "Email OTP Length" ile ayni.
@@ -38,11 +38,6 @@ data class LoginUiState(
     /** Dogrulama basarili - cagiran taraf ana ekrana gecirir. */
     val signedIn: Boolean = false,
 
-    // Yeni portfoy / katilma
-    val inviteCode: String = "",
-    val inviteError: String? = null,
-    val joining: Boolean = false,
-
     // Kilit
     val portfolioName: String = "",
     val maskedTotalDigits: Int = 6,
@@ -63,8 +58,6 @@ data class LoginUiState(
      * Uzunluk yanlissa artik sunucu soyler, kullanici da en azindan deneyebilir.
      */
     val canVerify: Boolean get() = !verifying && code.length >= MinLoginCodeLength
-
-    val canJoin: Boolean get() = !joining && inviteCode.length == InviteCodeLength
 }
 
 /**
@@ -89,12 +82,8 @@ sealed interface LoginIntent {
     /** Kod kutusundan e-posta adimina donus - yanlis adres yazilmis olabilir. */
     data object EditEmail : LoginIntent
 
-    data object GoToStart : LoginIntent
-    data object GoToSignIn : LoginIntent
-
+    /** "Yeni portfoy olustur" - dogrudan tanitima gecer. */
     data object CreatePortfolio : LoginIntent
-    data class ChangeInviteCode(val value: String) : LoginIntent
-    data object Join : LoginIntent
 
     /** Kilit asamasina gec - kabuk acilista cagirir. */
     data object Lock : LoginIntent

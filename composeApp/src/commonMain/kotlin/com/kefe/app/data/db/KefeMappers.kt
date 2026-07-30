@@ -79,9 +79,6 @@ internal fun Members.toDomain(): Member = Member(
     id = id,
     name = name,
     initials = initials,
-    role = role,
-    permission = permission,
-    lastSeen = lastSeen,
 )
 
 internal fun Portfolios.toDomain(memberIds: List<String>): Portfolio = Portfolio(

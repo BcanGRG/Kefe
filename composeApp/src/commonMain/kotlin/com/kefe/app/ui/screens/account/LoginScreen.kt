@@ -92,10 +92,9 @@ fun LoginScreen(
     //
     // Kilit asamasi bilerek disarida: kilitliyken geri tusu uygulamadan cikarir,
     // kilidi acmaz. Kapali tutmak da kullaniciyi ekranda hapsederdi.
+    // Kod kutusundayken geri, e-posta adimina doner. Kilit asamasi bilerek
+    // disarida: kilitliyken geri tusu uygulamadan cikarir, kilidi acmaz.
     val backStep: (() -> Unit)? = when {
-        state.stage == LoginStage.Start -> {
-            { onIntent(LoginIntent.GoToSignIn) }
-        }
         state.stage == LoginStage.SignIn && state.codeSent -> {
             { onIntent(LoginIntent.EditEmail) }
         }
@@ -107,14 +106,6 @@ fun LoginScreen(
     // ust cubuk da icerikle ayni dar kolonda kalsin diye birlikte ortalanir.
     // Telefonda (390) sinir devreye girmez.
     Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        if (state.stage == LoginStage.Start) {
-            AccountTopBar(
-                title = "Başlangıç",
-                onBack = { onIntent(LoginIntent.GoToSignIn) },
-                modifier = Modifier.widthIn(max = Sizes.formMaxWidth),
-            )
-        }
-
         Column(
             Modifier
                 .fillMaxWidth()
@@ -131,7 +122,6 @@ fun LoginScreen(
             ) {
                 when (state.stage) {
                     LoginStage.SignIn -> SignInStage(state, onIntent)
-                    LoginStage.Start -> StartStage(state, onIntent)
                     LoginStage.Locked -> LockStage(state, onIntent)
                 }
             }
@@ -260,6 +250,8 @@ private fun SignInStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
             horizontalArrangement = Arrangement.Center,
         ) {
             Text("Hesabınız yok mu? ", style = t.caption, color = c.onSurfaceMuted)
+            // Dogrudan tanitima gecer. Once araya bir "Başlangıç" adimi giriyordu;
+            // tek secenek "yeni portfoy" oldugu icin o adim bos bir duraktı.
             Text(
                 "Yeni portföy oluştur",
                 style = t.caption.copy(fontWeight = FontWeight.SemiBold),
@@ -268,7 +260,7 @@ private fun SignInStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
                     indication = null,
                     interactionSource = null,
                     role = Role.Button,
-                ) { onIntent(LoginIntent.GoToStart) },
+                ) { onIntent(LoginIntent.CreatePortfolio) },
             )
         }
         Spacer(Modifier.height(Space.x24))
@@ -333,121 +325,19 @@ private fun EmailField(value: String, onValueChange: (String) -> Unit, hasError:
     }
 }
 
-// --- Baslangic: yeni portfoy / davet kodu ----------------------------------
-
-@Composable
-private fun StartStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
-    val c = KefeTheme.colors
-    val t = KefeTheme.type
-
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = Space.x20, end = Space.x20, top = Space.x8, bottom = Space.x24),
-    ) {
-        Text("Nasıl başlıyoruz?", style = t.h1, color = c.onSurface)
-        Spacer(Modifier.height(Space.x8))
-        Text(
-            "Kefe tek kişilik de tam çalışır. Paylaşmak bir özellik, zorunluluk değil.",
-            style = t.body.copy(lineHeight = 22.sp),
-            color = c.onSurfaceMuted,
-        )
-
-        Spacer(Modifier.height(Space.x24))
-        StartCard(borderColor = c.accent) {
-            Box(
-                modifier = Modifier
-                    .size(Space.x40)
-                    .clip(KefeShapes.button)
-                    .background(c.accentMuted),
-                contentAlignment = Alignment.Center,
-            ) {
-                KefeIcon(KefeIcons.Plus, null, size = 22.dp, tint = c.accent)
-            }
-            Spacer(Modifier.height(Space.x12))
-            Text("Yeni portföy oluştur", style = t.bodyStrong, color = c.onSurface)
-            Spacer(Modifier.height(Space.x4))
-            Text(
-                "Sıfırdan başlayın, eşinizi sonra davet edin.",
-                style = t.caption.copy(lineHeight = 19.sp),
-                color = c.onSurfaceMuted,
-            )
-            Spacer(Modifier.height(Space.x14))
-            AccountFilledButton(
-                text = "Portföy oluştur",
-                onClick = { onIntent(LoginIntent.CreatePortfolio) },
-                modifier = Modifier.fillMaxWidth(),
-                height = Sizes.fieldDefault,
-            )
-        }
-
-        Spacer(Modifier.height(Space.x12))
-        StartCard(borderColor = c.outline) {
-            Box(
-                modifier = Modifier
-                    .size(Space.x40)
-                    .clip(KefeShapes.button)
-                    .background(c.surfaceSunken),
-                contentAlignment = Alignment.Center,
-            ) {
-                KefeIcon(AccountIcons.UserPlus, null, size = 22.dp, tint = c.onSurfaceMuted)
-            }
-            Spacer(Modifier.height(Space.x12))
-            Text("Davet koduyla katıl", style = t.bodyStrong, color = c.onSurface)
-            Spacer(Modifier.height(Space.x4))
-            Text(
-                "Eşiniz sizi davet ettiyse altı haneli kodu girin.",
-                style = t.caption.copy(lineHeight = 19.sp),
-                color = c.onSurfaceMuted,
-            )
-            Spacer(Modifier.height(Space.x14))
-            InviteCodeInput(
-                code = state.inviteCode,
-                onCodeChange = { onIntent(LoginIntent.ChangeInviteCode(it)) },
-            )
-            if (state.inviteError != null) {
-                Spacer(Modifier.height(Space.x8))
-                Text(state.inviteError, style = t.micro, color = c.negative)
-            }
-            Spacer(Modifier.height(Space.x12))
-            AccountOutlineButton(
-                text = "Katıl",
-                onClick = { onIntent(LoginIntent.Join) },
-                modifier = Modifier.fillMaxWidth(),
-                height = Sizes.fieldDefault,
-                enabled = state.canJoin,
-            )
-        }
-    }
-}
-
-/** Baslangic kartlari: 18dp dolgu, 16dp yaricap, tek renkli kenarlik. */
-@Composable
-private fun StartCard(borderColor: Color, content: @Composable () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(KefeShapes.card)
-            .background(KefeTheme.colors.surfaceElevated)
-            .border(Sizes.hairline, borderColor, KefeShapes.card)
-            .padding(18.dp),
-    ) {
-        content()
-    }
-}
-
 /**
  * Hane hane kod kutusu. Kutular gorseldir; giris gorunmez bir metin alanina
  * yapilir - boylece sistem klavyesi, yapistirma ve otomatik doldurma calisir.
  *
- * Uzunluk PARAMETRE: davet kodu alti hane, Supabase giris kodu sekiz. Sabit
- * kaldigi surece giris kutusu hicbir zaman dolmuyor ve dugme acilmiyordu.
+ * Adi "davet kodu"ndan kaldi ama artik yalniz Supabase giris kodu icin kullanilir
+ * (davet akisi kaldirildi). Uzunluk PARAMETRE: sunucudaki OTP ayari degisince
+ * kutu sayisi da degissin.
  */
 @Composable
 private fun InviteCodeInput(
     code: String,
     onCodeChange: (String) -> Unit,
-    length: Int = InviteCodeLength,
+    length: Int = LoginCodeLength,
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type

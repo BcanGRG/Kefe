@@ -36,9 +36,6 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 portfolioId = portfolio.id,
                 name = member.name,
                 initials = member.initials,
-                role = member.role,
-                permission = member.permission,
-                lastSeen = member.lastSeen,
                 sortOrder = index.toLong(),
             )
         }
