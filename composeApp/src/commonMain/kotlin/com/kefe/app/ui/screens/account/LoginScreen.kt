@@ -207,12 +207,27 @@ private fun SignInStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
                 enabled = state.canVerify,
             )
             Spacer(Modifier.height(Space.x8))
-            AccountFlatButton(
-                text = "E-postayı düzelt",
-                onClick = { onIntent(LoginIntent.EditEmail) },
-                contentColor = c.onSurfaceMuted,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            // Iki ikincil eylem yan yana: yanlis adres icin duzelt, kod gelmediyse
+            // tekrar gonder. Tekrar gonderme geri sayim boyunca soluk ve tiklanamaz.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.x8)) {
+                AccountFlatButton(
+                    text = "E-postayı düzelt",
+                    onClick = { onIntent(LoginIntent.EditEmail) },
+                    contentColor = c.onSurfaceMuted,
+                    modifier = Modifier.weight(1f),
+                )
+                AccountFlatButton(
+                    text = if (state.resendCooldown > 0) {
+                        "Tekrar gönder (${state.resendCooldown})"
+                    } else {
+                        "Kodu tekrar gönder"
+                    },
+                    onClick = { onIntent(LoginIntent.ResendCode) },
+                    contentColor = c.accent,
+                    enabled = state.resendCooldown == 0 && !state.sendingCode,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
 
         Spacer(Modifier.height(Space.x10))
@@ -311,7 +326,7 @@ private fun EmailField(value: String, onValueChange: (String) -> Unit, hasError:
                     Box(contentAlignment = Alignment.CenterStart) {
                         if (value.isEmpty()) {
                             Text(
-                                "volkan@ornek.com",
+                                "burak@ornek.com",
                                 style = t.body,
                                 color = c.onSurfaceMuted,
                                 maxLines = 1,
@@ -768,10 +783,11 @@ internal fun AccountFlatButton(
     height: Dp = Sizes.touchTarget,
     horizontalPadding: Dp = 0.dp,
     hoverBackground: Color? = null,
+    enabled: Boolean = true,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val background = if (hovered) {
+    val background = if (hovered && enabled) {
         hoverBackground ?: KefeTheme.colors.surfaceElevated
     } else {
         Color.Transparent
@@ -782,11 +798,12 @@ internal fun AccountFlatButton(
             .height(height)
             .clip(KefeShapes.button)
             .background(background)
-            .hoverable(interaction)
+            .hoverable(interaction, enabled = enabled)
             .clickable(
                 interactionSource = interaction,
                 indication = null,
                 role = Role.Button,
+                enabled = enabled,
                 onClick = onClick,
             )
             .padding(horizontal = horizontalPadding),
@@ -795,7 +812,8 @@ internal fun AccountFlatButton(
         Text(
             text = text,
             style = KefeTheme.type.caption.copy(fontWeight = FontWeight.SemiBold),
-            color = contentColor,
+            // Devre disiyken soluk: geri sayim surerken tiklanamayacagi belli olsun.
+            color = if (enabled) contentColor else KefeTheme.colors.onSurfaceMuted.copy(alpha = 0.5f),
         )
     }
 }

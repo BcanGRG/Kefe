@@ -27,12 +27,19 @@ erişim demek. Düz metin jeton + açık senkron = sızıntı. Bu yüzden 8, 7'd
 
 | # | Adım | Durum |
 |---|---|---|
-| 8 | Jeton Keystore/Keychain'e | ✅ **bitti** (7'den önce) |
-| 7 | Supabase tabloları + RLS | ✅ **bitti** (SQL kullanıcı çalıştırır) |
-| 9 | Push | ✅ **bitti** (canlı doğrulama girişte) |
-| 10 | Pull | ⬜ |
+| 8 | Jeton Keystore/Keychain'e | ✅ **bitti + canlı doğrulandı** (enc1:, eyJ yok) |
+| 7 | Supabase tabloları + RLS | ✅ **bitti + canlı doğrulandı** (upsert 2xx) |
+| 9 | Push | ✅ **bitti + canlı doğrulandı** (watermark ilerledi) |
+| 9b | Bulut girişi + giriş/kilit fix + boş-durum + resend | ✅ **bitti** |
+| 10 | Pull | ⬜ (sıradaki) |
 | 11 | Gerçek zamanlı | ⬜ |
 | 12 | Bildirimler | ⬜ (11'den sonra anlamlı) |
+
+**Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
+Gmail SMTP + App Password ile açıldı (Resend domain istiyordu; domain alınmadı).
+Giriş yapıldi: jeton diskte `enc1:` sifreli (`eyJ` duz-metin yok) → adim 8; push
+watermark ilerledi (`lastPushedAt` yazildi, motor bunu ancak TUM upsert'ler 2xx
+donunce yazar) → adim 9; upsert'lerin gecmesi kolon/RLS uyumunu → adim 7 dogrular.
 
 ---
 
@@ -394,3 +401,48 @@ uygulama temiz açıldı (Koin 33 tanım, sync grafiği kuruldu, çökme yok); o
 olmadığı için henüz push denemiyor. **Açık kalan:** verinin gerçekten Supabase'e
 düştüğünün canlı kanıtı — bir sonraki girişte yakalanacak (adım 8'in `enc1:`
 kanıtıyla aynı oturum).
+
+---
+
+## 9b · Bulut girişi + giriş/kilit çakışması + boş-durum + resend ✅
+
+**Neydi (kör nokta).** Adım 9 push motorunu kurdu ama iki-profil rescope'u,
+onboarding'i geçmiş + oturumu kapanmış bir kullanıcının **giriş yolunu** silmişti:
+Ayarlar'daki "Hesap" bölümü yalnız girişliyken çiziliyordu. Yani ikinci telefon
+(ya da oturumu düşen biri) hiç giriş yapamıyordu — senkron da hiç başlamıyordu.
+
+**Bulut bölümü.** "Hesap" → **Bulut** bölümüne dönüştü: signed-out iken "Giriş yap
+ve senkronu aç", signed-in iken e-posta + son senkron + çıkış. Çıkış artık
+kullanıcıyı login köküne ATMIYOR (giriş isteğe bağlı, uygulama çevrimdışı tam
+çalışır) — Ayarlar'da kalır, Bulut yeniden "Giriş yap" gösterir.
+
+**Giriş/kilit çakışması (asıl bug).** `LoginKey` ekranı ÇİFT görevli: açılış
+biyometrik kilidi (yığın kökü iken) + bulut girişi (Ayarlar'dan itilince). AYNI
+`LoginViewModel` ikisine de hizmet ettiği için kilitten arta kalan durum
+(`stage=Locked`, `unlocked=true`) itilmiş girişe sızıyordu: "Giriş yap" bir an
+kilit ekranını (gerçek cihazda parmak izi istemini) açıp, `unlocked` etkisiyle
+`enterApp` çağırıp Özet'e geri atıyordu. Çözüm: **itilmiş LoginKey her zaman temiz
+SignIn gösterir** (kök değilse `state`'i SignIn/unlocked=false'a zorlar); kilit
+yalnız kök iken. Tuzak: düzeltme bir süre `LoginStage` import'u eksik olduğu için
+DERLENMİYORDU — build "başarılı" görünüp eski APK'yı kuruyordu; asıl teşhis
+logcat stack-trace ile geldi.
+
+**Boş-durum başlığı.** İlk kayıttan önce (`SummaryStage.Empty`) başlıktaki senkron
+çipi (Eşit), göz (gizle) ve yenile ÇİZİLMEZ; pull-to-refresh kapalı — eşlenecek
+veri, gizlenecek bakiye, tazelenecek fiyat yok. İlk varlıkla gelirler. (Not: "Eşit"
+çipi aslında FİYAT tazeliğini gösteriyor, bulut senkronunu değil — ileride ayrılmalı.)
+
+**Kodu tekrar gönder.** Kod-giriş ekranına "Kodu tekrar gönder" eklendi, 60 sn
+geri sayımlı (Supabase OTP aralığıyla uyumlu; foreground tek-seferlik sayaç, arka
+plan poll değil). Başarısız resend kod kutusundan atmaz. `AccountFlatButton`
+`enabled` aldı. Placeholder `volkan@` → `burak@ornek.com`.
+
+**E-posta (altyapı, kod dışı).** Resend domain istiyordu; domain alınmadı. Çözüm:
+Gmail SMTP + App Password (`smtp.gmail.com:587`) — domain gerektirmez, kod
+`burockcan2309@gmail.com`'a gelir. İlk hata `535 BadCredentials` App Password'ün
+boşluklu girilmesindendi.
+
+**Doğrulama.** 98 masaüstü testi geçiyor; iki platform derleniyor. Emülatörde giriş
+ekranı artık kilit yerine e-posta/kod gösteriyor (stack-trace + DBG ile
+doğrulandı). Gerçek cihaz + gerçek Supabase'de giriş → adım 8/9 canlı kanıtı
+(yukarı bkz). `SyncCoordinator` push hatasında artık tanısal log bırakıyor.

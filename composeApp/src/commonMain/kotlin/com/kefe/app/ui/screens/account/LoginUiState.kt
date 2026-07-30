@@ -35,6 +35,11 @@ data class LoginUiState(
     val codeSent: Boolean = false,
     val code: String = "",
     val verifying: Boolean = false,
+    /**
+     * "Kodu tekrar gonder" icin geri sayim (saniye). 0 iken tekrar gonderilebilir.
+     * Sunucunun OTP hiz sinirina takilmadan once kullaniciyi bekletir.
+     */
+    val resendCooldown: Int = 0,
     /** Dogrulama basarili - cagiran taraf ana ekrana gecirir. */
     val signedIn: Boolean = false,
 
@@ -81,6 +86,9 @@ sealed interface LoginIntent {
 
     /** Kod kutusundan e-posta adimina donus - yanlis adres yazilmis olabilir. */
     data object EditEmail : LoginIntent
+
+    /** Ayni adrese yeni bir kod ister - kod gelmediyse ya da suresi dolduysa. */
+    data object ResendCode : LoginIntent
 
     /** "Yeni portfoy olustur" - dogrudan tanitima gecer. */
     data object CreatePortfolio : LoginIntent

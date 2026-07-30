@@ -65,9 +65,10 @@ class SettingsViewModel(
     private fun signOut() {
         viewModelScope.launch {
             authRepository.signOut()
-            // Aksi halde "bir kez girildiyse giris ekrani atlanir" kurali
-            // kullaniciyi ayni karede iceri geri alirdi.
-            portfolioRepository.clearOnboarded()
+            // Onboarded BIRAKILIR, yerel veri durur: giris artik zorunlu bir kapi
+            // degil, Bulut bolumunden acilip kapanan istege bagli bir baglanti.
+            // Cikinca kullanici uygulamada kalir (cevrimdisi tam calisir), senkron
+            // durur ve Bulut bolumu yeniden "Giriş yap" gosterir.
             emitEffect(SettingsEffect.SignedOut)
         }
     }
@@ -203,10 +204,32 @@ class SettingsViewModel(
                     // alindiktan sonra bile bos kaliyordu.
                     lastBackupLabel = prefs[PreferenceKeys.LastBackupAt]?.toBackupLabel()
                         ?: "Henüz alınmadı",
+                    // Bulut durumu: push watermark'i son ne zaman ilerledi. Push
+                    // yalniz TUM upsert'ler basardiktan sonra ilerledigi icin bu,
+                    // "en son ne zaman sunucuya ulastik" demek. Emisyon aninda
+                    // hesaplanir - ticker YOK; bir sonraki degisimde tazelenir.
+                    syncStatusLabel = prefs[PreferenceKeys.LastPushedAt]?.toLongOrNull()
+                        ?.let { relativeSince(it, clock.nowEpochMillis()) }
+                        ?: "Henüz yok",
                     appVersion = SupabaseConfig.AppVersion,
                 )
             }.collect { next -> setState { next } }
         }
+    }
+}
+
+/**
+ * Iki epoch ms arasindaki farki kaba bir Turkce etikete cevirir ("az önce",
+ * "5 dk önce", "2 sa önce", "3 gün önce"). Gun-alti duraklar yeterli: kullanici
+ * "ne kadar taze" sorusuna bakar, saniye hassasiyeti istemez.
+ */
+private fun relativeSince(then: Long, now: Long): String {
+    val seconds = ((now - then) / 1000L).coerceAtLeast(0)
+    return when {
+        seconds < 60 -> "az önce"
+        seconds < 3600 -> "${seconds / 60} dk önce"
+        seconds < 86_400 -> "${seconds / 3600} sa önce"
+        else -> "${seconds / 86_400} gün önce"
     }
 }
 

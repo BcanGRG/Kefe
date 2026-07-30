@@ -8,6 +8,8 @@ import com.kefe.app.security.BiometricAvailability
 import com.kefe.app.security.BiometricGate
 import com.kefe.app.security.BiometricResult
 import com.kefe.app.domain.repository.PortfolioRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +31,10 @@ class LoginViewModel(
 
     private val _state = MutableStateFlow(LoginUiState())
     val state: StateFlow<LoginUiState> = _state.asStateFlow()
+
+    // "Kodu tekrar gonder" geri sayimi; e-posta duzeltilince ya da yeni gonderimde
+    // iptal edilir.
+    private var cooldownJob: Job? = null
 
     init {
         observePortfolio()
@@ -52,11 +58,17 @@ class LoginViewModel(
 
             LoginIntent.VerifyCode -> verifyCode()
 
-            LoginIntent.EditEmail -> _state.value = _state.value.copy(
-                codeSent = false,
-                code = "",
-                emailError = null,
-            )
+            LoginIntent.EditEmail -> {
+                cooldownJob?.cancel()
+                _state.value = _state.value.copy(
+                    codeSent = false,
+                    code = "",
+                    emailError = null,
+                    resendCooldown = 0,
+                )
+            }
+
+            LoginIntent.ResendCode -> resendCode()
 
             LoginIntent.CreatePortfolio -> _state.value = _state.value.copy(portfolioCreated = true)
 
@@ -92,6 +104,38 @@ class LoginViewModel(
                 codeSent = error == null,
                 emailError = error?.userMessage(),
             )
+            // Basariyla gonderildiyse "tekrar gonder" geri sayimi baslar.
+            if (error == null) startResendCooldown()
+        }
+    }
+
+    /**
+     * Ayni adrese yeni kod. sendCode'dan farki: BASARISIZ olsa da kod kutusundan
+     * ATMAZ - kullanici zaten kod bekliyor, yalniz hatayi gorur ve tekrar dener.
+     */
+    private fun resendCode() {
+        val current = _state.value
+        if (current.resendCooldown > 0 || current.sendingCode) return
+        _state.value = current.copy(sendingCode = true, emailError = null)
+        viewModelScope.launch {
+            val error = authRepository.sendCode(current.email).exceptionOrNull()
+            _state.value = _state.value.copy(
+                sendingCode = false,
+                emailError = error?.userMessage(),
+            )
+            if (error == null) startResendCooldown()
+        }
+    }
+
+    /** Foreground, tek seferlik geri sayim - biter, arka planda donen bir sey yok. */
+    private fun startResendCooldown() {
+        cooldownJob?.cancel()
+        cooldownJob = viewModelScope.launch {
+            for (remaining in ResendCooldownSeconds downTo 1) {
+                _state.value = _state.value.copy(resendCooldown = remaining)
+                delay(1_000)
+            }
+            _state.value = _state.value.copy(resendCooldown = 0)
         }
     }
 
@@ -165,3 +209,9 @@ private fun Throwable.userMessage(): String? = when (this) {
     is AuthException -> message
     else -> "Bağlanılamadı — internet bağlantınızı kontrol edin"
 }
+
+/**
+ * "Kodu tekrar gonder" arasindaki bekleme. Supabase OTP icin varsayilan yeniden
+ * gonderim araligiyla (60 sn) ayni; kullaniciyi sunucu reddetmeden once bekletir.
+ */
+private const val ResendCooldownSeconds = 60

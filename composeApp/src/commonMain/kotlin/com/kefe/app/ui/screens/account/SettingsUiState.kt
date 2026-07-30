@@ -58,8 +58,10 @@ data class SettingsUiState(
     /** Son yedek tarihi ("29 Temmuz 2026"); bos ise henuz yedek alinmadi. */
     val lastBackupLabel: String = "",
     val email: String = "",
-    /** Bulut hesabina girilmis mi - "Çıkış yap" satiri buna gore gorunur. */
+    /** Bulut hesabina girilmis mi - Bulut bolumu buna gore giris ya da hesap gosterir. */
     val signedIn: Boolean = false,
+    /** Bulut bolumunun alt satiri: "Son senkron: az önce" ya da "Henüz senkronlanmadı". */
+    val syncStatusLabel: String = "",
     val appVersion: String = "",
 
     /** "Tüm verileri sil" onay penceresi acik mi. */
