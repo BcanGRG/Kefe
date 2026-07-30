@@ -168,6 +168,11 @@ class AssetDetailViewModel(
             members = members,
             // Grafik AYRI akistan gelir; burada yeniden yazmak onu sifirlardi.
             priceSeries = _state.value.priceSeries,
+            // Gecici UI bayraklari da korunur: akis fiyat/senkron her tiktiginde
+            // yeniden kuruluyor; korunmazsa acilan menu ya da silme onayi bir
+            // sonraki emisyonda ANINDA kapaniyordu (dialog "acilip hemen kapaniyor").
+            menuOpen = _state.value.menuOpen,
+            confirmDelete = _state.value.confirmDelete,
             // Isaretciler ve eksen etiketleri gecmis serisine dayaniyordu;
             // gercek seri gunluk ve daha yeni oldugu icin ikisi de bu turda
             // bos birakildi - uydurma bir eksen cizmektense hic cizmemek dogru.
