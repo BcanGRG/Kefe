@@ -58,7 +58,9 @@ import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.formatLong
 import com.kefe.app.domain.model.label
 import com.kefe.app.ui.components.AmountKeyboard
+import com.kefe.app.ui.components.ThousandsSeparatorTransformation
 import com.kefe.app.ui.components.asAmountInput
+import androidx.compose.ui.text.input.VisualTransformation
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
@@ -557,6 +559,7 @@ private fun KaratPanel(
                 value = state.gramText,
                 onValueChange = { onIntent(AddTransactionIntent.ChangeGram(it.asAmountInput())) },
                 keyboardOptions = AmountKeyboard,
+                visualTransformation = ThousandsSeparatorTransformation(),
                 textStyle = amountStyle(),
                 modifier = Modifier.weight(1f),
                 placeholder = "0",
@@ -790,6 +793,7 @@ private fun StepAmount(
             value = state.unitPriceText,
             onValueChange = { onIntent(AddTransactionIntent.ChangeUnitPrice(it.asAmountInput())) },
             keyboardOptions = AmountKeyboard,
+            visualTransformation = ThousandsSeparatorTransformation(),
             textStyle = t.h2.tabular(),
             modifier = Modifier.weight(1f),
             placeholder = "0",
@@ -967,6 +971,7 @@ private fun QuantityField(
             value = state.quantityText,
             onValueChange = { onIntent(AddTransactionIntent.ChangeQuantity(it.asAmountInput())) },
             keyboardOptions = AmountKeyboard,
+            visualTransformation = ThousandsSeparatorTransformation(),
             textStyle = amountStyle(),
             modifier = Modifier.weight(1f),
             placeholder = "0",
@@ -1144,6 +1149,7 @@ private fun ExtraFields(
                             value = state.feeText,
                             onValueChange = { onIntent(AddTransactionIntent.ChangeFee(it.asAmountInput())) },
                             keyboardOptions = AmountKeyboard,
+                            visualTransformation = ThousandsSeparatorTransformation(),
                             textStyle = t.body.tabular(),
                             modifier = Modifier.weight(1f),
                             placeholder = "0",
@@ -1347,6 +1353,8 @@ private fun SheetInput(
     placeholder: String = "",
     singleLine: Boolean = true,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    /** Tutar alanlari icin binlik ayrac (deger ham kalir; bkz. imlec sorunu). */
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     val c = KefeTheme.colors
     BasicTextField(
@@ -1357,6 +1365,7 @@ private fun SheetInput(
         singleLine = singleLine,
         cursorBrush = SolidColor(c.accent),
         keyboardOptions = keyboardOptions,
+        visualTransformation = visualTransformation,
         decorationBox = { inner ->
             Box(contentAlignment = Alignment.CenterStart) {
                 if (value.isEmpty() && placeholder.isNotEmpty()) {
