@@ -64,12 +64,40 @@ fun goalWealth(
     if (assignment?.goalId != goal.id) 0.0 else assignment.valueIn(position)
 }
 
+/**
+ * Bir hedefi karsilayan varligin O HEDEFE DUSEN kismi.
+ *
+ * Ekranlarin `Position`i dogrudan gostermesi, atama miktar tasimaya baslayinca
+ * YALAN soyler oldu: hedefe 15 ceyrek atanmisken liste "16 adet" ve varligin
+ * tam degerini yaziyordu. Neyin sayildigini tasiyan tek tip burasi.
+ */
+data class GoalAsset(
+    val position: Position,
+    val assignment: GoalAssignment,
+) {
+    /** Hedefe sayilan miktar - pozisyonunkiyle sinirli. */
+    val quantity: Double get() = assignment.effectiveQuantity(position)
+
+    /** Hedefe sayilan TL degeri. */
+    val value: Double get() = assignment.valueIn(position)
+
+    /**
+     * Varligin tamami mi sayiliyor. Kismi ise ekran bunu acikca yazmali;
+     * "tamami" ise miktar tekrar edilmemeli.
+     */
+    val coversWholePosition: Boolean
+        get() = assignment.isWhole || quantity >= position.quantity
+}
+
 /** Hedefe atanmis varliklar - detay ekranindaki liste. */
 fun assetsOf(
     goal: Goal,
     positions: List<Position>,
     assignments: Map<String, GoalAssignment>,
-): List<Position> = positions.filter { assignments[it.id]?.goalId == goal.id }
+): List<GoalAsset> = positions.mapNotNull { position ->
+    val assignment = assignments[position.id]?.takeIf { it.goalId == goal.id }
+    assignment?.let { GoalAsset(position, it) }
+}
 
 /**
  * Islem kaydedilirken atamanin ALACAGI yeni miktar; `null` ise atamaya

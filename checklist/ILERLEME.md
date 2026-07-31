@@ -47,6 +47,7 @@ Gerçek kullanımda çıkan altı şey. Hepsi emülatörde doğrulandı.
 | 16 | Hedef ataması adet bazında bölünebiliyor | ✅ **bitti** (schema.sql tekrar çalıştırılmalı) |
 | 17 | "Çevrimdışı" mantığı — fiyat ile bulut ayrıldı | ✅ **bitti + canlı doğrulandı** |
 | 18 | Açılış animasyonu tek akıcı harekete indi | ✅ **bitti** |
+| 19 | Hedef ekranı atanan kısmı gösteriyor, miktar sonradan değiştirilebiliyor | ✅ **bitti** |
 
 **Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
 Gmail SMTP + App Password ile açıldı (Resend domain istiyordu; domain alınmadı).
@@ -738,3 +739,45 @@ büyüyüp çözülüyor. Son kare düz zemin, yani uygulamanın ilk karesiyle a
 
 **Doğrulama.** Emülatörde kare kare yakalandı: açılıştan itibaren **tek** yay,
 sabit boyda; sonra kilit kuruluyor, ad geliyor, uygulama açılıyor. Doubling yok.
+
+---
+
+## 19 · Hedef ekranı: atanan kısım ve miktarı sonradan değiştirme ✅
+
+Adım 16 veri modelini kurdu ama ekran onu anlatmıyordu. İki şikâyet:
+
+**1. Liste yalan söylüyordu.** "Bu hedefi karşılayanlar" pozisyonun TAMAMINI
+yazıyordu: hedefe 15 çeyrek atanmışken satır "16 adet" ve varlığın tam değerini
+gösteriyordu — ekranda görünen şey hedefin saydığı şeyden başkaydı.
+
+**2. Sonradan fikir değiştirilemiyordu.** "Geçen hafta hedefsiz aldığım 1 çeyreği
+de Ev'e alayım" demenin yolu yoktu; "Varlık seç" hepsi-ya-hiçbiri anahtarıydı.
+
+**Ne yapıldı.**
+
+- Yeni `GoalAsset` (pozisyon + atama): `quantity` ve `value` artık ATANAN kısmı
+  verir. `assetsOf` bunu döndürüyor, ekranlar `Position`'ı doğrudan göstermiyor.
+- Liste kısmi atamada "15 adet / 16 adet" yazıyor ve tutar atanan kısmın;
+  tamamı atanmışsa eskisi gibi sade "16 adet" (16/16 yazmak gürültü olurdu).
+- "Varlık seç" satırı büyüdü: kutu **atandı/atanmadı**, altında **kaydırıcı** ile
+  miktar ve bir **"Tümü"** çipi. Üç ayrı şey oldukları için üçü de ayrı duruyor.
+- **"Tümü" sabit bir miktar değildir** — ileride alınacakları da kapsar.
+  Kaydırıcıyı sonuna sürüklemekle aynı şey olmadığı için ayrı bir seçenek;
+  çip, atama `-1` iken dolu, sabit miktardayken boş görünüyor.
+- Kaydırıcının sol ucu (0) atamayı kaldırır — ayrı bir "kaldır" yolu açmadık.
+- Pencere taşıyordu (her satır üçe katlanınca "Bitti" ekran dışında kalıyordu);
+  liste kaydırılır oldu, başlık ve buton sabit.
+
+**Yol boyunca çıkan tuzak — kaydırıcı tam sayıya oturmuyordu.** `KefeSlider`'da
+`steps` ARALIK sayısıdır (senaryo kaydırıcısı: 30–120 arası 5'erli = 18), Compose'
+daki gibi "aradaki nokta" sayısı değil. Bir eksik verince 15 adetlik varlık
+15/14'lük adımlara oturdu: kullanıcı 10'u seçemiyor, **9,64** yazılıyor, etiket de
+bunu "10 adet" diye yuvarlayıp gizliyordu. Değer ₺94.874 çıkıyordu, ₺98.388
+yerine — yani ekran yine yalan söylüyordu, bu sefer sessizce. Adım sayısı
+düzeltildi ve adet/pay ViewModel'de ayrıca tam sayıya yuvarlanıyor: kayan nokta
+artığı diske yazılıp eşitlenmesin.
+
+**Doğrulama.** 140 masaüstü testi (3 yeni: liste atanan kısmı taşıyor, tüm-varlık
+kısmi sayılmaz, miktar pozisyona eşitse kısmi sayılmaz). Emülatörde: kaydırıcı
+10'a çekildi → liste "10 adet / 15 adet", tutar **₺98.388** (= ₺147.581 × 10/15),
+hedef %31 → %30; "Tümü" ile geri alındı → "15 adet", %31.

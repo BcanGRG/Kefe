@@ -1,6 +1,7 @@
 package com.kefe.app.ui.screens.goals
 
 import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.GoalAsset
 import com.kefe.app.domain.model.GoalMilestone
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.KefeDate
@@ -20,7 +21,21 @@ data class AssignableAsset(
     val position: Position,
     val assignedToThis: Boolean,
     val otherGoalName: String?,
-)
+    /** Bu hedefe sayilan miktar. Atanmamissa 0. */
+    val assignedQuantity: Double = 0.0,
+    /**
+     * "Tümü" secili mi - yani atama miktar tasimiyor (-1).
+     *
+     * Fark onemli: "tümü" ileride ALINACAKLARI da kapsar, sabit bir miktar
+     * kapsamaz. Kullanici bir kismini atadiktan sonra "hepsi ve bundan
+     * sonrakiler de" diyebilmeli.
+     */
+    val coversWholePosition: Boolean = false,
+) {
+    /** Kaydiricinin ust siniri; miktarsiz varlikta secici cizilmez. */
+    val maxQuantity: Double get() = position.quantity
+    val isDivisible: Boolean get() = position.quantity > 0.0
+}
 
 /** Aylik katki gecmisi tablosunun tek satiri. */
 data class ContributionRow(
@@ -65,13 +80,15 @@ data class GoalDetailUiState(
     val collapsedRows: List<ContributionRow> = emptyList(),
     val showAllRows: Boolean = false,
 
-    /** Bu hedefe atanmis varliklar. Bos ise hedef tum birikimi sayiyor. */
-    val assignedAssets: List<Position> = emptyList(),
     /**
-     * Hedefi OLUSTURAN varliklar: atanmis varlik varsa onlar; yoksa (tum birikim
-     * modu) tum varliklar. "Bu hedefi karsilayanlar" listesi bunu gosterir.
+     * Bu hedefe atanmis varliklar - ATANAN KISIMLARIYLA.
+     *
+     * [GoalAsset] tasiyor cunku atama artik miktar tutabiliyor: 16 ceyregin
+     * 15'i bu hedefteyse liste "16 adet" ve varligin tam degerini yazmamali.
      */
-    val composingAssets: List<Position> = emptyList(),
+    val assignedAssets: List<GoalAsset> = emptyList(),
+    /** "Bu hedefi karsilayanlar" listesinin gosterdigi kalemler. */
+    val composingAssets: List<GoalAsset> = emptyList(),
     /** Seciciye dokulen tum varliklar. */
     val assignableAssets: List<AssignableAsset> = emptyList(),
     val assetPickerOpen: Boolean = false,
@@ -112,8 +129,24 @@ sealed interface GoalDetailIntent {
     data object OpenAssetPicker : GoalDetailIntent
     data object CloseAssetPicker : GoalDetailIntent
 
-    /** Atanmamissa atar, atanmissa kaldirir. */
+    /** Atanmamissa TUMUNU atar, atanmissa kaldirir. */
     data class ToggleAsset(val positionId: String) : GoalDetailIntent
+
+    /**
+     * Varligin bu hedefe sayilan miktarini belirler.
+     *
+     * Sonradan fikir degistirmenin tek yolu buydu ve yoktu: "gecen hafta
+     * hedefsiz aldigim 1 ceyregi de Ev'e alayim" diyen kullanicinin elinde
+     * yalnizca hepsi-ya-hicbiri anahtari vardi.
+     */
+    data class SetAssetQuantity(val positionId: String, val quantity: Double) : GoalDetailIntent
+
+    /**
+     * "Tümü": miktar sabitlemeyi birakir (-1).
+     *
+     * Sabit bir miktardan farki, ILERIDE ALINACAKLARI da kapsamasidir.
+     */
+    data class AssignWholeAsset(val positionId: String) : GoalDetailIntent
 }
 
 /** Ay sirasi - iki tarih arasindaki ay farkini hesaplamak icin. */

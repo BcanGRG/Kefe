@@ -47,14 +47,22 @@ fun Position.quantityLabel(): String {
  * Hedef listesinde birim fiyat zaten satirin sagindaki tutarda yasiyor; ikinci
  * kez yazmak satiri sisirir.
  */
-fun Position.shortQuantityLabel(): String = when (unit) {
-    QuantityUnit.Piece -> Money.quantity(quantity, unit.label())
-    QuantityUnit.Gram -> Money.quantity(quantity, unit.label(), quantityDecimals())
-    QuantityUnit.Share -> Money.quantity(quantity, unit.label())
+fun Position.shortQuantityLabel(): String = shortQuantityLabel(quantity)
+
+/**
+ * Ayni kisa hal ama BASKA bir miktar icin: "15 adet".
+ *
+ * Hedef atamasi artik varligin tamamini degil bir KISMINI tutabiliyor; liste
+ * "16 adet" yazarken hedefe 15'i sayiyorsa ekran yalan soyluyor demektir.
+ */
+fun Position.shortQuantityLabel(amount: Double): String = when (unit) {
+    QuantityUnit.Piece -> Money.quantity(amount, unit.label())
+    QuantityUnit.Gram -> Money.quantity(amount, unit.label(), quantityDecimals(amount))
+    QuantityUnit.Share -> Money.quantity(amount, unit.label())
     QuantityUnit.Currency ->
-        if (assetClass == AssetClass.Cash) "TL" else Money.number(quantity)
+        if (assetClass == AssetClass.Cash) "TL" else Money.number(amount)
 }
 
 /** Tam sayi miktarlarda ondalik yazilmaz: 15 gr, 62,4 gr. */
-private fun Position.quantityDecimals(): Int =
-    if (quantity == quantity.toLong().toDouble()) 0 else 1
+private fun Position.quantityDecimals(amount: Double = quantity): Int =
+    if (amount == amount.toLong().toDouble()) 0 else 1
