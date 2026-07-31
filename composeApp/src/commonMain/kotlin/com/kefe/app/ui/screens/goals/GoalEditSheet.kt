@@ -1,5 +1,6 @@
 package com.kefe.app.ui.screens.goals
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,17 +19,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -42,6 +42,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -53,12 +54,13 @@ import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.formatMonthYear
 import com.kefe.app.domain.model.monthName
 import com.kefe.app.ui.components.AmountKeyboard
-import com.kefe.app.ui.components.ThousandsSeparatorTransformation
-import com.kefe.app.ui.components.asAmountInput
-import androidx.compose.ui.text.input.VisualTransformation
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeSwitch
+import com.kefe.app.ui.components.ThousandsSeparatorTransformation
+import com.kefe.app.ui.components.asAmountInput
+import com.kefe.app.ui.components.bringFieldIntoView
+import com.kefe.app.ui.components.defaultKeyboardActions
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
@@ -438,6 +440,9 @@ private fun SheetTextField(
 
     Row(
         modifier = modifier
+            // Klavye acilinca alanin TAMAMI gorunsun - kutuya konur, girise
+            // degil; yoksa cerceve altligin altinda kirpiliyor.
+            .bringFieldIntoView()
             .fillMaxWidth()
             .height(height)
             .clip(KefeShapes.button)
@@ -464,6 +469,7 @@ private fun SheetTextField(
             singleLine = true,
             cursorBrush = SolidColor(c.accent),
             keyboardOptions = keyboardOptions,
+            keyboardActions = defaultKeyboardActions(),
             visualTransformation = visualTransformation,
             interactionSource = interaction,
             decorationBox = { inner ->

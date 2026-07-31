@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -32,6 +33,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -42,6 +45,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -58,13 +62,15 @@ import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.formatLong
 import com.kefe.app.domain.model.label
 import com.kefe.app.ui.components.AmountKeyboard
-import com.kefe.app.ui.components.ThousandsSeparatorTransformation
-import com.kefe.app.ui.components.asAmountInput
-import androidx.compose.ui.text.input.VisualTransformation
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeStepDots
+import com.kefe.app.ui.components.ThousandsSeparatorTransformation
+import com.kefe.app.ui.components.asAmountInput
+import com.kefe.app.ui.components.bringFieldIntoView
+import com.kefe.app.ui.components.defaultKeyboardActions
+import com.kefe.app.ui.components.next
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
@@ -837,12 +843,19 @@ private fun StepAmount(
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
+    // Miktar -> birim fiyat zinciri ACIK KURULUR.
+    //
+    // `focusManager.moveFocus(Next)` ise yaramiyor: miktar satirinda alandan
+    // sonra "−" ve "+" dugmeleri var ve gezinme sirasi once onlara ugruyor.
+    // Kullanicinin bekledigi sey bir sonraki YAZI alani.
+    val priceFocus = remember { FocusRequester() }
+
     SideSelector(state.side) { onIntent(AddTransactionIntent.SelectSide(it)) }
 
     Spacer(Modifier.height(18.dp))
     SectionLabel("Miktar")
     Spacer(Modifier.height(6.dp))
-    QuantityField(state, onIntent)
+    QuantityField(state, onIntent, onNext = { priceFocus.requestFocus() })
 
     Spacer(Modifier.height(18.dp))
     Row(
@@ -862,7 +875,7 @@ private fun StepAmount(
             keyboardOptions = AmountKeyboard,
             visualTransformation = ThousandsSeparatorTransformation(),
             textStyle = t.h2.tabular(),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).focusRequester(priceFocus),
             placeholder = "0",
         )
         // Donulecek bir piyasa fiyati yoksa dugme de yok.
@@ -1025,6 +1038,8 @@ private fun RowScope.SideSegment(text: String, selected: Boolean, onClick: () ->
 private fun QuantityField(
     state: AddTransactionUiState,
     onIntent: (AddTransactionIntent) -> Unit,
+    /** Klavyedeki "İleri" - odagi birim fiyat alanina tasir. */
+    onNext: () -> Unit,
 ) {
     val c = KefeTheme.colors
 
@@ -1037,7 +1052,9 @@ private fun QuantityField(
         SheetInput(
             value = state.quantityText,
             onValueChange = { onIntent(AddTransactionIntent.ChangeQuantity(it.asAmountInput())) },
-            keyboardOptions = AmountKeyboard,
+            // Ardindan birim fiyat geliyor: klavyede "Tamam" degil "İleri".
+            keyboardOptions = AmountKeyboard.next(),
+            keyboardActions = KeyboardActions(onNext = { onNext() }),
             visualTransformation = ThousandsSeparatorTransformation(),
             textStyle = amountStyle(),
             modifier = Modifier.weight(1f),
@@ -1215,7 +1232,8 @@ private fun ExtraFields(
                         SheetInput(
                             value = state.feeText,
                             onValueChange = { onIntent(AddTransactionIntent.ChangeFee(it.asAmountInput())) },
-                            keyboardOptions = AmountKeyboard,
+                            // Ek alanlar sirayla: iscilik -> not -> saklama.
+                            keyboardOptions = AmountKeyboard.next(),
                             visualTransformation = ThousandsSeparatorTransformation(),
                             textStyle = t.body.tabular(),
                             modifier = Modifier.weight(1f),
@@ -1228,6 +1246,7 @@ private fun ExtraFields(
                     ExtraLabel("Not")
                     Box(
                         Modifier
+                            .bringFieldIntoView()
                             .fillMaxWidth()
                             .heightIn(min = Sizes.touchTarget)
                             .clip(KefeShapes.button)
@@ -1286,6 +1305,7 @@ private fun ExtraField(content: @Composable RowScope.() -> Unit) {
     val c = KefeTheme.colors
     Row(
         modifier = Modifier
+            .bringFieldIntoView()
             .fillMaxWidth()
             .height(Sizes.touchTarget)
             .clip(KefeShapes.button)
@@ -1403,6 +1423,9 @@ private fun FieldRow(
 ) {
     Row(
         modifier = modifier
+            // Klavye acilinca alanin TAMAMI gorunsun - kutuya konur, girise
+            // degil; yoksa cerceve altligin altinda kirpiliyor.
+            .bringFieldIntoView()
             .fillMaxWidth()
             .height(height)
             .clip(KefeShapes.button)
@@ -1424,6 +1447,8 @@ private fun SheetInput(
     placeholder: String = "",
     singleLine: Boolean = true,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    /** null ise varsayilan: "İleri" sonraki alana gecer, "Tamam" klavyeyi kapatir. */
+    keyboardActions: KeyboardActions? = null,
     /** Tutar alanlari icin binlik ayrac (deger ham kalir; bkz. imlec sorunu). */
     visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
@@ -1436,6 +1461,7 @@ private fun SheetInput(
         singleLine = singleLine,
         cursorBrush = SolidColor(c.accent),
         keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions ?: defaultKeyboardActions(),
         visualTransformation = visualTransformation,
         decorationBox = { inner ->
             Box(contentAlignment = Alignment.CenterStart) {
