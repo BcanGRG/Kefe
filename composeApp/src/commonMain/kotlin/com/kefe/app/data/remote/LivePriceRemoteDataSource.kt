@@ -15,9 +15,15 @@ import com.kefe.app.domain.model.PriceSource
  * Uc kaynagin tazeligi FARKLIDIR ve bu ekranda gorunur: her satir kendi
  * zaman damgasini tasir.
  *
- * BOLUNMEZ DEGIL: fonlar cekilemezse altin ve doviz yine gosterilir. Ama altin
- * kaynagi dusesrse yenileme basarisiz sayilir - altin portfoyun ana kalemi,
- * onsuz "guncellendi" demek yaniltici olur.
+ * HICBIR KAYNAK TEK BASINA YENILEMEYI DUSURMEZ. Once serbest piyasa cagrisi
+ * korumasizdi: o tokezleyince TCMB ve TEFAS cevap verse bile tum tablo
+ * "Çevrimdışı" oluyordu - ucretsiz bir ucun gunde birkac kez takilmasi
+ * uygulamayi cevrimdisi gostermeye yetiyordu. Artik olcut SONUC: elde tek satir
+ * fiyat varsa yenileme basarilidir. Hicbiri gelmediyse [PriceRefreshException]
+ * atilir ve cagiran cevrimdisi damgasini o zaman basar.
+ *
+ * Altin yine ayricalikli DEGIL ama kayipsiz da degil: gelmeyen satirin yerine
+ * onbellekteki son bilinen fiyat ekranda kalir (bkz. SqlDelightPriceRepository).
  */
 class LivePriceRemoteDataSource(
     private val freeMarket: FreeMarketApi,
@@ -30,13 +36,17 @@ class LivePriceRemoteDataSource(
 ) : PriceRemoteDataSource {
 
     override suspend fun fetchPrices(): List<Price> {
-        val metals = freeMarket.fetch()
-        val metalStamp = metals.updatedAt.toClockLabel()
+        // Serbest piyasa da diger ikisi gibi DUSEBILIR. Yutulmasi degil,
+        // digerlerini engellememesi onemli: bos kotasyonla devam edilir, doviz
+        // TCMB'den gelir, fonlar TEFAS'tan.
+        val metals = runCatching { freeMarket.fetch() }.getOrNull()
+        val metalStamp = metals?.updatedAt.toClockLabel()
 
         val prices = mutableListOf<Price>()
+        val quotes = metals?.quotes.orEmpty()
 
         MetalMapping.forEach { (assetKey, mapping) ->
-            val quote = metals.quotes[mapping.symbol] ?: return@forEach
+            val quote = quotes[mapping.symbol] ?: return@forEach
             prices += Price(
                 assetKey = assetKey,
                 label = mapping.label,
@@ -61,7 +71,7 @@ class LivePriceRemoteDataSource(
         //
         // TCMB yine de duruyor: serbest piyasada olmayan bir para birimi ya da
         // eksik bir satir icin tek cagriyla devreye giriyor.
-        val missingFromFreeMarket = CurrencyMapping.filterValues { metals.quotes[it.symbol] == null }
+        val missingFromFreeMarket = CurrencyMapping.filterValues { quotes[it.symbol] == null }
         val official = if (missingFromFreeMarket.isEmpty()) {
             emptyMap()
         } else {
@@ -69,7 +79,7 @@ class LivePriceRemoteDataSource(
         }
 
         CurrencyMapping.forEach { (assetKey, mapping) ->
-            val free = metals.quotes[mapping.symbol]
+            val free = quotes[mapping.symbol]
             val rate = official[mapping.symbol]
             val bid = free?.buying ?: rate?.buying
             val ask = free?.selling ?: rate?.selling ?: return@forEach
@@ -104,6 +114,13 @@ class LivePriceRemoteDataSource(
                 source = PriceSource.Tefas,
                 assetClass = AssetClass.Fund,
             )
+        }
+
+        // Uc kaynagin UCU DE dustu: gosterecek yeni bir sey yok, yenileme
+        // basarisiz. Bos liste dondurmek "basariyla hicbir sey geldi" demek
+        // olurdu ve onbellegi taze sayardik.
+        if (prices.isEmpty()) {
+            throw PriceRefreshException("Hicbir fiyat kaynagi yanit vermedi")
         }
 
         return prices

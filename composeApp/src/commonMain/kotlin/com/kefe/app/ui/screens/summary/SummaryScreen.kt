@@ -36,13 +36,14 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kefe.app.domain.model.AllocationSlice
-import com.kefe.app.domain.model.PortfolioTotals
-import com.kefe.app.domain.model.TopMover
+import com.kefe.app.data.sync.CloudState
 import com.kefe.app.domain.model.ActivityEvent
+import com.kefe.app.domain.model.AllocationSlice
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.Member
+import com.kefe.app.domain.model.PortfolioTotals
+import com.kefe.app.domain.model.TopMover
 import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.formatMonthYear
 import com.kefe.app.domain.model.label
@@ -59,7 +60,6 @@ import com.kefe.app.ui.charts.Point
 import com.kefe.app.ui.components.KefeAvatar
 import com.kefe.app.ui.components.KefeAvatarStack
 import com.kefe.app.ui.components.KefeCard
-import com.kefe.app.ui.layout.KefeMarketRow
 import com.kefe.app.ui.components.KefeChip
 import com.kefe.app.ui.components.KefeDashedCard
 import com.kefe.app.ui.components.KefeHairline
@@ -80,6 +80,7 @@ import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
+import com.kefe.app.ui.layout.KefeMarketRow
 import com.kefe.app.ui.theme.IconSize
 import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
@@ -223,12 +224,21 @@ private fun SummaryTopBar(
             // gorunur kilacak fiyat yok. Ilk varlik eklenince hepsi gelir.
             if (state.stage != SummaryStage.Empty) {
                 Spacer(Modifier.width(Space.x8))
-                KefeSyncChip(
-                    state = when (state.freshness) {
-                        PriceFreshness.Offline -> SyncStatus.Offline
-                        else -> if (state.refreshing) SyncStatus.Pending else SyncStatus.Synced
-                    },
-                )
+                // Cip ESITLEMEYI gosterir. Once fiyat tazeligini gosteriyordu:
+                // ucretsiz fiyat ucu tokezleyince "Çevrimdışı" yaziyor, bulut
+                // senkronu ise gayet calisiyordu (9b'nin acik notu). Fiyatin
+                // eskiligi zaten kendi seridinde ("Son bilinen fiyatlar · ...").
+                //
+                // Bulut KAPALIYKEN cip hic cizilmez: giris yapmamis kullaniciya
+                // her acilista bozuk bir sey varmis gibi gostermek yanlis olurdu.
+                if (state.cloudState != CloudState.Off) {
+                    KefeSyncChip(
+                        state = when (state.cloudState) {
+                            CloudState.Unreachable -> SyncStatus.Offline
+                            else -> SyncStatus.Synced
+                        },
+                    )
+                }
 
                 Spacer(Modifier.width(Space.x8))
                 KefeIconButton(

@@ -63,10 +63,15 @@ class AssetsViewModel(
             .groupBy { it.assetClass }
             .map { (assetClass, rows) ->
                 val groupTotal = rows.sumOf { it.value }
+                // Maliyet defterden gelir; sifirsa (nakit, elle girilmemis)
+                // oran hesaplanamaz ve 0 kalir - "%∞ kar" yazmaktansa sessiz.
+                val groupCost = rows.sumOf { it.cost }
+                val groupProfit = groupTotal - groupCost
                 AssetGroup(
                     assetClass = assetClass,
                     total = groupTotal,
-                    percent = if (total <= 0.0) 0.0 else groupTotal / total * 100.0,
+                    profit = groupProfit,
+                    profitPercent = if (groupCost <= 0.0) 0.0 else groupProfit / groupCost * 100.0,
                     positions = rows.sortedWith(comparator),
                 )
             }

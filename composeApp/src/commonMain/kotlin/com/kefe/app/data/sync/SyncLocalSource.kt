@@ -122,6 +122,7 @@ class SyncLocalSource(
                             positionId = r.positionId,
                             userId = userId,
                             goalId = r.goalId,
+                            quantity = r.quantity,
                             updatedAt = r.updatedAt,
                             deletedAt = r.deletedAt,
                         )

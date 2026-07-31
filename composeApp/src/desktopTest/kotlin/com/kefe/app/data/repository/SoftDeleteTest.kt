@@ -6,6 +6,7 @@ import com.kefe.app.db.KefeDatabase
 import com.kefe.app.domain.FixedKefeClock
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Position
@@ -17,13 +18,13 @@ import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.domain.repository.RefreshOutcome
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
  * Mezar tasi kurallari GERCEK veritabaniyla dogrulanir.
@@ -163,8 +164,13 @@ class SoftDeleteTest {
             ),
         )
 
+        // Miktarsiz cagri = tum varlik (-1); hedef detayindaki "Varlik sec"
+        // listesinin anlami budur.
         repo.assignPositionToGoal("pos_gold_quarter", "goal-1")
-        assertEquals(mapOf("pos_gold_quarter" to "goal-1"), repo.observeGoalAssets().first())
+        assertEquals(
+            mapOf("pos_gold_quarter" to GoalAssignment("goal-1")),
+            repo.observeGoalAssets().first(),
+        )
 
         repo.assignPositionToGoal("pos_gold_quarter", null)
         assertTrue(repo.observeGoalAssets().first().isEmpty())
@@ -172,5 +178,12 @@ class SoftDeleteTest {
         // Yeniden atanabilmeli: mezar tasi kalici bir engel degil.
         repo.assignPositionToGoal("pos_gold_quarter", "goal-1")
         assertEquals(1, repo.observeGoalAssets().first().size)
+
+        // Miktar tasiyan atama yazilip geri okunabilmeli.
+        repo.assignPositionToGoal("pos_gold_quarter", "goal-1", quantity = 10.0)
+        val stored = repo.observeGoalAssets().first().getValue("pos_gold_quarter")
+        assertEquals(10.0, stored.quantity)
+        assertEquals("goal-1", stored.goalId)
+        assertEquals(stored, repo.goalAssignmentOf("pos_gold_quarter"))
     }
 }

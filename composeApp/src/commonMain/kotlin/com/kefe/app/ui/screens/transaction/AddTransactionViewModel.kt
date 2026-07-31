@@ -2,11 +2,14 @@ package com.kefe.app.ui.screens.transaction
 
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.data.remote.TefasApi
+import com.kefe.app.data.sync.CloudState
+import com.kefe.app.data.sync.SyncCoordinator
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.ActivityKind
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.Currency
+import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.Karat
 import com.kefe.app.domain.model.Member
@@ -18,6 +21,7 @@ import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.buyPrice
 import com.kefe.app.domain.model.newId
+import com.kefe.app.domain.model.nextAssignedQuantity
 import com.kefe.app.domain.model.priceKey
 import com.kefe.app.domain.model.sellPrice
 import com.kefe.app.domain.repository.PortfolioRepository
@@ -49,6 +53,8 @@ class AddTransactionViewModel(
     // Fon adiminda girilen kodu TEFAS'tan canli cekmek icin - yereldeki 5 fonun
     // disindaki fonlar da eklenebilsin.
     private val tefas: TefasApi,
+    // Kaydin "Bekliyor" damgasi BULUT durumundan gelir, fiyat tazeliginden degil.
+    private val syncCoordinator: SyncCoordinator,
 ) : MviViewModel<AddTransactionUiState, AddTransactionIntent, AddTransactionEffect>(
     // Tarih varsayilani sabit YAZILAMAZ: kayit artik diske gidiyor, yanlis tarih
     // kalici olur ve duzeltme ekrani yok.
@@ -59,11 +65,9 @@ class AddTransactionViewModel(
     private var positions: List<Position> = emptyList()
     private var members: List<Member> = emptyList()
 
-    // Varlik -> hedef atamasi (positionId -> goalId). Hedef secici bir pozisyonun
-    // MEVCUT hedefini onceden secsin ve "Hedefsiz" secilince atama kaldirilabilsin
-    // diye tutulur. Yoksa mevcut hedefe atanmis varlik, seciciye dokunulmadigi
-    // icin o hedefte kaliyor ("Hedefsiz sectim ama Ev'de duruyor").
-    private var assignments: Map<String, String> = emptyMap()
+    // Varlik -> hedef atamasi. Hedef secici bir pozisyonun MEVCUT hedefini
+    // onceden secsin diye tutulur.
+    private var assignments: Map<String, GoalAssignment> = emptyMap()
 
     // Bu oturumda TEFAS'tan canli cekilen fonlar. fundResults her withPrices'ta
     // yeniden kuruldugu icin ayri saklanir; katalog ile birlestirilir.
@@ -80,6 +84,7 @@ class AddTransactionViewModel(
         observePortfolio()
         observePrices()
         observeAssignments()
+        observeCloud()
     }
 
     override fun onIntent(intent: AddTransactionIntent) {
@@ -232,6 +237,19 @@ class AddTransactionViewModel(
     }
 
     /**
+     * Bulut durumu FIYAT tazeliginden ayri okunur. Once ikisi tek bayrakti:
+     * ucretsiz fiyat ucu tokezleyince kayit, senkron calisirken bile "Bekliyor"
+     * damgasiyla diske yaziliyordu (bkz. [CloudState]).
+     */
+    private fun observeCloud() {
+        viewModelScope.launch {
+            syncCoordinator.cloudState().collect { cloud ->
+                _state.value = _state.value.copy(cloudState = cloud)
+            }
+        }
+    }
+
+    /**
      * Varlik bir pozisyonla eslesiyorsa hedef seciciyi o pozisyonun MEVCUT
      * hedefine ayarlar (yeni varlikta null = Hedefsiz). Boylece Ev'e atanmis bir
      * varliga daha ekleyen kullanici seciciyi "Ev" gorur; dokunmadan kaydederse
@@ -239,7 +257,7 @@ class AddTransactionViewModel(
      */
     private fun AddTransactionUiState.withCurrentGoal(): AddTransactionUiState {
         val matched = positions.firstOrNull { it.matches(this) }
-        return copy(selectedGoalId = matched?.let { assignments[it.id] })
+        return copy(selectedGoalId = matched?.let { assignments[it.id]?.goalId })
     }
 
     /** Secimi degistiren her intent fiyat tablosunu yeniden uygular. */
@@ -385,7 +403,7 @@ class AddTransactionViewModel(
                     storage = transaction.storage.orEmpty(),
                     // Secici pozisyonun MEVCUT hedefini gosterir; kullanici
                     // duzenlerken varligin hangi hedefte oldugunu gorur.
-                    selectedGoalId = assignments[position.id],
+                    selectedGoalId = assignments[position.id]?.goalId,
                     // Not, iscilik veya saklama doluysa alan kapali kalmamali.
                     extraExpanded = transaction.fee > 0.0 ||
                         !transaction.note.isNullOrBlank() ||
@@ -437,6 +455,13 @@ class AddTransactionViewModel(
             val position = positions.firstOrNull { it.matches(s) }
             val positionId = position?.id ?: newPositionId(s)
 
+            // Atama ve miktar YAZMADAN ONCE okunur. "Tum varlik" atamasini bu
+            // isleme kadarki miktara sabitlemek gerekiyor (bkz.
+            // nextAssignedQuantity) ve o miktar ancak burada bellidir - kayit
+            // yazildiktan sonra pozisyon zaten yeni adedi tasiyor.
+            val assignmentBefore = portfolioRepository.goalAssignmentOf(positionId)
+            val quantityBefore = position?.quantity ?: 0.0
+
             // Varlik portfoyde yoksa once TANITILIR. Islem tek basina varligin
             // adini, sinifini ve birimini tasimaz; pozisyon olmadan kayit oksuz
             // kalir ve hicbir ekranda gorunmez.
@@ -482,25 +507,66 @@ class AddTransactionViewModel(
                     addedByMemberId = activeMemberId.ifBlank {
                         members.firstOrNull()?.id.orEmpty()
                     },
-                    // Cevrimdisi kayit cihazda bekler; baglaninca esitlenir.
-                    syncState = if (s.offline) SyncState.Pending else SyncState.Synced,
+                    // Damga BULUT durumundan gelir. Once fiyat tazeliginden
+                    // geliyordu: fiyat ucu tokezleyince kayit, esitleme gayet
+                    // calisirken bile "Bekliyor" olarak DISKE yaziliyordu.
+                    syncState = when (s.cloudState) {
+                        CloudState.Synced -> SyncState.Synced
+                        // Bulut kapaliyken de kayit "esitlenmemis"tir: giris
+                        // yapilinca ilk push'la gidecek.
+                        CloudState.Off, CloudState.Unreachable -> SyncState.Pending
+                    },
                 )
             )
 
-            // Secici ne diyorsa O uygulanir: secili hedefe ata, "Hedefsiz" (null)
-            // ise atamayi KALDIR. Once yalniz atama YAPILIYORDU (null gecince
-            // dokunulmuyordu); o yuzden Ev'e atanmis bir varliga "Hedefsiz" ile
-            // ekleyen kullanici, varlik Ev'de kaldigi icin "hedefsiz sectim ama
-            // gene Ev'e yazildi" diyordu. Secici artik mevcut hedefi onceden
-            // gosterdigi icin (bkz. withCurrentGoal) dokunmadan kaydeden atamasini
-            // yanlislikla silmez.
-            portfolioRepository.assignPositionToGoal(
-                positionId = positionId,
-                goalId = s.selectedGoalId,
-            )
+            applyGoalSelection(positionId, s, assignmentBefore, quantityBefore)
         }
 
         if (replaced != null) portfolioRepository.deleteTransaction(replaced)
+    }
+
+    /**
+     * Hedef secicisi YALNIZ BU ISLEMIN nereye sayilacagini soyler.
+     *
+     * NEYDI. Secici tum varligin atamasini yazip siliyordu: Ev'de 10 ceyrek
+     * varken 1 tane "Hedefsiz" eklemek atamayi komple siliyor, 11 ceyregin
+     * HEPSI Ev'den cikiyordu. Kullanicinin bekledigi "10'u Ev'de kalsin".
+     *
+     * Kural:
+     *   - Hedefsiz  -> mevcut atamaya DOKUNULMAZ. Eklenen kadari zaten hicbir
+     *     hedefe sayilmaz, cunku atanan miktar oldugu yerde kalir.
+     *   - Ayni hedef -> atanan miktar bu islem kadar ARTAR (satista azalir).
+     *   - Baska hedef -> varlik o hedefe TASINIR; miktar bu islemin miktari
+     *     olur. Tasima zaten yikici bir islem, secici de bunu yaziyor.
+     *   - "Tum varlik" (-1) atamasi ayni hedefte KORUNUR: kullanici bir kez
+     *     "tamami bu hedefe" demisse, sonraki alimlar da oraya sayilmali.
+     *
+     * Atamayi kaldirma buradan YAPILMAZ; hedef detayindaki "Bu hedefi
+     * karsilayanlar" listesinin isi odur.
+     */
+    private suspend fun applyGoalSelection(
+        positionId: String,
+        s: AddTransactionUiState,
+        current: GoalAssignment?,
+        quantityBefore: Double,
+    ) {
+        // Aritmetik saf bir fonksiyonda: kuralin kendisi burada degil, test
+        // edilebildigi yerde dursun. null = atamaya dokunma.
+        val quantity = nextAssignedQuantity(
+            current = current,
+            selectedGoalId = s.selectedGoalId,
+            transactionQuantity = s.quantity,
+            isSell = s.side == TradeSide.Sell,
+            quantityBefore = quantityBefore,
+        ) ?: return
+
+        portfolioRepository.assignPositionToGoal(
+            positionId = positionId,
+            // Hedefsizken de bir hedef yazilir: yapilan sey atamayi kaldirmak
+            // degil, mevcut hedefin payini o ana kadarki miktara dondurmaktir.
+            goalId = s.selectedGoalId ?: current?.goalId ?: return,
+            quantity = quantity,
+        )
     }
 }
 

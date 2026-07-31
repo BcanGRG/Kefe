@@ -132,7 +132,10 @@ fun AddTransactionSheet(
 
             SheetHeader(state, onDismiss)
 
-            if (state.offline) OfflineStrip()
+            // Serit YALNIZ buluta ulasilamiyorsa. Once fiyat tazeliginden
+            // suruluyordu: fiyat ucu tokezleyince "bağlanınca eşitlenir" yaziyor,
+            // esitleme ise gayet calisiyordu.
+            if (state.cloudUnreachable) OfflineStrip()
 
             // "Tekrar ekle" duzenlemede gizlenir: kisayol YENI kayit icindir,
             // burada dokunmak duzeltilen islemi baska bir kaydin degerleriyle
@@ -140,7 +143,7 @@ fun AddTransactionSheet(
             state.lastAdded?.takeUnless { state.isEditing }?.let { last ->
                 RepeatRow(
                     label = last.label,
-                    offline = state.offline,
+                    offline = state.cloudUnreachable,
                     onRepeat = { onIntent(AddTransactionIntent.RepeatLast) },
                 )
             }
@@ -1349,7 +1352,11 @@ private fun SheetFooter(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = state.canSubmit,
-                leadingIcon = if (state.offline && !state.isFirstStep) KefeIcons.CloudOff else null,
+                leadingIcon = if (state.cloudUnreachable && !state.isFirstStep) {
+                    KefeIcons.CloudOff
+                } else {
+                    null
+                },
             )
 
             if (!state.isFirstStep) {

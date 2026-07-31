@@ -69,6 +69,13 @@ fun KefeListRow(
     subtitle: String? = null,
     value: String? = null,
     delta: Double? = null,
+    /**
+     * [delta] yerine yazilacak metin - isaret ve renk yine [delta]'dan gelir.
+     * Varlik listesinde alt rakam gunluk degisim yuzdesi degil TL KAR: elle
+     * fiyatlanan varliklarda gunluk degisim zaten hep "0,00%" oluyordu ve
+     * "ne kadar kazandik" sorusunun karsiligi hicbir listede yoktu.
+     */
+    deltaText: String? = null,
     leadingIcon: ImageVector? = null,
     leadingTint: Color = KefeTheme.colors.onSurfaceMuted,
     modifier: Modifier = Modifier,
@@ -171,7 +178,7 @@ fun KefeListRow(
                 if (delta != null) {
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = Money.delta(delta, 2),
+                        text = deltaText ?: Money.delta(delta, 2),
                         style = type.micro.tabular(),
                         color = colors.delta(delta),
                         maxLines = 1,
@@ -195,6 +202,9 @@ fun KefeSectionHeader(
     onToggle: () -> Unit,
     chevronIcon: ImageVector,
     modifier: Modifier = Modifier,
+    // Alt satir bir KAR/ZARAR rakami tasidiginda renk tasir; pay gibi notr
+    // bilgilerde varsayilan sonuk renk kalir.
+    percentColor: Color? = null,
 ) {
     val colors = KefeTheme.colors
     val type = KefeTheme.type
@@ -264,7 +274,7 @@ fun KefeSectionHeader(
                 Text(
                     text = percent,
                     style = type.nano.tabular(),
-                    color = colors.onSurfaceMuted,
+                    color = percentColor ?: colors.onSurfaceMuted,
                     maxLines = 1,
                 )
             }

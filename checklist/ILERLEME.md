@@ -32,8 +32,21 @@ erişim demek. Düz metin jeton + açık senkron = sızıntı. Bu yüzden 8, 7'd
 | 9 | Push | ✅ **bitti + canlı doğrulandı** (watermark ilerledi) |
 | 9b | Bulut girişi + giriş/kilit fix + boş-durum + resend | ✅ **bitti** |
 | 10 | Pull | ✅ **bitti** (LWW guard SQL kullanıcı tekrar çalıştırır) |
-| 11 | Gerçek zamanlı | ⬜ (sıradaki) |
+| 11 | Gerçek zamanlı | ✅ **bitti + canlı doğrulandı** (olay aktı, ekleme ve silme) |
 | 12 | Bildirimler | ⬜ (11'den sonra anlamlı) |
+
+## Kullanım turu (11'den sonra)
+
+Gerçek kullanımda çıkan altı şey. Hepsi emülatörde doğrulandı.
+
+| # | Adım | Durum |
+|---|---|---|
+| 13 | Fon aramasında rakamlı kodlar (AN1, TP2) | ✅ **bitti + canlı doğrulandı** |
+| 14 | Varlıklarda yüzde yerine TL kâr | ✅ **bitti** |
+| 15 | Hedef halkası: tutar halkanın altına | ✅ **bitti** |
+| 16 | Hedef ataması adet bazında bölünebiliyor | ✅ **bitti** (schema.sql tekrar çalıştırılmalı) |
+| 17 | "Çevrimdışı" mantığı — fiyat ile bulut ayrıldı | ✅ **bitti + canlı doğrulandı** |
+| 18 | Açılış animasyonu tek akıcı harekete indi | ✅ **bitti** |
 
 **Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
 Gmail SMTP + App Password ile açıldı (Resend domain istiyordu; domain alınmadı).
@@ -482,3 +495,246 @@ canli tetigi ekleyecek.
 yeni ise uygulanir; mezar tasi silinmis uygulanir; jeton yoksa cekmez. Iki platform
 derleniyor, emulatorde temiz acildi. **Canli:** ikinci (bos) cihaz giris yapinca
 altin portfoy buluttan gelir - kullaniciyla dogrulanacak.
+
+---
+
+## 11 · Gerçek zamanlı ✅
+
+**Neydi.** Push ve pull iki yönü de kurmuştu ama pull yalnız **iki anda**
+tetikleniyordu: girişte bir kez, ve her push'tan sonra. Yani karşı cihazın
+yazdığı veri, sen kendi telefonunda bir şey yazana kadar gelmiyordu. İki kişilik
+bir uygulamada "eşim çeyrek ekledi, bende görünmüyor" tam olarak buydu.
+
+**Ne yapıldı.** Supabase Realtime (Phoenix WebSocket) üçüncü tetik kaynağı olarak
+eklendi: `RealtimeApi` / `SupabaseRealtimeApi`. `PostgrestApi` ile aynı gerekçeyle
+elle yazıldı — supabase-kt kendi Ktor sürümünü dayatıyor, ihtiyacımız tek soket.
+
+**SİNYAL, VERİ DEĞİL.** Gelen mesajın içindeki satır okunmuyor; olay yalnız
+"değişti" demek, uygulamayı `PullEngine.pullOnce()` yapıyor — adım 10'un tam
+çekim + LWW kararıyla aynı çizgi. Payload'ı doğrudan uygulamak ikinci bir
+doğruluk yüzeyi açardı: kaçırılan bir olay kalıcı tutarsızlık demek olurdu.
+
+**Soket yalnız ön planda açık.** Kapı = girişli **ve** uygulama ön planda
+(`observeAuthState` + `LifecycleResumeEffect` → `setForeground`). Arka planda
+soket kapanır; Phoenix'in ~30 sn'lik heartbeat'i kullanıcının bakmadığı bir ekran
+için pil yakardı. Bu bir uygulama ticker'ı değil, soketin kendi keepalive'ı ve
+yalnız soket açıkken yaşar. Kapı her açıldığında **önce bir pull** istenir —
+soket kapalıyken olan değişiklikleri toparlayan şey odur.
+
+**Yankı bilerek kabul edildi.** Kendi push'um sunucuda satır değiştirir, realtime
+olayı bana da döner, bir fazladan pull olur. Kendiliğinden söner: debounce
+toplar, `PullEngine`'in mutex'i çakışmayı engeller, LWW hiçbir satırı uygulamaz
+(damgalar eşit) → yerelde yazma olmaz → yeni push tetiklenmez. Bedeli 7 küçük
+`select`; `commit_timestamp`'e bakıp kendi yazmamızı elemek ikinci bir doğruluk
+yüzeyi açardı.
+
+**Yol boyunca çıkan üç şey.**
+
+1. **Join yanıtı kabul kanıtı değil.** Supabase istenen yapılandırmayı, tablo
+   yayında olmasa bile olduğu gibi geri yansıtıyor: emülatörde "7/7 tablo" dedi
+   ve hemen ardından `system/error` ile aboneliği reddetti. İlk log satırı
+   "başarılı" gibi okunuyordu; gerçek ölçü `realtimeProblem` satırı. Loglar buna
+   göre düzeltildi — "baglandı ama hiç olay gelmiyor" durumu artık konuşuyor.
+2. **Sonda testleri hiç koşmuyormuş.** `excludeTestsMatching`, komut satırındaki
+   `--tests` içermesini **eziyor**; `--tests "*LivePriceProbeTest"` sessizce
+   hiçbir test seçmiyor ve `isFailOnNoMatchingTests = false` yüzünden "BUILD
+   SUCCESSFUL" diyordu. Artık hariç tutma `-Pprobe` bayrağına bağlı.
+3. Ktor'un kendi `pingInterval`'i **kurulmadı**: Phoenix uygulama düzeyinde kendi
+   heartbeat *mesajını* bekliyor, WS ping frame'ini saymıyor.
+
+**Sunucu tarafı.** `supabase/schema.sql`'e 7 tabloyu `supabase_realtime`
+yayınına ekleyen idempotent blok eklendi. `replica identity full` **konmadı** —
+payload okunmuyor, birincil anahtar yeter. **Kullanıcı `schema.sql`'i tekrar
+çalıştırır.**
+
+**Doğrulama.** **119 masaüstü testi** (16 yeni): protokol çerçeveleri (join 7
+tabloyu ve kullanıcının jetonunu taşır, heartbeat `phoenix` topic'ine gider,
+yalnız `postgres_changes` sinyal sayılır, üstel bekleme tavanda durur) ve tetik
+mantığı (kapı açılınca sinyal beklemeden pull; sinyal gelince pull; ard arda
+sinyaller tek pull'a toplanır; kapı kapanınca dinleme durur ve sinyal pull
+üretmez; soket yalnız girişli **ve** ön planda açılır). İki platform derleniyor.
+
+**Elle sonda** (`-Pprobe --tests "*RealtimeProbeTest" --rerun`) gerçek Supabase'e
+bağlandı: `phx_reply status ok` — adres, WebSockets eklentisi ve masaüstü motoru
+doğrulandı.
+
+**Emülatörde:** Koin 36 tanım, çökme yok; `realtime bagli` → `join yaniti - 7/7`;
+HOME → `dinleme kapali`; geri dön → yeniden bağlandı. Ön plan/arka plan döngüsü
+uçtan uca çalışıyor.
+
+**CANLI (2026-07-31, emülatör + gerçek Supabase).** Önce `schema.sql`
+çalıştırılmadan denendi ve log tam da beklenen şeyi söyledi: *"abonelik
+REDDEDILDI ... table: activity_events"* — sessiz başarısızlığın konuşması buydu.
+`schema.sql` çalıştırıldıktan sonra o satır kayboldu; emülatöre bir çeyrek
+eklendi → push → sunucu satırı değişti → **`realtime sinyali - pull isteniyor`**
+düştü. Kayıt silindiğinde ikinci sinyal geldi: mezar taşı da akıyor. Test kaydı
+geri alındı, toplam ₺946.559'a döndü (ekleme öncesiyle birebir), hareket
+akışında iz kalmadı.
+
+**Sonraya.** Sinyal yolu kanıtlandı ama iki AYRI cihaz arasındaki gecikme henüz
+elle ölçülmedi (kanıt aynı cihazın yankısıyla alındı). Adım 10'un açık canlı
+doğrulaması — ikinci boş telefonun buluttan çekmesi — hâlâ duruyor; ikisi tek
+oturumda kapanır.
+
+---
+
+## 13 · Fon aramasında rakamlı kodlar ✅
+
+**Neydi.** Kullanıcı fon kutusuna `AN1` yazıyor, hiçbir şey olmuyordu — canlı
+arama satırı bile çıkmıyordu. `fundSearchCode` kodu `q.all { it.isLetter() }` ile
+süzüyordu; TEFAS kodları ise harf-rakam karışımı olabiliyor (AN1, TP2, GO1).
+Amaç "22" gibi salt sayıları elemekti, filtre fazla genişti.
+
+**Ne yapıldı.** Koşul "hepsi harf" yerine "hepsi ASCII harf-rakam **ve** ilk
+karakter harf" oldu. Salt sayı eleme amacı korundu, ASCII dışı harf kabul
+edilmiyor (TEFAS kodlarında yok; "çeyrek" yazan biri boşuna ağa çıkmasın).
+
+**Doğrulama.** Emülatörde `AN1` → *"TEFAS'ta "AN1" ara"* satırı çıktı, dokununca
+gerçek TEFAS'tan **STRATEJİ PORTFÖY BİRİNCİ DEĞİŞKEN FON, ₺108,39** geldi.
+
+---
+
+## 14 · Varlıklarda yüzde yerine TL kâr ✅
+
+**Neydi.** Varlıklar ekranında grup başlığının sağındaki `%95,4` kâr sanılıyordu;
+aslında **toplam birikim içindeki pay**dı. Satırlardaki `0,00%` ise günlük
+değişimdi ve elle fiyatlanan varlıklarda hep sıfır çıkıyordu. Yani "ne kadar
+kazandık" sorusunun karşılığı hiçbir listede yoktu — yalnız varlık detayına
+girince görülüyordu. Yüzdeyle arası iyi olmayan biri için ekran sessizdi.
+
+**Ne yapıldı.** Grup başlığı `+₺239.112 · +36,3%`, satırlar `+₺192.971` gösteriyor;
+ikisi de kâr/zarar rengiyle. Pay yüzdesi kaldırıldı — Özet'teki "Ne kadarı
+nerede" halkasında zaten duruyor, iki yerde tekrar ediyordu.
+
+**Doğrulama.** Emülatörde Altın başlığı `+₺239.112 · +36,3%`, satırlar TL kâr.
+
+---
+
+## 15 · Hedef halkası: tutar halkanın altında ✅
+
+**Neydi.** Halkanın kasesine hem yüzde hem `mevcut / hedef` yazılıyordu. Kase dar
+olduğu için büyük hedeflerde tam yazım sığmıyor, kısaltmaya düşüyordu
+(`₺946,6B / ₺3,0M`) — en çok bakılan rakam okunması en zor hale geliyordu.
+
+**Ne yapıldı.** Kasede yalnız yüzde. Tutar halkanın **altına**, tam yazımla:
+orada genişlik sınırı yok. `KefeGoalRing`'in `centerAmount` parametresi artık
+null kabul ediyor.
+
+---
+
+## 16 · Hedef ataması adet bazında ✅
+
+**Neydi.** Atama tam varlıktı: bir pozisyon ya tamamen bir hedefteydi ya hiç.
+Pratikte şu oluyordu — Ev'de 10 çeyrek varken 1 tane "Hedefsiz" eklemek, seçici
+Hedefsiz'e alındığı için atamayı komple siliyor ve **11 çeyreğin hepsi Ev'den
+çıkıyordu**. Kullanıcının beklediği "10'u Ev'de kalsın".
+
+**Ne yapıldı.** `goal_assets` tablosuna `quantity` kolonu (5.sqm, v5→v6).
+`-1 = tüm varlık` — mevcut satırlar bunu alır, yani migration davranışı **aynen
+korur**. Hedef detayındaki "Varlık seç" listesi de bu anlamda atar: "bu varlığın
+tamamı bu hedefi karşılar".
+
+**Kayıt anındaki kural** (`nextAssignedQuantity`, saf fonksiyon):
+- **Hedefsiz** → mevcut atamaya **dokunulmaz**. Şikâyetin çözümü tam burası.
+- Aynı hedef → miktar bu işlem kadar artar (satışta azalır, negatife inmez).
+- Başka hedef → varlık taşınır, miktar bu işlemin miktarı olur.
+- "Tüm varlık" ataması aynı hedefte korunur: bir kez "tamamı buraya" denmişse
+  sonraki alımlar da oraya sayılır.
+
+**Kırpma okuma anında.** Atanan miktar pozisyonunkini aşamaz: 10 atanmışken 6
+tanesi satılırsa hedef 6 sayar. Böylece satışın hangi hedeften düştüğüne dair
+ikinci bir hesap defteri tutmak gerekmiyor.
+
+**İlk sürüm sahada TUTMADI — eksik olan neydi.** Kullanıcı 15 çeyreği Ev'deyken
+1 tane "Hedefsiz" ekledi ve hedef **16** gösterdi. Sebep: migration mevcut
+atamaları `-1` (tüm varlık) olarak korumuştu — bilinçliydi, davranış bozulmasın
+diye. Ama "tüm varlık" dediği sürece "Hedefsiz" hiçbir şey ifade etmiyor: hedef
+zaten "hepsi"ni sayıyor, yeni alınan da hepsinin içinde. Kural "hedefsizde
+atamaya dokunma" olduğu için de hiçbir şey değişmiyordu.
+
+**Eklenen kural.** Hedefsiz bir **alım**, "tüm varlık" atamasını o ana kadarki
+miktara **sabitler**. "Tamamı bu hedefe" sözü bugüne kadar alınanlar içindir;
+kullanıcı yeni alımın dışarıda kalmasını açıkça istediğinde o söz dondurulur.
+Miktarı zaten belli olan atamalara dokunulmaz (orada yeni alım nasılsa
+sayılmıyor), satış da atamayı dondurmaz (kırpma okuma anında zaten var).
+
+Bunun için `writeTransaction` atamayı ve pozisyon miktarını kayıttan **önce**
+okuyor: sabitlenecek miktar ancak orada bellidir, kayıt yazıldıktan sonra
+pozisyon zaten yeni adedi taşıyor.
+
+**Sunucu tarafı.** `schema.sql`'e `quantity` kolonu eklendi — `create table if
+not exists` zaten kurulmuş tabloda hiçbir şey yapmadığı için ayrı bir
+`add column if not exists` ile geliyor. **Kullanıcı `schema.sql`'i tekrar
+çalıştırır**, yoksa push 400 döner ve senkron sessizce durur.
+
+**Doğrulama.** 18 test (miktar kuralı, kayıt aritmetiği ve dört "Hedefsiz"
+durumu). Migration doğrulaması geçiyor; emülatörde mevcut veriyle çalıştı.
+
+**Emülatörde asıl senaryo:** Çeyrek 15 adet, tamamı Ev'de. 1 tane "Hedefsiz"
+eklendi → toplam ₺941.544 → **₺951.381**, Ev hedefi **₺941.544'te kaldı**.
+Test kaydı geri alındı, iki rakam da eski haline döndü.
+
+---
+
+## 17 · "Çevrimdışı" mantığı — fiyat ile bulut ayrıldı ✅
+
+9b'nin açık notu buydu: *"'Eşit' çipi aslında FİYAT tazeliğini gösteriyor, bulut
+senkronunu değil — ileride ayrılmalı."* Adım 11 gerçek bulut sinyalini getirdiği
+için ayrım artık yapılabiliyordu.
+
+**İki ayrı hata vardı.**
+
+1. **Tek kaynak tüm tabloyu düşürüyordu.** `LivePriceRemoteDataSource`'ta
+   `freeMarket.fetch()` korumasızdı; ücretsiz uç tökezleyince TCMB ve TEFAS
+   cevap verse bile yenileme baştan patlıyor, uygulama kendini çevrimdışı ilan
+   ediyordu. Artık ölçüt SONUÇ: elde tek satır fiyat varsa yenileme başarılıdır.
+2. **Fiyat tazeliği DİSKE yazıyordu.** `AddTransactionViewModel` `syncState`'i
+   `offline` (fiyat) bayrağından türetiyordu: fiyat ucu düştü diye kayıt,
+   senkron gayet çalışırken "Bekliyor" damgası yiyordu. Emülatörde gördüğümüz
+   "150 Gram Gümüş · Bekliyor" tam buydu.
+
+**Ne yapıldı.** `CloudState` (Off / Synced / Unreachable) `SyncCoordinator`'dan
+yayınlanıyor; push ve pull sonuçları besliyor. Başlıktaki çip, ekleme
+ekranındaki şerit ve `syncState` artık **bunu** okuyor. Fiyat tazeliği kendi
+şeridinde kaldı. Bulut KAPALIYKEN çip hiç çizilmiyor — giriş yapmamış kullanıcıya
+her açılışta bozuk bir şey varmış gibi göstermek yanlıştı.
+
+**Yol boyunca çıkan tuzak.** Kaynaklar bağımsızlaşınca kısmi bir çekim tabloyu
+KIRPTI: oturum sonucu önbelleğin *yerine* geçiyordu, altın satırları tahtadan
+düşüyor ve toplam ₺946k'dan **₺693k'ya** iniyordu. Emülatör yakaladı. Çekim artık
+önbelleğin **üzerine bindiriliyor**; iki test bu kuralı kilitliyor.
+
+**Doğrulama.** Emülatörde çip "Eşit", şerit yok, toplam doğru; serbest piyasa o
+sırada gerçekten düşüktü ve fiyatlar TCMB'den geldi — yani senaryo canlı yaşandı.
+
+---
+
+## 18 · Açılış animasyonu ✅
+
+**Neydi.** Kullanıcı "sanki 2 tane farklı ekran açılıyor" dedi. Ekran
+görüntüleriyle bakınca sebep netti: sistem penceresi zinciri **~156dp**,
+askısız, ekranın tam ortasında gösteriyordu; hemen ardından Compose aynı zinciri
+**~50dp**, askılı, kelime işaretiyle ve daha yukarıda çiziyordu. Boy, konum ve
+içerik aynı anda değişiyordu. Üstelik iki sert kesme vardı (sistem→Compose,
+Compose→uygulama) ve animasyonun ortasında 1,2 saniyelik **ölü bir bekleme**
+duruyordu.
+
+**Ne yapıldı — üç parça.**
+
+1. Sistem çizimi küçültüldü (`ic_splash_mark.xml`, ölçek 0.72 → 0.40): ekranda
+   ~87dp'ye iniyor. Merkez korunuyor (`translate = 54 - 50 × ölçek`).
+2. Compose işareti **ekranın ortasından, sistem boyunda** başlıyor ve kendi
+   kilidine süzülüyor. Hiçbir şey ilk ~290ms boyunca kımıldamıyor: sistem
+   penceresi o sırada soluyor ve iki katman **aynı** şeyi gösteriyor.
+3. Sistem penceresi kesilerek değil **soldurularak** bırakılıyor
+   (`setOnExitAnimationListener`, 260ms). Solma bir hareket değil bir geçiştir;
+   sistemin kendi zoom-out'uyla yaşanan "iki ayrı hareket" sorunu doğmuyor.
+
+**Tek zaman ekseni.** Üç ayrı `Animatable` ve aradaki ölü bekleme kaldırıldı;
+her şey tek doğrusal saatten türüyor, aşamalar örtüşüyor. Toplam **2,4 saniye**:
+devir teslim → sönümlü zincir salınımı → ad süzülerek beliriyor → işaret hafifçe
+büyüyüp çözülüyor. Son kare düz zemin, yani uygulamanın ilk karesiyle aynı renk —
+üçüncü kesme de yok.
+
+**Doğrulama.** Emülatörde kare kare yakalandı: açılıştan itibaren **tek** yay,
+sabit boyda; sonra kilit kuruluyor, ad geliyor, uygulama açılıyor. Doubling yok.

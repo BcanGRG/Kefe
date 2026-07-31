@@ -106,7 +106,9 @@ private val AmountMaxWidth = 90.dp
  * Hedef ilerlemesi halkasi.
  *
  * @param progress 0..1 arasi doluluk.
- * @param centerAmount tam yazim ("₺19.587 / ₺100.000").
+ * @param centerAmount tam yazim ("₺19.587 / ₺100.000"). NULL ise kasede yalniz
+ *   yuzde durur - tutari halkanin ALTINA yazan cagiranlar icin. Kase dar, tutar
+ *   oraya ancak kisaltilarak siginca ("₺946,6B / ₺3,0M") okunmasi guclesiyordu.
  * @param centerAmountShort kisa yazim ("₺19,6B / ₺100B") - tam yazim kaseye
  *   sigmadiginda kullanilir. Verilmezse tam yazim kucultulmeden yazilir.
  * @param milestones yay uzerinde ayirici cizilecek oranlar.
@@ -115,7 +117,7 @@ private val AmountMaxWidth = 90.dp
 fun KefeGoalRing(
     progress: Float,
     centerPercent: String,
-    centerAmount: String,
+    centerAmount: String? = null,
     modifier: Modifier = Modifier,
     centerAmountShort: String? = null,
     color: Color = KefeTheme.colors.accent,
@@ -226,24 +228,26 @@ fun KefeGoalRing(
             // Tutar kasenin ICINDE kalmali. Once tam yazim kasenin disina
             // tasiyor, yayin ve uzerindeki kilometre noktalarinin ustune
             // biniyordu: rakam okunakli ama halka bozuk gorunuyordu.
-            val amountStyle = KefeTheme.type.caption
-                .copy(fontSize = 12.sp, lineHeight = 14.sp)
-                .tabular()
-            val measurer = rememberTextMeasurer()
-            val density = LocalDensity.current
-            val amountText = remember(centerAmount, centerAmountShort, amountStyle, density) {
-                val width = measurer.measure(centerAmount, amountStyle).size.width
-                val fits = with(density) { width.toDp() } <= AmountMaxWidth
-                if (fits || centerAmountShort == null) centerAmount else centerAmountShort
+            if (centerAmount != null) {
+                val amountStyle = KefeTheme.type.caption
+                    .copy(fontSize = 12.sp, lineHeight = 14.sp)
+                    .tabular()
+                val measurer = rememberTextMeasurer()
+                val density = LocalDensity.current
+                val amountText = remember(centerAmount, centerAmountShort, amountStyle, density) {
+                    val width = measurer.measure(centerAmount, amountStyle).size.width
+                    val fits = with(density) { width.toDp() } <= AmountMaxWidth
+                    if (fits || centerAmountShort == null) centerAmount else centerAmountShort
+                }
+                Text(
+                    text = amountText,
+                    style = amountStyle,
+                    color = colors.onSurfaceMuted,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = AmountMaxWidth),
+                )
             }
-            Text(
-                text = amountText,
-                style = amountStyle,
-                color = colors.onSurfaceMuted,
-                maxLines = 1,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(max = AmountMaxWidth),
-            )
         }
     }
 }

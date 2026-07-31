@@ -1,0 +1,17 @@
+-- Surum 5 -> 6: hedef atamasi MIKTAR tasiyor.
+--
+-- NEYDI. Atama tam varliktiydi (bir pozisyon ya tamamen bir hedefte ya hic).
+-- Pratikte su oluyordu: Ev hedefinde 10 ceyrek varken 1 tane "hedefsiz"
+-- eklemek, hedef secicisi Hedefsiz'e alindigi icin atamayi komple siliyordu -
+-- 11 ceyregin HEPSI Ev'den cikiyordu. Kullanicinin bekledigi "10'u Ev'de
+-- kalsin, 1'i hedefsiz olsun" tam varlikli bir atamayla anlatilamiyordu.
+--
+-- -1 = TUM VARLIK. Var olan her satir bunu alir, yani bu migration mevcut
+-- davranisi AYNEN korur: bugun Ev'de olan varlik yarin da tamamiyle Ev'de.
+-- Miktar tasiyan atamalar bundan sonra yazilir.
+--
+-- Kirpma SEMADA DEGIL okuma aninda: atanan miktar pozisyonun miktarini asamaz
+-- (bkz. goalWealth). Satista atamayi ayrica dusurmek, satisin hangi hedeften
+-- gittigine dair ikinci bir defter demek olurdu.
+
+ALTER TABLE goal_assets ADD COLUMN quantity REAL NOT NULL DEFAULT -1.0;

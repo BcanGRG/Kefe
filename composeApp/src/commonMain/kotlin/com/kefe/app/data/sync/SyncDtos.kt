@@ -80,6 +80,12 @@ data class GoalAssetDto(
     @SerialName("position_id") val positionId: String,
     @SerialName("user_id") val userId: String,
     @SerialName("goal_id") val goalId: String,
+    /**
+     * Atanan miktar; -1 = tum varlik. Varsayilan var cunku bu kolon sonradan
+     * geldi: eski bir cihazin gonderdigi satirda alan hic bulunmayabilir ve
+     * o satir "tum varlik" demektir.
+     */
+    val quantity: Double = -1.0,
     @SerialName("updated_at") val updatedAt: Long,
     @SerialName("deleted_at") val deletedAt: Long?,
 )

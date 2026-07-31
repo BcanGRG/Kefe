@@ -1,5 +1,6 @@
 package com.kefe.app.ui.screens.transaction
 
+import com.kefe.app.data.sync.CloudState
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.Currency
 import com.kefe.app.domain.model.Goal
@@ -102,8 +103,13 @@ data class AddTransactionUiState(
      */
     val editingTransactionId: String? = null,
     val lastAdded: LastAdded? = null,
-    /** Cevrimdisi kayit: serit, "Bekliyor" rozeti ve farkli CTA metni. */
+    /**
+     * FIYAT cevrimdisi: guncel kotasyon alinamadi, son bilinen fiyat kullaniliyor.
+     * Kaydin esitlenmesiyle ILGISI YOK - bunun icin [cloudState] var.
+     */
     val offline: Boolean = false,
+    /** Esitleme durumu: serit, "Bekliyor" rozeti ve CTA metnini bu belirler. */
+    val cloudState: CloudState = CloudState.Off,
     /** Alt notta adi gecen diger uye - kayit ona da gorunecek. */
     val partnerName: String = "",
     val saving: Boolean = false,
@@ -219,13 +225,20 @@ val AddTransactionUiState.selectedFund: FundResult?
 
 /**
  * TEFAS'ta canli aranabilecek fon kodu - yoksa null (arama satiri gizli).
- * Kosul: 2-6 harfli bir kod ve yerel sonuclarda TAM kod eslesmesi yok - zaten
- * listede olani ya da "22" gibi bir sayiyi aratmanin anlami yok.
+ *
+ * TEFAS kodlari HARF-RAKAM karisimidir ve harfle baslar: AFA, TTE, ama AN1, TP2,
+ * GO1 de vardir. Once kosul "hepsi harf" idi; rakam tasiyan her kod arama
+ * satirini HIC acmiyordu - kullanici "AN1" yazip bir sey olmamasini izliyordu.
+ * Ilk karakterin harf olmasi sarti, "22" gibi salt sayilari eleme amacini
+ * korur. ASCII disi harf kabul edilmez: TEFAS kodlarinda yoktur, "çeyrek"
+ * yazan birini bosuna aga cikarmayalim.
  */
 val AddTransactionUiState.fundSearchCode: String?
     get() {
         val q = fundQuery.trim()
-        if (q.length !in 2..6 || !q.all { it.isLetter() }) return null
+        if (q.length !in 2..6) return null
+        if (!q.all { it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' }) return null
+        if (!q.first().isLetter()) return null
         if (fundResults.any { it.code.equals(q, ignoreCase = true) }) return null
         return q.uppercase()
     }
@@ -286,10 +299,20 @@ val AddTransactionUiState.karatLine: String
             Money.quantity(grams, "gr", decimals = 1) + " ≈ " + Money.tl(grams * karatGramPrice)
     }
 
+/**
+ * Kayit su an buluta GIDEMEZ: serit cizilir, "Bekliyor" rozeti ve farkli CTA.
+ *
+ * Bulut KAPALI (giris yok) bunun disindadir: uygulama cevrimdisi tam calisir,
+ * her kaydi "çevrimdışı" diye isaretlemek giris yapmamis kullaniciya bir sey
+ * bozukmus gibi gosterirdi.
+ */
+val AddTransactionUiState.cloudUnreachable: Boolean
+    get() = cloudState == CloudState.Unreachable
+
 val AddTransactionUiState.ctaText: String
     get() = when {
         isFirstStep -> "Devam"
-        offline -> "Çevrimdışı kaydet"
+        cloudUnreachable -> "Çevrimdışı kaydet"
         isEditing -> "Güncelle"
         else -> "Kaydet"
     }
@@ -297,14 +320,22 @@ val AddTransactionUiState.ctaText: String
 val AddTransactionUiState.isEditing: Boolean
     get() = editingTransactionId != null
 
-/** Altligin ince aciklama satiri: cevrimdisiyken uyari, aksi halde hesap. */
+/**
+ * Altligin ince aciklama satiri.
+ *
+ * Sira onemli: buluta ulasilamiyorsa kaydin akibeti, fiyat eskiyse fiyatin
+ * kaynagi, aksi halde hesap. Once ikisi tek bayraktan geliyordu ve fiyat ucu
+ * tokezleyince ekran "bağlanınca eşitlenir" diyordu - esitleme zaten
+ * calisiyorken.
+ */
 val AddTransactionUiState.footNote: String
     get() {
-        if (offline) {
+        if (cloudUnreachable) {
             val partner = partnerName.takeIf { it.isNotBlank() }
                 ?: return "Kayıt cihazda tutulur; bağlanınca eşitlenir."
             return "Kayıt cihazda tutulur; bağlanınca ${trGenitive(partner)} telefonunda da görünür."
         }
+        if (offline) return "Son bilinen fiyatla kaydedilir; tutarı elle düzeltebilirsiniz."
         val head = quantityText.ifBlank { "0" } + " × " +
             Money.tl(unitPrice, decimals = priceDecimals)
         return if (fee > 0.0) head + " + " + Money.tl(fee) + " işçilik" else head
