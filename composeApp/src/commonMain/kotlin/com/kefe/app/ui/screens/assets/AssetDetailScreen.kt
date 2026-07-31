@@ -48,7 +48,10 @@ import com.kefe.app.ui.components.KefeSellBadge
 import com.kefe.app.ui.components.KefeSkeletonBlock
 import com.kefe.app.ui.components.KefeSwipeableRow
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.maxPriceDecimals
 import com.kefe.app.ui.format.moneyTl
+import com.kefe.app.ui.format.priceDecimals
+import com.kefe.app.ui.format.quantityDecimalsOf
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
@@ -402,9 +405,18 @@ private fun SummaryCard(state: AssetDetailUiState, position: Position) {
         // "Ortalama alış" degil "maliyet": artik ekranda iki ayri "alis" var -
         // kullanicinin odedigi ve piyasanin alis tarafi. Ayni kelime ikisini de
         // anlatirsa hangisinin ne oldugu okunmaz.
+        // Ortalama maliyet BOLME sonucudur: 3 pay ₺1.000'e alinmissa birim
+        // maliyet 333,333333 eder. Pozisyonun guncel fiyatinin hane sayisiyla
+        // yazmak bunu kirpardi; kendi hane sayisi kullanilir.
         SummaryRow(
             "Ortalama maliyet",
-            Money.tl(state.averageBuyPrice, decimals = position.priceDecimals()),
+            Money.tl(
+                state.averageBuyPrice,
+                decimals = Money.decimals(
+                    state.averageBuyPrice,
+                    position.assetClass.maxPriceDecimals(),
+                ),
+            ),
         )
         KefeHairline()
         SummaryRow(
@@ -623,21 +635,27 @@ private fun Position.detailSubtitle(): String {
     return "$quantityText · ${assetClass.label()}"
 }
 
-private fun Position.detailQuantityDecimals(): Int =
-    if (quantity == quantity.toLong().toDouble()) 0 else 1
+private fun Position.detailQuantityDecimals(): Int = quantityDecimalsOf()
 
-/** Kucuk birim fiyatlarda (fon payi) kurus gosterilir, buyuklerde gosterilmez. */
-private fun Position.priceDecimals(): Int = if (unitPrice < 100.0) 2 else 0
-
-/** "2 adet × ₺26.400" */
+/**
+ * "2 adet × ₺26.400" - hem miktar hem fiyat KENDI hane sayisiyla.
+ *
+ * Once fiyat "100 TL altindaysa iki hane, ustundeyse sifir" kuraliyla
+ * yaziliyordu: ₺108,394521'lik bir fon payi "₺108" gorunuyor, kullanicinin
+ * kurusuna kadar girdigi rakam ekranda kayboluyordu. Miktar da en cok bir
+ * haneye iniyordu; oysa fon payi kesirli alinir.
+ */
 private fun Transaction.lineLabel(position: Position): String {
     val unitLabel = position.unit.label()
+    val decimals = position.quantityDecimalsOf(quantity)
     val quantityText = if (unitLabel.isBlank()) {
-        Money.number(quantity, if (quantity == quantity.toLong().toDouble()) 0 else 2)
+        Money.number(quantity, decimals)
     } else {
-        Money.quantity(quantity, unitLabel, if (quantity == quantity.toLong().toDouble()) 0 else 1)
+        Money.quantity(quantity, unitLabel, decimals)
     }
-    return "$quantityText × ${Money.tl(unitPrice, decimals = position.priceDecimals())}"
+    // Islemin KENDI fiyati - pozisyonun guncel fiyati degil.
+    val priceDecimals = Money.decimals(unitPrice, position.assetClass.maxPriceDecimals())
+    return "$quantityText × ${Money.tl(unitPrice, decimals = priceDecimals)}"
 }
 
 /** "12 Tem 2026" · gerekirse "işçilik ₺600" eklenir. */

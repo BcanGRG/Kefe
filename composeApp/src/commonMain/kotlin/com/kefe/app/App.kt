@@ -249,8 +249,12 @@ private fun KefeApp(
     // Duzenlenen islemin kimligi; null ise sheet yeni kayit icin acilir.
     var addSheetEditId by remember { mutableStateOf<String?>(null) }
 
-    fun openAddSheet(side: TradeSide = TradeSide.Buy) {
+    // Sheet HANGI VARLIK icin aciliyor; null ise varlik secimiyle baslar.
+    var addSheetPositionId by remember { mutableStateOf<String?>(null) }
+
+    fun openAddSheet(side: TradeSide = TradeSide.Buy, positionId: String? = null) {
         addSheetSide = side
+        addSheetPositionId = positionId
         addSheetEditId = null
         addSheetVisible = true
     }
@@ -575,8 +579,11 @@ private fun KefeApp(
                                     onIntent = vm::onIntent,
                                     onBack = { goBack() },
                                     onEditTransaction = { openEditSheet(it) },
-                                    onAddBuy = { openAddSheet(TradeSide.Buy) },
-                                    onAddSell = { openAddSheet(TradeSide.Sell) },
+                                    // Sheet BU VARLIKLA acilir: kullanici hangi
+                                    // varlikta oldugunu zaten soyledi, bir kez
+                                    // daha secmesi gereksiz bir adimdi.
+                                    onAddBuy = { openAddSheet(TradeSide.Buy, key.positionId) },
+                                    onAddSell = { openAddSheet(TradeSide.Sell, key.positionId) },
                                 )
                             }
                         }
@@ -706,12 +713,14 @@ private fun KefeApp(
             // Duzenlemede alan degerleri kayittan gelir - alis/satis dahil.
             // Yeni kayitta form sifirlanir: ViewModel sheet kapaninca olmedigi
             // icin bir onceki acilisin alanlari duruyordu.
-            LaunchedEffect(addSheetSide, addSheetEditId) {
+            LaunchedEffect(addSheetSide, addSheetEditId, addSheetPositionId) {
                 val editId = addSheetEditId
                 if (editId != null) {
                     addVm.onIntent(AddTransactionIntent.EditTransaction(editId))
                 } else {
-                    addVm.onIntent(AddTransactionIntent.StartNew(addSheetSide))
+                    addVm.onIntent(
+                        AddTransactionIntent.StartNew(addSheetSide, addSheetPositionId),
+                    )
                 }
             }
 

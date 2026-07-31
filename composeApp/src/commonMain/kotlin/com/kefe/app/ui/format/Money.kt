@@ -99,7 +99,35 @@ object Money {
     fun quantity(value: Double, unit: String, decimals: Int = 0): String =
         format(value, decimals, forceSign = false) + " " + unit
 
+    /**
+     * Degerin GERCEKTEN tasidigi ondalik hane sayisi - en az [min], en cok [max].
+     *
+     * NEDEN: hane sayisi sabit yazildiginda ya bilgi kayboluyor ya gurultu
+     * ekleniyordu. Fon payi TEFAS'ta alti haneye kadar iner (₺108,394521) ama
+     * ekran iki haneye, varlik detayinda da 100 TL ustunde SIFIR haneye
+     * yuvarliyordu: kullanicinin kurusuna kadar girdigi fiyat "₺108" olarak
+     * gorunuyordu. Bunun tersi de dogru: 10.063 TL'lik ceyregi alti haneyle
+     * yazmak okumayi zorlastirir.
+     *
+     * Bu yuzden hane sayisi DEGERDEN turer, sinir varlik sinifindan gelir.
+     */
+    fun decimals(value: Double, max: Int, min: Int = 0): Int {
+        if (!value.isFinite()) return min
+        val a = abs(value)
+        // Kayan nokta artigi: 108,39 diskte 108.38999999999999 olabiliyor.
+        // Bagil tolerans, buyuk sayilarda da dogru calisir.
+        val tolerance = Epsilon * maxOf(1.0, a)
+        for (d in min..max) {
+            val factor = pow10(d)
+            if (abs(round(a * factor) / factor - a) <= tolerance) return d
+        }
+        return max
+    }
+
     // --- ic ---
+
+    /** Bagil tolerans: cift duyarlikli sayida ~15 anlamli hane var. */
+    private const val Epsilon = 1e-9
 
     private fun format(value: Double, decimals: Int, forceSign: Boolean): String {
         val negative = value < 0

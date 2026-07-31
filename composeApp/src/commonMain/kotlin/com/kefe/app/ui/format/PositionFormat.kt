@@ -6,6 +6,45 @@ import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.label
 
 /**
+ * Bir varlik sinifinin FIYATTA tasiyabilecegi en cok ondalik hane.
+ *
+ * Ust sinirdir, sabit hane sayisi degil: gercek hane sayisi degerden turer
+ * (bkz. [Money.decimals]). Boylece ₺108,394521 tam yazilir, ₺10.063,88 iki
+ * haneyle kalir, ₺40.359 ondaliksiz.
+ */
+fun AssetClass.maxPriceDecimals(): Int = when (this) {
+    // TEFAS pay fiyatlarini ALTI haneye kadar veriyor; iki haneye yuvarlamak
+    // kullanicinin elle girdigi fiyati bozuyordu.
+    AssetClass.Fund -> 6
+    // Kur dort haneye kadar anlamli (capraz kurlarda kurusun altina iner).
+    AssetClass.Fx -> 4
+    // Kiymetli maden kotasyonlari kurus mertebesinde.
+    AssetClass.Gold, AssetClass.Silver -> 2
+    AssetClass.Cash -> 2
+}
+
+/**
+ * Bir birimin MIKTARDA tasiyabilecegi en cok ondalik hane.
+ *
+ * Fon payi kesirli alinir (₺1.000'lik emir 9,213847 pay eder); adet ise
+ * bolunmez.
+ */
+fun QuantityUnit.maxQuantityDecimals(): Int = when (this) {
+    QuantityUnit.Share -> 6
+    QuantityUnit.Gram -> 3
+    QuantityUnit.Currency -> 2
+    QuantityUnit.Piece -> 0
+}
+
+/** Bu pozisyonun birim fiyatinin gercekte tasidigi hane sayisi. */
+fun Position.priceDecimals(): Int =
+    Money.decimals(unitPrice, assetClass.maxPriceDecimals())
+
+/** Bu pozisyonun miktarinin gercekte tasidigi hane sayisi. */
+fun Position.quantityDecimalsOf(amount: Double = quantity): Int =
+    Money.decimals(amount, unit.maxQuantityDecimals())
+
+/**
  * Varligin miktar metni: "8 adet", "62,4 gr", "12.400 pay × ₺24,60".
  *
  * Ayar bilgisi yalniz adda gecmiyorsa eklenir - "22 Ayar Bilezik" satirinda
@@ -16,20 +55,19 @@ import com.kefe.app.domain.model.label
  */
 fun Position.quantityLabel(): String {
     val base = when (unit) {
-        QuantityUnit.Piece ->
-            Money.quantity(quantity, unit.label())
-
-        QuantityUnit.Gram ->
-            Money.quantity(quantity, unit.label(), quantityDecimals())
+        QuantityUnit.Piece, QuantityUnit.Gram ->
+            Money.quantity(quantity, unit.label(), quantityDecimalsOf())
 
         QuantityUnit.Share ->
-            Money.quantity(quantity, unit.label()) + " × " + Money.tl(unitPrice, decimals = 2)
+            Money.quantity(quantity, unit.label(), quantityDecimalsOf()) +
+                " × " + Money.tl(unitPrice, decimals = priceDecimals())
 
         QuantityUnit.Currency ->
             if (assetClass == AssetClass.Cash) {
                 "TL"
             } else {
-                Money.number(quantity) + " × " + Money.tl(unitPrice, decimals = 2)
+                Money.number(quantity, quantityDecimalsOf()) +
+                    " × " + Money.tl(unitPrice, decimals = priceDecimals())
             }
     }
 
@@ -56,13 +94,9 @@ fun Position.shortQuantityLabel(): String = shortQuantityLabel(quantity)
  * "16 adet" yazarken hedefe 15'i sayiyorsa ekran yalan soyluyor demektir.
  */
 fun Position.shortQuantityLabel(amount: Double): String = when (unit) {
-    QuantityUnit.Piece -> Money.quantity(amount, unit.label())
-    QuantityUnit.Gram -> Money.quantity(amount, unit.label(), quantityDecimals(amount))
-    QuantityUnit.Share -> Money.quantity(amount, unit.label())
-    QuantityUnit.Currency ->
-        if (assetClass == AssetClass.Cash) "TL" else Money.number(amount)
-}
+    QuantityUnit.Piece, QuantityUnit.Gram, QuantityUnit.Share ->
+        Money.quantity(amount, unit.label(), quantityDecimalsOf(amount))
 
-/** Tam sayi miktarlarda ondalik yazilmaz: 15 gr, 62,4 gr. */
-private fun Position.quantityDecimals(amount: Double = quantity): Int =
-    if (amount == amount.toLong().toDouble()) 0 else 1
+    QuantityUnit.Currency ->
+        if (assetClass == AssetClass.Cash) "TL" else Money.number(amount, quantityDecimalsOf(amount))
+}

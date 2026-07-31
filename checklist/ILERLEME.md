@@ -49,6 +49,8 @@ Gerçek kullanımda çıkan altı şey. Hepsi emülatörde doğrulandı.
 | 18 | Açılış animasyonu tek akıcı harekete indi | ✅ **bitti** |
 | 19 | Hedef ekranı atanan kısmı gösteriyor, miktar sonradan değiştirilebiliyor | ✅ **bitti** |
 | 20 | Klavye alanı görünür kılıyor, alanlar arası geçiş var | ✅ **bitti + gerçek cihazda doğrulandı** |
+| 21 | Fon fiyatlarında ince ondalık; hesaplar gözden geçirildi | ✅ **bitti + gerçek cihazda doğrulandı** |
+| 22 | Varlık detayından ekleme o varlıkla açılıyor | ✅ **bitti** |
 
 **Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
 Gmail SMTP + App Password ile açıldı (Resend domain istiyordu; domain alınmadı).
@@ -829,3 +831,70 @@ kutu **tamamıyla** görünür, altlığın hemen üstünde (öncesinde ortadan
 kırpılıyordu). Miktar alanına dokunuldu → klavyede **"İleri"** yazıyor;
 basınca odak birim fiyat alanına geçti, klavye açık kaldı ve alan görünür
 konuma kaydı.
+
+---
+
+## 21 · İnce ondalık: fon fiyatları ve hesapların gözden geçirilmesi ✅
+
+**Neydi.** Kullanıcı fon fiyatını kuruşun altına kadar giriyor ama ekran
+yuvarlıyordu. Hane sayısı üç ayrı yerde SABİT yazılmıştı ve ikisi de yanlış
+yönde hata yapıyordu:
+
+| Yer | Kural | Sonuç |
+|---|---|---|
+| Varlık detayı | `fiyat < 100 ? 2 : 0` | ₺108,394521 → **"₺108"** |
+| Piyasa tablosu | fon = 2 | ₺3,714754 → "₺3,71" |
+| Miktar etiketi | en çok 1 hane | 9,226847 pay → "9,2 pay" |
+
+Fon payı TEFAS'ta **altı haneye** kadar iner ve kesirli alınır; iki haneye
+sabitlemek kullanıcının gördüğü rakamı kırpıyordu. Tersi de doğru: ₺40.359'luk
+tam altını altı haneyle yazmak okumayı zorlaştırır.
+
+**Ne yapıldı.** Hane sayısı artık **değerden türüyor**, üst sınır varlık
+sınıfından geliyor:
+
+- `Money.decimals(value, max, min)` — değerin gerçekten taşıdığı hane sayısı.
+  Bağıl tolerans var: 108,39 diskte `108.38999999999999` durabiliyor ve bu
+  altı haneli bir fiyat değildir.
+- `AssetClass.maxPriceDecimals()` — fon 6, döviz 4, altın/gümüş 2.
+- `QuantityUnit.maxQuantityDecimals()` — pay 6, gram 3, döviz 2, **adet 0**
+  (adet bölünmez; "15,000000 adet" gürültüdür).
+- Piyasa tablosunda **kuruş tabanı** korundu (`min = 2`): adım 3'teki "fiyat
+  donmuş sanılıyor" düzeltmesi bozulmasın.
+
+**Hesaplar gözden geçirildi — değiştirilecek bir şey çıkmadı.** Kayda değer
+olanlar:
+
+- `todayChange()` her pozisyonu **dünkü değerine geri çözüp** TL farkları
+  topluyor; yüzdeleri ortalamıyor. `todayChangePercent` de TL değişimin dünkü
+  toplama oranı — değer ağırlıklı, doğru.
+- Yıllık getiri **XIRR** (Newton-Raphson + ikiye bölme yedeği): bileşik doğru
+  kurulmuş, her liranın kaç gün çalıştığını sayıyor.
+- Maliyet ağırlıklı ortalama, para yolunda tek bir yuvarlama yok; SQL kolonları
+  `REAL`, alan adı `Double`.
+- **Hedef projeksiyonu bilerek getiri VARSAYMIYOR** (`değer += aylık katkı`).
+  Bileşik büyüme eklemek bir beklenen getiri uydurmak demek; depo bu kararı
+  daha önce açıkça almış ("uydurma sayı üretmez"). Dokunulmadı.
+
+**Doğrulama.** 151 masaüstü testi (11 yeni: değerden türeyen hane sayısı, üst/alt
+sınır, kayan nokta artığı, sınıfa göre tavanlar). Emülatör ve **gerçek cihaz**:
+`5 pay × ₺108,391402`, `46 pay × ₺10,972608`, `107 pay × ₺3,714754`,
+`238 pay × ₺1,59423`. Varlık detayında "Ortalama maliyet ₺110,048" ve "Güncel
+birim fiyat ₺108,391402" (önce "₺110" ve "₺108" yazıyordu).
+
+---
+
+## 22 · Varlık detayından ekleme o varlıkla açılır ✅
+
+**Neydi.** Varlık detayında "Alım Ekle"ye basınca sayfa 1. adımdan, boş
+açılıyordu: kullanıcı hangi varlıkta olduğunu zaten söylemişken sınıfı ve alt
+türü bir kez daha seçmek zorundaydı.
+
+**Ne yapıldı.** `StartNew` artık isteğe bağlı bir `positionId` taşıyor. Doluysa
+form o pozisyondan doldurulup doğrudan 2. adıma geçiyor; alanlar `loadForEdit`
+ile **aynı yoldan** çözülüyor (fon ve döviz kimliği pozisyon kimliğinden türer,
+yoksa kayıt yeni bir pozisyona yazılırdı).
+
+**Doğrulama.** Emülatörde AN1 fonunun detayından "Alım Ekle" → sheet
+*"2. adım · AN1 · STRATEJİ PORTFÖY BİRİNCİ DEĞİŞKEN FON"* ile açıldı, birim
+"pay", fiyat 108,391402 dolu; "Satış Ekle" → aynı sayfa, **Satış** seçili.

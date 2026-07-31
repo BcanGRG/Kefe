@@ -11,6 +11,7 @@ import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.label
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.maxPriceDecimals
 import com.kefe.app.ui.format.trLower
 
 /** Iki adimli akis: once "ne", sonra "ne kadar". */
@@ -179,7 +180,16 @@ sealed interface AddTransactionIntent {
      * duruyordu. Duzenlemeden sonra en tehlikelisi [editingTransactionId]:
      * temizlenmezse yeni kayit eski islemi de silerdi.
      */
-    data class StartNew(val side: TradeSide) : AddTransactionIntent
+    data class StartNew(
+        val side: TradeSide,
+        /**
+         * Doldurulacak varlik. null ise form bostur ve 1. adimdan baslar.
+         *
+         * Varlik detayindan "Alım/Satış Ekle" denince kullanici hangi varlikta
+         * oldugunu ZATEN soylemis oluyor; onu bir kez daha secmek gereksiz.
+         */
+        val positionId: String? = null,
+    ) : AddTransactionIntent
 }
 
 // --- Turetilen degerler ------------------------------------------------------
@@ -256,12 +266,15 @@ val AddTransactionUiState.quantityUnit: QuantityUnit
         AssetClass.Fx, AssetClass.Cash -> QuantityUnit.Currency
     }
 
-/** Fon ve doviz kurusla gosterilir; kalanlar tam TL. */
+/**
+ * "Güncel piyasa: ₺x" ipucusunun hane sayisi - DEGERDEN turer.
+ *
+ * Once fon ve doviz iki, kalani sifir haneye sabitti: kullanicinin alani
+ * dolduran gercek fiyat (₺108,394521) ipucunda "₺108,39" gorunuyor, iki rakam
+ * birbirini tutmuyordu.
+ */
 val AddTransactionUiState.priceDecimals: Int
-    get() = when (assetClass) {
-        AssetClass.Fund, AssetClass.Fx -> 2
-        else -> 0
-    }
+    get() = Money.decimals(marketPrice, assetClass.maxPriceDecimals())
 
 val AddTransactionUiState.quantity: Double get() = quantityText.parseTrNumber()
 
