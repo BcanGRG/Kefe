@@ -455,6 +455,13 @@ class AddTransactionViewModel(
             val position = positions.firstOrNull { it.matches(s) }
             val positionId = position?.id ?: newPositionId(s)
 
+            // Atama ve miktar YAZMADAN ONCE okunur. "Tum varlik" atamasini bu
+            // isleme kadarki miktara sabitlemek gerekiyor (bkz.
+            // nextAssignedQuantity) ve o miktar ancak burada bellidir - kayit
+            // yazildiktan sonra pozisyon zaten yeni adedi tasiyor.
+            val assignmentBefore = portfolioRepository.goalAssignmentOf(positionId)
+            val quantityBefore = position?.quantity ?: 0.0
+
             // Varlik portfoyde yoksa once TANITILIR. Islem tek basina varligin
             // adini, sinifini ve birimini tasimaz; pozisyon olmadan kayit oksuz
             // kalir ve hicbir ekranda gorunmez.
@@ -512,7 +519,7 @@ class AddTransactionViewModel(
                 )
             )
 
-            applyGoalSelection(positionId, s)
+            applyGoalSelection(positionId, s, assignmentBefore, quantityBefore)
         }
 
         if (replaced != null) portfolioRepository.deleteTransaction(replaced)
@@ -537,20 +544,28 @@ class AddTransactionViewModel(
      * Atamayi kaldirma buradan YAPILMAZ; hedef detayindaki "Bu hedefi
      * karsilayanlar" listesinin isi odur.
      */
-    private suspend fun applyGoalSelection(positionId: String, s: AddTransactionUiState) {
-        val selected = s.selectedGoalId ?: return
+    private suspend fun applyGoalSelection(
+        positionId: String,
+        s: AddTransactionUiState,
+        current: GoalAssignment?,
+        quantityBefore: Double,
+    ) {
+        // Aritmetik saf bir fonksiyonda: kuralin kendisi burada degil, test
+        // edilebildigi yerde dursun. null = atamaya dokunma.
+        val quantity = nextAssignedQuantity(
+            current = current,
+            selectedGoalId = s.selectedGoalId,
+            transactionQuantity = s.quantity,
+            isSell = s.side == TradeSide.Sell,
+            quantityBefore = quantityBefore,
+        ) ?: return
 
         portfolioRepository.assignPositionToGoal(
             positionId = positionId,
-            goalId = selected,
-            // Aritmetik saf bir fonksiyonda: kuralin kendisi burada degil,
-            // test edilebildigi yerde dursun.
-            quantity = nextAssignedQuantity(
-                current = portfolioRepository.goalAssignmentOf(positionId),
-                selectedGoalId = selected,
-                transactionQuantity = s.quantity,
-                isSell = s.side == TradeSide.Sell,
-            ),
+            // Hedefsizken de bir hedef yazilir: yapilan sey atamayi kaldirmak
+            // degil, mevcut hedefin payini o ana kadarki miktara dondurmaktir.
+            goalId = s.selectedGoalId ?: current?.goalId ?: return,
+            quantity = quantity,
         )
     }
 }

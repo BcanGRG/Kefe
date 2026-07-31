@@ -25,6 +25,21 @@ private infix fun String.whollyIn(goalId: String): Pair<String, GoalAssignment> 
 private fun String.partlyIn(goalId: String, quantity: Double): Pair<String, GoalAssignment> =
     this to GoalAssignment(goalId, quantity)
 
+/** Kayit anindaki atama aritmetigi - uzun imzayi testlerde tekrarlamamak icin. */
+private fun next(
+    current: GoalAssignment?,
+    selectedGoalId: String?,
+    quantity: Double,
+    isSell: Boolean = false,
+    before: Double = 0.0,
+): Double? = nextAssignedQuantity(
+    current = current,
+    selectedGoalId = selectedGoalId,
+    transactionQuantity = quantity,
+    isSell = isSell,
+    quantityBefore = before,
+)
+
 private fun goal(id: String): Goal = Goal(
     id = id,
     name = id,
@@ -160,42 +175,26 @@ class GoalAssetsTest {
         // Ev'de 10 ceyrek varken 3 tane daha "Ev" ile eklendi.
         val current = GoalAssignment("ev", 10.0)
 
-        assertEquals(
-            13.0,
-            nextAssignedQuantity(current, "ev", transactionQuantity = 3.0, isSell = false),
-            EPS,
-        )
+        assertEquals(13.0, next(current, "ev", quantity = 3.0)!!, EPS)
     }
 
     @Test
     fun ayniHedeftenSatmakMiktariDusurur() {
         val current = GoalAssignment("ev", 10.0)
 
-        assertEquals(
-            6.0,
-            nextAssignedQuantity(current, "ev", transactionQuantity = 4.0, isSell = true),
-            EPS,
-        )
+        assertEquals(6.0, next(current, "ev", quantity = 4.0, isSell = true)!!, EPS)
     }
 
     @Test
     fun satisMiktariNegatifeInmez() {
         val current = GoalAssignment("ev", 2.0)
 
-        assertEquals(
-            0.0,
-            nextAssignedQuantity(current, "ev", transactionQuantity = 5.0, isSell = true),
-            EPS,
-        )
+        assertEquals(0.0, next(current, "ev", quantity = 5.0, isSell = true)!!, EPS)
     }
 
     @Test
     fun ilkAtamaIslemMiktariKadar() {
-        assertEquals(
-            10.0,
-            nextAssignedQuantity(null, "ev", transactionQuantity = 10.0, isSell = false),
-            EPS,
-        )
+        assertEquals(10.0, next(null, "ev", quantity = 10.0)!!, EPS)
     }
 
     @Test
@@ -204,24 +203,54 @@ class GoalAssetsTest {
         // islemin miktari Ev'e yazilir - eski hedefin miktari devralinmaz.
         val current = GoalAssignment("araba", 10.0)
 
-        assertEquals(
-            3.0,
-            nextAssignedQuantity(current, "ev", transactionQuantity = 3.0, isSell = false),
-            EPS,
-        )
+        assertEquals(3.0, next(current, "ev", quantity = 3.0)!!, EPS)
     }
 
     @Test
     fun tumVarlikAtamasiEklemedeKorunur() {
-        // Kullanici bir kez "tamami bu hedefe" demisse sonraki alimlar da oraya
-        // sayilir; miktara dusurmek o sozu bozardi.
+        // Kullanici bir kez "tamami bu hedefe" demisse, AYNI hedefe eklerken
+        // soz korunur; miktara dusurmek onu bozardi.
         val current = GoalAssignment("ev")
 
         assertEquals(
             GoalAssignment.WholePosition,
-            nextAssignedQuantity(current, "ev", transactionQuantity = 3.0, isSell = false),
+            next(current, "ev", quantity = 3.0, before = 15.0)!!,
             EPS,
         )
+    }
+
+    // --- "Hedefsiz" ---------------------------------------------------------
+
+    @Test
+    fun hedefsizAlimTumVarlikAtamasiniDondurur() {
+        // SAHADA CIKAN HATA. Eski atamalarin hepsi -1 (tum varlik). Kullanici
+        // 15 ceyregi Ev'deyken 1 tane "Hedefsiz" ekliyor, hedef 16 gosteriyordu:
+        // "hepsi" dedigi surece yeni alinan da sayiliyor. Artik atama o ana
+        // kadarki miktara sabitlenir.
+        val current = GoalAssignment("ev")
+
+        assertEquals(15.0, next(current, null, quantity = 1.0, before = 15.0)!!, EPS)
+    }
+
+    @Test
+    fun hedefsizAlimMiktarliAtamayaDokunmaz() {
+        // Miktari zaten belli: yeni alim nasilsa sayilmiyor, yazmaya gerek yok.
+        val current = GoalAssignment("ev", 10.0)
+
+        assertNull(next(current, null, quantity = 1.0, before = 10.0))
+    }
+
+    @Test
+    fun hedefsizAlimAtamasizVarligaDokunmaz() {
+        assertNull(next(null, null, quantity = 1.0, before = 0.0))
+    }
+
+    @Test
+    fun hedefsizSatisAtamayaDokunmaz() {
+        // Satis atamayi dondurmez: kirpma zaten okuma aninda yapiliyor.
+        val current = GoalAssignment("ev")
+
+        assertNull(next(current, null, quantity = 1.0, isSell = true, before = 15.0))
     }
 
     @Test

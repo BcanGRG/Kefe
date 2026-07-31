@@ -72,25 +72,46 @@ fun assetsOf(
 ): List<Position> = positions.filter { assignments[it.id]?.goalId == goal.id }
 
 /**
- * Islem kaydedilirken atamanin ALACAGI yeni miktar.
+ * Islem kaydedilirken atamanin ALACAGI yeni miktar; `null` ise atamaya
+ * DOKUNULMAZ.
  *
- * Hedef secicisi YALNIZ BU ISLEMIN nereye sayilacagini soyler:
+ * Hedef secicisi YALNIZ BU ISLEMIN nereye sayilacagini soyler.
+ *
+ * [selectedGoalId] doluyken:
  *   - Ayni hedef  -> miktar bu islem kadar artar (satista azalir).
  *   - "Tum varlik" atamasi ayni hedefte KORUNUR: kullanici bir kez "tamami bu
  *     hedefe" demisse sonraki alimlar da oraya sayilmali.
  *   - Baska hedef (ya da ilk atama) -> miktar bu islemin miktari olur; varlik
  *     o hedefe TASINIR.
  *
- * "Hedefsiz" buraya hic gelmez - o durumda atamaya DOKUNULMAZ. Once secici tum
- * varligin atamasini siliyordu: Ev'de 10 ceyrek varken 1 tane hedefsiz eklemek
- * 11'i birden Ev'den cikariyordu.
+ * "HEDEFSIZ" (null) VE "TUM VARLIK" ATAMASI. Burasi ilk surumde eksikti ve
+ * duzeltme sahada tutmadi: eski atamalarin hepsi -1 (tum varlik) oldugu icin
+ * "Hedefsiz" hicbir sey ifade etmiyordu - hedef "hepsi" dedigi surece yeni
+ * alinan da sayiliyordu. Kullanici 15 ceyregi Ev'deyken 1 tane hedefsiz
+ * ekliyor, hedef 16 gosteriyordu.
+ *
+ * Cozum: hedefsiz bir ALIM, "tum varlik" atamasini o ana kadarki miktara
+ * SABITLER ([quantityBefore]). "Tamami bu hedefe" sozu bugune kadar alinanlar
+ * icindir; kullanici yeni alimin disarida kalmasini acikca istediginde o soz
+ * dondurulur. Miktari zaten belli olan atamalara dokunulmaz - onlarda yeni alim
+ * nasilsa sayilmiyor.
  */
 fun nextAssignedQuantity(
     current: GoalAssignment?,
-    selectedGoalId: String,
+    selectedGoalId: String?,
     transactionQuantity: Double,
     isSell: Boolean,
-): Double = when {
+    /** Pozisyonun BU ISLEMDEN ONCEKI miktari. */
+    quantityBefore: Double,
+): Double? = when {
+    // Hedefsiz: yalniz "tum varlik" atamasini dondurmak icin mudahale edilir.
+    selectedGoalId == null ->
+        if (current != null && current.isWhole && !isSell) {
+            quantityBefore.coerceAtLeast(0.0)
+        } else {
+            null
+        }
+
     current == null || current.goalId != selectedGoalId ->
         transactionQuantity.coerceAtLeast(0.0)
 

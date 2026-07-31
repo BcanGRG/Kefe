@@ -645,13 +645,34 @@ tamamı bu hedefi karşılar".
 tanesi satılırsa hedef 6 sayar. Böylece satışın hangi hedeften düştüğüne dair
 ikinci bir hesap defteri tutmak gerekmiyor.
 
+**İlk sürüm sahada TUTMADI — eksik olan neydi.** Kullanıcı 15 çeyreği Ev'deyken
+1 tane "Hedefsiz" ekledi ve hedef **16** gösterdi. Sebep: migration mevcut
+atamaları `-1` (tüm varlık) olarak korumuştu — bilinçliydi, davranış bozulmasın
+diye. Ama "tüm varlık" dediği sürece "Hedefsiz" hiçbir şey ifade etmiyor: hedef
+zaten "hepsi"ni sayıyor, yeni alınan da hepsinin içinde. Kural "hedefsizde
+atamaya dokunma" olduğu için de hiçbir şey değişmiyordu.
+
+**Eklenen kural.** Hedefsiz bir **alım**, "tüm varlık" atamasını o ana kadarki
+miktara **sabitler**. "Tamamı bu hedefe" sözü bugüne kadar alınanlar içindir;
+kullanıcı yeni alımın dışarıda kalmasını açıkça istediğinde o söz dondurulur.
+Miktarı zaten belli olan atamalara dokunulmaz (orada yeni alım nasılsa
+sayılmıyor), satış da atamayı dondurmaz (kırpma okuma anında zaten var).
+
+Bunun için `writeTransaction` atamayı ve pozisyon miktarını kayıttan **önce**
+okuyor: sabitlenecek miktar ancak orada bellidir, kayıt yazıldıktan sonra
+pozisyon zaten yeni adedi taşıyor.
+
 **Sunucu tarafı.** `schema.sql`'e `quantity` kolonu eklendi — `create table if
 not exists` zaten kurulmuş tabloda hiçbir şey yapmadığı için ayrı bir
 `add column if not exists` ile geliyor. **Kullanıcı `schema.sql`'i tekrar
 çalıştırır**, yoksa push 400 döner ve senkron sessizce durur.
 
-**Doğrulama.** 14 test (6'sı yeni miktar kuralı, 6'sı kayıt aritmetiği).
-Migration doğrulaması geçiyor; emülatörde mevcut veriyle çalıştı, çökme yok.
+**Doğrulama.** 18 test (miktar kuralı, kayıt aritmetiği ve dört "Hedefsiz"
+durumu). Migration doğrulaması geçiyor; emülatörde mevcut veriyle çalıştı.
+
+**Emülatörde asıl senaryo:** Çeyrek 15 adet, tamamı Ev'de. 1 tane "Hedefsiz"
+eklendi → toplam ₺941.544 → **₺951.381**, Ev hedefi **₺941.544'te kaldı**.
+Test kaydı geri alındı, iki rakam da eski haline döndü.
 
 ---
 
