@@ -48,6 +48,7 @@ Gerçek kullanımda çıkan altı şey. Hepsi emülatörde doğrulandı.
 | 17 | "Çevrimdışı" mantığı — fiyat ile bulut ayrıldı | ✅ **bitti + canlı doğrulandı** |
 | 18 | Açılış animasyonu tek akıcı harekete indi | ✅ **bitti** |
 | 19 | Hedef ekranı atanan kısmı gösteriyor, miktar sonradan değiştirilebiliyor | ✅ **bitti** |
+| 20 | Klavye alanı görünür kılıyor, alanlar arası geçiş var | ✅ **bitti + gerçek cihazda doğrulandı** |
 
 **Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
 Gmail SMTP + App Password ile açıldı (Resend domain istiyordu; domain alınmadı).
@@ -781,3 +782,50 @@ artığı diske yazılıp eşitlenmesin.
 kısmi sayılmaz, miktar pozisyona eşitse kısmi sayılmaz). Emülatörde: kaydırıcı
 10'a çekildi → liste "10 adet / 15 adet", tutar **₺98.388** (= ₺147.581 × 10/15),
 hedef %31 → %30; "Tümü" ile geri alındı → "15 adet", %31.
+
+---
+
+## 20 · Klavye: alanı görünür kılma ve alanlar arası geçiş ✅
+
+Gerçek cihazda test edildi — **emülatörde klavye açılmadığı için bu tur orada
+doğrulanamazdı** (emülatörde donanım klavyesi açıkken yazılım klavyesi hiç
+gelmiyor; `adb shell settings put secure show_ime_with_hard_keyboard 1` ile
+açılıyor ama gelen şey yüzen ince bir çubuk, gerçek inset'i temsil etmiyor).
+
+**Neydi — 1: alan yarım görünüyordu.** Ekleme sayfasında "Birim fiyat" alanına
+dokununca klavye açılıyor, sayfa küçülüyor ama alanın kutusu sayfanın sabit
+altlığı tarafından **kırpılıyordu**: rakam okunuyor, kutunun alt kenarı
+görünmüyordu. Sebep ince: Compose odaklanan alanı zaten görünür kılıyor, ama
+görünür kıldığı şey **metnin** sınırı — alanın çerçevesi, etiketi ve yardım
+satırı dışarıda kalabiliyor.
+
+**Neydi — 2: klavyenin eylem tuşu ölüydü.** Miktar → Birim fiyat gibi ard arda
+alanlarda tuş "Tamam" diyordu ve hiçbir şey yapmıyordu; kullanıcı klavyeyi
+kapatıp ikinci alana elle dokunuyordu.
+
+**Ne yapıldı.**
+
+- `Modifier.bringFieldIntoView()` — alanın **kutusuna** konur, girişin kendisine
+  değil. `onFocusChanged` kapsayıcıya konduğu için `hasFocus` ile alt ağaçtaki
+  girişin odağını da görür; her giriş bileşeninin ayrı ayrı bilmesi gerekmez.
+  Klavye açılırken görünür alan küçülmeye devam ettiğinden istek **iki kez**
+  yapılır (ilki eski ölçüye göre kaydırıyordu).
+- `defaultKeyboardActions()` — "İleri" sonraki alana, "Tamam" klavyeyi kapatır.
+  `KefeTextField`, `KefeAmountField`, sheet'lerin kendi giriş bileşenleri ve
+  `GoalEditSheet` hepsi bunu kullanıyor.
+- Miktar alanı artık `imeAction = Next`.
+
+**Yol boyunca çıkan tuzak — `moveFocus(Next)` yetmedi.** Miktar satırında
+alandan sonra "−" ve "+" düğmeleri var ve gezinme sırası önce onlara uğruyor:
+"İleri"ye basınca odak fiyat alanına değil düğmeye gidiyordu (emülatörde
+`KEYCODE_ENTER` ile yakalandı — alan odağı kaybediyor, fiyat alanı almıyordu).
+Miktar → birim fiyat zinciri bu yüzden `FocusRequester` ile **açık** kuruldu.
+
+Ayrıca `KefeAmountField`'a hiç klavye türü verilmemişti: miktar alanı tam metin
+klavyesi açıyordu.
+
+**Doğrulama (gerçek cihaz, Galaxy S10+).** Birim fiyat alanına dokunuldu →
+kutu **tamamıyla** görünür, altlığın hemen üstünde (öncesinde ortadan
+kırpılıyordu). Miktar alanına dokunuldu → klavyede **"İleri"** yazıyor;
+basınca odak birim fiyat alanına geçti, klavye açık kaldı ve alan görünür
+konuma kaydı.
