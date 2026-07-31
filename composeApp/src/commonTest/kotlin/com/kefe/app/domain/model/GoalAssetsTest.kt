@@ -99,7 +99,43 @@ class GoalAssetsTest {
         val assignments = mapOf("altin" whollyIn "ev", "euro" whollyIn "araba")
         val mine = assetsOf(ev, positions, assignments)
 
-        assertEquals(listOf("altin"), mine.map { it.id })
+        assertEquals(listOf("altin"), mine.map { it.position.id })
+    }
+
+    @Test
+    fun listeAtananKismiTasir() {
+        // EKRAN YALAN SOYLEMESIN. Hedefe 15 ceyrek atanmisken liste "16 adet"
+        // ve varligin tam degerini yaziyordu; gosterilen sey hedefin saydigi
+        // seyden baskaydi.
+        val ceyrek = position("ceyrek", value = 160_000.0, quantity = 16.0)
+        val assignments = mapOf("ceyrek".partlyIn("ev", 15.0))
+
+        val asset = assetsOf(ev, listOf(ceyrek), assignments).single()
+
+        assertEquals(15.0, asset.quantity, EPS)
+        assertEquals(150_000.0, asset.value, EPS)
+        // Kismi: ekran "15 / 16" yazmali.
+        assertEquals(false, asset.coversWholePosition)
+    }
+
+    @Test
+    fun tumVarlikAtamasiKismiSayilmaz() {
+        val ceyrek = position("ceyrek", value = 160_000.0, quantity = 16.0)
+        val assignments = mapOf("ceyrek" whollyIn "ev")
+
+        val asset = assetsOf(ev, listOf(ceyrek), assignments).single()
+
+        assertEquals(16.0, asset.quantity, EPS)
+        assertEquals(true, asset.coversWholePosition)
+    }
+
+    @Test
+    fun miktarPozisyonaEsitseKismiSayilmaz() {
+        // 16 atanmis, 16 var: "16 / 16" yazmak gurultu olurdu.
+        val ceyrek = position("ceyrek", value = 160_000.0, quantity = 16.0)
+        val assignments = mapOf("ceyrek".partlyIn("ev", 16.0))
+
+        assertEquals(true, assetsOf(ev, listOf(ceyrek), assignments).single().coversWholePosition)
     }
 
     @Test
@@ -260,6 +296,9 @@ class GoalAssetsTest {
         val ceyrek = position("ceyrek", value = 110_000.0, quantity = 11.0)
         val assignments = mapOf("ceyrek".partlyIn("ev", 10.0))
 
-        assertEquals(listOf("ceyrek"), assetsOf(ev, listOf(ceyrek), assignments).map { it.id })
+        assertEquals(
+            listOf("ceyrek"),
+            assetsOf(ev, listOf(ceyrek), assignments).map { it.position.id },
+        )
     }
 }

@@ -9,8 +9,10 @@ import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.MonthlyContribution
 import com.kefe.app.domain.model.Position
+import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.assetsOf
+import com.kefe.app.domain.model.effectiveQuantity
 import com.kefe.app.domain.model.goalMilestones
 import com.kefe.app.domain.model.goalProjection
 import com.kefe.app.domain.model.goalWealth
@@ -23,6 +25,7 @@ import com.kefe.app.domain.model.otherGoalOf
 import com.kefe.app.domain.model.plusMonths
 import com.kefe.app.domain.model.progress
 import com.kefe.app.domain.repository.PortfolioRepository
+import kotlin.math.round
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -81,10 +84,47 @@ class GoalDetailViewModel(
             // Atanmisi tekrar secmek atamayi KALDIRIR - ayni dokunusla geri
             // alinabilmesi icin ayri bir "kaldir" dugmesi yok.
             is GoalDetailIntent.ToggleAsset -> viewModelScope.launch {
-                val alreadyMine = _state.value.assignedAssets.any { it.id == intent.positionId }
+                val alreadyMine = _state.value.assignedAssets
+                    .any { it.position.id == intent.positionId }
                 portfolioRepository.assignPositionToGoal(
                     positionId = intent.positionId,
                     goalId = if (alreadyMine) null else goalId,
+                    // Isaretlemek TUMUNU atar: kutuya dokunan biri "bu varlik bu
+                    // hedefi karsilasin" diyor, bir miktar pazarligi yapmiyor.
+                    // Miktar isteyen kaydiriciyi kullanir.
+                    quantity = GoalAssignment.WholePosition,
+                )
+            }
+
+            is GoalDetailIntent.SetAssetQuantity -> viewModelScope.launch {
+                val position = _state.value.assignableAssets
+                    .firstOrNull { it.position.id == intent.positionId }
+                    ?.position
+                    ?: return@launch
+                // Sifir = atamayi kaldir. Ayri bir "kaldir" yolu daha acmak
+                // yerine kaydiricinin sol ucu bu isi gorur.
+                //
+                // Adet/pay TAM SAYIYA yuvarlanir: kaydiricinin kayan nokta
+                // aritmetigi 9,999999 uretebiliyor ve o sayi diske yazilip
+                // esitleniyor. "10 adet" yazan ekranin arkasinda baska bir sayi
+                // durmasin.
+                val raw = intent.quantity.coerceIn(0.0, position.quantity)
+                val quantity = when (position.unit) {
+                    QuantityUnit.Piece, QuantityUnit.Share -> round(raw)
+                    else -> raw
+                }
+                portfolioRepository.assignPositionToGoal(
+                    positionId = intent.positionId,
+                    goalId = if (quantity <= 0.0) null else goalId,
+                    quantity = quantity,
+                )
+            }
+
+            is GoalDetailIntent.AssignWholeAsset -> viewModelScope.launch {
+                portfolioRepository.assignPositionToGoal(
+                    positionId = intent.positionId,
+                    goalId = goalId,
+                    quantity = GoalAssignment.WholePosition,
                 )
             }
 
@@ -163,11 +203,14 @@ class GoalDetailViewModel(
             // Secici: her varlik, varsa baska hedefin adiyla. Secmek TASIR;
             // kullanici bunu okumadan yapmamali.
             assignableAssets = positions.map { position ->
+                val mine = assignments[position.id]?.takeIf { it.goalId == goal.id }
                 AssignableAsset(
                     position = position,
-                    assignedToThis = assignments[position.id]?.goalId == goal.id,
+                    assignedToThis = mine != null,
                     otherGoalName = otherGoalOf(position.id, goal, assignments)
                         ?.let { otherId -> goalNames[otherId] },
+                    assignedQuantity = mine?.effectiveQuantity(position) ?: 0.0,
+                    coversWholePosition = mine?.isWhole == true,
                 )
             },
         )

@@ -49,6 +49,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.formatMonthYear
 import com.kefe.app.domain.model.monthLabel
@@ -61,8 +62,8 @@ import com.kefe.app.ui.charts.Point
 import com.kefe.app.ui.components.KefeCard
 import com.kefe.app.ui.components.KefeEmptyState
 import com.kefe.app.ui.components.KefeHairline
-import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeIconButton
+import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeSlider
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.quantityLabel
@@ -271,8 +272,9 @@ private fun AssignedAssetsCard(
                 color = c.onSurfaceMuted,
             )
         } else {
-            shown.forEachIndexed { index, position ->
+            shown.forEachIndexed { index, asset ->
                 if (index > 0) KefeHairline()
+                val position = asset.position
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = Space.x10),
                     verticalAlignment = Alignment.CenterVertically,
@@ -292,10 +294,18 @@ private fun AssignedAssetsCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        // Miktar da yazilir: "₺19.587" tek basina kac ceyrek
-                        // oldugunu soylemiyor.
+                        // ATANAN kisim yazilir, varligin tamami degil. Once
+                        // pozisyonun kendi miktari yaziliyordu: hedefe 15 ceyrek
+                        // atanmisken liste "16 adet" diyor, hemen yanindaki
+                        // tutar da 16'nin degerini gosteriyordu - ekran hedefin
+                        // saydigi seyden BASKA bir sey anlatiyordu.
                         Text(
-                            text = position.quantityLabel(),
+                            text = if (asset.coversWholePosition) {
+                                position.quantityLabel()
+                            } else {
+                                position.shortQuantityLabel(asset.quantity) + " / " +
+                                    position.shortQuantityLabel()
+                            },
                             style = t.micro,
                             color = c.onSurfaceMuted,
                             maxLines = 1,
@@ -304,7 +314,7 @@ private fun AssignedAssetsCard(
                     }
                     Spacer(Modifier.width(Space.x8))
                     Text(
-                        text = Money.tl(position.value),
+                        text = Money.tl(asset.value),
                         style = t.body.tabular(),
                         color = c.onSurface,
                         maxLines = 1,
@@ -376,66 +386,24 @@ private fun AssetPickerSheet(
             Text("Varlık seç", style = t.h2, color = c.onSurface)
             Spacer(Modifier.height(Space.x8))
             Text(
-                "Seçilenler bu hedefe sayılır. Hiçbiri seçilmezse hedef %0 kalır.",
+                "Seçilenler bu hedefe sayılır. Bir varlığın yalnız bir kısmını " +
+                    "da verebilirsin. Hiçbiri seçilmezse hedef %0 kalır.",
                 style = t.caption,
                 color = c.onSurfaceMuted,
             )
             Spacer(Modifier.height(Space.x14))
 
-            state.assignableAssets.forEachIndexed { index, item ->
-                if (index > 0) KefeHairline()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(role = Role.Checkbox) {
-                            onIntent(GoalDetailIntent.ToggleAsset(item.position.id))
-                        }
-                        .padding(vertical = Space.x12),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        Modifier
-                            .size(20.dp)
-                            .clip(KefeShapes.boxSmall)
-                            .background(if (item.assignedToThis) c.accent else Color.Transparent)
-                            .border(
-                                width = Sizes.hairline,
-                                color = if (item.assignedToThis) c.accent else c.onSurfaceMuted,
-                                shape = KefeShapes.boxSmall,
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (item.assignedToThis) {
-                            KefeIcon(KefeIcons.Check, null, size = 14.dp, tint = c.onAccent)
-                        }
-                    }
-                    Spacer(Modifier.width(Space.x12))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = item.position.name + " · " +
-                                item.position.shortQuantityLabel(),
-                            style = t.body,
-                            color = c.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        item.otherGoalName?.let { other ->
-                            Text(
-                                text = "$other hedefinde — seçersen buraya taşınır",
-                                style = t.micro,
-                                color = c.onSurfaceMuted,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(Space.x8))
-                    Text(
-                        text = Money.tl(item.position.value),
-                        style = t.caption.tabular(),
-                        color = c.onSurfaceMuted,
-                        maxLines = 1,
-                    )
+            // Liste KAYDIRILIR. Miktar secimi gelince her satir uce katlandi ve
+            // bes varlikta pencere tasti: son satir kirpiliyor, "Bitti" ekran
+            // disinda kaliyordu. Baslik ve buton sabit, yalniz liste kayar.
+            Column(
+                Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                state.assignableAssets.forEachIndexed { index, item ->
+                    if (index > 0) KefeHairline()
+                    AssignableAssetRow(item, onIntent)
                 }
             }
 
@@ -447,6 +415,145 @@ private fun AssetPickerSheet(
             )
         }
     }
+}
+
+/**
+ * Secicideki tek varlik satiri.
+ *
+ * Kutu ATANDI/ATANMADI'yi tasir; miktar secimi ancak atanmisken ve varlik
+ * bolunebilirken acilir. Once yalniz kutu vardi ve atama hepsi-ya-hicbiriydi:
+ * "gecen hafta hedefsiz aldigim 1 ceyregi de Ev'e alayim" diyen kullanicinin
+ * elinde hicbir sey yoktu.
+ */
+@Composable
+private fun AssignableAssetRow(
+    item: AssignableAsset,
+    onIntent: (GoalDetailIntent) -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    val position = item.position
+
+    Column(Modifier.fillMaxWidth().padding(vertical = Space.x12)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Checkbox) {
+                    onIntent(GoalDetailIntent.ToggleAsset(position.id))
+                },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .size(20.dp)
+                    .clip(KefeShapes.boxSmall)
+                    .background(if (item.assignedToThis) c.accent else Color.Transparent)
+                    .border(
+                        width = Sizes.hairline,
+                        color = if (item.assignedToThis) c.accent else c.onSurfaceMuted,
+                        shape = KefeShapes.boxSmall,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (item.assignedToThis) {
+                    KefeIcon(KefeIcons.Check, null, size = 14.dp, tint = c.onAccent)
+                }
+            }
+            Spacer(Modifier.width(Space.x12))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = position.name + " · " + position.shortQuantityLabel(),
+                    style = t.body,
+                    color = c.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                item.otherGoalName?.let { other ->
+                    Text(
+                        text = "$other hedefinde — seçersen buraya taşınır",
+                        style = t.micro,
+                        color = c.onSurfaceMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Spacer(Modifier.width(Space.x8))
+            Text(
+                text = Money.tl(position.value),
+                style = t.caption.tabular(),
+                color = c.onSurfaceMuted,
+                maxLines = 1,
+            )
+        }
+
+        if (!item.assignedToThis || !item.isDivisible) return@Column
+
+        Spacer(Modifier.height(Space.x10))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Bu hedefe",
+                style = t.micro,
+                color = c.onSurfaceMuted,
+            )
+            Spacer(Modifier.width(Space.x8))
+            Text(
+                text = position.shortQuantityLabel(item.assignedQuantity),
+                style = t.caption.tabular(),
+                color = c.onSurface,
+            )
+            Spacer(Modifier.weight(1f))
+            // "Tümü" SABIT BIR MIKTAR DEGILDIR: ileride alinacaklari da kapsar.
+            // Kaydiriciyi sonuna surukleyip birakmakla ayni sey degil, o yuzden
+            // ayri bir secenek olarak duruyor.
+            WholeChip(
+                selected = item.coversWholePosition,
+                onClick = { onIntent(GoalDetailIntent.AssignWholeAsset(position.id)) },
+            )
+        }
+        Spacer(Modifier.height(2.dp))
+        KefeSlider(
+            value = item.assignedQuantity.toFloat(),
+            onValueChange = {
+                onIntent(GoalDetailIntent.SetAssetQuantity(position.id, it.toDouble()))
+            },
+            valueRange = 0f..item.maxQuantity.toFloat(),
+            // Adet ve pay tam sayidir; kaydirici arada bir yerde durmamali.
+            // Gram ve nakit surekli - orada adim yok.
+            //
+            // [KefeSlider]'da `steps` ARALIK sayisidir, Compose'daki gibi
+            // "aradaki nokta" sayisi degil (senaryo kaydiricisi: 30-120 arasi
+            // 5'erli = 18). Bir eksik verilince 15 adetlik varlik 15/14'luk
+            // adimlara oturuyor, kullanici 10'u secemiyor (9,64 yaziliyor) ve
+            // etiket bunu "10 adet" diye yuvarlayip gizliyordu.
+            steps = when (position.unit) {
+                QuantityUnit.Piece, QuantityUnit.Share -> item.maxQuantity.toInt()
+                else -> 0
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/** "Tümü" secenegi - miktar sabitlemeyi birakir. */
+@Composable
+private fun WholeChip(selected: Boolean, onClick: () -> Unit) {
+    val c = KefeTheme.colors
+    Text(
+        text = "Tümü",
+        style = KefeTheme.type.micro,
+        color = if (selected) c.onAccent else c.accent,
+        modifier = Modifier
+            .clip(KefeShapes.button)
+            .background(if (selected) c.accent else Color.Transparent)
+            .border(
+                width = Sizes.hairline,
+                color = if (selected) c.accent else c.outline,
+                shape = KefeShapes.button,
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = Space.x12, vertical = 6.dp),
+    )
 }
 
 // --- Durum seridi ----------------------------------------------------------
