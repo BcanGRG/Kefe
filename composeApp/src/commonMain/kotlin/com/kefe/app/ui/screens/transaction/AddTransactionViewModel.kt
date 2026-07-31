@@ -178,16 +178,20 @@ class AddTransactionViewModel(
 
             is AddTransactionIntent.EditTransaction -> loadForEdit(intent.transactionId)
 
-            is AddTransactionIntent.StartNew -> update(
+            is AddTransactionIntent.StartNew -> {
                 // Tasinanlar yalniz sheet'e ait olmayanlar: kisayol ve es adi
                 // portfoyden gelir, formun onceki icerigiyle ilgisi yok.
-                AddTransactionUiState(
+                val fresh = AddTransactionUiState(
                     date = clock.today(),
                     side = intent.side,
                     lastAdded = s.lastAdded,
                     partnerName = s.partnerName,
                 )
-            )
+                val position = intent.positionId?.let { id ->
+                    positions.firstOrNull { it.id == id }
+                }
+                update(if (position == null) fresh else fresh.forPosition(position))
+            }
         }
     }
 
@@ -248,6 +252,24 @@ class AddTransactionViewModel(
             }
         }
     }
+
+    /**
+     * Formu VERILEN VARLIK icin hazirlar ve dogrudan 2. adima gecer.
+     *
+     * Varlik detayindan "Alım/Satış Ekle" denince kullanici hangi varlikta
+     * oldugunu zaten soylemis oluyor; onu bir kez daha secmek gereksiz bir adim.
+     * Alanlar [loadForEdit] ile ayni yoldan cozulur - fon ve doviz kimligi
+     * pozisyon kimliginden turer, yoksa kayit yeni bir pozisyona yazilir.
+     */
+    private fun AddTransactionUiState.forPosition(position: Position): AddTransactionUiState =
+        copy(
+            assetClass = position.assetClass,
+            selectedSubtype = position.subtype ?: selectedSubtype,
+            karat = position.karat ?: karat,
+            selectedFundKey = position.id.removePrefix("pos_")
+                .takeIf { position.assetClass == AssetClass.Fund },
+            currency = Currency.fromPriceKey(position.id.removePrefix("pos_")) ?: currency,
+        ).toAmountStep().withCurrentGoal()
 
     /**
      * Varlik bir pozisyonla eslesiyorsa hedef seciciyi o pozisyonun MEVCUT

@@ -96,7 +96,7 @@ class MarketViewModel(
                 // Alan bos degil mevcut fiyatla acilir: kullanici genelde kucuk bir
                 // duzeltme yapar, sifirdan yazmaz.
                 input = price?.let {
-                    Money.number(it.ask, it.assetClass.priceDecimals())
+                    Money.number(it.ask, it.assetClass.priceDecimals(it.ask))
                 }.orEmpty(),
                 isManual = price?.isManual == true,
             ),
@@ -170,12 +170,13 @@ private fun List<Price>.toSections(): List<MarketSection> =
     }
 
 private fun Price.toRow(): MarketRow {
-    val decimals = assetClass.priceDecimals()
     return MarketRow(
         assetKey = assetKey,
         name = displayName(assetKey, label),
-        bidText = bid?.let { Money.tl(it, decimals = decimals) } ?: "—",
-        askText = Money.tl(ask, decimals = decimals),
+        // Alis ve satis AYRI hesaplanir: makas kurusun altinda olabiliyor ve
+        // tek bir hane sayisi ikisinden birini kirpiyor.
+        bidText = bid?.let { Money.tl(it, decimals = assetClass.priceDecimals(it)) } ?: "—",
+        askText = Money.tl(ask, decimals = assetClass.priceDecimals(ask)),
         changePercent = changePercent,
         sourceLine = source.label() + " · " + timestamp,
         isManual = isManual,

@@ -2,6 +2,8 @@ package com.kefe.app.ui.screens.market
 
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.repository.PriceFreshness
+import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.maxPriceDecimals
 
 /**
  * Piyasa tablosunun tek satiri. Rakamlar burada bicimlenir: ekran yalniz cizer,
@@ -62,11 +64,14 @@ sealed interface MarketIntent {
  * Kurus gosterimi varlik sinifina baglidir: altin/gumus tam TL ile,
  * doviz ve fon iki hane ile yazilir - tasarimdaki tablo boyle.
  */
-fun AssetClass.priceDecimals(): Int = when (this) {
-    AssetClass.Fx, AssetClass.Fund -> 2
-    // Altin ve gumus de iki ondalikla: kaynak dakikada bir guncelleniyor ve
-    // hareket cogu zaman kurus mertebesinde. Tam liraya yuvarlandiginda tablo
-    // saatlerce ayni rakami gosteriyor, fiyat donmus saniliyordu.
-    AssetClass.Gold, AssetClass.Silver -> 2
+fun AssetClass.priceDecimals(value: Double): Int = when (this) {
     AssetClass.Cash -> 0
+    // KURUS TABANI: kaynak dakikada bir guncelleniyor ve hareket cogu zaman
+    // kurus mertebesinde. Tam liraya yuvarlandiginda tablo saatlerce ayni
+    // rakami gosteriyor, fiyat donmus saniliyordu - o yuzden en az iki hane.
+    //
+    // Ust sinir varlik sinifindan gelir ve gercek hane sayisi DEGERDEN turer:
+    // fon payi alti haneye kadar iner (₺3,714523), iki haneye sabitlemek
+    // kullanicinin gordugu fiyati kirpiyordu.
+    else -> Money.decimals(value, maxPriceDecimals(), min = 2)
 }
