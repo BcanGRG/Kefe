@@ -6,7 +6,9 @@ import com.kefe.app.data.remote.LivePriceRemoteDataSource
 import com.kefe.app.data.remote.PriceRemoteDataSource
 import com.kefe.app.data.remote.AuthApi
 import com.kefe.app.data.remote.PostgrestApi
+import com.kefe.app.data.remote.RealtimeApi
 import com.kefe.app.data.remote.SupabaseAuthApi
+import com.kefe.app.data.remote.SupabaseRealtimeApi
 import com.kefe.app.data.remote.SupabasePostgrestApi
 import com.kefe.app.data.remote.TcmbApi
 import com.kefe.app.data.remote.TefasApi
@@ -99,11 +101,13 @@ val appModule = module {
     // girisliyken yerel degisimleri dinler; PostgrestApi kullanicinin jetonuyla
     // upsert eder (RLS o hesaba kilitler).
     single<PostgrestApi> { SupabasePostgrestApi(get()) }
+    // Gercek zamanli: sunucudaki degisikligi soketten ogrenip pull tetikler.
+    single<RealtimeApi> { SupabaseRealtimeApi(get(), get()) }
     single { SyncLocalSource(get()) }
     single { SyncLocalSink(get()) }
     single { PushEngine(get(), get(), get(), get(), get()) }
     single { PullEngine(get(), get(), get()) }
-    single { SyncCoordinator(get(), get(), get(), get()) }
+    single { SyncCoordinator(get(), get(), get(), get(), get()) }
 
     // Dosya paylasimi/secimi platforma iner; Android tarafi Activity ister.
     single { FileTransfer() }
@@ -111,6 +115,8 @@ val appModule = module {
     // Cihaz kilidi. Masaustunde karsiligi yok; oradaki actual Unsupported doner.
     single { BiometricGate() }
 
+    // SummaryViewModel ve AddTransactionViewModel BULUT durumunu okur (senkron
+    // cipi ve kaydin "Bekliyor" damgasi) - o yuzden kordinatoru de alirlar.
     viewModelOf(::SummaryViewModel)
     viewModelOf(::AssetsViewModel)
     viewModelOf(::GoalsViewModel)

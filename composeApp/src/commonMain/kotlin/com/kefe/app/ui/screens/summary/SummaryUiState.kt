@@ -1,11 +1,12 @@
 package com.kefe.app.ui.screens.summary
 
-import com.kefe.app.domain.model.AllocationSlice
-import com.kefe.app.domain.model.PortfolioTotals
-import com.kefe.app.domain.model.TopMover
+import com.kefe.app.data.sync.CloudState
 import com.kefe.app.domain.model.ActivityEvent
+import com.kefe.app.domain.model.AllocationSlice
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.Member
+import com.kefe.app.domain.model.PortfolioTotals
+import com.kefe.app.domain.model.TopMover
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.layout.KefeMarketRow
@@ -62,8 +63,11 @@ data class SummaryUiState(
     val rates: UnitRates = UnitRates(1.0, 1.0, 1.0),
     val masked: Boolean = false,
     val periodIndex: Int = 3,
+    /** FIYAT tazeligi - "son bilinen fiyatlar" seridini bu surer. */
     val freshness: PriceFreshness = PriceFreshness.Fresh,
     val pricesUpdatedAt: String = "",
+    /** ESITLEME durumu - basliktaki cipi bu surer. Fiyatla ilgisi yok. */
+    val cloudState: CloudState = CloudState.Off,
     /**
      * Ana hedefin karsiligi. Hedefe varlik atanmissa TOPLAM birikimden farklidir;
      * o yuzden ayri tutulur.

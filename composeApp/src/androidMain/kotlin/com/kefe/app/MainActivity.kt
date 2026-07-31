@@ -33,10 +33,23 @@ class MainActivity : FragmentActivity() {
         var ready = false
         val splash = installSplashScreen()
         splash.setKeepOnScreenCondition { !ready }
-        // Sistemin kendi cikis animasyonu atilir: hemen ardindan Compose'un
-        // marka animasyonu basliyor, ikisi ust uste binince goz iki ayri
-        // hareket goruyor.
-        splash.setOnExitAnimationListener { it.remove() }
+        // Sistem penceresi KESILEREK degil SOLDURULARAK birakilir.
+        //
+        // Once dogrudan remove() cagriliyordu: sistemin kendi zoom-out'u Compose'un
+        // marka animasyonuyla cakisiyordu, dogru. Ama sert kesme de bedava degildi -
+        // altta zaten cizili duran Compose isareti bir anda beliriyor ve goz bunu
+        // "ikinci bir ekran acildi" diye okuyordu. Solma bir HAREKET degil bir
+        // gecistir: iki ayri hareket olusmaz, sicrama da kalmaz. Compose isareti
+        // bu sirada zaten sistem ikonunun boyundan kendi boyuna iniyor
+        // (bkz. KefeSplash.HandoffScale), yani devir teslim tek bir surekli
+        // hareket olarak gorunur.
+        splash.setOnExitAnimationListener { provider ->
+            provider.view.animate()
+                .alpha(0f)
+                .setDuration(SplashHandoffMillis)
+                .withEndAction { provider.remove() }
+                .start()
+        }
 
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -47,6 +60,12 @@ class MainActivity : FragmentActivity() {
         AndroidFileBridge.attach(this, openBackup)
         setContent { App(onReady = { ready = true }) }
     }
+
+    /**
+     * Sistem penceresinin solma suresi. Kisa: bu bir gosteri degil, altta zaten
+     * oynayan animasyona gecis. Uzatmak soguk acilisi gozle gorulur geciktirir.
+     */
+    private val SplashHandoffMillis = 260L
 
     override fun onDestroy() {
         // Activity referansi birakilir; tutulursa ekran her dondugunde bir

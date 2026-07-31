@@ -506,19 +506,27 @@ private fun RingCard(
         ),
     ) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            // Kasede YALNIZ yuzde. Tutar da icerideyken buyuk hedeflerde tam
+            // yazim sigmiyor, kisaltmaya dusuyordu ("₺946,6B / ₺3,0M") - halkanin
+            // en cok bakilan rakami okunmasi en zor olan haline geliyordu.
             KefeGoalRing(
                 progress = state.progress,
                 centerPercent = Money.ratioOf(state.progress.toDouble()),
-                centerAmount = "${Money.tl(state.currentWealth)} / ${Money.tl(goal.amount)}",
-                // Buyuk hedeflerde tam yazim kaseye sigmaz; tam rakam zaten
-                // hemen altindaki "KALAN" kartinda duruyor.
-                centerAmountShort = "₺${Money.compact(state.currentWealth, 1)} / " +
-                    "₺${Money.compact(goal.amount, 1)}",
                 color = if (state.exceeded) c.positive else c.accent,
             )
         }
 
-        Spacer(Modifier.height(6.dp))
+        // Tutar halkanin ALTINDA, tam yazimla: burada genislik sinirli degil.
+        Text(
+            text = "${Money.tl(state.currentWealth)} / ${Money.tl(goal.amount)}",
+            style = KefeTheme.type.body.tabular(),
+            color = c.onSurfaceMuted,
+            maxLines = 1,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(Modifier.height(Space.x12))
         Row(horizontalArrangement = Arrangement.spacedBy(Space.x10)) {
             SunkenInfoBox(
                 label = if (state.exceeded) "Fazla" else "Kalan",

@@ -18,8 +18,17 @@ enum class AssetSort(val label: String) {
 data class AssetGroup(
     val assetClass: AssetClass,
     val total: Double,
-    /** Toplam birikim icindeki pay - yuzde cinsinden (58.0). */
-    val percent: Double,
+    /**
+     * Bu grubun TL kar/zarari (deger - maliyet).
+     *
+     * Basligin sag rakami once toplam icindeki PAY idi (%95,4). Iki sorun vardi:
+     * pay zaten Ozet'teki "Ne kadari nerede" halkasinda duruyordu, ve yuzdeyle
+     * arasi iyi olmayan biri icin "ne kadar kazandik" sorusunun karsiligi
+     * ekranin hicbir yerinde yoktu - yalniz varlik detayina girince goruluyordu.
+     */
+    val profit: Double,
+    /** Kar/zararin maliyete orani - yuzde cinsinden (21.6). */
+    val profitPercent: Double,
     val positions: List<Position>,
 )
 

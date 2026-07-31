@@ -37,3 +37,8 @@ Pods/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# graphify - kod grafigi kaynaktan URETILIR (graphify update .). graph.json tek
+# basina birkac MB ve her derlemede degisiyor; depoya girerse her PR anlamsiz
+# bir diff tasir.
+graphify-out/

@@ -9,12 +9,25 @@
 --   3. positionId PRIMARY KEY oldugu icin "bir varlik en fazla bir hedefe"
 --      kurali SEMADA durur, kodun hatirlamasi gereken bir sey degil.
 --
--- Bolme (3 ceyregin 2'si Ev'e) bilincli olarak YOK: miktar tasiyan bir atama,
--- satis olunca hangi hedeften dusuruleceginden fotograflarin nasil bolunecegine
--- kadar ayri bir hesap defteri gerektirir. Once tam varlik.
+-- BOLME (11 ceyregin 10'u Ev'e) VAR: `quantity`.
+--
+-- Once atama tam varliktiydi ve pratikte su oluyordu: Ev hedefinde 10 ceyrek
+-- varken 1 tane "hedefsiz" eklemek, seciciyi Hedefsiz'e aldigi icin atamayi
+-- komple siliyor ve 11 ceyregin HEPSI Ev'den cikiyordu. Kullanicinin
+-- bekledigi "10'u Ev'de kalsin" ancak miktar tasiyan bir atamayla anlatilabilir.
+--
+-- quantity = -1 : TUM VARLIK (eski davranis). Mevcut satirlar boyle kalir ve
+--   hedef detayindaki "Varlik sec" listesi de boyle atar - o ekranin sozu
+--   "bu varligin tamami bu hedefi karsilar".
+-- quantity >= 0 : o kadar adet/gram bu hedefe sayilir.
+--
+-- Miktar POZISYONUN MIKTARIYLA SINIRLANIR (bkz. goalWealth): 10 atanmisken 6
+-- tanesi satilirsa hedef 6 sayar. Boylece satista ayri bir defter tutmaya
+-- gerek kalmaz - kirpma okuma aninda yapilir.
 CREATE TABLE goal_assets (
     positionId TEXT NOT NULL PRIMARY KEY REFERENCES positions(id) ON DELETE CASCADE,
     goalId TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+    quantity REAL NOT NULL DEFAULT -1.0,
     updatedAt INTEGER NOT NULL DEFAULT 0,
     deletedAt INTEGER
 );
@@ -40,12 +53,18 @@ ORDER BY updatedAt;
 
 -- Pull: sunucudan gelen atama. goal_assets bir YAPRAK, OR REPLACE guvenli.
 applyGoalAssetPull:
-INSERT OR REPLACE INTO goal_assets(positionId, goalId, updatedAt, deletedAt)
-VALUES (:positionId, :goalId, :updatedAt, :deletedAt);
+INSERT OR REPLACE INTO goal_assets(positionId, goalId, quantity, updatedAt, deletedAt)
+VALUES (:positionId, :goalId, :quantity, :updatedAt, :deletedAt);
 
 assignPositionToGoal:
-INSERT OR REPLACE INTO goal_assets(positionId, goalId, updatedAt, deletedAt)
-VALUES (:positionId, :goalId, :updatedAt, NULL);
+INSERT OR REPLACE INTO goal_assets(positionId, goalId, quantity, updatedAt, deletedAt)
+VALUES (:positionId, :goalId, :quantity, :updatedAt, NULL);
+
+-- Tek satir - "bu varligin mevcut atamasi ne" sorusunun kayit anindaki cevabi.
+selectGoalAssetByPosition:
+SELECT *
+FROM goal_assets
+WHERE positionId = :positionId AND deletedAt IS NULL;
 
 clearPositionAssignment:
 UPDATE goal_assets

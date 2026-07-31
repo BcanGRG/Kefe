@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.DailySnapshot
 import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.MonthlyContribution
 import com.kefe.app.domain.model.Position
@@ -122,7 +123,7 @@ class GoalDetailViewModel(
         positions: List<Position>,
         snapshots: List<DailySnapshot>,
         transactions: List<Transaction>,
-        assignments: Map<String, String>,
+        assignments: Map<String, GoalAssignment>,
     ): GoalDetailUiState {
         val previous = _state.value
         // Hedefe varlik atanmissa yalniz onlar sayilir; atanmamissa tum birikim.
@@ -164,7 +165,7 @@ class GoalDetailViewModel(
             assignableAssets = positions.map { position ->
                 AssignableAsset(
                     position = position,
-                    assignedToThis = assignments[position.id] == goal.id,
+                    assignedToThis = assignments[position.id]?.goalId == goal.id,
                     otherGoalName = otherGoalOf(position.id, goal, assignments)
                         ?.let { otherId -> goalNames[otherId] },
                 )

@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
@@ -191,6 +192,14 @@ private fun KefeApp(
     // kendi surec-omurlu scope'unda calisir, start() idempotent (bir kez baslar).
     val syncCoordinator = koinInject<SyncCoordinator>()
     LaunchedEffect(Unit) { syncCoordinator.start() }
+
+    // Gercek zamanli soket YALNIZ on planda acik kalir - arka planda Phoenix
+    // heartbeat'i kullanicinin bakmadigi bir ekran icin pil yakardi. Geri
+    // donuste kordinator kacirilanlari tek pull ile toparlar.
+    LifecycleResumeEffect(Unit) {
+        syncCoordinator.setForeground(true)
+        onPauseOrDispose { syncCoordinator.setForeground(false) }
+    }
 
     // Marka animasyonu YALNIZ SOGUK ACILISTA oynar. Bayrak surec omurludur:
     // arka plandan geri donuste uygulama hemen gorunur, cunku her gecis icin iki

@@ -69,7 +69,21 @@ class SqlDelightPriceRepository(
         fetched,
         lastRefreshFailed,
     ) { cached, manual, session, failed ->
-        val base = session ?: cached.map { it.toDomain() }
+        // Oturumdaki cekim onbellegin UZERINE BINDIRILIR, yerine gecmez.
+        //
+        // Once `session ?: cached` idi ve tek bir kaynagin dusmesi yenilemenin
+        // tamamini dusurdugu icin sorun cikmiyordu. Kaynaklar birbirinden
+        // bagimsiz hale gelince (bkz. LivePriceRemoteDataSource) kismi bir cekim
+        // tabloyu KIRPIYORDU: serbest piyasa tokezleyip doviz TCMB'den gelince
+        // ekranda yalniz doviz kaliyor, altin satirlari tahtadan dusuyor ve
+        // toplam birikim bir anda ucuruma iniyordu (₺946k -> ₺693k).
+        val cachedPrices = cached.map { it.toDomain() }
+        val base = if (session == null) {
+            cachedPrices
+        } else {
+            val fresh = session.associateBy { it.assetKey }
+            cachedPrices.filterNot { it.assetKey in fresh } + session
+        }
         val overrides = manual.associate { it.assetKey to it.price }
         val merged = base.map { price ->
             val override = overrides[price.assetKey]

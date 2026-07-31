@@ -205,6 +205,7 @@ class SyncLocalSink(
             database.goalAssetQueries.applyGoalAssetPull(
                 positionId = r.positionId,
                 goalId = r.goalId,
+                quantity = r.quantity,
                 updatedAt = r.updatedAt,
                 deletedAt = r.deletedAt,
             )

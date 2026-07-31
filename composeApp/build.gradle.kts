@@ -106,6 +106,7 @@ kotlin {
             // navigation3-ui, navigation3-runtime'i gecisli getirir; ayri artifact yok.
             implementation(libs.navigation3.ui)
             implementation(libs.compose.ui.backhandler)
+            implementation(libs.lifecycle.runtime.compose)
 
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
@@ -115,6 +116,7 @@ kotlin {
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.json)
             implementation(libs.ktor.client.logging)
+            implementation(libs.ktor.client.websockets)
 
             implementation(libs.sqldelight.runtime)
             implementation(libs.sqldelight.coroutines)
@@ -154,13 +156,23 @@ kotlin {
     }
 }
 
-// Fiyat sondasi GERCEK servislere baglanir: normal kosuda calisirsa testler
+// Sondalar GERCEK servislere baglanir: normal kosuda calisirlarsa testler
 // internete ve ucuncu taraf calisma suresine bagli hale gelir. Elle calistirilir:
-//   ./gradlew :composeApp:desktopTest --tests "*LivePriceProbeTest" -i
+//   ./gradlew :composeApp:desktopTest -Pprobe --tests "*LivePriceProbeTest" --rerun -i
+//   ./gradlew :composeApp:desktopTest -Pprobe --tests "*RealtimeProbeTest" --rerun -i
+//
+// -P BAYRAGI SART: Gradle'da excludeTestsMatching, komut satirindaki --tests
+// icermesini EZER - yani yalniz --tests yazmak sondayi kosturmaz, sessizce
+// hicbir test secmez (isFailOnNoMatchingTests = false oldugu icin de "BUILD
+// SUCCESSFUL" der). Bayrak, haric tutmayi yapilandirma aninda kaldirir.
+val runProbes = providers.gradleProperty("probe").isPresent
 tasks.withType<Test>().configureEach {
     filter {
         isFailOnNoMatchingTests = false
-        excludeTestsMatching("*LivePriceProbeTest")
+        if (!runProbes) {
+            excludeTestsMatching("*LivePriceProbeTest")
+            excludeTestsMatching("*RealtimeProbeTest")
+        }
     }
 }
 

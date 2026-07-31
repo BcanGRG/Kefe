@@ -2,6 +2,8 @@ package com.kefe.app.ui.screens.summary
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kefe.app.data.sync.CloudState
+import com.kefe.app.data.sync.SyncCoordinator
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.DailySnapshot
@@ -43,6 +45,8 @@ class SummaryViewModel(
     private val priceRepository: PriceRepository,
     private val preferences: PreferencesRepository,
     private val clock: KefeClock,
+    // Baslikta "Eşit / Çevrimdışı" cipi BUNU gosterir - fiyat tazeligini degil.
+    private val syncCoordinator: SyncCoordinator,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SummaryUiState())
@@ -77,7 +81,21 @@ class SummaryViewModel(
         observeHistory()
         observePrices()
         observeMaskPreference()
+        observeCloud()
         refresh()
+    }
+
+    /**
+     * Bulut durumu fiyat tazeliginden AYRI. 9b'nin acik notu buydu: baslikta
+     * "Eşit" yazan cip aslinda fiyatlarin tazeligini gosteriyordu, esitlemeyi
+     * degil - fiyat ucu tokezleyince senkron calisirken "Çevrimdışı" yaziyordu.
+     */
+    private fun observeCloud() {
+        viewModelScope.launch {
+            syncCoordinator.cloudState().collect { cloud ->
+                _state.value = _state.value.copy(cloudState = cloud)
+            }
+        }
     }
 
     private fun observeMaskPreference() {

@@ -140,13 +140,21 @@ grant select, insert, update, delete on public.goals to authenticated;
 -- 5. goal_assets - varlik -> hedef atamasi. position_id anahtar: bir varlik en
 --    fazla bir hedefe.
 -- =========================================================================
+-- quantity: atanan miktar; -1 = TUM VARLIK. Sonradan eklendi (yerelde 5.sqm),
+-- o yuzden ayri bir "add column if not exists" ile gelir: tablo zaten
+-- olusturulmus hesaplarda create table if not exists hicbir sey yapmaz ve
+-- kolon eksik kalirdi - push 400 doner, senkron sessizce durur.
 create table if not exists public.goal_assets (
     position_id text   primary key,
     user_id     uuid   not null default auth.uid() references auth.users (id) on delete cascade,
     goal_id     text   not null,
+    quantity    double precision not null default -1,
     updated_at  bigint not null default 0,
     deleted_at  bigint
 );
+
+alter table public.goal_assets
+    add column if not exists quantity double precision not null default -1;
 
 alter table public.goal_assets enable row level security;
 drop policy if exists goal_assets_own on public.goal_assets;
@@ -257,6 +265,33 @@ create trigger activity_events_lww before update on public.activity_events
     for each row execute function public.kefe_lww_guard();
 
 -- =========================================================================
--- Gercek zamanli (adim 11) ve bildirimler (adim 12) BU DOSYADA YOK - kendi
--- adimlarinda eklenir.
+-- GERCEK ZAMANLI (adim 11). Realtime, degisiklikleri mantiksal cogaltmadan
+-- okur: bir tablo "supabase_realtime" yayinina EKLENMEDEN o tablonun olaylari
+-- hic akmaz. Istemci baglanir, join basarili doner ve hicbir sey gelmez -
+-- sessiz basarisizlik; bir sorun yasanirsa ilk bakilacak yer burasi.
+--
+-- REPLICA IDENTITY FULL KONMADI: gelen olayin icindeki satiri okumuyoruz, olay
+-- yalnizca "degisti" sinyali (uygulamayi pull yapar). Birincil anahtar yeter;
+-- FULL her guncellemede eski satirin tamamini WAL'a yazdirirdi.
+--
+-- Dongu idempotent: zaten ekli tabloyu yeniden eklemek hata verirdi.
+-- =========================================================================
+do $$
+declare t text;
+begin
+    foreach t in array array['members', 'positions', 'transactions', 'goals',
+                             'goal_assets', 'daily_snapshots', 'activity_events'] loop
+        if not exists (
+            select 1 from pg_publication_tables
+            where pubname = 'supabase_realtime'
+              and schemaname = 'public'
+              and tablename = t
+        ) then
+            execute format('alter publication supabase_realtime add table public.%I', t);
+        end if;
+    end loop;
+end $$;
+
+-- =========================================================================
+-- Bildirimler (adim 12) BU DOSYADA YOK - kendi adiminda eklenir.
 -- =========================================================================

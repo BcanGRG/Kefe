@@ -55,6 +55,17 @@ private fun gramGold(bid: Double = 6000.0) = Price(
     assetClass = AssetClass.Gold,
 )
 
+private fun usd(bid: Double = 40.0) = Price(
+    assetKey = "fx_usd",
+    label = "USD/TRY",
+    bid = bid,
+    ask = bid + 0.1,
+    changePercent = 0.0,
+    timestamp = "TCMB",
+    source = PriceSource.FreeMarket,
+    assetClass = AssetClass.Fx,
+)
+
 /** Saat bir saniyeyle degil milisaniyeyle ilerler; kolayligi icin sarmalanir. */
 private fun clockAt(seconds: Long) = FixedKefeClock(millis = seconds * 1000L)
 
@@ -75,6 +86,48 @@ private fun newRepository(
 }
 
 class PriceFreshnessTest {
+
+    @Test
+    fun `kismi cekim tabloyu kirpmaz`() = runTest {
+        // ASIL TUZAK. Kaynaklar birbirinden bagimsiz hale gelince (serbest piyasa
+        // dusse de TCMB/TEFAS gelsin) kismi bir cekim mumkun oldu. Oturum
+        // sonucu onbellegin YERINE gecseydi, altin satirlari tahtadan duser ve
+        // toplam birikim bir anda ucuruma inerdi - emulatorde ₺946k'dan ₺693k'ya
+        // dusen rakam tam olarak buydu.
+        val remote = FakeRemote(prices = listOf(gramGold(6_000.0), usd(40.0)))
+        // Saat ILERLEYEBILIR olmali: sabit saatte ikinci yenileme kisitlamaya
+        // takilir ve aga hic cikmaz.
+        val clock = MovingClock(seconds = 10_000L)
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        KefeDatabase.Schema.create(driver)
+        val repo = SqlDelightPriceRepository(createKefeDatabase(driver), remote, clock)
+
+        repo.refresh()
+        assertEquals(2, repo.observePrices().first().prices.size)
+
+        // Ikinci turda serbest piyasa dustu: yalniz doviz geldi.
+        remote.prices = listOf(usd(41.0))
+        clock.seconds += 600L
+        repo.refresh()
+
+        val board = repo.observePrices().first()
+        // Altin HALA tahtada (son bilinen fiyatiyla), doviz tazelendi.
+        assertEquals(6_000.0, board.byKey("gold_gram")?.bid)
+        assertEquals(41.0, board.byKey("fx_usd")?.bid)
+        assertEquals(2, board.prices.size)
+    }
+
+    @Test
+    fun `tek kaynak gelse de cevrimdisi yazilmaz`() = runTest {
+        val remote = FakeRemote(prices = listOf(usd(40.0)))
+        val (repo, _) = newRepository(remote, nowSeconds = 10_000L)
+
+        repo.refresh()
+
+        // Elde fiyat var ve deneme patlamadi: cevrimdisi degiliz. Once serbest
+        // piyasa tek basina yenilemeyi dusurdugu icin bu hal "Çevrimdışı" idi.
+        assertEquals(PriceFreshness.Fresh, repo.observePrices().first().freshness)
+    }
 
     @Test
     fun `hic fiyat yokken ve deneme yapilmamisken yukleniyor`() = runTest {

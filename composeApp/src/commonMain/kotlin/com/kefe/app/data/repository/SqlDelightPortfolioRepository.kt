@@ -28,6 +28,7 @@ import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.ActivityKind
 import com.kefe.app.domain.model.DailySnapshot
 import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.Portfolio
 import com.kefe.app.domain.model.Position
@@ -40,12 +41,12 @@ import com.kefe.app.domain.model.valuedAt
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.domain.repository.PriceRepository
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.CoroutineContext
 
 /**
  * Kalici portfoy deposu (SQLDelight).
@@ -145,11 +146,17 @@ class SqlDelightPortfolioRepository(
         }
     }
 
-    override fun observeGoalAssets(): Flow<Map<String, String>> =
+    override fun observeGoalAssets(): Flow<Map<String, GoalAssignment>> =
         goalAssetQueries.selectGoalAssets().asFlow().mapToList(dispatcher)
-            .map { rows -> rows.associate { it.positionId to it.goalId } }
+            .map { rows ->
+                rows.associate { it.positionId to GoalAssignment(it.goalId, it.quantity) }
+            }
 
-    override suspend fun assignPositionToGoal(positionId: String, goalId: String?) {
+    override suspend fun assignPositionToGoal(
+        positionId: String,
+        goalId: String?,
+        quantity: Double,
+    ) {
         withContext(dispatcher) {
             if (goalId == null) {
                 goalAssetQueries.clearPositionAssignment(positionId = positionId, deletedAt = clock.nowEpochMillis())
@@ -157,11 +164,23 @@ class SqlDelightPortfolioRepository(
                 goalAssetQueries.assignPositionToGoal(
                     positionId = positionId,
                     goalId = goalId,
+                    quantity = quantity,
                     updatedAt = clock.nowEpochMillis(),
                 )
             }
         }
     }
+
+    /**
+     * Bir varligin SU ANKI atamasi - kayit anindaki "miktari ne kadar
+     * artiracagim" hesabi icin. Akisi beklemek yerine tek satir okunur: kayit
+     * ve atama ayni islemde bitmeli.
+     */
+    override suspend fun goalAssignmentOf(positionId: String): GoalAssignment? =
+        withContext(dispatcher) {
+            goalAssetQueries.selectGoalAssetByPosition(positionId).executeAsOneOrNull()
+                ?.let { GoalAssignment(it.goalId, it.quantity) }
+        }
 
     /** Siralama sozu SQL'de tutulur (ORDER BY sortOrder). */
     override fun observeGoals(): Flow<List<Goal>> =
@@ -322,7 +341,11 @@ class SqlDelightPortfolioRepository(
                     )
                 },
                 goalAssets = goalAssetQueries.selectGoalAssets().executeAsList().map {
-                    BackupGoalAsset(positionId = it.positionId, goalId = it.goalId)
+                    BackupGoalAsset(
+                        positionId = it.positionId,
+                        goalId = it.goalId,
+                        quantity = it.quantity,
+                    )
                 },
                 snapshots = snapshotQueries.selectSnapshots().executeAsList().map {
                     BackupSnapshot(
@@ -453,6 +476,7 @@ class SqlDelightPortfolioRepository(
                     goalAssetQueries.assignPositionToGoal(
                         positionId = assignment.positionId,
                         goalId = assignment.goalId,
+                        quantity = assignment.quantity,
                         updatedAt = clock.nowEpochMillis(),
                     )
                 }

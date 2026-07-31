@@ -87,7 +87,15 @@ data class BackupGoal(
 )
 
 @Serializable
-data class BackupGoalAsset(val positionId: String, val goalId: String)
+data class BackupGoalAsset(
+    val positionId: String,
+    val goalId: String,
+    /**
+     * Atanan miktar; -1 = tum varlik. Varsayilan var cunku alan sonradan geldi:
+     * eski yedeklerde hic bulunmaz ve o kayitlar "tum varlik" demektir.
+     */
+    val quantity: Double = -1.0,
+)
 
 @Serializable
 data class BackupSnapshot(

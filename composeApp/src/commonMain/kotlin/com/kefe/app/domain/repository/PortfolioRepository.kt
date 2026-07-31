@@ -4,6 +4,7 @@ import com.kefe.app.domain.backup.BackupFile
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.DailySnapshot
 import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.Portfolio
 import com.kefe.app.domain.model.Position
@@ -29,12 +30,13 @@ interface PortfolioRepository {
     fun observeGoals(): Flow<List<Goal>>
 
     /**
-     * Varlik -> hedef atamasi (positionId -> goalId).
+     * Varlik -> hedef atamasi (positionId -> [GoalAssignment]).
      *
      * Hedef YALNIZ kendine atanan varliklari sayar (kati atama); atama yoksa
-     * ilerleme %0; bkz. [goalWealth]. Bir varlik en fazla bir hedefe atanir.
+     * ilerleme %0; bkz. [goalWealth]. Bir varlik en fazla bir hedefe atanir,
+     * ama artik TAMAMI degil belli bir MIKTARI atanabilir.
      */
-    fun observeGoalAssets(): Flow<Map<String, String>>
+    fun observeGoalAssets(): Flow<Map<String, GoalAssignment>>
 
     fun observeActivity(): Flow<List<ActivityEvent>>
 
@@ -103,8 +105,21 @@ interface PortfolioRepository {
 
     suspend fun deletePosition(positionId: String)
 
-    /** [goalId] null ise atama kaldirilir - varlik yeniden "tum birikim"e doner. */
-    suspend fun assignPositionToGoal(positionId: String, goalId: String?)
+    /**
+     * [goalId] null ise atama kaldirilir - varlik yeniden "tum birikim"e doner.
+     *
+     * [quantity] varsayilani [GoalAssignment.WholePosition] (tum varlik): hedef
+     * detayindaki "Varlik sec" listesi bu anlamda cagirir. Islem ekleme akisi
+     * ise acik bir miktar verir.
+     */
+    suspend fun assignPositionToGoal(
+        positionId: String,
+        goalId: String?,
+        quantity: Double = GoalAssignment.WholePosition,
+    )
+
+    /** Varligin su anki atamasi - kayit anindaki miktar hesabi icin tek okuma. */
+    suspend fun goalAssignmentOf(positionId: String): GoalAssignment?
 
     /** Kullanicinin girdigi her sey - yedek dosyasinin icerigi. */
     suspend fun exportBackup(takenOn: String): BackupFile

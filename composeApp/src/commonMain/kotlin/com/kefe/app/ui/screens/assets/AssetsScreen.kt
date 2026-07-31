@@ -216,7 +216,15 @@ private fun AssetGroupCard(
             dotColor = c.assetClass(group.assetClass.color()),
             title = group.assetClass.label(),
             total = moneyTl(group.total),
-            percent = Money.ratio(group.percent, 1),
+            // Pay yuzdesi yerine TL KAR. Pay zaten Ozet'teki "Ne kadari nerede"
+            // halkasinda duruyordu; "ne kadar kazandik" ise hicbir listede yoktu.
+            // Maliyeti olmayan grupta (nakit) oran anlamsiz - yalniz tutar yazilir.
+            percent = Money.tlSigned(group.profit) + if (group.profitPercent != 0.0) {
+                " · " + Money.delta(group.profitPercent, 1)
+            } else {
+                ""
+            },
+            percentColor = if (group.profit < 0.0) c.negative else c.positive,
             expanded = expanded,
             onToggle = onToggle,
             chevronIcon = KefeIcons.ChevronRight,
@@ -242,11 +250,17 @@ private fun AssetRow(position: Position, onClick: () -> Unit) {
         null
     }
 
+    // Alt rakam gunluk degisim yuzdesi DEGIL, TL kar. Elle fiyatlanan
+    // varliklarda gunluk degisim hep "0,00%" cikiyordu; asil merak edilen
+    // "bu varlik bize ne kazandirdi" ise yalniz detay ekraninda vardi.
+    val profit = position.value - position.cost
+
     KefeListRow(
         title = position.name,
         subtitle = position.quantityLabel(),
         value = moneyTl(position.value),
-        delta = position.dailyChangePercent,
+        delta = profit,
+        deltaText = Money.tlSigned(profit),
         leadingIcon = position.assetClass.icon(),
         leadingTint = c.assetClass(position.assetClass.color()),
         onClick = onClick,

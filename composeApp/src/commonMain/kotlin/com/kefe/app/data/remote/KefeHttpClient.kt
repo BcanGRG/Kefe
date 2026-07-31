@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.http.HttpHeaders
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
@@ -34,6 +35,15 @@ fun createKefeHttpClient(enableLogging: Boolean = false): HttpClient = HttpClien
         connectTimeoutMillis = 10_000
         socketTimeoutMillis = 10_000
     }
+
+    // Supabase Realtime soketi icin (bkz. RealtimeApi). Ktor'un kendi
+    // pingInterval'i KURULMAZ: Phoenix uygulama duzeyinde kendi heartbeat
+    // MESAJINI bekler, WS ping frame'ini saymaz - ikisini birden kurmak
+    // ayni isi iki kez yapan iki zamanlayici demek olurdu.
+    //
+    // NOT: HttpTimeout'un socketTimeout'u WS oturumuna uygulanmaz; soket
+    // sessiz kalabilir, canliligi heartbeat cevabi tasir.
+    install(WebSockets)
 
     defaultRequest {
         headers.append(HttpHeaders.Accept, "application/json")
