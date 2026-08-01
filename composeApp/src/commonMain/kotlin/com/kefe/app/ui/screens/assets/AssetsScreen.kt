@@ -262,13 +262,14 @@ private fun AssetGroupCard(
                 " · " + Money.delta(group.profitPercent)
             } else {
                 ""
-            } + group.periodChangePercent?.let {
-                // Donem etiketi yazilir: "+₺239.112,47 · +36,29% · Hafta +2,41%"
-                // Ustteki cipler zaten donemi soyluyor ama bu satir kar ile
-                // donem degisimini yan yana tasiyor, ikisi karismamali.
-                " · ${period.label} ${Money.delta(it)}"
-            }.orEmpty(),
+            },
             percentColor = if (group.profit < 0.0) c.negative else c.positive,
+            // Donem degisimi AYRI satirda ve AYRI renkte. Once kar metnine
+            // ekleniyordu ve satir tek renk tasidigi icin toplam kar yesilken
+            // "Gün −0,94%" de yesil yaziliyordu - rakam eksi, renk arti.
+            percentSecondary = group.periodChangePercent
+                ?.let { "${period.label} ${Money.delta(it)}" },
+            percentSecondaryColor = group.periodChangePercent?.let { c.delta(it) },
             expanded = expanded,
             onToggle = onToggle,
             chevronIcon = KefeIcons.ChevronRight,
@@ -305,10 +306,12 @@ private fun AssetRow(position: Position, period: ChangePeriod, onClick: () -> Un
         value = Money.tlExact(position.value),
         delta = profit,
         deltaText = Money.tlSignedExact(profit),
-        // TL kar birincil kalir; donem degisimi onun altinda sonuk ikinci
-        // satirda. Veri yoksa "Hafta —" yazilir: satirin bos kalmasi
-        // "degismedi" gibi okunurdu.
+        // TL kar birincil kalir; donem degisimi onun altinda ikinci satirda.
+        // Veri yoksa "Hafta —" yazilir: satirin bos kalmasi "degismedi" gibi
+        // okunurdu. Kendi rengini tasir - toplam kar yesilken hafta kirmizi
+        // olabilir; veri yokken sonuk kalir.
         deltaSecondary = "${period.label} ${changeText(position.changeIn(period))}",
+        deltaSecondaryColor = position.changeIn(period)?.let { c.delta(it) },
         leadingIcon = position.assetClass.icon(),
         leadingTint = c.assetClass(position.assetClass.color()),
         onClick = onClick,

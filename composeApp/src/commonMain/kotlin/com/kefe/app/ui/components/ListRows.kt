@@ -84,6 +84,13 @@ fun KefeListRow(
      * yan yana yazmak toplam kar ile donem degisimini karistirirdi.
      */
     deltaSecondary: String? = null,
+    /**
+     * [deltaSecondary]'nin KENDI rengi.
+     *
+     * null ise sonuk kalir. Dolu verilmeli: dönem değişimi kar/zarardan AYRI
+     * bir sayidir ve toplam kâr yesilken hafta kirmizi olabilir.
+     */
+    deltaSecondaryColor: Color? = null,
     leadingIcon: ImageVector? = null,
     leadingTint: Color = KefeTheme.colors.onSurfaceMuted,
     modifier: Modifier = Modifier,
@@ -197,7 +204,7 @@ fun KefeListRow(
                     Text(
                         text = deltaSecondary,
                         style = type.nano.tabular(),
-                        color = colors.onSurfaceMuted,
+                        color = deltaSecondaryColor ?: colors.onSurfaceMuted,
                         maxLines = 1,
                     )
                 }
@@ -222,6 +229,15 @@ fun KefeSectionHeader(
     // Alt satir bir KAR/ZARAR rakami tasidiginda renk tasir; pay gibi notr
     // bilgilerde varsayilan sonuk renk kalir.
     percentColor: Color? = null,
+    /**
+     * [percent]'in ALTINDAKI ucuncu satir - kendi rengiyle.
+     *
+     * Donem degisimi buraya duser. Once [percent] metnine eklenmisti ve TEK
+     * renk tasidigi icin toplam kar yesilken "Gün −0,94%" de yesil
+     * yaziliyordu; ayri sayilar ayri satirda, ayri renkte.
+     */
+    percentSecondary: String? = null,
+    percentSecondaryColor: Color? = null,
 ) {
     val colors = KefeTheme.colors
     val type = KefeTheme.type
@@ -292,6 +308,15 @@ fun KefeSectionHeader(
                     text = percent,
                     style = type.nano.tabular(),
                     color = percentColor ?: colors.onSurfaceMuted,
+                    maxLines = 1,
+                )
+            }
+            if (percentSecondary != null) {
+                Spacer(Modifier.height(1.dp))
+                Text(
+                    text = percentSecondary,
+                    style = type.nano.tabular(),
+                    color = percentSecondaryColor ?: colors.onSurfaceMuted,
                     maxLines = 1,
                 )
             }
