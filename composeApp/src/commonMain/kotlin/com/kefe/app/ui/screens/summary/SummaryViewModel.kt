@@ -15,6 +15,7 @@ import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.allocation
 import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.goalWealth
+import com.kefe.app.domain.model.toEpochDay
 import com.kefe.app.domain.model.portfolioTotals
 import com.kefe.app.domain.model.topGainer
 import com.kefe.app.domain.model.topLoser
@@ -120,8 +121,8 @@ class SummaryViewModel(
             is SummaryIntent.SelectUnit -> _state.value = _state.value.copy(unit = intent.unit)
             SummaryIntent.ToggleMask -> _state.value =
                 _state.value.copy(masked = !_state.value.masked)
-            is SummaryIntent.SelectPeriod -> _state.value =
-                _state.value.copy(periodIndex = intent.index)
+            // Aralik degisince aga cikilmaz: seri elde, yalniz penceresi degisir.
+            is SummaryIntent.SelectPeriod -> applyRange(intent.range)
             SummaryIntent.Refresh -> refresh()
             SummaryIntent.DismissRefreshError -> _state.value =
                 _state.value.copy(refreshError = null)
@@ -193,15 +194,38 @@ class SummaryViewModel(
     private fun observeHistory() {
         viewModelScope.launch {
             portfolioRepository.observeSnapshots().collect { history ->
-                _state.value = _state.value.copy(
-                    // Gercek fotograflar. Ornek seri kullanilamaz: kullanicinin
-                    // kendi rakami tepede dururken altinda baskasinin egrisini
-                    // cizmek "param buyumus" dedirtirdi.
-                    netWorthTotal = history.map { it.totalValue },
-                    netWorthPrincipal = history.map { it.principal },
-                )
+                // Gercek fotograflar. Ornek seri kullanilamaz: kullanicinin
+                // kendi rakami tepede dururken altinda baskasinin egrisini
+                // cizmek "param buyumus" dedirtirdi.
+                snapshots = history
+                applyRange(_state.value.range)
             }
         }
+    }
+
+    /** Aralik uygulanmadan onceki TUM fotograflar; pencere bundan kesilir. */
+    private var snapshots: List<DailySnapshot> = emptyList()
+
+    /**
+     * Secili araligi seriye uygular.
+     *
+     * Cipler once yalniz basliktaki aciklamayi degistiriyordu - egri her zaman
+     * tum seriydi, yani "3A" ile "Tümü" ayni resmi veriyordu.
+     */
+    private fun applyRange(range: NetWorthRange) {
+        val days = range.days
+        val visible = if (days == null) {
+            snapshots
+        } else {
+            val cutoff = clock.today().toEpochDay() - days
+            snapshots.filter { it.date.toEpochDay() >= cutoff }
+        }
+        _state.value = _state.value.copy(
+            range = range,
+            netWorthTotal = visible.map { it.totalValue },
+            netWorthPrincipal = visible.map { it.principal },
+            netWorthSnapshotCount = snapshots.size,
+        )
     }
 
     /**

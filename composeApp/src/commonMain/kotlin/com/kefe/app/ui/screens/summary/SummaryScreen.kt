@@ -744,55 +744,74 @@ private fun NetWorthCard(
 ) {
     val t = KefeTheme.type
     val c = KefeTheme.colors
-    if (state.netWorthTotal.size < 2) return
+    // Hic fotograf yoksa kart hic cizilmez. "Secili aralikta yok" ise ayri bir
+    // durum: kart ve cipler durur, yerine kisa bir not gelir - aksi halde
+    // "Gün"e dokunan kullanicinin karti gozunun onunde kayboluyordu.
+    if (state.netWorthSnapshotCount < 2) return
+    val enough = state.netWorthTotal.size >= 2
 
     KefeCard(modifier = modifier) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Net değer", style = t.bodyStrong, color = c.onSurface)
             Spacer(Modifier.weight(1f))
-            Text(periodCaption(state.periodIndex), style = t.caption, color = c.onSurfaceMuted)
+            Text(state.range.caption, style = t.caption, color = c.onSurfaceMuted)
         }
 
         Spacer(Modifier.height(Space.x12))
+        // Cipler egrinin ARALIGINI secer. Yedi secenek esit paya bolununce
+        // "Tümü" dar telefonda kirpiliyordu; her cip kendi metni kadar yer alir.
         KefePeriodChips(
-            selectedIndex = state.periodIndex,
-            onSelect = { onIntent(SummaryIntent.SelectPeriod(it)) },
+            selectedIndex = NetWorthRange.entries.indexOf(state.range),
+            onSelect = { onIntent(SummaryIntent.SelectPeriod(NetWorthRange.entries[it])) },
+            options = NetWorthRange.entries.map { it.label },
+            fill = false,
         )
 
         Spacer(Modifier.height(Space.x12))
-        KefeNetWorthChart(
-            total = state.netWorthTotal.toPoints(),
-            principal = state.netWorthPrincipal.toPoints(),
-            goalLine = state.mainGoal?.amount,
-            goalLabel = state.mainGoal?.let { "₺${Money.compact(it.amount)} ana hedef" },
-            selectedIndex = state.netWorthTotal.lastIndex,
-            selectedLabel = "Tem 2026",
-            selectedValue = if (state.masked) {
-                Money.masked(digits = 4)
-            } else {
-                Money.tl(state.netWorthTotal.last())
-            },
-            modifier = Modifier.fillMaxWidth().height(NetWorthChartHeight),
-        )
+        if (enough) {
+            KefeNetWorthChart(
+                total = state.netWorthTotal.toPoints(),
+                principal = state.netWorthPrincipal.toPoints(),
+                goalLine = state.mainGoal?.amount,
+                goalLabel = state.mainGoal?.let { "₺${Money.compact(it.amount)} ana hedef" },
+                selectedIndex = state.netWorthTotal.lastIndex,
+                selectedLabel = state.range.label,
+                selectedValue = if (state.masked) {
+                    Money.masked(digits = 4)
+                } else {
+                    Money.tl(state.netWorthTotal.last())
+                },
+                modifier = Modifier.fillMaxWidth().height(NetWorthChartHeight),
+            )
 
-        Spacer(Modifier.height(Space.x14))
-        KefeChartLegend(
-            items = listOf(
-                ChartLegendItem("Toplam değer", c.accent, LegendMark.Line),
-                ChartLegendItem("Yatırdığım anapara", c.onSurfaceMuted, LegendMark.ThinLine),
-                ChartLegendItem("Getiri", c.accent, LegendMark.Area),
-            ),
-        )
+            Spacer(Modifier.height(Space.x14))
+            KefeChartLegend(
+                items = listOf(
+                    ChartLegendItem("Toplam değer", c.accent, LegendMark.Line),
+                    ChartLegendItem("Yatırdığım anapara", c.onSurfaceMuted, LegendMark.ThinLine),
+                    ChartLegendItem("Getiri", c.accent, LegendMark.Area),
+                ),
+            )
+        } else {
+            // Iki noktadan az veri egri degildir. Uydurma bir cizgi cizmektense
+            // neden cizilmedigini yazariz.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(NetWorthChartHeight)
+                    .clip(KefeShapes.boxMedium)
+                    .background(c.surfaceSunken),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Bu aralıkta yeterli kayıt yok.\nUygulamayı açtıkça birikiyor.",
+                    style = t.caption,
+                    color = c.onSurfaceMuted,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
     }
-}
-
-/** Grafik basligindaki donem aciklamasi - secili cip ile ayni kaynaktan. */
-private fun periodCaption(index: Int): String = when (index) {
-    0 -> "Son 1 ay"
-    1 -> "Son 3 ay"
-    2 -> "Son 6 ay"
-    3 -> "Son 12 ay"
-    else -> "Tüm zamanlar"
 }
 
 private fun List<Double>.toPoints(): List<Point> =
