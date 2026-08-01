@@ -54,6 +54,7 @@ import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.formatMonthYear
 import com.kefe.app.domain.model.monthName
 import com.kefe.app.ui.components.AmountKeyboard
+import com.kefe.app.ui.components.KefeBackHandler
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeSwitch
@@ -86,7 +87,12 @@ fun GoalEditSheet(
     onIntent: (GoalsIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Geri tusu sayfayi kapatir. Isleyici erken donusun ONUNDE ve KOSULSUZ:
+    // sonrasina konsaydi sayfa her acilip kapandiginda bestelemeye girip cikacak
+    // ve sira bozulacakti (bkz. KefeBackHandler).
+    KefeBackHandler(enabled = state != null) { onIntent(GoalsIntent.DismissEditor) }
     if (state == null) return
+
     val c = KefeTheme.colors
     val t = KefeTheme.type
 

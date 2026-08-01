@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +54,7 @@ import com.kefe.app.navigation.SummaryKey
 import com.kefe.app.navigation.desktopDestinations
 import com.kefe.app.navigation.topLevelDestinations
 import com.kefe.app.ui.brand.KefeSplash
+import com.kefe.app.ui.components.KefeBackHandler
 import com.kefe.app.ui.components.KefeBottomNav
 import com.kefe.app.ui.components.KefeAutoDismissBanner
 import com.kefe.app.ui.components.SyncStatus
@@ -105,6 +104,7 @@ import com.kefe.app.ui.screens.transaction.AddTransactionEffect
 import com.kefe.app.ui.screens.transaction.AddTransactionIntent
 import com.kefe.app.ui.screens.transaction.AddTransactionSheet
 import com.kefe.app.ui.screens.transaction.AddTransactionViewModel
+import com.kefe.app.ui.screens.transaction.isFirstStep
 import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
@@ -167,7 +167,6 @@ fun App(onReady: () -> Unit = {}) {
  *   Expanded - solda 240dp genisletilmis nav + ust cubuk + sagda 320dp piyasa paneli
  * Ekranlarin kendisi bu kromu cizmez; yalniz icerigi verir.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun KefeApp(
     windowSize: WindowSize,
@@ -489,7 +488,7 @@ private fun KefeApp(
                             // sayfayi birden atlayip giris ekranina donuyordu.
                             // Ilk sayfada devre disi kalir - orada geri gitmek
                             // gercekten giris ekranina donmek demektir.
-                            BackHandler(enabled = onboardingPage > 0) { onboardingPage-- }
+                            KefeBackHandler(enabled = onboardingPage > 0) { onboardingPage-- }
                             ScreenSurface {
                                 OnboardingScreen(
                                     pageIndex = onboardingPage,
@@ -706,10 +705,26 @@ private fun KefeApp(
         // Hedef duzenleme sheet'i her ekranin ustunde cizilir.
         GoalEditSheet(state = goalsState.editor, onIntent = goalsVm::onIntent)
 
-        if (addSheetVisible) {
-            val addVm = koinViewModel<AddTransactionViewModel>()
-            val addState by addVm.state.collectAsState()
+        // Ekleme sheet'inin ViewModel'i de KABUKTA yasar - GoalsViewModel ile ayni
+        // gerekce, bir tane daha eklenerek: sheet'in geri isleyicisi KOSULSUZ
+        // bestelenmek zorunda (bkz. KefeBackHandler) ve isleyici sheet'in
+        // hangi adimda oldugunu bilmeli. Ikisi de `if` icinde kalamaz.
+        val addVm = koinViewModel<AddTransactionViewModel>()
+        val addState by addVm.state.collectAsState()
 
+        // Geri tusu ADIMLARI da tanir. Iki adim ayri bir gezinme girdisi degil,
+        // tek sayfanin durumu; sistem bunu bilmedigi icin geri tusu sayfayi
+        // acik birakip ARKADAKI ekrani geri atiyordu. Ust bardaki geri okuyla
+        // ayni davranis: 2. adimda bir adim geri, 1. adimda sayfa kapanir.
+        KefeBackHandler(enabled = addSheetVisible) {
+            if (addState.isFirstStep) {
+                addSheetVisible = false
+            } else {
+                addVm.onIntent(AddTransactionIntent.Back)
+            }
+        }
+
+        if (addSheetVisible) {
             // Duzenlemede alan degerleri kayittan gelir - alis/satis dahil.
             // Yeni kayitta form sifirlanir: ViewModel sheet kapaninca olmedigi
             // icin bir onceki acilisin alanlari duruyordu.

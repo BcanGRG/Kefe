@@ -2,6 +2,7 @@ package com.kefe.app.ui.screens.assets
 
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.Position
+import com.kefe.app.ui.format.ChangePeriod
 
 /**
  * Siralama olcutu. Uc secenek de gercekten calisir: siralama grup ICINDEKI
@@ -29,6 +30,12 @@ data class AssetGroup(
     val profit: Double,
     /** Kar/zararin maliyete orani - yuzde cinsinden (21.6). */
     val profitPercent: Double,
+    /**
+     * Grubun SECILI DONEMDEKI degisimi - deger agirlikli, yuzde ortalamasi
+     * degil (bkz. `weightedChangePercent`). null ise grubun hicbir satirinda
+     * o donem icin veri yok ve hic yazilmaz.
+     */
+    val periodChangePercent: Double?,
     val positions: List<Position>,
 )
 
@@ -39,9 +46,12 @@ data class AssetsUiState(
     val sort: AssetSort = AssetSort.Value,
     // Nakit grubu kapali baslar - tasarimdaki varsayilan hal.
     val collapsed: Set<AssetClass> = setOf(AssetClass.Cash),
+    /** Degisim penceresi - Piyasa ekraniyla AYNI secici. */
+    val period: ChangePeriod = ChangePeriod.Day,
 )
 
 sealed interface AssetsIntent {
     data class SelectSort(val sort: AssetSort) : AssetsIntent
     data class ToggleGroup(val assetClass: AssetClass) : AssetsIntent
+    data class SelectPeriod(val period: ChangePeriod) : AssetsIntent
 }

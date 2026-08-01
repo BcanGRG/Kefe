@@ -2,7 +2,9 @@ package com.kefe.app.domain.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 private const val EPS = 1e-9
 
@@ -31,6 +33,8 @@ private fun price(
     bid: Double? = 9_850.0,
     ask: Double = 10_018.0,
     changePercent: Double = 1.5,
+    weekChangePercent: Double? = null,
+    monthChangePercent: Double? = null,
 ): Price = Price(
     assetKey = assetKey,
     label = "Çeyrek Altın",
@@ -40,6 +44,8 @@ private fun price(
     timestamp = "14:32",
     source = PriceSource.FreeMarket,
     assetClass = AssetClass.Gold,
+    weekChangePercent = weekChangePercent,
+    monthChangePercent = monthChangePercent,
 )
 
 class ValuationTest {
@@ -85,6 +91,26 @@ class ValuationTest {
     }
 
     @Test
+    fun donemselDegisimlerTasinir() {
+        val valued = position().valuedAt(
+            price(weekChangePercent = 2.4, monthChangePercent = -3.1),
+        )
+
+        assertEquals(2.4, valued.weekChangePercent!!, EPS)
+        assertEquals(-3.1, valued.monthChangePercent!!, EPS)
+    }
+
+    @Test
+    fun bilinmeyenDonemNullKalir() {
+        // Gunlukten farkli: sifira dusurmek "degismedi" demek olurdu, oysa
+        // dogrusu "bilmiyoruz" - ekran "—" yazmali.
+        val valued = position().valuedAt(price())
+
+        assertNull(valued.weekChangePercent)
+        assertNull(valued.monthChangePercent)
+    }
+
+    @Test
     fun maliyetVeMiktarDokunulmaz() {
         // Ikisi de DEFTERDEN turer; fiyat onlari degistirmez.
         val original = position()
@@ -120,6 +146,53 @@ class ValuationTest {
     fun bilezikAyardanAnahtar() {
         val jewelry = position(subtype = GoldSubtype.Jewelry, karat = Karat.K18)
         assertEquals("gold_k18", jewelry.priceKey())
+    }
+
+    @Test
+    fun gramAyardanAnahtar() {
+        // ASIL SIKAYET: 22 ayar gram altini olan biri onu ancak "Bilezik/Takı"
+        // diye kaydedebiliyordu. Artik gram formunda da ayar seciliyor.
+        assertEquals(
+            "gold_k22",
+            position(subtype = GoldSubtype.Gram, karat = Karat.K22).priceKey(),
+        )
+        assertEquals(
+            "gold_k14",
+            position(subtype = GoldSubtype.Gram, karat = Karat.K14).priceKey(),
+        )
+    }
+
+    @Test
+    fun ayarsizEskiGramKaydiDegismez() {
+        // Eski kayitlarda ayar kolonu BOS. Varsayilan 24 ve 24 ayar zaten
+        // gold_gram'a duser - mevcut pozisyonlarin fiyati zerre degismemeli.
+        assertEquals("gold_gram", position(subtype = GoldSubtype.Gram, karat = null).priceKey())
+        assertEquals(
+            "gold_gram",
+            position(subtype = GoldSubtype.Gram, karat = Karat.K24).priceKey(),
+        )
+    }
+
+    @Test
+    fun adetleSatilanFormlarAyarSormaz() {
+        // Ceyrek/yarim/tam/ata hep 22 ayardir; ayar sormak yanlis bir secim
+        // imkani acardi. Has/Kulce zaten saf altin.
+        assertFalse(GoldSubtype.Quarter.usesKarat())
+        assertFalse(GoldSubtype.Ata.usesKarat())
+        assertFalse(GoldSubtype.Bullion.usesKarat())
+        assertTrue(GoldSubtype.Gram.usesKarat())
+        assertTrue(GoldSubtype.Jewelry.usesKarat())
+        assertEquals(Karat.K24, GoldSubtype.Gram.defaultKarat())
+        assertEquals(Karat.K22, GoldSubtype.Jewelry.defaultKarat())
+    }
+
+    @Test
+    fun ayarPozisyonuAnahtardanAYIRIR() {
+        // 22 ayar gram ile 24 ayar gram AYRI varliklardir: ayni anahtara
+        // dusseler biri digerinin fiyatiyla degerlenirdi.
+        val k22 = position(subtype = GoldSubtype.Gram, karat = Karat.K22).priceKey()
+        val k24 = position(subtype = GoldSubtype.Gram, karat = Karat.K24).priceKey()
+        assertTrue(k22 != k24, "22 ve 24 ayar ayni anahtara dusuyor: $k22")
     }
 
     @Test

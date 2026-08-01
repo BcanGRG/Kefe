@@ -61,6 +61,17 @@ FROM price_history
 WHERE assetKey = :assetKey
 ORDER BY dateYear, dateMonth, dateDay;
 
+-- Haftalik/aylik degisimin kaynagi: TUM varliklarin son N gunu.
+--
+-- Tarih uc kolona bolundugu icin karsilastirilabilir tek bir sayiya cevrilir
+-- (yyyymmdd). Tablonun tamamini okumak yil gectikce buyuyen bir sorgu olurdu;
+-- aylik degisim icin ~40 gun yeter.
+selectRecentPriceHistory:
+SELECT *
+FROM price_history
+WHERE (dateYear * 10000 + dateMonth * 100 + dateDay) >= :sinceDateKey
+ORDER BY assetKey, dateYear, dateMonth, dateDay;
+
 upsertPriceHistory:
 INSERT OR REPLACE INTO price_history(assetKey, dateYear, dateMonth, dateDay, price)
 VALUES (:assetKey, :dateYear, :dateMonth, :dateDay, :price);

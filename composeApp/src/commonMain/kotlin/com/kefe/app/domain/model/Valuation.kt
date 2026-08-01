@@ -12,10 +12,14 @@ package com.kefe.app.domain.model
  * degerdir.
  */
 fun Position.priceKey(): String? = when (assetClass) {
-    AssetClass.Gold -> if (subtype == GoldSubtype.Jewelry) {
-        (karat ?: Karat.K22).priceKey()
-    } else {
-        subtype?.priceKey()
+    // Gramla satilan formlarda fiyati AYAR belirler (14/18/22 ayar gramin
+    // kendi kotasyonu var); adetle satilanlarda formun kendisi belirler.
+    //
+    // Eski kayitlarda ayar kolonu bos: Gram icin varsayilan 24, o da
+    // `gold_gram`a dustugu icin bu degisiklik mevcut pozisyonlarin fiyatini
+    // degistirmez.
+    AssetClass.Gold -> subtype?.let { s ->
+        if (s.usesKarat()) (karat ?: s.defaultKarat()).priceKey() else s.priceKey()
     }
 
     AssetClass.Silver -> "silver_gram"
@@ -89,5 +93,7 @@ fun Position.valuedAt(price: Price?): Position {
         unitPrice = unit,
         value = quantity * unit,
         dailyChangePercent = price.changePercent,
+        weekChangePercent = price.weekChangePercent,
+        monthChangePercent = price.monthChangePercent,
     )
 }

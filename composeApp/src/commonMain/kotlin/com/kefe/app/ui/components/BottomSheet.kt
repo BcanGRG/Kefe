@@ -52,6 +52,12 @@ private const val SheetExitMillis = 200
  * masaustunde surukleme davranisi tutarli olsun diye.
  *
  * Cagiran taraf bunu ekranin en ustundeki bir Box icine yerlestirmelidir.
+ *
+ * GERI TUSU SAYFAYI KAPATIR. Sayfa bir gezinme girdisi degil, ekranin bir
+ * durumu; sistem bunu bilmedigi icin geri tusu sayfayi acik birakip ARKADAKI
+ * ekrani geri atiyordu. Kullanici sayfayi kapatmak icin basiyor, kendini baska
+ * ekranda buluyordu. Isleyici burada oldugu icin [KefeBottomSheet] kullanan her
+ * sayfa bunu kendiliginden alir.
  */
 @Composable
 fun KefeBottomSheet(
@@ -68,6 +74,8 @@ fun KefeBottomSheet(
     val colors = KefeTheme.colors
     val type = KefeTheme.type
     val scrimInteraction = remember { MutableInteractionSource() }
+
+    KefeBackHandler(enabled = visible) { onDismiss() }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AnimatedVisibility(

@@ -30,8 +30,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -56,6 +54,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.kefe.app.ui.components.KefeBackHandler
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
@@ -73,7 +72,6 @@ import com.kefe.app.ui.theme.tabular
  * Birincil yol sifresiz giristir: e-postaya tek kullanimlik baglanti. Sifre
  * yolu bilerek ikincil butondadir.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LoginScreen(
     state: LoginUiState,
@@ -100,7 +98,7 @@ fun LoginScreen(
         }
         else -> null
     }
-    BackHandler(enabled = backStep != null) { backStep?.invoke() }
+    KefeBackHandler(enabled = backStep != null) { backStep?.invoke() }
 
     // Form masaustunde pencere boyunca uzarsa alan ve butonlar okunaksiz olur;
     // ust cubuk da icerikle ayni dar kolonda kalsin diye birlikte ortalanir.

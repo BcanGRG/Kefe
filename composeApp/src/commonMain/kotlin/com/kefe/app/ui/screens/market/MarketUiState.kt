@@ -2,6 +2,7 @@ package com.kefe.app.ui.screens.market
 
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.repository.PriceFreshness
+import com.kefe.app.ui.format.ChangePeriod
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.maxPriceDecimals
 
@@ -15,7 +16,15 @@ data class MarketRow(
     /** Fonlarda alis kotasyonu yoktur; o zaman tire gosterilir. */
     val bidText: String,
     val askText: String,
-    val changePercent: Double,
+    /**
+     * SECILI DONEMIN degisimi; null ise o donem icin veri yok ve
+     * [changeText] tire yazar.
+     *
+     * Sutun tek: telefonda gun/hafta/ay ayri sutunlara sigmiyor (urun adina
+     * ~16dp kaliyordu). Hangi donemin yazildigini ustteki cipler soyler.
+     */
+    val changePercent: Double?,
+    val changeText: String,
     /** "Serbest piyasa · 14:32" / "TEFAS · 09:00" / "Elle · dün 21:30" */
     val sourceLine: String,
     val isManual: Boolean,
@@ -48,11 +57,14 @@ data class MarketUiState(
     /** Kisitlanan yenileme bilgisi - hata degil, Ozet ile ayni. */
     val notice: String? = null,
     val edit: MarketPriceEdit? = null,
+    /** Degisim sutununun penceresi. Gunluk varsayilan: en cok bakilan olcu. */
+    val period: ChangePeriod = ChangePeriod.Day,
 )
 
 sealed interface MarketIntent {
     data object Refresh : MarketIntent
     data object DismissNotice : MarketIntent
+    data class SelectPeriod(val period: ChangePeriod) : MarketIntent
     data class OpenManualPrice(val assetKey: String) : MarketIntent
     data object DismissManualPrice : MarketIntent
     data class ChangeManualPrice(val text: String) : MarketIntent

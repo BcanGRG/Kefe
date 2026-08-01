@@ -49,12 +49,13 @@ import com.kefe.app.ui.components.asAmountInput
 import com.kefe.app.ui.components.KefeAutoDismissBanner
 import com.kefe.app.ui.components.KefeDashedCard
 import com.kefe.app.ui.components.KefeHairline
+import com.kefe.app.ui.components.KefePeriodChips
 import com.kefe.app.ui.components.KefePullToRefresh
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeTextButton
 import com.kefe.app.ui.components.KefeTextField
-import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.ChangePeriod
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
@@ -193,6 +194,17 @@ private fun MarketTopBar(
                 modifier = Modifier.weight(1f, fill = false),
             )
         }
+
+        // Degisim penceresi. Tabloya ucuncu ve dorduncu bir sutun eklemek yerine
+        // TEK sutun secilen donemi yaziyor: telefonda gun/hafta/ay yan yana
+        // konunca urun adina ~16dp kaliyor ve tablo okunmaz oluyordu.
+        KefePeriodChips(
+            selectedIndex = ChangePeriod.entries.indexOf(state.period),
+            onSelect = { onIntent(MarketIntent.SelectPeriod(ChangePeriod.entries[it])) },
+            options = ChangePeriod.entries.map { it.label },
+            lastWeight = 1f,
+            modifier = Modifier.padding(start = Space.x16, end = Space.x16, top = Space.x10),
+        )
     }
 }
 
@@ -420,10 +432,11 @@ private fun MarketPriceRow(
             modifier = Modifier.width(ColAsk),
         )
         Text(
-            // Isaret her zaman yazilir: yon bilgisi renge birakilmaz.
-            text = Money.delta(row.changePercent),
+            // Isaret her zaman yazilir: yon bilgisi renge birakilmaz. Veri
+            // yoksa tire - sifir yazmak "degismedi" demek olurdu.
+            text = row.changeText,
             style = t.captionSmall.copy(fontWeight = FontWeight.SemiBold).tabular(),
-            color = c.delta(row.changePercent),
+            color = row.changePercent?.let { c.delta(it) } ?: c.onSurfaceMuted,
             textAlign = TextAlign.End,
             maxLines = 1,
             modifier = Modifier.width(ColChange),

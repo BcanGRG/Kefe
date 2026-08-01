@@ -45,6 +45,26 @@ object Money {
         return sign + LIRA + (if (spaced) " " else "") + body
     }
 
+    /**
+     * Tutarin GERCEKTEN tasidigi kurusu yazar - en cok iki hane.
+     *
+     * `Kuruslari goster` ayarindan BAGIMSIZDIR (bkz. [moneyTl]). Ayar ana
+     * toplamlar icin konmustu; varlik detayindaki "Güncel değer" ve varlik
+     * listesindeki kar/zarar ise ayarin kapali olmasi yuzunden kirpiliyordu:
+     * kurusuna kadar hesap yapan biri icin ₺147.581,36 "₺147.581" gorunuyordu.
+     *
+     * Hane sayisi degerden turer ama IKI KADEMELIDIR: tam sayi tutar
+     * "₺40.359,00" olmaz (gurultu), kusuratli tutar da "₺670.503,6" olmaz.
+     * Parada ya kurus vardir ya yoktur; tek hane para yazimi degildir ve
+     * ust uste dizilen bir sutunda rakamlar egri gorunur.
+     */
+    fun tlExact(value: Double, spaced: Boolean = false): String =
+        tl(value, spaced = spaced, decimals = centDecimals(value))
+
+    /** [tlExact]'in isaretli kardesi - kar/zarar satirlari. */
+    fun tlSignedExact(value: Double, spaced: Boolean = false): String =
+        tlSigned(value, spaced = spaced, decimals = centDecimals(value))
+
     /** `+₺12.400` / `−₺8.240` - isaret her zaman yazilir (renk tek sinyal olamaz). */
     fun tlSigned(value: Double, spaced: Boolean = false, decimals: Int = 0): String {
         val sign = when {
@@ -128,6 +148,13 @@ object Money {
 
     /** Bagil tolerans: cift duyarlikli sayida ~15 anlamli hane var. */
     private const val Epsilon = 1e-9
+
+    /** TL bir tutarda kurustan oteye hane yoktur. */
+    private const val MaxCents = 2
+
+    /** Ya sifir ya iki hane - arada bir sey yok (bkz. [tlExact]). */
+    private fun centDecimals(value: Double): Int =
+        if (decimals(value, max = MaxCents) == 0) 0 else MaxCents
 
     private fun format(value: Double, decimals: Int, forceSign: Boolean): String {
         val negative = value < 0

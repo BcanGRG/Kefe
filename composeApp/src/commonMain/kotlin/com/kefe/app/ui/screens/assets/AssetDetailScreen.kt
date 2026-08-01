@@ -36,6 +36,7 @@ import com.kefe.app.domain.model.label
 import com.kefe.app.ui.charts.KefePriceChart
 import com.kefe.app.ui.charts.Point
 import com.kefe.app.ui.components.KefeAvatar
+import com.kefe.app.ui.components.KefeBackHandler
 import com.kefe.app.ui.components.KefeBuyBadge
 import com.kefe.app.ui.components.KefeCard
 import com.kefe.app.ui.components.KefeConfirmDialog
@@ -49,7 +50,6 @@ import com.kefe.app.ui.components.KefeSkeletonBlock
 import com.kefe.app.ui.components.KefeSwipeableRow
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.maxPriceDecimals
-import com.kefe.app.ui.format.moneyTl
 import com.kefe.app.ui.format.priceDecimals
 import com.kefe.app.ui.format.quantityDecimalsOf
 import com.kefe.app.ui.format.trUpper
@@ -78,6 +78,11 @@ fun AssetDetailScreen(
     modifier: Modifier = Modifier,
 ) {
     val position = state.position
+
+    // Geri tusu once USTTEKI katmani kapatir, ekrandan cikmaz. Isleyici burada,
+    // KOSULSUZ: menunun icine konsaydi bestelemeye girip cikacak ve sira
+    // bozulacakti (bkz. KefeBackHandler).
+    KefeBackHandler(enabled = state.menuOpen) { onIntent(AssetDetailIntent.CloseMenu) }
 
     // Menu ve onay kutusu icerigin USTUNDE cizilmeli; Column olsaydi dikey
     // akisa katilir, sayfanin altina bir kutu olarak eklenirdi.
@@ -137,18 +142,17 @@ fun AssetDetailScreen(
             )
         }
 
-        if (state.confirmDelete) {
-            KefeConfirmDialog(
-                title = "Varlığı sil",
-                // Defter de gider: kullanici yalniz satiri degil, o varliga ait
-                // TUM alim satim gecmisini kaybediyor.
-                message = "${position?.name ?: "Bu varlık"} ve ona ait " +
-                    "${state.transactions.size} işlem silinecek. Bu işlem geri alınamaz.",
-                confirmLabel = "Sil",
-                onConfirm = { onIntent(AssetDetailIntent.ConfirmDelete) },
-                onDismiss = { onIntent(AssetDetailIntent.DismissDeleteConfirm) },
-            )
-        }
+        KefeConfirmDialog(
+            visible = state.confirmDelete,
+            title = "Varlığı sil",
+            // Defter de gider: kullanici yalniz satiri degil, o varliga ait
+            // TUM alim satim gecmisini kaybediyor.
+            message = "${position?.name ?: "Bu varlık"} ve ona ait " +
+                "${state.transactions.size} işlem silinecek. Bu işlem geri alınamaz.",
+            confirmLabel = "Sil",
+            onConfirm = { onIntent(AssetDetailIntent.ConfirmDelete) },
+            onDismiss = { onIntent(AssetDetailIntent.DismissDeleteConfirm) },
+        )
     }
 }
 
@@ -163,6 +167,8 @@ private fun DetailMenu(onDelete: () -> Unit, onDismiss: () -> Unit) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
+    // Geri isleyicisi burada DEGIL, AssetDetailScreen'de: kosullu bestelenen bir
+    // isleyici sirayi bozuyor (bkz. KefeBackHandler).
     Box(
         Modifier
             .fillMaxSize()
@@ -267,15 +273,17 @@ private fun CurrentValueBlock(position: Position, holdingLabel: String?) {
         )
         Spacer(Modifier.height(Space.x4))
         Text(
-            // Sub-lira degerde kurus gosterimi Money.tl icinde; ₺0,76 -> ₺1 olmaz.
-            text = Money.tl(position.value, spaced = true),
+            // Kurus HER ZAMAN yazilir (bkz. Money.tlExact): burasi ana toplam
+            // degil, tek varligin degeri - kurusuna kadar hesap yapan biri icin
+            // "₺147.581" ile "₺147.581,36" arasindaki fark bilgidir.
+            text = Money.tlExact(position.value, spaced = true),
             style = t.display.tabular(),
             color = c.onSurface,
         )
         Spacer(Modifier.height(Space.x8))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "Maliyet ${moneyTl(position.cost)}",
+                text = "Maliyet ${Money.tlExact(position.cost)}",
                 style = t.caption.tabular(),
                 color = c.onSurfaceMuted,
             )
@@ -296,7 +304,7 @@ private fun CurrentValueBlock(position: Position, holdingLabel: String?) {
             )
             Spacer(Modifier.width(5.dp))
             Text(
-                text = "${Money.tlSigned(profit)} (${Money.delta(position.profitPercent, 1)})",
+                text = "${Money.tlSignedExact(profit)} (${Money.delta(position.profitPercent)})",
                 style = t.caption.copy(fontWeight = FontWeight.SemiBold).tabular(),
                 color = c.delta(profit),
             )
@@ -431,7 +439,7 @@ private fun SummaryCard(state: AssetDetailUiState, position: Position) {
             SummaryRow(
                 "Alış / satış makası",
                 Money.tl(state.spreadAmount, decimals = position.priceDecimals()) +
-                    " · " + Money.ratio(percent, decimals = 1),
+                    " · " + Money.ratio(percent, decimals = 2),
             )
         }
         KefeHairline()
@@ -440,10 +448,10 @@ private fun SummaryCard(state: AssetDetailUiState, position: Position) {
         // dogru olcusu budur: her liranin kac gun calistigini hesaba katar.
         // Hesaplanamiyorsa (tek islem, ayni gun) satir HIC gosterilmez.
         state.annualizedReturnPercent?.let { annual ->
-            SummaryRow("Yıllık getiri", Money.delta(annual, 1))
+            SummaryRow("Yıllık getiri", Money.delta(annual))
         }
         if (state.realizedProfit != 0.0) {
-            SummaryRow("Kesinleşmiş kâr", Money.tlSigned(state.realizedProfit))
+            SummaryRow("Kesinleşmiş kâr", Money.tlSignedExact(state.realizedProfit))
         }
         KefeHairline()
         SummaryRow("Fiyat kaynağı", state.priceSourceLabel)
@@ -561,7 +569,9 @@ private fun TransactionRow(
         Spacer(Modifier.width(Space.x10))
         Text(
             // Tasarimda satir tutari isciligi icermez: iscilik alt satirda ayrica yazilir.
-            text = moneyTl(transaction.quantity * transaction.unitPrice),
+            // Miktar x fiyat carpimi cogu zaman kusuratli - kirpmak defterle
+            // ekrani celiskiye dusururdu.
+            text = Money.tlExact(transaction.quantity * transaction.unitPrice),
             style = t.body.tabular(),
             color = c.onSurface,
         )
@@ -630,7 +640,7 @@ private fun Position.detailSubtitle(): String {
         QuantityUnit.Gram -> Money.quantity(quantity, unit.label(), detailQuantityDecimals())
         QuantityUnit.Share -> Money.quantity(quantity, unit.label())
         QuantityUnit.Currency ->
-            if (assetClass == AssetClass.Cash) Money.tl(quantity) else Money.number(quantity)
+            if (assetClass == AssetClass.Cash) Money.tlExact(quantity) else Money.number(quantity)
     }
     return "$quantityText · ${assetClass.label()}"
 }
@@ -660,4 +670,8 @@ private fun Transaction.lineLabel(position: Position): String {
 
 /** "12 Tem 2026" · gerekirse "işçilik ₺600" eklenir. */
 private fun Transaction.dateLabel(): String =
-    if (fee > 0.0) "${date.formatShort()} · işçilik ${Money.tl(fee)}" else date.formatShort()
+    if (fee > 0.0) {
+        "${date.formatShort()} · işçilik ${Money.tlExact(fee)}"
+    } else {
+        date.formatShort()
+    }

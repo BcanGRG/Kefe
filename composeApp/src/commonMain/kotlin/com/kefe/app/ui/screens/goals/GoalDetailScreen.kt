@@ -59,6 +59,7 @@ import com.kefe.app.ui.charts.KefeProjectionChart
 import com.kefe.app.ui.charts.KefeStackedBarChart
 import com.kefe.app.ui.charts.MonthBar
 import com.kefe.app.ui.charts.Point
+import com.kefe.app.ui.components.KefeBackHandler
 import com.kefe.app.ui.components.KefeCard
 import com.kefe.app.ui.components.KefeEmptyState
 import com.kefe.app.ui.components.KefeHairline
@@ -96,6 +97,13 @@ fun GoalDetailScreen(
     modifier: Modifier = Modifier,
 ) {
     val goal = state.goal
+
+    // Geri tusu once seciciyi kapatir, hedef detayindan CIKMAZ. Isleyici burada,
+    // KOSULSUZ: secicinin icine konsaydi bestelemeye girip cikacak ve sira
+    // bozulacakti (bkz. KefeBackHandler).
+    KefeBackHandler(enabled = state.assetPickerOpen) {
+        onIntent(GoalDetailIntent.CloseAssetPicker)
+    }
 
     // Secici icerigin USTUNDE cizilir; Column olsaydi dikey akisa katilir,
     // sayfanin altina bir kutu olarak eklenirdi.
@@ -362,6 +370,8 @@ private fun AssetPickerSheet(
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
+    // Geri isleyicisi burada DEGIL, GoalDetailScreen'de: kosullu bestelenen bir
+    // isleyici sirayi bozuyor (bkz. KefeBackHandler).
     Box(
         Modifier
             .fillMaxSize()

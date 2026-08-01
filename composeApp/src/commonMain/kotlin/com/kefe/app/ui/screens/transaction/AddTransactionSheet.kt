@@ -72,6 +72,7 @@ import com.kefe.app.ui.components.bringFieldIntoView
 import com.kefe.app.ui.components.defaultKeyboardActions
 import com.kefe.app.ui.components.next
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.maxPriceDecimals
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
@@ -102,6 +103,9 @@ fun AddTransactionSheet(
 ) {
     val c = KefeTheme.colors
 
+    // Geri isleyicisi burada DEGIL, kabukta (App.kt): sayfa yalniz acikken
+    // besteleniyor ve kosullu bestelenen bir isleyici sirayi bozuyor
+    // (bkz. KefeBackHandler).
     Box(modifier.fillMaxSize()) {
         Box(
             Modifier
@@ -345,7 +349,10 @@ private fun StepAsset(
             SectionLabel("Alt tür")
             Spacer(Modifier.height(Space.x8))
             SubtypeList(state, onIntent)
-            if (state.selectedSubtype == GoldSubtype.Jewelry) {
+            // Ayar gramla satilan her formda sorulur - yalniz bilezikte degil.
+            // 22 ayar gram altini olan biri onu "Bilezik/Takı" diye kaydetmek
+            // zorunda kaliyordu.
+            if (state.selectedSubtype.usesKarat()) {
                 KaratPanel(state, onIntent)
             }
         }
@@ -562,25 +569,36 @@ private fun KaratPanel(
             }
         }
 
-        Spacer(Modifier.height(Space.x16))
-        SectionLabel("Gram")
-        Spacer(Modifier.height(Space.x8))
-        FieldRow(height = Sizes.fieldLarge, borderColor = c.accent, gap = Space.x8) {
-            SheetInput(
-                value = state.gramText,
-                onValueChange = { onIntent(AddTransactionIntent.ChangeGram(it.asAmountInput())) },
-                keyboardOptions = AmountKeyboard,
-                visualTransformation = ThousandsSeparatorTransformation(),
-                textStyle = amountStyle(),
-                modifier = Modifier.weight(1f),
-                placeholder = "0",
-            )
-            Text("gr", style = t.body, color = c.onSurfaceMuted)
+        // Gram alani YALNIZ bilezikte. Duz gram altinda miktar zaten 2. adimda
+        // giriliyor; burada ikinci bir gram kutusu ayni sayiyi iki kez sormak
+        // olurdu. Bu yuzden gram formunda yalniz secili ayarin fiyati yazilir.
+        if (state.selectedSubtype == GoldSubtype.Jewelry) {
+            Spacer(Modifier.height(Space.x16))
+            SectionLabel("Gram")
+            Spacer(Modifier.height(Space.x8))
+            FieldRow(height = Sizes.fieldLarge, borderColor = c.accent, gap = Space.x8) {
+                SheetInput(
+                    value = state.gramText,
+                    onValueChange = {
+                        onIntent(AddTransactionIntent.ChangeGram(it.asAmountInput()))
+                    },
+                    keyboardOptions = AmountKeyboard,
+                    visualTransformation = ThousandsSeparatorTransformation(),
+                    textStyle = amountStyle(),
+                    modifier = Modifier.weight(1f),
+                    placeholder = "0",
+                )
+                Text("gr", style = t.body, color = c.onSurfaceMuted)
+            }
         }
 
         Spacer(Modifier.height(Space.x10))
         Text(
-            text = state.karatLine,
+            text = if (state.selectedSubtype == GoldSubtype.Jewelry) {
+                state.karatLine
+            } else {
+                state.karatPriceLine
+            },
             style = t.caption.tabular(),
             color = c.onSurfaceMuted,
         )
@@ -737,7 +755,12 @@ private fun FundResults(
                 Spacer(Modifier.width(Space.x12))
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = Money.tl(fund.price, decimals = 2),
+                        // Fon payi alti haneye kadar iner; iki haneye
+                        // sabitlemek kullanicinin sectigi fiyati kirpiyordu.
+                        text = Money.tl(
+                            fund.price,
+                            decimals = Money.decimals(fund.price, AssetClass.Fund.maxPriceDecimals()),
+                        ),
                         style = t.caption.tabular(),
                         color = c.onSurface,
                         maxLines = 1,
@@ -1349,7 +1372,11 @@ private fun SheetFooter(
                         modifier = Modifier.alignByBaseline(),
                     )
                     Text(
-                        text = Money.tl(state.total),
+                        // Kurus HER ZAMAN yazilir. Bu rakam KAYDEDILECEK tutar;
+                        // hemen altindaki "1 × ₺5.593,05" satiri kurusu
+                        // gosterirken toplamin "₺5.593" demesi ikisini
+                        // celiskiye dusuruyordu.
+                        text = Money.tlExact(state.total),
                         style = amountStyle(),
                         color = c.onSurface,
                         maxLines = 1,

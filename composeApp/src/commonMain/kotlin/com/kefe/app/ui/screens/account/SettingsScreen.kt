@@ -232,31 +232,31 @@ fun SettingsScreen(
         }
     }
 
-        if (state.confirmDelete) {
-            KefeConfirmDialog(
-                title = "Tüm verileri sil",
-                message = "Varlıklarınız, işlem geçmişiniz, hedefleriniz ve tercihleriniz " +
-                    "silinecek. Bu işlem geri alınamaz.",
-                confirmLabel = "Sil",
-                onConfirm = { onIntent(SettingsIntent.ConfirmDeleteAllData) },
-                onDismiss = { onIntent(SettingsIntent.DismissDeleteConfirm) },
-            )
-        }
+        // Gorunurluk `if` ile DEGIL parametreyle verilir: kutunun geri
+        // isleyicisi kosulsuz bestelenmeli (bkz. KefeBackHandler).
+        KefeConfirmDialog(
+            visible = state.confirmDelete,
+            title = "Tüm verileri sil",
+            message = "Varlıklarınız, işlem geçmişiniz, hedefleriniz ve tercihleriniz " +
+                "silinecek. Bu işlem geri alınamaz.",
+            confirmLabel = "Sil",
+            onConfirm = { onIntent(SettingsIntent.ConfirmDeleteAllData) },
+            onDismiss = { onIntent(SettingsIntent.DismissDeleteConfirm) },
+        )
 
         // Geri yukleme de yikicidir: yedek mevcut verinin USTUNE degil YERINE
         // gecer. Birlestirme yapilmiyor cunku hangi kaydin daha yeni oldugunu
         // soyleyecek bir zaman damgasi yok.
-        if (state.confirmRestore) {
-            KefeConfirmDialog(
-                title = "Yedeği geri yükle",
-                message = "Şu anki varlıklarınız, işlemleriniz ve hedefleriniz " +
-                    "yedektekilerle DEĞİŞTİRİLECEK. Bu işlem geri alınamaz — " +
-                    "önce mevcut halin yedeğini almak isteyebilirsiniz.",
-                confirmLabel = "Dosya seç",
-                onConfirm = { onIntent(SettingsIntent.ConfirmRestore) },
-                onDismiss = { onIntent(SettingsIntent.DismissRestoreConfirm) },
-            )
-        }
+        KefeConfirmDialog(
+            visible = state.confirmRestore,
+            title = "Yedeği geri yükle",
+            message = "Şu anki varlıklarınız, işlemleriniz ve hedefleriniz " +
+                "yedektekilerle DEĞİŞTİRİLECEK. Bu işlem geri alınamaz — " +
+                "önce mevcut halin yedeğini almak isteyebilirsiniz.",
+            confirmLabel = "Dosya seç",
+            onConfirm = { onIntent(SettingsIntent.ConfirmRestore) },
+            onDismiss = { onIntent(SettingsIntent.DismissRestoreConfirm) },
+        )
     }
 }
 

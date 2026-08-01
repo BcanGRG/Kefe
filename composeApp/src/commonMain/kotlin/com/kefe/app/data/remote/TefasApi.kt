@@ -1,5 +1,7 @@
 package com.kefe.app.data.remote
 
+import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.PricePoint
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -17,6 +19,12 @@ import kotlinx.serialization.json.Json
  * Fonlar GUNDE BIR fiyatlanir; bu yuzden ayri bir kaynak ve ayri tazelik
  * beklentisi var. Bir aylik seri istenir cunku gunluk degisim yuzdesi ancak iki
  * ardisik fiyattan hesaplanabilir - tek fiyat "bugun ne kadar degisti"yi vermez.
+ *
+ * O SERI ARTIK ATILMIYOR. Once yalniz son iki satiri okunuyor, gerisi cope
+ * gidiyordu; oysa haftalik ve aylik degisim tam olarak orada duruyor. Seri
+ * [TefasQuote.history] ile tasinir ve depo onu `price_history`'ye yazar -
+ * boylece fonlarda hafta/ay ILK GUNDEN gercek olur (altin ve dovizde oyle
+ * degil: onlarin kaynagi gecmis vermiyor, cihazda birikmesi gerekiyor).
  *
  * NOT: eski `/api/DB/BindHistoryInfo` ucu 2026'da kaldirildi, 404 donuyor.
  * Kullanilan uc `/api/funds/fonFiyatBilgiGetir`.
@@ -66,6 +74,12 @@ class TefasApi(private val client: HttpClient) {
             price = latest.fiyat,
             changePercent = change,
             date = latest.tarih.orEmpty(),
+            // Tarihi cozulemeyen satir ATLANIR - bicim degisirse hafta/ay
+            // sessizce yanlis cikmaz, yalnizca "—" kalir.
+            history = series.mapNotNull { row ->
+                val date = parseIsoDate(row.tarih) ?: return@mapNotNull null
+                if (row.fiyat <= 0.0) null else PricePoint(date, row.fiyat)
+            },
         )
     }
 
@@ -104,4 +118,23 @@ data class TefasQuote(
     val price: Double,
     val changePercent: Double,
     val date: String,
+    /** Bir aylik gunluk seri, eskiden yeniye. Haftalik/aylik degisimin kaynagi. */
+    val history: List<PricePoint> = emptyList(),
 )
+
+/**
+ * "2026-07-31" -> KefeDate. Bicim canli sonda ile dogrulandi
+ * (`-Pprobe --tests "*LivePriceProbeTest"`).
+ *
+ * Baska bir bicim gelirse null doner: yanlis bir tarih uydurmaktansa o satiri
+ * hic saymamak dogru - hafta/ay o zaman yerel gecmise duser.
+ */
+internal fun parseIsoDate(text: String?): KefeDate? {
+    val parts = text?.trim()?.split('-') ?: return null
+    if (parts.size != 3) return null
+    val year = parts[0].toIntOrNull() ?: return null
+    val month = parts[1].toIntOrNull() ?: return null
+    val day = parts[2].toIntOrNull() ?: return null
+    if (month !in 1..12 || day !in 1..31) return null
+    return KefeDate(year = year, month = month, day = day)
+}

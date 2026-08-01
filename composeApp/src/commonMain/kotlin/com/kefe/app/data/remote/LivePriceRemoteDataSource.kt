@@ -113,6 +113,9 @@ class LivePriceRemoteDataSource(
                 timestamp = quote.date,
                 source = PriceSource.Tefas,
                 assetClass = AssetClass.Fund,
+                // TEFAS'in bir aylik serisi: depo bunu gecmise yazar, boylece
+                // fonlarda haftalik/aylik degisim ilk gunden gercek olur.
+                history = quote.history,
             )
         }
 
