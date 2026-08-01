@@ -79,6 +79,21 @@ fun periodChangesOf(
 )
 
 /**
+ * Bir degisimin TL tutari ve yuzdesi BIRLIKTE.
+ *
+ * Ikisi ayni cozumden gelir: ayri hesaplansalar yuvarlamada ayrisir ve ekranda
+ * "+₺100 · +0,00%" gibi kendi kendiyle celisen satirlar cikardi.
+ *
+ * [percent]'in paydasi DONEM BASINDAKI degerdir - kar/zararin maliyete orani
+ * degil. "Bu hafta ne kadar oynadi" ile "bugune kadar ne kazandim" ayri
+ * sorulardir.
+ */
+data class PeriodTotal(
+    val amount: Double,
+    val percent: Double,
+)
+
+/**
  * Bir grup pozisyonun DEGER AGIRLIKLI donem degisimi.
  *
  * Yuzdeler ORTALANMAZ: ₺900.000'lik altinin %1'i ile ₺1.000'lik fonun %10'u
@@ -89,7 +104,7 @@ fun periodChangesOf(
  * fonun bilinmeyen aylik degisimini sifir saymak grubun degisimini sulandirirdi.
  * Hicbirinde veri yoksa null.
  */
-fun weightedChangePercent(values: List<Pair<Double, Double?>>): Double? {
+fun weightedPeriodTotal(values: List<Pair<Double, Double?>>): PeriodTotal? {
     var previousTotal = 0.0
     var currentTotal = 0.0
     var known = false
@@ -104,5 +119,14 @@ fun weightedChangePercent(values: List<Pair<Double, Double?>>): Double? {
     }
 
     if (!known || previousTotal <= 0.0) return null
-    return (currentTotal - previousTotal) / previousTotal * 100.0
+    val amount = currentTotal - previousTotal
+    return PeriodTotal(amount = amount, percent = amount / previousTotal * 100.0)
+}
+
+/** Tek pozisyonun donem degisimi - yuzde biliniyorsa TL karsiligiyla. */
+fun periodTotalOf(value: Double, percent: Double?): PeriodTotal? {
+    if (percent == null) return null
+    val previous = value / (1.0 + percent / 100.0)
+    if (previous <= 0.0) return null
+    return PeriodTotal(amount = value - previous, percent = percent)
 }

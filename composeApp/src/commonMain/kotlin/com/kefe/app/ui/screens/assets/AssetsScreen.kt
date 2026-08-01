@@ -38,10 +38,7 @@ import com.kefe.app.ui.components.KefeManualBadge
 import com.kefe.app.ui.components.KefePeriodChips
 import com.kefe.app.ui.components.KefeSectionHeader
 import com.kefe.app.ui.components.KefeSkeletonBlock
-import com.kefe.app.ui.format.ChangePeriod
 import com.kefe.app.ui.format.Money
-import com.kefe.app.ui.format.changeIn
-import com.kefe.app.ui.format.changeText
 import com.kefe.app.ui.format.quantityLabel
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcons
@@ -144,9 +141,10 @@ private fun AssetsHeader(state: AssetsUiState, onIntent: (AssetsIntent) -> Unit)
 
         Spacer(Modifier.height(Space.x8))
 
-        // Degisim penceresi - Piyasa ekranindakiyle AYNI secici. Satirdaki TL
-        // kar yerini korur; donem degisimi onun ALTINA, sonuk ikinci satira
-        // duser (adim 14: "ne kadar kazandik" birincil olmali).
+        // Degisim penceresi. TEK rakam cifti gosterilir ve cip hangi soruyu
+        // sordugunu soyler: TL de yuzde de birlikte degisir. Once TL kar (hep
+        // toplam) ile donem yuzdesi ust uste duruyordu; ayni satirda iki farkli
+        // soruya cevap vermek karisikti.
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Space.x8),
@@ -157,9 +155,9 @@ private fun AssetsHeader(state: AssetsUiState, onIntent: (AssetsIntent) -> Unit)
                 color = c.onSurfaceMuted,
             )
             KefePeriodChips(
-                selectedIndex = ChangePeriod.entries.indexOf(state.period),
-                onSelect = { onIntent(AssetsIntent.SelectPeriod(ChangePeriod.entries[it])) },
-                options = ChangePeriod.entries.map { it.label },
+                selectedIndex = AssetChange.entries.indexOf(state.change),
+                onSelect = { onIntent(AssetsIntent.SelectChange(AssetChange.entries[it])) },
+                options = AssetChange.entries.map { it.label },
                 lastWeight = 1f,
             )
         }
@@ -221,7 +219,7 @@ private fun AssetsList(
         items(state.groups, key = { it.assetClass.name }) { group ->
             AssetGroupCard(
                 group = group,
-                period = state.period,
+                mode = state.change,
                 expanded = group.assetClass !in state.collapsed,
                 onToggle = { onIntent(AssetsIntent.ToggleGroup(group.assetClass)) },
                 onOpenPosition = onOpenPosition,
@@ -233,7 +231,7 @@ private fun AssetsList(
 @Composable
 private fun AssetGroupCard(
     group: AssetGroup,
-    period: ChangePeriod,
+    mode: AssetChange,
     expanded: Boolean,
     onToggle: () -> Unit,
     onOpenPosition: (String) -> Unit,
@@ -251,24 +249,17 @@ private fun AssetGroupCard(
             dotColor = c.assetClass(group.assetClass.color()),
             title = group.assetClass.label(),
             total = Money.tlExact(group.total),
-            // Pay yuzdesi yerine TL KAR. Pay zaten Ozet'teki "Ne kadari nerede"
-            // halkasinda duruyordu; "ne kadar kazandik" ise hicbir listede yoktu.
-            // Maliyeti olmayan grupta (nakit) oran anlamsiz - yalniz tutar yazilir.
+            // Pay yuzdesi yerine TL. Pay zaten Ozet'teki "Ne kadari nerede"
+            // halkasinda duruyordu; "ne kadar kazandik" ise hicbir listede
+            // yoktu. Maliyeti olmayan grupta (nakit) oran anlamsiz - yalniz
+            // tutar yazilir. Kurus HER ZAMAN gorunur (bkz. Money.tlExact):
+            // kar/zarar ayarin "ana toplam" istisnasina girmez.
             //
-            // Kurus HER ZAMAN yazilir (bkz. Money.tlExact): kar/zarar ayarin
-            // "ana toplam" istisnasina girmez, kullanicinin bakip karar verdigi
-            // rakamdir.
-            percent = Money.tlSignedExact(group.profit) + if (group.profitPercent != 0.0) {
-                " · " + Money.delta(group.profitPercent)
-            } else {
-                ""
-            } + group.periodChangePercent?.let {
-                // Donem etiketi yazilir: "+₺239.112,47 · +36,29% · Hafta +2,41%"
-                // Ustteki cipler zaten donemi soyluyor ama bu satir kar ile
-                // donem degisimini yan yana tasiyor, ikisi karismamali.
-                " · ${period.label} ${Money.delta(it)}"
-            }.orEmpty(),
-            percentColor = if (group.profit < 0.0) c.negative else c.positive,
+            // Secili pencerenin TL'si ve yuzdesi BIRLIKTE, tek renkte. Veri
+            // yoksa tire ve notr renk: bilinmeyen bir sayiya yon vermek yanlis
+            // olurdu.
+            percent = changeLabel(group.change, mode),
+            percentColor = group.change?.let { c.delta(it.amount) } ?: c.onSurfaceMuted,
             expanded = expanded,
             onToggle = onToggle,
             chevronIcon = KefeIcons.ChevronRight,
@@ -277,14 +268,14 @@ private fun AssetGroupCard(
         if (expanded) {
             group.positions.forEach { position ->
                 KefeHairline()
-                AssetRow(position, period, onClick = { onOpenPosition(position.id) })
+                AssetRow(position, mode, onClick = { onOpenPosition(position.id) })
             }
         }
     }
 }
 
 @Composable
-private fun AssetRow(position: Position, period: ChangePeriod, onClick: () -> Unit) {
+private fun AssetRow(position: Position, mode: AssetChange, onClick: () -> Unit) {
     val c = KefeTheme.colors
 
     // Elle girilen fiyat rozetle isaretlenir - hesabin nereden geldigi gizlenmez.
@@ -294,21 +285,20 @@ private fun AssetRow(position: Position, period: ChangePeriod, onClick: () -> Un
         null
     }
 
-    // Alt rakam gunluk degisim yuzdesi DEGIL, TL kar. Elle fiyatlanan
-    // varliklarda gunluk degisim hep "0,00%" cikiyordu; asil merak edilen
-    // "bu varlik bize ne kazandirdi" ise yalniz detay ekraninda vardi.
-    val profit = position.value - position.cost
+    // Alt rakam SECILI pencerenin TL'si ve yuzdesi. Once iki ayri sayi ust uste
+    // duruyordu (hep toplam TL kar, altinda donem yuzdesi); ayni satirda iki
+    // farkli soruya cevap vermek karisikti.
+    val change = position.changeIn(mode)
 
     KefeListRow(
         title = position.name,
         subtitle = position.quantityLabel(),
         value = Money.tlExact(position.value),
-        delta = profit,
-        deltaText = Money.tlSignedExact(profit),
-        // TL kar birincil kalir; donem degisimi onun altinda sonuk ikinci
-        // satirda. Veri yoksa "Hafta —" yazilir: satirin bos kalmasi
-        // "degismedi" gibi okunurdu.
-        deltaSecondary = "${period.label} ${changeText(position.changeIn(period))}",
+        delta = change?.amount,
+        deltaText = changeLabel(change, mode),
+        // Veri yoksa tire, notr renkte: satirin bos kalmasi "degismedi" gibi
+        // okunurdu, renk vermek de bilinmeyene yon vermek olurdu.
+        deltaColor = change?.let { c.delta(it.amount) } ?: c.onSurfaceMuted,
         leadingIcon = position.assetClass.icon(),
         leadingTint = c.assetClass(position.assetClass.color()),
         onClick = onClick,
