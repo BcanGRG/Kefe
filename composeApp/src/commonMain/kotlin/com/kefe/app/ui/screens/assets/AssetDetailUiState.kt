@@ -12,12 +12,21 @@ data class AssetDetailUiState(
     val transactions: List<Transaction> = emptyList(),
     val members: List<Member> = emptyList(),
 
-    // Grafik: 12 aylik birim fiyat serisi + uzerindeki alim/satim isaretleri.
+    // Grafik: KAYDEDILMIS gunluk birim fiyatlar + uzerindeki alim/satim
+    // isaretleri. Sabit bir pencere degil - elde ne varsa o cizilir.
     val priceSeries: List<Double> = emptyList(),
     val tradeMarkers: List<TradeMarker> = emptyList(),
     /** Eksende gosterilen uc etiket: ilk, orta, son ay. */
     val axisLabels: List<String> = emptyList(),
-    val periodLabel: String = "12 ay",
+    /**
+     * Grafigin GERCEKTEN kapsadigi araliK: "1 Tem – 31 Tem".
+     *
+     * Once sabit "12 ay" yaziyordu. Fonlarda TEFAS'in bir aylik serisi gecmise
+     * yazilmaya baslayinca etiket acikca YALAN soyler oldu: dolu gorunen bir
+     * egrinin ustunde "12 ay" duruyor, oysa bir aylik veri var. Altin ve
+     * dovizde ise seri cihazda birikiyor - orada da sabit bir pencere yok.
+     */
+    val periodLabel: String = "",
 
     // Ozet satirlari - hepsi ISLEM DEFTERINDEN turetilir
     val averageBuyPrice: Double = 0.0,

@@ -31,9 +31,17 @@ import com.kefe.app.ui.theme.Space
  * Kurallar hep ayni: onay dugmesi VARSAYILAN DEGILDIR - kutuyu kapatmak tek
  * dokunusla, silmek bilerek yapilir - ve [message] neyin kaybedilecegini tek tek
  * yazar. Kullanici neyi kaybettigini bilmeli.
+ *
+ * Geri tusu VAZGECMEKTIR, onaylamak degil.
+ *
+ * Gorunurluk [visible] ile verilir, cagiran taraftaki `if` ile DEGIL: geri
+ * isleyicisi kosulsuz bestelenmek zorunda (bkz. [KefeBackHandler]). `if` ile
+ * sarilinca isleyici bestelemeye girip cikiyor, sira degisiyor ve geri tusu
+ * bazen kutuyu kapatiyor bazen arkadaki ekrani geri atiyordu.
  */
 @Composable
 fun KefeConfirmDialog(
+    visible: Boolean,
     title: String,
     message: String,
     confirmLabel: String,
@@ -43,6 +51,9 @@ fun KefeConfirmDialog(
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
+
+    KefeBackHandler(enabled = visible) { onDismiss() }
+    if (!visible) return
 
     Box(
         Modifier

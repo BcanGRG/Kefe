@@ -102,7 +102,19 @@ class AddTransactionViewModel(
                 )
             )
 
-            is AddTransactionIntent.SelectSubtype -> update(s.copy(selectedSubtype = intent.subtype))
+            // Form degisince ayar da o formun varsayilanina doner: bilezikten
+            // grama gecen biri 22 ayar secili kalirsa, ayar panelini fark
+            // etmediginde 24 ayar gramini 22 ayar fiyatiyla kaydeder.
+            is AddTransactionIntent.SelectSubtype -> update(
+                s.copy(
+                    selectedSubtype = intent.subtype,
+                    karat = if (intent.subtype.usesKarat()) {
+                        intent.subtype.defaultKarat()
+                    } else {
+                        s.karat
+                    },
+                )
+            )
 
             // Ayni hedefe tekrar dokunmak secimi KALDIRIR (hedefsiz'e doner).
             is AddTransactionIntent.SelectGoal -> update(
@@ -265,7 +277,10 @@ class AddTransactionViewModel(
         copy(
             assetClass = position.assetClass,
             selectedSubtype = position.subtype ?: selectedSubtype,
-            karat = position.karat ?: karat,
+            // Ayari bos eski kayitta formun varsayilanina duseriz - yoksa
+            // "Gram Altın" duzenlenirken 22 ayar secili gelip kaydedince
+            // varlik baska bir kotasyona tasinirdi.
+            karat = position.karat ?: position.subtype?.defaultKarat() ?: karat,
             selectedFundKey = position.id.removePrefix("pos_")
                 .takeIf { position.assetClass == AssetClass.Fund },
             currency = Currency.fromPriceKey(position.id.removePrefix("pos_")) ?: currency,
@@ -403,7 +418,8 @@ class AddTransactionViewModel(
                     editingTransactionId = transaction.id,
                     assetClass = position.assetClass,
                     selectedSubtype = position.subtype ?: s.selectedSubtype,
-                    karat = position.karat ?: s.karat,
+                    // Ayari bos eski kayitta formun varsayilani (bkz. forPosition).
+                    karat = position.karat ?: position.subtype?.defaultKarat() ?: s.karat,
                     // Fon pozisyonunun kimligi "pos_<fon anahtari>" bicimindedir;
                     // secim bununla eslesmezse kayit yeni bir pozisyona yazilir.
                     selectedFundKey = position.id.removePrefix("pos_")
@@ -495,8 +511,7 @@ class AddTransactionViewModel(
                         assetClass = s.assetClass,
                         subtype = s.selectedSubtype.takeIf { s.assetClass == AssetClass.Gold },
                         karat = s.karat.takeIf {
-                            s.assetClass == AssetClass.Gold &&
-                                s.selectedSubtype == GoldSubtype.Jewelry
+                            s.assetClass == AssetClass.Gold && s.selectedSubtype.usesKarat()
                         },
                         // Miktar ve maliyet defterden turer; burada yalniz meta bilgi.
                         quantity = 0.0,
@@ -646,7 +661,7 @@ private fun karatGramPrice(karat: Karat, board: PriceBoard, side: TradeSide): Do
 /** Secime karsilik gelen guncel birim fiyat. */
 private fun marketPriceOf(s: AddTransactionUiState, board: PriceBoard): Double =
     when (s.assetClass) {
-        AssetClass.Gold -> if (s.selectedSubtype == GoldSubtype.Jewelry) {
+        AssetClass.Gold -> if (s.selectedSubtype.usesKarat()) {
             karatGramPrice(s.karat, board, s.side)
         } else {
             subtypePrice(s.selectedSubtype, board, s.side) ?: 0.0
@@ -712,9 +727,18 @@ private fun lastAddedOf(activity: List<ActivityEvent>, positions: List<Position>
 
 /** Ayni varlik zaten portfoydeyse islem o pozisyona yazilir. */
 private fun Position.matches(s: AddTransactionUiState): Boolean = when (s.assetClass) {
+    // Ayar da eslesmeli: 22 ayar gram ile 24 ayar gram AYRI varliklardir,
+    // fiyatlari da ayri kotasyondan gelir.
+    //
+    // Eski kayitlarda ayar kolonu BOS. `karat == s.karat` deseydik mevcut
+    // "Gram Altın" pozisyonu (null) 24 ayar secimiyle eslesmez, her ekleme
+    // ikinci bir pozisyon acardi. Bu yuzden ETKIN ayar kiyaslanir.
     AssetClass.Gold -> assetClass == AssetClass.Gold &&
         subtype == s.selectedSubtype &&
-        (s.selectedSubtype != GoldSubtype.Jewelry || karat == s.karat)
+        (
+            !s.selectedSubtype.usesKarat() ||
+                (karat ?: s.selectedSubtype.defaultKarat()) == s.karat
+            )
 
     AssetClass.Fund -> assetClass == AssetClass.Fund &&
         s.selectedFund?.code?.let { name.startsWith(it) } == true

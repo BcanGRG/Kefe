@@ -11,6 +11,7 @@ import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.Price
+import com.kefe.app.domain.model.PricePoint
 import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
@@ -40,7 +41,7 @@ internal class NoPrices : PriceRepository {
     override fun observePrices(): Flow<PriceBoard> =
         flowOf(PriceBoard(emptyList(), "", PriceFreshness.Offline))
 
-    override fun observePriceHistory(assetKey: String): Flow<List<Double>> = flowOf(emptyList())
+    override fun observePriceHistory(assetKey: String): Flow<List<PricePoint>> = flowOf(emptyList())
     override suspend fun refresh(): Result<RefreshOutcome> =
         Result.success(RefreshOutcome.Fetched)
     override suspend fun setManualPrice(assetKey: String, value: Double) = Unit

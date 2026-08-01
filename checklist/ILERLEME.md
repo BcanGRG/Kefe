@@ -51,6 +51,10 @@ Gerçek kullanımda çıkan altı şey. Hepsi emülatörde doğrulandı.
 | 20 | Klavye alanı görünür kılıyor, alanlar arası geçiş var | ✅ **bitti + gerçek cihazda doğrulandı** |
 | 21 | Fon fiyatlarında ince ondalık; hesaplar gözden geçirildi | ✅ **bitti + gerçek cihazda doğrulandı** |
 | 22 | Varlık detayından ekleme o varlıkla açılıyor | ✅ **bitti** |
+| 23 | Geri tuşu alt sayfayı kapatıyor, arkadaki ekranı atmıyor | ✅ **bitti** |
+| 24 | Varlık detayı ve listesinde kuruş hep görünür | ✅ **bitti** |
+| 25 | Günlük/haftalık/aylık değişim — Piyasa ve Varlıklar | ✅ **bitti** |
+| 26 | Gram altında ayar seçilebiliyor (14/18/22/24) | ✅ **bitti** |
 
 **Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
 Gmail SMTP + App Password ile açıldı (Resend domain istiyordu; domain alınmadı).
@@ -898,3 +902,150 @@ yoksa kayıt yeni bir pozisyona yazılırdı).
 **Doğrulama.** Emülatörde AN1 fonunun detayından "Alım Ekle" → sheet
 *"2. adım · AN1 · STRATEJİ PORTFÖY BİRİNCİ DEĞİŞKEN FON"* ile açıldı, birim
 "pay", fiyat 108,391402 dolu; "Satış Ekle" → aynı sayfa, **Satış** seçili.
+
+---
+
+## 23 · Geri tuşu alt sayfayı kapatır ✅
+
+**Neydi.** Ekleme sayfası, hedef düzenleme, varlık seçici, elle fiyat sayfası,
+varlık menüsü ve silme onayı açıkken sistem geri tuşuna basmak sayfayı
+kapatmıyor, **arkadaki ekranı geri atıyordu**. Kullanıcı sayfayı kapatmak için
+basıyor, kendini başka ekranda buluyordu. Onboarding ve giriş kod kutusu bu
+dersi zaten almıştı (adım 4, 9b); alt sayfalar almamıştı.
+
+**Ne yapıldı.** Ortak `KefeBackHandler` (`ui/components/BackHandler.kt`).
+Compose'un `ui-backhandler`'ı kullanımdan kaldırıldığı için altında
+navigationevent'in `NavigationBackHandler`'ı var — NavDisplay da kendi geri
+işleyicisini aynı göndericiye kaydediyor, yani ikisi aynı sırada buluşuyor.
+
+- `KefeBottomSheet` ve `KefeConfirmDialog` işleyiciyi **kendi içinde** taşıyor;
+  onları kullanan her sayfa bunu kendiliğinden alıyor.
+- Ekleme sayfası **iki adımı da tanıyor**: 2. adımda geri bir adım geri gider,
+  1. adımda sayfa kapanır. Üst bardaki geri okuyla aynı davranış.
+
+**Yol boyunca çıkan tuzak — işleyici KOŞULSUZ bestelenmeli.** İlk sürümde her
+katman kendi işleyicisini `if (açık)` içinde besteliyordu. Emülatörde geri
+tuşu **her seferinde başka türlü** davrandı: bir kez 1. adıma döndü, bir kez
+sayfayı kapattı, bir kez hiç yakalanmayıp uygulamadan çıktı. Sebep
+kütüphanenin kendi uyarısında yazıyor: hangi işleyicinin çalışacağını *son
+bestelenen* belirler, `if` ile girip çıkan bir işleyici o sırayı bozar.
+
+Düzeltme: işleyiciyi katmanın **sahibi** koşulsuz besteler, görünürlüğü
+`enabled` ile verir. `KefeConfirmDialog` bu yüzden artık `visible` parametresi
+alıyor (çağıran taraftaki `if` kalktı), varlık menüsü ile varlık seçicinin
+işleyicileri ekran köküne çıktı, ekleme sayfasınınki kabuğa (App.kt) taşındı.
+`AddTransactionViewModel` de bu yüzden kabukta yaşıyor — `GoalsViewModel` ile
+aynı yerde.
+
+**Doğrulama.** Emülatörde art arda: 2. adımda geri → **1. adım**; 1. adımda
+geri → sayfa kapandı, arkadaki ekran değişmedi; kök sekmede geri →
+uygulamadan çıktı (Android'in beklenen davranışı). Üç tekrarda da aynı sonuç.
+
+---
+
+## 24 · İnce ondalık: tutarlar da kuruşlu ✅
+
+**Neydi.** Adım 21 FİYAT hanelerini değerden türetti ama TUTARLARA
+dokunmamıştı. Varlık detayında "Güncel değer" `₺147.581`, kâr `+₺39.291`,
+yüzdeler tek hane; varlıklar listesinde kâr/zarar ondalıksız. Kuruşuna kadar
+hesap yapan biri için ekran hâlâ kırpıyordu.
+
+**Ne yapıldı.** `Money.tlExact` / `tlSignedExact` — "Kuruşları göster"
+ayarından **bağımsız**. Ayar ana toplamlar için konmuştu; varlık detayındaki
+değer ve listedeki kâr/zarar ana toplam değil, kullanıcının bakıp karar
+verdiği rakam. Yüzdeler tek haneden ikiye çıktı (`Money.delta` varsayılanı).
+
+**İKİ KADEMELİ hane.** Emülatörde yakalandı: değerden türeyen hane sayısı
+`₺670.503,6` üretiyordu. Parada ya kuruş vardır ya yoktur; tek hane para
+yazımı değil ve üst üste dizilen bir sütunda rakamlar eğri görünüyor. Kural
+"ya 0 ya 2" oldu — tam sayı tutar hâlâ `₺40.359`, kuruşlu tutar `₺670.503,60`.
+
+Ekleme sayfasındaki **Toplam** da buna döndü: hemen altındaki
+"1 × ₺5.593,05" satırı kuruşu gösterirken toplamın "₺5.593" demesi ikisini
+çelişkiye düşürüyordu.
+
+**Doğrulama.** 11 yeni test (kuruş yazımı, tam sayıda ",00" yok, tek hane yok,
+kayan nokta artığı, kuruştan öteye gitmez). Emülatörde fon detayı:
+"₺ 541,96", "Maliyet ₺550,24", "−₺8,28 (−1,51%)".
+
+---
+
+## 25 · Günlük / haftalık / aylık değişim ✅
+
+**Neydi.** Piyasa tablosu ve varlıklar tek bir "bugün" penceresinden
+bakıyordu; haftalık ve aylık hareket hiçbir yerde yoktu.
+
+**Kaynak sorunu ve çözümü.** Altın, gümüş ve dövizde geçmiş veren bir uç YOK:
+serbest piyasa yalnız bugünü, TCMB yalnız günlük bülteni veriyor. Bu yüzden
+tek gerçek kaynak cihazdaki `price_history` tablosu oldu — zaten günlük
+yazılıyordu.
+
+**Fonlar ilk günden dolu.** TEFAS bir AYLIK seri döndürüyor (`periyod: 1`) ve
+şimdiye kadar yalnız son iki satırı okunup gerisi çöpe gidiyordu. O seri artık
+`price_history`'ye yazılıyor: fonlarda hafta/ay **gerçek**, üstelik varlık
+detayındaki fiyat grafiği de fonlarda gerçek bir aylık eğri kazandı. Tarih
+biçimi (`2026-07-31`) tahmin edilmedi, canlı sondayla ölçüldü
+(`-Pprobe --tests "*LivePriceProbeTest"`); ayrıştırılamayan satır atlanıyor.
+
+**Veri yoksa "—", sıfır değil.** "Değişmedi" ile "bilmiyoruz" ayrı şeyler.
+7 günlük pencere 3, 30 günlük pencere 7 gün esner (hafta sonu, uygulamanın
+açılmadığı günler); daha eskisine uzanmak "40 gün önceki fiyatı haftalık diye
+yazmak" olurdu. **Elle fiyatlı satırda dönem değişimi hiç yok**: geçmişteki
+satırlar kaynağın fiyatı, bugünkü kullanıcının girdiği rakam — ikisini
+kıyaslamak iki ayrı ölçünün farkı olurdu.
+
+**Grup değişimi DEĞER AĞIRLIKLI.** ₺900.000'lik altının %1'i ile ₺1.000'lik
+fonun %10'u aynı ağırlıkta değil; yüzdeler ortalanmıyor (`todayChange()` ile
+aynı mantık). Yüzdesi bilinmeyen pozisyon hesaba hiç girmiyor.
+
+**Ekran.** Piyasa ve Varlıklar başlığına **Gün / Hafta / Ay** çipleri; tek
+değişim sütunu seçilen dönemi yazıyor. Üç ayrı sütun telefonda ürün adına
+~16dp bırakıyordu. Varlıklar satırında **TL kâr birincil kalıyor** (adım 14
+kararı bozulmadı), dönem değişimi altına sönük ikinci satır olarak düşüyor.
+**Elde varlık yokken seçiciler hiç çizilmiyor** — sıralanacak liste, ölçülecek
+değişim yok (Özet'in boş durumuyla aynı gerekçe, adım 9b).
+
+**Grafik etiketi düzeltildi.** Sabit "12 ay" yazıyordu ve bu bir varsayımdı;
+fonlarda dolu bir aylık eğrinin üstünde açıkça yalan oldu. Etiket artık
+serinin gerçek aralığını yazıyor ("1 Tem – 31 Tem").
+
+**Doğrulama.** 13 yeni test (tam gün, tolerans içi/dışı, pencerenin en yenisi,
+boş geçmiş, düşüşün işareti, değer ağırlığı, bilinmeyenin hesaba girmemesi).
+Emülatörde: fonlarda hafta `−1,07% / −0,59% / −1,82% / −7,06%`, grup
+`Hafta −2,63%`; altın, gümüş ve dövizde "—" (cihazda henüz geçmiş yok).
+
+---
+
+## 26 · Gram altında ayar seçilebiliyor ✅
+
+**Neydi.** Alt tür listesi "Gram (24 ayar)" diyordu ve ayar YALNIZ
+"Bilezik/Takı" seçilince soruluyordu. **22 ayar gram altını** olan biri onu
+ancak "Bilezik/Takı" diye kaydedebiliyordu: hesap doğru çıkıyor ama ekranda
+elindekinden başka bir şey yazıyordu. Oysa 14/18/22 ayar gramın kendi
+kotasyonu piyasa tablosunda zaten duruyordu — ulaşılamıyordu.
+
+**Ne yapıldı.** Ayar artık formdan AYRI bir eksen:
+
+- `GoldSubtype.usesKarat()` — **gramla satılan** formlarda ayar sorulur (gram,
+  bilezik). Adetle satılanlarda formun kendisi ayarı belirler: çeyrek, yarım,
+  tam, ata hep 22'dir; has/külçe zaten saf altındır.
+- Varsayılan: gramda 24, bilezikte 22. Form değişince ayar da o formun
+  varsayılanına döner — bilezikten grama geçen biri 22 ayar seçili kalırsa,
+  ayar panelini fark etmediğinde 24 ayar gramını 22 ayar fiyatıyla kaydederdi.
+- Ad "22 Ayar Gram Altın"; **24 ayarda ayar yazılmıyor**, "Gram Altın" kalıyor.
+
+**Eski kayıtlar zerre değişmiyor.** `karat` kolonu eski gram kayıtlarında boş;
+varsayılan 24 ve 24 ayar zaten `gold_gram` anahtarına düşüyor. Pozisyon
+eşleştirmesi de ETKİN ayarı kıyaslıyor (`karat ?: varsayılan`) — düz
+`karat == seçili` deseydik mevcut "Gram Altın" 24 ayar seçimiyle eşleşmez,
+her ekleme ikinci bir pozisyon açardı.
+
+**Gram kutusu yalnız bilezikte.** Düz gram altında miktar zaten 2. adımda
+giriliyor; 1. adımda ikinci bir gram kutusu aynı sayıyı iki kez sormak olurdu.
+Orada yalnız seçili ayarın gram fiyatı yazıyor.
+
+**Doğrulama.** 4 yeni test (gram+ayar anahtarı, ayarsız eski kaydın
+değişmemesi, adetle satılanların ayar sormaması, 22 ile 24'ün ayrı anahtara
+düşmesi). Emülatörde: Gram → AYAR paneli (14/18/22/24, varsayılan 24) →
+22 seçildi → *"2. adım · 22 ayar Gram Altın"*, birim gram, birim fiyat
+**₺5.593,05** (24 ayarın ₺6.175'inden ayrı, gerçek 22 ayar kotasyonu).

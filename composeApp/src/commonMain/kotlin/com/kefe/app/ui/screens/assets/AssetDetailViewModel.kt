@@ -6,11 +6,13 @@ import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.Price
+import com.kefe.app.domain.model.PricePoint
 import com.kefe.app.domain.model.PriceSource
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.annualizedReturnPercent
 import com.kefe.app.domain.model.buyPrice
 import com.kefe.app.domain.model.costBasis
+import com.kefe.app.domain.model.formatShort
 import com.kefe.app.domain.model.holdingDays
 import com.kefe.app.domain.model.priceKey
 import com.kefe.app.domain.model.sellPrice
@@ -92,7 +94,12 @@ class AssetDetailViewModel(
             priceRepository.observePriceHistory(assetKey).collect { series ->
                 // Tek nokta egri degildir: iki noktadan az veri varken grafik
                 // hic cizilmez (ekran zaten size >= 2 kontrolu yapiyor).
-                _state.value = _state.value.copy(priceSeries = series)
+                _state.value = _state.value.copy(
+                    priceSeries = series.map { it.price },
+                    // Etiket serinin GERCEK araligini yazar; sabit "12 ay"
+                    // fonlarda dolu bir aylik egrinin ustunde yalan oluyordu.
+                    periodLabel = periodLabelOf(series),
+                )
             }
         }
     }
@@ -234,4 +241,21 @@ private fun PriceBoard.matchTo(position: Position): Price? =
         ?: prices.firstOrNull { it.label == position.name }
         ?: prices.firstOrNull { position.name.startsWith(it.label) }
         ?: prices.firstOrNull { it.label.startsWith(position.name) }
+
+/**
+ * Grafigin ustundeki aralik etiketi: "1 Tem – 31 Tem".
+ *
+ * Once sabit "12 ay" yaziyordu ve bu bir varsayimdi: grafik cihazda BIRIKMIS
+ * gunleri ciziyor, on iki aylik bir seri hicbir zaman olmuyordu. Fonlarda
+ * TEFAS'in aylik serisi gecmise yazilmaya baslayinca etiket acikca yanlis
+ * oldu - dolu gorunen bir egrinin ustunde "12 ay" duruyordu.
+ *
+ * Iki noktadan az veride grafik zaten cizilmiyor; etiket de bos kalir.
+ */
+private fun periodLabelOf(series: List<PricePoint>): String {
+    if (series.size < 2) return ""
+    val first = series.first().date
+    val last = series.last().date
+    return "${first.formatShort()} – ${last.formatShort()}"
+}
 

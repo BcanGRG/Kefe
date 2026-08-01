@@ -11,6 +11,9 @@ androidxBiometric = "1.1.0"
 coroutines = "1.11.0"
 lifecycle = "2.11.0"
 navigation3 = "1.1.1"
+# navigation3 1.1.1'in gecisli olarak istedigi surum; ayrisirsa NavDisplay ile
+# ayni gonderici ustunde bulusmayan iki kopya olusabilir.
+navigationevent = "1.0.1"
 activityCompose = "1.13.0"
 ktor = "3.5.1"
 koin = "4.2.2"
@@ -40,7 +43,10 @@ lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecyc
 navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
 # Ortak koddan sistem geri tusunu yakalamak icin. navigation3 bunu zaten gecisli
 # getiriyor ama YALNIZ calisma zamaninda; derlemede gorunmesi icin acikca yazilir.
-compose-ui-backhandler = { module = "org.jetbrains.compose.ui:ui-backhandler", version.ref = "composeMultiplatform" }
+# Compose'un ui-backhandler'i kullanimdan kaldirildi; NavDisplay'in kendi geri
+# isleyicisi de bu artifact'tan geliyor - ayni gonderici, ayni oncelik sirasi.
+# Surum navigation3'un istedigiyle ayni tutulur (1.1.1 -> 1.0.1).
+navigationevent-compose = { module = "org.jetbrains.androidx.navigationevent:navigationevent-compose", version.ref = "navigationevent" }
 
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "androidxBiometric" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }

@@ -17,6 +17,13 @@ data class Position(
     val cost: Double,
     val manualPrice: Boolean = false,
     val dailyChangePercent: Double = 0.0,
+    /**
+     * Haftalik/aylik fiyat degisimi. null = bilmiyoruz (bkz. [PeriodChanges]);
+     * gunlukten farkli olarak sifira dusurulmez - "degismedi" ile "veri yok"
+     * ayri seylerdir.
+     */
+    val weekChangePercent: Double? = null,
+    val monthChangePercent: Double? = null,
 ) {
     val profit: Double get() = value - cost
 

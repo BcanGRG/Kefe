@@ -216,10 +216,17 @@ val AddTransactionUiState.stepLabel: String
 /** Secimin okunur adi - ikinci adimin alt basligi ve pozisyon adi. */
 val AddTransactionUiState.selectionName: String
     get() = when (assetClass) {
-        AssetClass.Gold -> when (selectedSubtype) {
-            GoldSubtype.Jewelry -> "${karat.label()} ${GoldSubtype.Jewelry.label()}"
-            GoldSubtype.Gram -> "Gram Altın"
-            GoldSubtype.Bullion -> "Has/Külçe Altın"
+        AssetClass.Gold -> when {
+            selectedSubtype == GoldSubtype.Bullion -> "Has/Külçe Altın"
+            // Ayar adin ONUNE yazilir: "22 Ayar Gram Altın", "18 Ayar Bilezik/Takı".
+            //
+            // 24 ayar gramda ayar YAZILMAZ: hem "gram altin" denince zaten o
+            // anlasilir, hem de eski kayitlarin adi "Gram Altın" - ad degisseydi
+            // mevcut pozisyon eslesmeyip ikinci bir "24 Ayar Gram Altın" acilirdi.
+            selectedSubtype == GoldSubtype.Gram && karat == Karat.K24 -> "Gram Altın"
+            selectedSubtype.usesKarat() -> "${karat.label()} ${selectedSubtype.label()}" +
+                if (selectedSubtype == GoldSubtype.Gram) " Altın" else ""
+
             else -> "${selectedSubtype.label()} Altın"
         }
 
@@ -300,16 +307,26 @@ val AddTransactionUiState.priceCompareLine: String
     get() = "Güncel piyasa: " + Money.tl(marketPrice, decimals = priceDecimals) +
         " · Fark " + Money.tlSigned(priceDifference, decimals = priceDecimals)
 
-/** Bilezik/taki icin secili ayarin gram fiyati; digerlerinde kullanilmaz. */
+/** Ayar secilen formlarda (gram, bilezik) secili ayarin gram fiyati. */
 val AddTransactionUiState.karatGramPrice: Double
     get() = karatOptions.firstOrNull { it.karat == karat }?.gramPrice ?: 0.0
+
+/**
+ * "22 Ayar gram fiyatı ₺15.308" - gram formunda, miktar yokken.
+ *
+ * Duz gram altinda miktar 2. adimda giriliyor; 1. adimda toplam yazmak icin
+ * sifirla carpip "≈ ₺0" gostermek gerekirdi. Yalniz fiyat yazilir.
+ */
+val AddTransactionUiState.karatPriceLine: String
+    get() = karat.label() + " gram fiyatı " + Money.tlExact(karatGramPrice)
 
 /** "22 ayar gram fiyatı ₺15.308 · 62,4 gr ≈ ₺955.219" */
 val AddTransactionUiState.karatLine: String
     get() {
         val grams = gramText.parseTrNumber()
-        return karat.label() + " gram fiyatı " + Money.tl(karatGramPrice) + " · " +
-            Money.quantity(grams, "gr", decimals = 1) + " ≈ " + Money.tl(grams * karatGramPrice)
+        return karat.label() + " gram fiyatı " + Money.tlExact(karatGramPrice) + " · " +
+            Money.quantity(grams, "gr", decimals = 1) + " ≈ " +
+            Money.tlExact(grams * karatGramPrice)
     }
 
 /**
@@ -351,7 +368,7 @@ val AddTransactionUiState.footNote: String
         if (offline) return "Son bilinen fiyatla kaydedilir; tutarı elle düzeltebilirsiniz."
         val head = quantityText.ifBlank { "0" } + " × " +
             Money.tl(unitPrice, decimals = priceDecimals)
-        return if (fee > 0.0) head + " + " + Money.tl(fee) + " işçilik" else head
+        return if (fee > 0.0) head + " + " + Money.tlExact(fee) + " işçilik" else head
     }
 
 val AddTransactionUiState.canContinue: Boolean

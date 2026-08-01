@@ -59,6 +59,51 @@ class PrecisionTest {
         assertEquals(0, Money.decimals(1_234_567.0, max = 6))
     }
 
+    // --- Money.tlExact / tlSignedExact ---------------------------------------
+
+    @Test
+    fun tlExactKurusuYazar() {
+        // ASIL SIKAYET: varlik detayindaki "Güncel değer" ve varlik
+        // listesindeki kar/zarar kurusu kirpiyordu.
+        assertEquals("₺147.581,36", Money.tlExact(147_581.3567))
+        assertEquals("+₺39.291,32", Money.tlSignedExact(39_291.32))
+        assertEquals("−₺8.240,55", Money.tlSignedExact(-8_240.55))
+    }
+
+    @Test
+    fun tlExactTamSayiyaOndalikEklemez() {
+        // Gurultu eklenmez: 40.359 TL "₺40.359,00" olmaz.
+        assertEquals("₺40.359", Money.tlExact(40_359.0))
+        assertEquals("+₺40.359", Money.tlSignedExact(40_359.0))
+    }
+
+    @Test
+    fun tlExactTekHaneYazmaz() {
+        // Emulatorde yakalandi: "₺670.503,6" cikiyordu. Parada ya kurus vardir
+        // ya yoktur; ust uste dizilen bir sutunda tek hane rakamlari egri
+        // gosteriyordu.
+        assertEquals("₺670.503,60", Money.tlExact(670_503.6))
+        assertEquals("+₺27.040,20", Money.tlSignedExact(27_040.2))
+    }
+
+    @Test
+    fun tlExactKayanNoktaArtiginiYutar() {
+        // 39.291,32 diskte 39291.319999999996 durabiliyor.
+        assertEquals("₺39.291,32", Money.tlExact(39_291.319999999996))
+    }
+
+    @Test
+    fun tlExactKurustanOteyeGitmez() {
+        // Fon fiyati alti haneye iner ama bir TUTAR kurustan oteye gitmez.
+        assertEquals("₺108,39", Money.tlExact(108.394521))
+    }
+
+    @Test
+    fun tlExactSifirIsaretsizdir() {
+        // Kar da zarar da yoksa "+" ya da "−" yazmak yon uydurmak olurdu.
+        assertEquals("₺0", Money.tlSignedExact(0.0))
+    }
+
     // --- Varlik sinifina gore ust sinir --------------------------------------
 
     @Test

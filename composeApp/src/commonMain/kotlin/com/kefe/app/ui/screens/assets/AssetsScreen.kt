@@ -35,10 +35,13 @@ import com.kefe.app.ui.components.KefeEmptyState
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeListRow
 import com.kefe.app.ui.components.KefeManualBadge
+import com.kefe.app.ui.components.KefePeriodChips
 import com.kefe.app.ui.components.KefeSectionHeader
 import com.kefe.app.ui.components.KefeSkeletonBlock
+import com.kefe.app.ui.format.ChangePeriod
 import com.kefe.app.ui.format.Money
-import com.kefe.app.ui.format.moneyTl
+import com.kefe.app.ui.format.changeIn
+import com.kefe.app.ui.format.changeText
 import com.kefe.app.ui.format.quantityLabel
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcons
@@ -111,6 +114,14 @@ private fun AssetsHeader(state: AssetsUiState, onIntent: (AssetsIntent) -> Unit)
             )
         }
 
+        // ELDE VARLIK YOKKEN SECICILER CIZILMEZ.
+        //
+        // Siralanacak bir liste, olculecek bir degisim yok; ipuclarini bos bir
+        // ekranin ustune koymak "bir sey eksik" hissi veriyordu. Ozet'in bos
+        // durumunda senkron cipi ve yenile de ayni gerekceyle gizleniyor
+        // (adim 9b). Ilk varlikla birlikte gelirler.
+        if (state.groups.isEmpty()) return@Column
+
         Spacer(Modifier.height(Space.x12))
 
         Row(
@@ -129,6 +140,28 @@ private fun AssetsHeader(state: AssetsUiState, onIntent: (AssetsIntent) -> Unit)
                     onClick = { onIntent(AssetsIntent.SelectSort(sort)) },
                 )
             }
+        }
+
+        Spacer(Modifier.height(Space.x8))
+
+        // Degisim penceresi - Piyasa ekranindakiyle AYNI secici. Satirdaki TL
+        // kar yerini korur; donem degisimi onun ALTINA, sonuk ikinci satira
+        // duser (adim 14: "ne kadar kazandik" birincil olmali).
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.x8),
+        ) {
+            Text(
+                text = "Değişim".trUpper(),
+                style = t.label(11, 0.06, FontWeight.SemiBold),
+                color = c.onSurfaceMuted,
+            )
+            KefePeriodChips(
+                selectedIndex = ChangePeriod.entries.indexOf(state.period),
+                onSelect = { onIntent(AssetsIntent.SelectPeriod(ChangePeriod.entries[it])) },
+                options = ChangePeriod.entries.map { it.label },
+                lastWeight = 1f,
+            )
         }
     }
 }
@@ -188,6 +221,7 @@ private fun AssetsList(
         items(state.groups, key = { it.assetClass.name }) { group ->
             AssetGroupCard(
                 group = group,
+                period = state.period,
                 expanded = group.assetClass !in state.collapsed,
                 onToggle = { onIntent(AssetsIntent.ToggleGroup(group.assetClass)) },
                 onOpenPosition = onOpenPosition,
@@ -199,6 +233,7 @@ private fun AssetsList(
 @Composable
 private fun AssetGroupCard(
     group: AssetGroup,
+    period: ChangePeriod,
     expanded: Boolean,
     onToggle: () -> Unit,
     onOpenPosition: (String) -> Unit,
@@ -215,15 +250,24 @@ private fun AssetGroupCard(
         KefeSectionHeader(
             dotColor = c.assetClass(group.assetClass.color()),
             title = group.assetClass.label(),
-            total = moneyTl(group.total),
+            total = Money.tlExact(group.total),
             // Pay yuzdesi yerine TL KAR. Pay zaten Ozet'teki "Ne kadari nerede"
             // halkasinda duruyordu; "ne kadar kazandik" ise hicbir listede yoktu.
             // Maliyeti olmayan grupta (nakit) oran anlamsiz - yalniz tutar yazilir.
-            percent = Money.tlSigned(group.profit) + if (group.profitPercent != 0.0) {
-                " · " + Money.delta(group.profitPercent, 1)
+            //
+            // Kurus HER ZAMAN yazilir (bkz. Money.tlExact): kar/zarar ayarin
+            // "ana toplam" istisnasina girmez, kullanicinin bakip karar verdigi
+            // rakamdir.
+            percent = Money.tlSignedExact(group.profit) + if (group.profitPercent != 0.0) {
+                " · " + Money.delta(group.profitPercent)
             } else {
                 ""
-            },
+            } + group.periodChangePercent?.let {
+                // Donem etiketi yazilir: "+₺239.112,47 · +36,29% · Hafta +2,41%"
+                // Ustteki cipler zaten donemi soyluyor ama bu satir kar ile
+                // donem degisimini yan yana tasiyor, ikisi karismamali.
+                " · ${period.label} ${Money.delta(it)}"
+            }.orEmpty(),
             percentColor = if (group.profit < 0.0) c.negative else c.positive,
             expanded = expanded,
             onToggle = onToggle,
@@ -233,14 +277,14 @@ private fun AssetGroupCard(
         if (expanded) {
             group.positions.forEach { position ->
                 KefeHairline()
-                AssetRow(position, onClick = { onOpenPosition(position.id) })
+                AssetRow(position, period, onClick = { onOpenPosition(position.id) })
             }
         }
     }
 }
 
 @Composable
-private fun AssetRow(position: Position, onClick: () -> Unit) {
+private fun AssetRow(position: Position, period: ChangePeriod, onClick: () -> Unit) {
     val c = KefeTheme.colors
 
     // Elle girilen fiyat rozetle isaretlenir - hesabin nereden geldigi gizlenmez.
@@ -258,9 +302,13 @@ private fun AssetRow(position: Position, onClick: () -> Unit) {
     KefeListRow(
         title = position.name,
         subtitle = position.quantityLabel(),
-        value = moneyTl(position.value),
+        value = Money.tlExact(position.value),
         delta = profit,
-        deltaText = Money.tlSigned(profit),
+        deltaText = Money.tlSignedExact(profit),
+        // TL kar birincil kalir; donem degisimi onun altinda sonuk ikinci
+        // satirda. Veri yoksa "Hafta —" yazilir: satirin bos kalmasi
+        // "degismedi" gibi okunurdu.
+        deltaSecondary = "${period.label} ${changeText(position.changeIn(period))}",
         leadingIcon = position.assetClass.icon(),
         leadingTint = c.assetClass(position.assetClass.color()),
         onClick = onClick,

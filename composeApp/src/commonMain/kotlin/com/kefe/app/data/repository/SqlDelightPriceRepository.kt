@@ -6,8 +6,13 @@ import com.kefe.app.data.db.toDomain
 import com.kefe.app.data.remote.PriceRemoteDataSource
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.domain.KefeClock
+import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.PeriodChanges
 import com.kefe.app.domain.model.Price
+import com.kefe.app.domain.model.PricePoint
 import com.kefe.app.domain.model.PriceSource
+import com.kefe.app.domain.model.periodChangesOf
+import com.kefe.app.domain.model.plusMonths
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.domain.repository.PriceRepository
@@ -68,7 +73,12 @@ class SqlDelightPriceRepository(
         priceQueries.selectManualPrices().asFlow().mapToList(dispatcher),
         fetched,
         lastRefreshFailed,
-    ) { cached, manual, session, failed ->
+        // Haftalik/aylik degisimin kaynagi. Pencere aylik hesabin ihtiyacindan
+        // genis tutuldu: sinir yalniz alt sinirdir, fazlasi zarar vermez ama
+        // uygulama gece yarisini gecerse pencere daralmasin.
+        priceQueries.selectRecentPriceHistory(dateKeyOf(clock.today().plusMonths(-2)))
+            .asFlow().mapToList(dispatcher),
+    ) { cached, manual, session, failed, history ->
         // Oturumdaki cekim onbellegin UZERINE BINDIRILIR, yerine gecmez.
         //
         // Once `session ?: cached` idi ve tek bir kaynagin dusmesi yenilemenin
@@ -84,20 +94,41 @@ class SqlDelightPriceRepository(
             val fresh = session.associateBy { it.assetKey }
             cachedPrices.filterNot { it.assetKey in fresh } + session
         }
+        // Gecmis varlik anahtarina gore gruplanir; sorgu zaten tarihe gore sirali.
+        val historyByKey = history
+            .groupBy { it.assetKey }
+            .mapValues { (_, rows) ->
+                rows.map { PricePoint(KefeDate(it.dateYear.toInt(), it.dateMonth.toInt(), it.dateDay.toInt()), it.price) }
+            }
+        val today = clock.today()
+
         val overrides = manual.associate { it.assetKey to it.price }
         val merged = base.map { price ->
             val override = overrides[price.assetKey]
-            if (override == null) {
-                price
-            } else {
+            if (override != null) {
                 // Elle girilen deger TEK fiyattir: alis tarafi eski onbellekten
                 // kalirsa portfoy degeri (satis fiyatini kullanir) kullanicinin
                 // girdigi rakami yok sayardi.
+                //
+                // Donemsel degisim ELLE FIYATTA YOK: gecmisteki satirlar kaynagin
+                // fiyatlari, bugunku ise kullanicinin girdigi rakam - ikisini
+                // kiyaslamak "haftalik degisim" degil, iki ayri olcunun farki
+                // olurdu.
                 price.copy(
                     bid = override,
                     ask = override,
                     source = PriceSource.Manual,
                     isManual = true,
+                    weekChangePercent = null,
+                    monthChangePercent = null,
+                )
+            } else {
+                val changes = historyByKey[price.assetKey]
+                    ?.let { periodChangesOf(it, price.ask, today) }
+                    ?: PeriodChanges.Unknown
+                price.copy(
+                    weekChangePercent = changes.week,
+                    monthChangePercent = changes.month,
                 )
             }
         }
@@ -127,9 +158,16 @@ class SqlDelightPriceRepository(
         return if (ageSeconds > StaleAfterSeconds) PriceFreshness.Stale else PriceFreshness.Fresh
     }
 
-    override fun observePriceHistory(assetKey: String): Flow<List<Double>> =
+    override fun observePriceHistory(assetKey: String): Flow<List<PricePoint>> =
         priceQueries.selectPriceHistory(assetKey).asFlow().mapToList(dispatcher)
-            .map { rows -> rows.map { it.price } }
+            .map { rows ->
+                rows.map {
+                    PricePoint(
+                        KefeDate(it.dateYear.toInt(), it.dateMonth.toInt(), it.dateDay.toInt()),
+                        it.price,
+                    )
+                }
+            }
 
     /**
      * Ayni anda tek cekme. Her dokunus kendi coroutine'ini baslatiyordu: arka
@@ -197,6 +235,20 @@ class SqlDelightPriceRepository(
                         dateDay = today.day.toLong(),
                         price = price.ask,
                     )
+                    // Kaynak GECMIS de verdiyse (TEFAS bir aylik seri donuyor)
+                    // o da yazilir. "Gecmis fiyat sonradan ogrenilemez" kurali
+                    // burada delinmiyor: bu, kaynagin kendi kaydi - biz
+                    // uydurmuyoruz. Fonlarda haftalik/aylik degisimi ilk gunden
+                    // gercek yapan sey budur.
+                    price.history.forEach { point ->
+                        priceQueries.upsertPriceHistory(
+                            assetKey = price.assetKey,
+                            dateYear = point.date.year.toLong(),
+                            dateMonth = point.date.month.toLong(),
+                            dateDay = point.date.day.toLong(),
+                            price = point.price,
+                        )
+                    }
                 }
             }
         }
@@ -223,6 +275,15 @@ class SqlDelightPriceRepository(
         }
     }
 }
+
+/**
+ * Tarihi karsilastirilabilir tek sayiya cevirir: 2026-07-31 -> 20260731.
+ *
+ * `price_history` tarihi uc kolonda tutuyor (SQLDelight lehcesinde tarih tipi
+ * yok); "su gunden yenisi" sorgusu ancak boyle yazilabiliyor.
+ */
+private fun dateKeyOf(date: KefeDate): Long =
+    date.year * 10_000L + date.month * 100L + date.day
 
 /** Tasarimin "2 saatten eski" esigi. */
 private const val StaleAfterSeconds = 2L * 60 * 60

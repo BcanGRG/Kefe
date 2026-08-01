@@ -214,6 +214,9 @@ val KefePeriodOptions: List<String> = listOf("1A", "3A", "6A", "1Y", "Tümü")
  *
  * Cipler satiri doldurur: her biri esit paya sahiptir, son secenek ("Tümü")
  * daha uzun oldugu icin 1.3 paylik yer alir (handoff: `flex:1` / `flex:1.3`).
+ *
+ * [lastWeight] o istisnayi kapatabilmek icindir: Gün/Hafta/Ay gibi son
+ * secenegin en KISA oldugu bir kumede 1.3 pay vermek cipleri egri gosterir.
  */
 @Composable
 fun KefePeriodChips(
@@ -221,6 +224,7 @@ fun KefePeriodChips(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
     options: List<String> = KefePeriodOptions,
+    lastWeight: Float = 1.3f,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -232,7 +236,7 @@ fun KefePeriodChips(
                 text = label,
                 selected = index == selectedIndex,
                 onClick = { onSelect(index) },
-                modifier = Modifier.weight(if (index == options.lastIndex) 1.3f else 1f),
+                modifier = Modifier.weight(if (index == options.lastIndex) lastWeight else 1f),
                 height = Sizes.chipMedium,
                 horizontalPadding = Space.x4,
             )

@@ -1,6 +1,7 @@
 package com.kefe.app.domain.repository
 
 import com.kefe.app.domain.model.Price
+import com.kefe.app.domain.model.PricePoint
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -58,8 +59,13 @@ interface PriceRepository {
      * Guncel fiyat tablosu her yenilemede uzerine yazildigi icin gecmis ayri
      * tutulur. Yeni bir varlikta liste bostur ya da tek elemanlidir - grafik o
      * zaman cizilmez, uydurma bir egri gosterilmez.
+     *
+     * TARIHLERIYLE birlikte doner: grafigin ustundeki etiket serinin gercekten
+     * hangi araligi kapsadigini yazmali. Once yalniz fiyatlar donuyor ve etiket
+     * sabit "12 ay" diyordu - fonlarda TEFAS'in aylik serisi gecmise
+     * yazilmaya baslayinca bu acikca yanlis oldu.
      */
-    fun observePriceHistory(assetKey: String): Flow<List<Double>>
+    fun observePriceHistory(assetKey: String): Flow<List<PricePoint>>
 
     /**
      * Kaynaktan yeniden ceker. Basarisizlikta son bilinen fiyatlar korunur.

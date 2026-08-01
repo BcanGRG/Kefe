@@ -7,7 +7,10 @@ import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.label
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.domain.repository.RefreshOutcome
+import com.kefe.app.ui.format.ChangePeriod
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.changeIn
+import com.kefe.app.ui.format.changeText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +42,13 @@ class MarketViewModel(
 
             MarketIntent.DismissNotice -> _state.value = _state.value.copy(notice = null)
 
+            // Donem degisince tablo AYNI fiyatlarla yeniden bicimlenir; aga
+            // cikilmaz - hafta ve ay zaten elde olan veriden hesaplaniyor.
+            is MarketIntent.SelectPeriod -> _state.value = _state.value.copy(
+                period = intent.period,
+                sections = lastPrices.toSections(intent.period),
+            )
+
             is MarketIntent.OpenManualPrice -> openEdit(intent.assetKey)
 
             MarketIntent.DismissManualPrice -> _state.value = _state.value.copy(edit = null)
@@ -63,7 +73,7 @@ class MarketViewModel(
             priceRepository.observePrices().collect { board ->
                 lastPrices = board.prices
                 _state.value = _state.value.copy(
-                    sections = board.prices.toSections(),
+                    sections = board.prices.toSections(_state.value.period),
                     updatedAtLabel = board.updatedAtLabel,
                     freshness = board.freshness,
                 )
@@ -152,11 +162,11 @@ private fun displayName(assetKey: String, fallback: String): String =
 private fun orderIndex(assetKey: String): Int =
     RowOrder.indexOf(assetKey).let { if (it < 0) Int.MAX_VALUE else it }
 
-private fun List<Price>.toSections(): List<MarketSection> =
+private fun List<Price>.toSections(period: ChangePeriod): List<MarketSection> =
     AssetClass.entries.mapNotNull { assetClass ->
         val rows = filter { it.assetClass == assetClass }
             .sortedBy { orderIndex(it.assetKey) }
-            .map { it.toRow() }
+            .map { it.toRow(period) }
         if (rows.isEmpty()) {
             null
         } else {
@@ -169,7 +179,8 @@ private fun List<Price>.toSections(): List<MarketSection> =
         }
     }
 
-private fun Price.toRow(): MarketRow {
+private fun Price.toRow(period: ChangePeriod): MarketRow {
+    val change = changeIn(period)
     return MarketRow(
         assetKey = assetKey,
         name = displayName(assetKey, label),
@@ -177,7 +188,8 @@ private fun Price.toRow(): MarketRow {
         // tek bir hane sayisi ikisinden birini kirpiyor.
         bidText = bid?.let { Money.tl(it, decimals = assetClass.priceDecimals(it)) } ?: "—",
         askText = Money.tl(ask, decimals = assetClass.priceDecimals(ask)),
-        changePercent = changePercent,
+        changePercent = change,
+        changeText = changeText(change),
         sourceLine = source.label() + " · " + timestamp,
         isManual = isManual,
     )
