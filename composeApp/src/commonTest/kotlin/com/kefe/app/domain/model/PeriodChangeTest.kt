@@ -124,25 +124,54 @@ class PeriodChangeTest {
     fun grupDegisimiDegerAgirliklidir() {
         // ₺900.000'lik altinin %1'i ile ₺1.000'lik fonun %10'u ayni agirlikta
         // DEGILDIR. Yuzde ortalamasi (5,5) yanlis cevaptir.
-        val weighted = weightedChangePercent(
+        val weighted = weightedPeriodTotal(
             listOf(900_000.0 to 1.0, 1_000.0 to 10.0),
         )!!
-        assertTrue(abs(weighted - 1.01) < 0.01, "beklenen ~1,01 idi: $weighted")
+        assertTrue(
+            abs(weighted.percent - 1.01) < 0.01,
+            "beklenen ~1,01 idi: ${weighted.percent}",
+        )
+    }
+
+    @Test
+    fun grupTutariVeYuzdesiAyniHesaptan() {
+        // TL ve yuzde AYNI cozumden gelir; ayri hesaplansalar yuvarlamada
+        // ayrisir ve ekranda "+₺100 · +0,00%" gibi celiskiler cikardi.
+        val total = weightedPeriodTotal(listOf(1_100.0 to 10.0))!!
+        assertEquals(100.0, total.amount, 1e-9)
+        assertEquals(10.0, total.percent, 1e-9)
     }
 
     @Test
     fun yuzdesiBilinmeyenPozisyonHesabaGirmez() {
         // Bilinmeyeni sifir saymak grubun degisimini sulandirirdi.
-        val onlyKnown = weightedChangePercent(listOf(1_000.0 to 10.0))!!
-        val withUnknown = weightedChangePercent(
+        val onlyKnown = weightedPeriodTotal(listOf(1_000.0 to 10.0))!!
+        val withUnknown = weightedPeriodTotal(
             listOf(1_000.0 to 10.0, 9_000.0 to null),
         )!!
-        assertEquals(onlyKnown, withUnknown, 1e-9)
+        assertEquals(onlyKnown.percent, withUnknown.percent, 1e-9)
+        assertEquals(onlyKnown.amount, withUnknown.amount, 1e-9)
     }
 
     @Test
     fun hicbiriBilinmiyorsaGrupNullDoner() {
-        assertNull(weightedChangePercent(listOf(1_000.0 to null, 2_000.0 to null)))
-        assertNull(weightedChangePercent(emptyList()))
+        assertNull(weightedPeriodTotal(listOf(1_000.0 to null, 2_000.0 to null)))
+        assertNull(weightedPeriodTotal(emptyList()))
+    }
+
+    // --- Tek pozisyon ---------------------------------------------------------
+
+    @Test
+    fun tekPozisyonunTLKarsiligi() {
+        // %10 artmis ₺1.100'luk bir varlik ₺100 kazandirmistir - sadelestirilmis
+        // "deger x yuzde" (110) YANLIS olurdu, cunku yuzde eski degere gore.
+        val total = periodTotalOf(value = 1_100.0, percent = 10.0)!!
+        assertEquals(100.0, total.amount, 1e-9)
+        assertEquals(10.0, total.percent, 1e-9)
+    }
+
+    @Test
+    fun yuzdesiBilinmeyenPozisyonNullDoner() {
+        assertNull(periodTotalOf(value = 1_000.0, percent = null))
     }
 }

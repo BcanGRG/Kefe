@@ -533,11 +533,11 @@ private fun DesktopNetWorthCard(state: SummaryUiState, onIntent: (SummaryIntent)
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Masaustu donem cipi: 32dp, 12dp yan dolgu, 12sp (handoff).
-                DesktopPeriods.forEach { (globalIndex, label) ->
+                DesktopPeriods.forEach { range ->
                     KefeChip(
-                        text = label,
-                        selected = state.periodIndex == globalIndex,
-                        onClick = { onIntent(SummaryIntent.SelectPeriod(globalIndex)) },
+                        text = range.label,
+                        selected = state.range == range,
+                        onClick = { onIntent(SummaryIntent.SelectPeriod(range)) },
                         height = Sizes.chipSmall,
                         horizontalPadding = Space.x12,
                         textStyle = t.captionSmall,
@@ -659,8 +659,19 @@ private fun SummaryUiState.desktopContextLine(): String = buildString {
 private fun List<Double>.toDesktopPoints(): List<Point> =
     mapIndexed { index, value -> Point(index.toFloat(), value.toFloat()) }
 
-/** Tasarimda dort donem gorunur; genel donem listesindeki karsiliklari. */
-private val DesktopPeriods = listOf(1 to "3A", 2 to "6A", 3 to "1Y", 4 to "Tümü")
+/**
+ * Masaustunde gorunen donemler.
+ *
+ * Telefondaki yedi secenegin hepsi degil: genis ekranda grafik zaten aylik
+ * hareketi okunur kiliyor, kisa vade (Gün/Hafta) telefonun isi.
+ */
+private val DesktopPeriods = listOf(
+    NetWorthRange.Week,
+    NetWorthRange.Month3,
+    NetWorthRange.Month6,
+    NetWorthRange.Year1,
+    NetWorthRange.All,
+)
 
 // --- Olculer ---------------------------------------------------------------
 

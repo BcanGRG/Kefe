@@ -45,6 +45,29 @@ private fun safeDiv(value: Double, rate: Double): Double = if (rate <= 0.0) 0.0 
 /** Ekranin yuklenme/veri durumu. Tasarimda her biri ayri cerceve olarak var. */
 enum class SummaryStage { Loading, Empty, Ready }
 
+/**
+ * Net deger grafiginin ARALIGI.
+ *
+ * Cipler once yalniz baslikaltindaki aciklamayi degistiriyordu; egri her zaman
+ * TUM seriyi ciziyordu, yani "3A" ile "Tümü" ayni resmi veriyordu. Artik seriyi
+ * gercekten pencereliyorlar.
+ *
+ * Gün ve Hafta bu yuzden eklendi: fotograflar gunluk oldugu icin kisa vade de
+ * cizilebilir ve "bu hafta ne oldu" sorusunun karsiligi grafikte gorunur.
+ *
+ * [days] bugunden geriye kac gun; null = tum kayitlar. Gün'de 1 gun geriye
+ * bakmak dunku ve bugunku fotografi verir - iki nokta, yani bir cizgi.
+ */
+enum class NetWorthRange(val label: String, val caption: String, val days: Int?) {
+    Day("Gün", "Dün → bugün", 1),
+    Week("Hafta", "Son 7 gün", 7),
+    Month1("1A", "Son 1 ay", 30),
+    Month3("3A", "Son 3 ay", 90),
+    Month6("6A", "Son 6 ay", 180),
+    Year1("1Y", "Son 12 ay", 365),
+    All("Tümü", "Tüm zamanlar", null),
+}
+
 data class SummaryUiState(
     val stage: SummaryStage = SummaryStage.Loading,
     val portfolioName: String = "",
@@ -54,15 +77,24 @@ data class SummaryUiState(
     val mainGoal: Goal? = null,
     val otherGoalCount: Int = 0,
     val activity: List<ActivityEvent> = emptyList(),
+    /** SECILI ARALIGA kirpilmis seri - grafik bunu cizer. */
     val netWorthTotal: List<Double> = emptyList(),
     val netWorthPrincipal: List<Double> = emptyList(),
+    /**
+     * Elde TOPLAM kac fotograf var (aralik uygulanmadan).
+     *
+     * Secili aralikta iki noktadan az kayit varsa grafik yerine kisa bir not
+     * cizilir; ama hic fotograf yokken kartin kendisi hic cizilmez. Ikisi ayri
+     * durum: "bu aralikta yok" ile "hic yok".
+     */
+    val netWorthSnapshotCount: Int = 0,
     val topGainer: TopMover? = null,
     val topLoser: TopMover? = null,
 
     val unit: DisplayUnit = DisplayUnit.Try,
     val rates: UnitRates = UnitRates(1.0, 1.0, 1.0),
     val masked: Boolean = false,
-    val periodIndex: Int = 3,
+    val range: NetWorthRange = NetWorthRange.Year1,
     /** FIYAT tazeligi - "son bilinen fiyatlar" seridini bu surer. */
     val freshness: PriceFreshness = PriceFreshness.Fresh,
     val pricesUpdatedAt: String = "",
@@ -121,7 +153,7 @@ data class SummaryUiState(
 sealed interface SummaryIntent {
     data class SelectUnit(val unit: DisplayUnit) : SummaryIntent
     data object ToggleMask : SummaryIntent
-    data class SelectPeriod(val index: Int) : SummaryIntent
+    data class SelectPeriod(val range: NetWorthRange) : SummaryIntent
     data object Refresh : SummaryIntent
     data object DismissRefreshError : SummaryIntent
     data object DismissRefreshNotice : SummaryIntent

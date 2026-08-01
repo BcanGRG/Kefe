@@ -4,7 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.domain.model.totalValue
 import com.kefe.app.domain.model.Position
-import com.kefe.app.domain.model.weightedChangePercent
+import com.kefe.app.domain.model.PeriodTotal
+import com.kefe.app.domain.model.weightedPeriodTotal
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.ui.format.changeIn
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,10 +45,10 @@ class AssetsViewModel(
                 rebuild()
             }
 
-            // Donem degisince gruplar AYNI pozisyonlardan yeniden kurulur:
+            // Pencere degisince gruplar AYNI pozisyonlardan yeniden kurulur:
             // hafta ve ay zaten fiyat tablosundan geliyor, depoya gidilmez.
-            is AssetsIntent.SelectPeriod -> {
-                _state.value = _state.value.copy(period = intent.period)
+            is AssetsIntent.SelectChange -> {
+                _state.value = _state.value.copy(change = intent.change)
                 rebuild()
             }
 
@@ -66,7 +67,7 @@ class AssetsViewModel(
 
     private fun rebuild() {
         val total = positions.totalValue()
-        val period = _state.value.period
+        val mode = _state.value.change
         val comparator = comparatorFor(_state.value.sort)
 
         val groups = positions
@@ -80,13 +81,21 @@ class AssetsViewModel(
                 AssetGroup(
                     assetClass = assetClass,
                     total = groupTotal,
+                    change = when (val period = mode.period) {
+                        // Toplam: kar/zarar ve onun MALIYETE orani (getiri).
+                        null -> PeriodTotal(
+                            amount = groupProfit,
+                            percent = if (groupCost <= 0.0) {
+                                0.0
+                            } else {
+                                groupProfit / groupCost * 100.0
+                            },
+                        )
+                        // Donem: deger agirlikli - buyuk pozisyonun kucuk
+                        // hareketi, kucugun buyuk hareketinden agir basar.
+                        else -> weightedPeriodTotal(rows.map { it.value to it.changeIn(period) })
+                    },
                     profit = groupProfit,
-                    profitPercent = if (groupCost <= 0.0) 0.0 else groupProfit / groupCost * 100.0,
-                    // Deger agirlikli: buyuk pozisyonun kucuk hareketi, kucuk
-                    // pozisyonun buyuk hareketinden agir basar.
-                    periodChangePercent = weightedChangePercent(
-                        rows.map { it.value to it.changeIn(period) },
-                    ),
                     positions = rows.sortedWith(comparator),
                 )
             }

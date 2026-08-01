@@ -55,6 +55,8 @@ Gerçek kullanımda çıkan altı şey. Hepsi emülatörde doğrulandı.
 | 24 | Varlık detayı ve listesinde kuruş hep görünür | ✅ **bitti** |
 | 25 | Günlük/haftalık/aylık değişim — Piyasa ve Varlıklar | ✅ **bitti** |
 | 26 | Gram altında ayar seçilebiliyor (14/18/22/24) | ✅ **bitti** |
+| 27 | Varlıklarda tek rakam çifti: Gün/Hafta/Ay/Toplam | ✅ **bitti + gerçek cihazda doğrulandı** |
+| 28 | Net değer çipleri grafiği gerçekten değiştiriyor | ✅ **bitti + gerçek cihazda doğrulandı** |
 
 **Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
 Gmail SMTP + App Password ile açıldı (Resend domain istiyordu; domain alınmadı).
@@ -1049,3 +1051,77 @@ değişmemesi, adetle satılanların ayar sormaması, 22 ile 24'ün ayrı anahta
 düşmesi). Emülatörde: Gram → AYAR paneli (14/18/22/24, varsayılan 24) →
 22 seçildi → *"2. adım · 22 ayar Gram Altın"*, birim gram, birim fiyat
 **₺5.593,05** (24 ayarın ₺6.175'inden ayrı, gerçek 22 ayar kotasyonu).
+
+---
+
+## 27 · Varlıklarda tek rakam çifti: Gün / Hafta / Ay / Toplam ✅
+
+**Neydi — 1: renk sayının tersini söylüyordu.** Grup başlığı kâr ile dönem
+değişimini TEK metinde birleştiriyor ve satır tek renk taşıyordu:
+
+> `+₺235.821,98 · +35,78% · Gün −0,94%` — hepsi **yeşil**
+
+Altın o gün %0,94 gerilemişti; rakam eksi, renk artıydı.
+
+**Neydi — 2: aynı satır iki ayrı soruya cevap veriyordu.** Üstteki TL hep
+TOPLAM kârdı ("bugüne kadar ne kazandım"), altındaki yüzde ise dönemin
+("bugün ne oldu"). İkisi yan yana durunca hangi rakamın neyi söylediği
+okunmuyordu.
+
+**Ne yapıldı.** Tek rakam çifti kaldı ve çip hangi soruyu sorduğunu söylüyor:
+**Gün · Hafta · Ay · Toplam**. TL de yüzde de birlikte değişir, ikisi de aynı
+rengi taşır — artık çelişecek iki sayı yok.
+
+- Varsayılan **Toplam**: listeye bakan önce "ne kadar kazandım" diye sorar.
+- Toplam'da yüzdenin paydası **maliyet** (getiri tanımı); dönemlerde **dönem
+  başındaki değer**. `PeriodTotal` ikisini tek çözümden verir — ayrı
+  hesaplansalar yuvarlamada ayrışır ve "+₺100 · +0,00%" gibi kendi kendiyle
+  çelişen satırlar çıkardı.
+- Sıralamadaki "Kâra göre" **her zaman toplam kâra** göredir; pencere onu
+  değiştirmez. Ayrı bir seçici, ayrı bir soru.
+- Veri yoksa "—" ve nötr renk. Dönemde **gerçek sıfır yazılır** (`₺0 · 0,00%`):
+  "bugün değişmedi" bir cevaptır; tek başına "₺0" eksik veri gibi okunuyordu.
+  Toplam'da sıfır yüzde ise "maliyet yok" demektir (nakit) ve yazılmaz.
+
+**Yüzdeler gözden geçirildi, hesapta hata çıkmadı.** Gerçek cihazdaki
+rakamlarla tek tek doğrulandı:
+
+- Altın: satır değerleri toplamı ₺894.821,98, kârlar toplamı ₺235.821,98 ✓
+- `+35,78%` = 235.821,98 / (894.821,98 − 235.821,98) — yani **kâr / maliyet** ✓
+- `Gün −0,94%` = her pozisyon dünkü değerine geri çözülüp TL farklar
+  toplanarak; değer ağırlıklı ✓
+
+Fondaki `−₺21,14 · −1,03%` de doğru: payda MALİYET (2.052,38), güncel değer
+(2.031,24) değil. "Getiri" tanımı gereği maliyete oranlanır — 21,14/2.031
+bölünürse −1,04% çıkar, aradaki fark budur.
+
+**Doğrulama (gerçek cihaz, Galaxy S10+).** "Toplam" seçili açıldı:
+`+₺235.821,98 · +35,78%` yeşil. "Gün"e dokunuldu → aynı satır
+`−₺8.471,96 · −0,94%` kırmızıya döndü, satırlar da (`−₺6.294,22 · −0,93%`);
+Döviz `+₺14,78 · +0,06%` yeşil kaldı.
+
+---
+
+## 28 · Net değer çipleri grafiği gerçekten değiştirir ✅
+
+**Neydi.** `1A / 3A / 6A / 1Y / Tümü` çipleri yalnız grafiğin ÜSTÜNDEKİ
+açıklamayı değiştiriyordu; eğri her zaman tüm seriyi çiziyordu. "3A" ile
+"Tümü" aynı resmi veriyordu — çipler dokunulabilir ama karşılıksızdı.
+
+**Ne yapıldı.** Çipler seriyi gerçekten pencereliyor ve **Gün** ile **Hafta**
+eklendi: fotoğraflar günlük olduğu için kısa vade de çizilebiliyor.
+
+- `NetWorthRange` **enum**, çıplak index değil. Başa iki seçenek eklemek,
+  masaüstü düzenindeki sabit `1..4` eşlemesini sessizce yanlış aralıklara
+  kaydırırdı.
+- Yedi çip eşit paya bölününce dar telefonda "Tümü" kırpılıyordu; dönem
+  çipleri artık metni kadar yer alıp gerekirse yatay kayabiliyor.
+- **İki noktadan az kayıt varsa eğri değil kısa bir not çizilir.** İki nokta
+  bir çizgidir, bir nokta değil; kartın parmağın altında kaybolması "neden
+  çizilmedi" yazmaktan kötüdür. Hiç fotoğraf yokken kart yine hiç çizilmez —
+  "bu aralıkta yok" ile "hiç yok" ayrı durumlar.
+
+**Doğrulama (gerçek cihaz, Galaxy S10+).** Altın başlığında `Gün −0,94%`
+**kırmızı**, `+35,78%` yeşil; Döviz'de `Gün +0,06%` yeşil. Net değer kartında
+yedi çip sığdı; "Hafta" → *Son 7 gün*, "Gün" → *Dün → bugün* ve eğri iki
+noktaya indi.

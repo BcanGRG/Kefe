@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -225,7 +227,34 @@ fun KefePeriodChips(
     modifier: Modifier = Modifier,
     options: List<String> = KefePeriodOptions,
     lastWeight: Float = 1.3f,
+    /**
+     * Cipler satiri DOLDURSUN mu.
+     *
+     * false ise her cip kendi metni kadar yer kaplar ve satir gerekirse yatay
+     * kayar. Yedi secenek (Gün/Hafta/1A/3A/6A/1Y/Tümü) esit paya bolununce
+     * "Tümü" dar telefonda kirpiliyordu.
+     */
+    fill: Boolean = true,
 ) {
+    if (!fill) {
+        Row(
+            modifier = modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(PeriodChipGap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            options.forEachIndexed { index, label ->
+                KefeChip(
+                    text = label,
+                    selected = index == selectedIndex,
+                    onClick = { onSelect(index) },
+                    height = Sizes.chipMedium,
+                    horizontalPadding = Space.x10,
+                )
+            }
+        }
+        return
+    }
+
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(PeriodChipGap),

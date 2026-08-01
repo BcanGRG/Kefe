@@ -77,13 +77,12 @@ fun KefeListRow(
      */
     deltaText: String? = null,
     /**
-     * [deltaText]'in ALTINDA, sonuk ve kucuk bir ikinci satir.
+     * [deltaText]'in rengi - null ise isarete gore ([delta]) belirlenir.
      *
-     * Varlik listesinde donemsel degisim buraya duser: TL kar birincil kalmali
-     * (adim 14 karari), ama "bu hafta ne oldu" da gorunmeli. Ikisini tek satirda
-     * yan yana yazmak toplam kar ile donem degisimini karistirirdi.
+     * Acikca verilmesi gereken tek hal: deger BILINMEDIGINDE. O zaman notr
+     * kalmali; bilinmeyen bir sayiya yon vermek yanlis olurdu.
      */
-    deltaSecondary: String? = null,
+    deltaColor: Color? = null,
     leadingIcon: ImageVector? = null,
     leadingTint: Color = KefeTheme.colors.onSurfaceMuted,
     modifier: Modifier = Modifier,
@@ -172,7 +171,7 @@ fun KefeListRow(
             }
         }
 
-        if (value != null || delta != null || deltaSecondary != null) {
+        if (value != null || delta != null || deltaText != null) {
             Spacer(Modifier.width(Space.x12))
             Column(horizontalAlignment = Alignment.End) {
                 if (value != null) {
@@ -183,21 +182,17 @@ fun KefeListRow(
                         maxLines = 1,
                     )
                 }
-                if (delta != null) {
+                // [deltaText] dolu ama [delta] bos olabilir: deger bilinmiyor
+                // ve satirda tire yaziyoruz. Kosul ikisine de bakmali, yoksa
+                // "—" hic cizilmez ve satir sessizce bos kalir.
+                if (delta != null || deltaText != null) {
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = deltaText ?: Money.delta(delta, 2),
+                        text = deltaText ?: Money.delta(delta ?: 0.0, 2),
                         style = type.micro.tabular(),
-                        color = colors.delta(delta),
-                        maxLines = 1,
-                    )
-                }
-                if (deltaSecondary != null) {
-                    Spacer(Modifier.height(1.dp))
-                    Text(
-                        text = deltaSecondary,
-                        style = type.nano.tabular(),
-                        color = colors.onSurfaceMuted,
+                        color = deltaColor
+                            ?: delta?.let { colors.delta(it) }
+                            ?: colors.onSurfaceMuted,
                         maxLines = 1,
                     )
                 }
