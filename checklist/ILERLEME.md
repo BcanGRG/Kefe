@@ -55,6 +55,8 @@ Gerçek kullanımda çıkan altı şey. Hepsi emülatörde doğrulandı.
 | 24 | Varlık detayı ve listesinde kuruş hep görünür | ✅ **bitti** |
 | 25 | Günlük/haftalık/aylık değişim — Piyasa ve Varlıklar | ✅ **bitti** |
 | 26 | Gram altında ayar seçilebiliyor (14/18/22/24) | ✅ **bitti** |
+| 27 | Dönem değişimi kendi rengini taşıyor | ✅ **bitti + gerçek cihazda doğrulandı** |
+| 28 | Net değer çipleri grafiği gerçekten değiştiriyor | ✅ **bitti + gerçek cihazda doğrulandı** |
 
 **Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
 Gmail SMTP + App Password ile açıldı (Resend domain istiyordu; domain alınmadı).
@@ -1049,3 +1051,58 @@ değişmemesi, adetle satılanların ayar sormaması, 22 ile 24'ün ayrı anahta
 düşmesi). Emülatörde: Gram → AYAR paneli (14/18/22/24, varsayılan 24) →
 22 seçildi → *"2. adım · 22 ayar Gram Altın"*, birim gram, birim fiyat
 **₺5.593,05** (24 ayarın ₺6.175'inden ayrı, gerçek 22 ayar kotasyonu).
+
+---
+
+## 27 · Dönem değişimi kendi rengini taşır ✅
+
+**Neydi.** Varlıklar listesinde grup başlığı kâr ile dönem değişimini TEK
+metinde birleştiriyordu ve satır tek renk taşıyordu:
+
+> `+₺235.821,98 · +35,78% · Gün −0,94%` — hepsi **yeşil**
+
+Altın o gün %0,94 gerilemişti; rakam eksiydi, rengi artıydı. Renk, sayının
+söylediğinin tersini söylüyordu.
+
+**Ne yapıldı.** İkisi ayrı sayıdır, artık ayrı satırda ve ayrı renkte:
+`KefeSectionHeader`'a `percentSecondary`, `KefeListRow`'a `deltaSecondaryColor`
+eklendi. Toplam kâr kâr rengini, dönem değişimi kendi rengini alıyor.
+**Veri yokken sönük kalıyor** — bilinmeyen bir sayıya yön vermek yanlış olurdu.
+
+**Yüzdeler gözden geçirildi, hesapta hata çıkmadı.** Gerçek cihazdaki
+rakamlarla tek tek doğrulandı:
+
+- Altın: satır değerleri toplamı ₺894.821,98, kârlar toplamı ₺235.821,98 ✓
+- `+35,78%` = 235.821,98 / (894.821,98 − 235.821,98) — yani **kâr / maliyet** ✓
+- `Gün −0,94%` = her pozisyon dünkü değerine geri çözülüp TL farklar
+  toplanarak; değer ağırlıklı ✓
+
+Fondaki `−₺21,14 · −1,03%` de doğru: payda MALİYET (2.052,38), güncel değer
+(2.031,24) değil. "Getiri" tanımı gereği maliyete oranlanır — 21,14/2.031
+bölünürse −1,04% çıkar, aradaki fark budur.
+
+---
+
+## 28 · Net değer çipleri grafiği gerçekten değiştirir ✅
+
+**Neydi.** `1A / 3A / 6A / 1Y / Tümü` çipleri yalnız grafiğin ÜSTÜNDEKİ
+açıklamayı değiştiriyordu; eğri her zaman tüm seriyi çiziyordu. "3A" ile
+"Tümü" aynı resmi veriyordu — çipler dokunulabilir ama karşılıksızdı.
+
+**Ne yapıldı.** Çipler seriyi gerçekten pencereliyor ve **Gün** ile **Hafta**
+eklendi: fotoğraflar günlük olduğu için kısa vade de çizilebiliyor.
+
+- `NetWorthRange` **enum**, çıplak index değil. Başa iki seçenek eklemek,
+  masaüstü düzenindeki sabit `1..4` eşlemesini sessizce yanlış aralıklara
+  kaydırırdı.
+- Yedi çip eşit paya bölününce dar telefonda "Tümü" kırpılıyordu; dönem
+  çipleri artık metni kadar yer alıp gerekirse yatay kayabiliyor.
+- **İki noktadan az kayıt varsa eğri değil kısa bir not çizilir.** İki nokta
+  bir çizgidir, bir nokta değil; kartın parmağın altında kaybolması "neden
+  çizilmedi" yazmaktan kötüdür. Hiç fotoğraf yokken kart yine hiç çizilmez —
+  "bu aralıkta yok" ile "hiç yok" ayrı durumlar.
+
+**Doğrulama (gerçek cihaz, Galaxy S10+).** Altın başlığında `Gün −0,94%`
+**kırmızı**, `+35,78%` yeşil; Döviz'de `Gün +0,06%` yeşil. Net değer kartında
+yedi çip sığdı; "Hafta" → *Son 7 gün*, "Gün" → *Dün → bugün* ve eğri iki
+noktaya indi.
