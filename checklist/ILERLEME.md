@@ -55,7 +55,7 @@ Gerçek kullanımda çıkan altı şey. Hepsi emülatörde doğrulandı.
 | 24 | Varlık detayı ve listesinde kuruş hep görünür | ✅ **bitti** |
 | 25 | Günlük/haftalık/aylık değişim — Piyasa ve Varlıklar | ✅ **bitti** |
 | 26 | Gram altında ayar seçilebiliyor (14/18/22/24) | ✅ **bitti** |
-| 27 | Dönem değişimi kendi rengini taşıyor | ✅ **bitti + gerçek cihazda doğrulandı** |
+| 27 | Varlıklarda tek rakam çifti: Gün/Hafta/Ay/Toplam | ✅ **bitti + gerçek cihazda doğrulandı** |
 | 28 | Net değer çipleri grafiği gerçekten değiştiriyor | ✅ **bitti + gerçek cihazda doğrulandı** |
 
 **Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
@@ -1054,20 +1054,34 @@ düşmesi). Emülatörde: Gram → AYAR paneli (14/18/22/24, varsayılan 24) →
 
 ---
 
-## 27 · Dönem değişimi kendi rengini taşır ✅
+## 27 · Varlıklarda tek rakam çifti: Gün / Hafta / Ay / Toplam ✅
 
-**Neydi.** Varlıklar listesinde grup başlığı kâr ile dönem değişimini TEK
-metinde birleştiriyordu ve satır tek renk taşıyordu:
+**Neydi — 1: renk sayının tersini söylüyordu.** Grup başlığı kâr ile dönem
+değişimini TEK metinde birleştiriyor ve satır tek renk taşıyordu:
 
 > `+₺235.821,98 · +35,78% · Gün −0,94%` — hepsi **yeşil**
 
-Altın o gün %0,94 gerilemişti; rakam eksiydi, rengi artıydı. Renk, sayının
-söylediğinin tersini söylüyordu.
+Altın o gün %0,94 gerilemişti; rakam eksi, renk artıydı.
 
-**Ne yapıldı.** İkisi ayrı sayıdır, artık ayrı satırda ve ayrı renkte:
-`KefeSectionHeader`'a `percentSecondary`, `KefeListRow`'a `deltaSecondaryColor`
-eklendi. Toplam kâr kâr rengini, dönem değişimi kendi rengini alıyor.
-**Veri yokken sönük kalıyor** — bilinmeyen bir sayıya yön vermek yanlış olurdu.
+**Neydi — 2: aynı satır iki ayrı soruya cevap veriyordu.** Üstteki TL hep
+TOPLAM kârdı ("bugüne kadar ne kazandım"), altındaki yüzde ise dönemin
+("bugün ne oldu"). İkisi yan yana durunca hangi rakamın neyi söylediği
+okunmuyordu.
+
+**Ne yapıldı.** Tek rakam çifti kaldı ve çip hangi soruyu sorduğunu söylüyor:
+**Gün · Hafta · Ay · Toplam**. TL de yüzde de birlikte değişir, ikisi de aynı
+rengi taşır — artık çelişecek iki sayı yok.
+
+- Varsayılan **Toplam**: listeye bakan önce "ne kadar kazandım" diye sorar.
+- Toplam'da yüzdenin paydası **maliyet** (getiri tanımı); dönemlerde **dönem
+  başındaki değer**. `PeriodTotal` ikisini tek çözümden verir — ayrı
+  hesaplansalar yuvarlamada ayrışır ve "+₺100 · +0,00%" gibi kendi kendiyle
+  çelişen satırlar çıkardı.
+- Sıralamadaki "Kâra göre" **her zaman toplam kâra** göredir; pencere onu
+  değiştirmez. Ayrı bir seçici, ayrı bir soru.
+- Veri yoksa "—" ve nötr renk. Dönemde **gerçek sıfır yazılır** (`₺0 · 0,00%`):
+  "bugün değişmedi" bir cevaptır; tek başına "₺0" eksik veri gibi okunuyordu.
+  Toplam'da sıfır yüzde ise "maliyet yok" demektir (nakit) ve yazılmaz.
 
 **Yüzdeler gözden geçirildi, hesapta hata çıkmadı.** Gerçek cihazdaki
 rakamlarla tek tek doğrulandı:
@@ -1080,6 +1094,11 @@ rakamlarla tek tek doğrulandı:
 Fondaki `−₺21,14 · −1,03%` de doğru: payda MALİYET (2.052,38), güncel değer
 (2.031,24) değil. "Getiri" tanımı gereği maliyete oranlanır — 21,14/2.031
 bölünürse −1,04% çıkar, aradaki fark budur.
+
+**Doğrulama (gerçek cihaz, Galaxy S10+).** "Toplam" seçili açıldı:
+`+₺235.821,98 · +35,78%` yeşil. "Gün"e dokunuldu → aynı satır
+`−₺8.471,96 · −0,94%` kırmızıya döndü, satırlar da (`−₺6.294,22 · −0,93%`);
+Döviz `+₺14,78 · +0,06%` yeşil kaldı.
 
 ---
 
