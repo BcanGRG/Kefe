@@ -57,6 +57,9 @@ Gerçek kullanımda çıkan altı şey. Hepsi emülatörde doğrulandı.
 | 26 | Gram altında ayar seçilebiliyor (14/18/22/24) | ✅ **bitti** |
 | 27 | Varlıklarda tek rakam çifti: Gün/Hafta/Ay/Toplam | ✅ **bitti + gerçek cihazda doğrulandı** |
 | 28 | Net değer çipleri grafiği gerçekten değiştiriyor | ✅ **bitti + gerçek cihazda doğrulandı** |
+| 29 | Açılışta giriş ekranı parlamıyor, kilit ilk kareden | ✅ **bitti + gerçek cihazda doğrulandı** |
+| 30 | Hedef detayı yüklenirken "bulunamadı" demiyor | ✅ **bitti + gerçek cihazda doğrulandı** |
+| 31 | Fiyat geçmişine iki yıllık emniyet sınırı | ✅ **bitti** (ölçüldü: 0,53 MB/yıl) |
 
 **Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
 Gmail SMTP + App Password ile açıldı (Resend domain istiyordu; domain alınmadı).
@@ -1125,3 +1128,71 @@ eklendi: fotoğraflar günlük olduğu için kısa vade de çizilebiliyor.
 **kırmızı**, `+35,78%` yeşil; Döviz'de `Gün +0,06%` yeşil. Net değer kartında
 yedi çip sığdı; "Hafta" → *Son 7 gün*, "Gün" → *Dün → bugün* ve eğri iki
 noktaya indi.
+
+---
+
+## 29 · Açılışta giriş ekranı parlamıyor ✅
+
+**Neydi.** Splash'ten sonra bir an giriş (e-posta) ekranı görünüyordu. Kare kare
+yakalandı: `Kefe` (splash) → boş kare → kilit ekranı.
+
+**Sebep.** `LoginViewModel` `stage = SignIn` ile **doğuyor**; kilit ancak
+`LaunchedEffect(locked, asRoot) { onIntent(Lock) }` ile, yani ilk bestelemeden
+SONRA geliyordu. Arada en az bir kare giriş aşaması çiziliyordu.
+
+**Ne yapıldı.** Kök `LoginKey` ve kilit açıkken **çizim etkiyi beklemez**:
+kabuk `stage`'i ilk kareden `Locked`'a zorluyor. Bu, itilmiş LoginKey'i temiz
+`SignIn`'e zorlayan mevcut hilenin simetriği (adım 9b) — aynı yerde, aynı
+gerekçeyle. Etki yine çalışıyor, yalnız ekran onu beklemiyor.
+
+**Doğrulama (gerçek cihaz).** Kare kare UI dökümü: `Kefe` → `Kefe kilitli ·
+Parmak izinizi tarayın` → `Birikimlerim`. Hiçbir karede giriş ekranı yok.
+
+*(Splash'in son karesi düz zemindir — adım 18'in kararı; o boş kare tasarımın
+kendisi, hata değil.)*
+
+---
+
+## 30 · Hedef detayı yüklenirken "bulunamadı" demiyor ✅
+
+**Neydi.** Hedef detayı ilk açılışta bir an *"Hedef bulunamadı — bu hedef
+silinmiş olabilir"* gösteriyor, veri gelince normal ekranı çiziyordu.
+Silinmemiş bir hedef için yanlış bir cümle.
+
+**Sebep.** Ekran `state.stage`'i hiç okumuyordu; yalnız `goal == null`a bakıp
+boş duruma düşüyordu. Oysa durum `Loading` ile başlar ve depo ilk emisyonunu
+yapana kadar hedef doğal olarak null'dur. **"Yok" ile "henüz gelmedi" ayrı
+şeylerdir** — varlık detayı bu ayrımı zaten yapıyordu (adım 22).
+
+**Ne yapıldı.** `Loading` iken iskelet çizilir; `Missing` iken boş durum.
+`GoalDetailSkeleton` halka, özet ve katkı kartının yerini tutuyor.
+
+**Doğrulama (gerçek cihaz).** Hedef kartına dokunuldu, ilk kareden itibaren
+`Ev · %31 · ₺939.170 / ₺3.000.000` — hiçbir karede "bulunamadı" yok.
+
+---
+
+## 31 · Fiyat geçmişine emniyet sınırı ✅
+
+**Soru.** Haftalık/aylık değişim için tutulan `price_history` zamanla çok mu
+büyür?
+
+**Ölçüldü, tahmin edilmedi.** Gerçek cihazın veritabanı çekilip `dbstat` ile
+bakıldı:
+
+| Ölçü | Değer |
+|---|---|
+| Satır başı (indeks dahil) | **~80 bayt** |
+| 19 varlık × 1 yıl | **0,53 MB** |
+| 19 varlık × 10 yıl | 5,3 MB |
+| 40 varlık × 10 yıl | 11 MB |
+
+O anki durum: 154 satır, 19 varlık, 25 gün; tüm veritabanı 164 KB.
+
+**Yani boyut sorunu YOK.** Buna rağmen sınırsız büyüyen bir tablo bırakmıyoruz:
+her başarılı çekimden sonra **iki yıldan eski** günler siliniyor. Portföyden
+çıkarılan bir fonun anahtarı da böylece zamanla düşüyor.
+
+**Sınır neden bu kadar geniş.** Varlık detayındaki eğri BU tablodan çizilir —
+eski satırlar ölü veri değil, grafiğin kendisi. Dönem hesabı 60 gün istiyor;
+iki yıl ondan kat kat fazla ve grafiği kırpmıyor.

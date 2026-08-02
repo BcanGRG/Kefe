@@ -79,6 +79,14 @@ VALUES (:assetKey, :dateYear, :dateMonth, :dateDay, :price);
 deleteAllPriceHistory:
 DELETE FROM price_history;
 
+-- Cok eski gunleri atar. Boyut sorunu DEGIL, emniyet sinir: gercek cihazda
+-- olculdu, satir basi ~80 bayt (indeks dahil) ve 19 varlik x 1 yil = 0,53 MB.
+-- On yil bile 5 MB. Yine de sinirsiz buyuyen bir tablo birakmiyoruz; portfoyden
+-- cikarilan bir fonun anahtari da boylece zamanla dusuyor.
+deletePriceHistoryBefore:
+DELETE FROM price_history
+WHERE (dateYear * 10000 + dateMonth * 100 + dateDay) < :beforeDateKey;
+
 -- --- Onbellek --------------------------------------------------------------
 
 selectCachedPrices:
