@@ -1278,3 +1278,73 @@ gövdeleriyle sınandı. Artık aynı sınıftaki bir hata testte düşer.
 **Çapraz doğrulama.** Aynı şirketin iki kotasyonu: Londra ₺2.173,26,
 Amsterdam ₺2.179,05 — %0,3 içinde örtüşüyor. Peni ve euro çevrimlerinin ikisi
 de doğru demek, çünkü biri bozuk olsa iki rakam ayrışırdı.
+
+## 33 · Yabancı hissenin kendi fiyatı da görünür ✅
+
+**Soru (kullanıcı).** "Bunları TL'ye çevirmek yerine dolarsa dolar, euroysa
+euro bıraksak? Toplam birikimde zaten TL/dolar/euro'ya çevirebiliyoruz."
+
+**Önce bir yanlış anlama düzeltildi.** Özet'teki ₺/$/€ çipleri her varlığı ayrı
+çevirmiyor — **tek bir TL toplamını** kura bölüyor. Yani "zaten çevirebiliyoruz"
+bu iş için yeterli değil; TL'ye çevirmeyi bıraksak o çipler de bozulurdu.
+
+**Neden hesap TL kalıyor.** `Position.value` tek bir sayı ve her yerde
+**toplanıyor**: portföy toplamı, dağılım yüzdeleri, hedef ilerlemesi, net değer
+grafiği, kâr/zarar, sıralama. Altını lira, Apple'ı dolar tutup ikisini toplamak
+anlamsız bir rakam üretirdi. Gerçek çok para birimli portföy, pozisyonlara para
+birimi kolonu + bu sayım noktalarının hepsinin kur tablosuyla yeniden yazılması
+demekti; çevrim yine yapılacaktı, sadece daha geç ve daha çok yerde.
+
+**Yapılan.** Çevrim kaldı, yanına **yalnız gösterim için** ikinci bir çift
+eklendi: `nativePrice` + `nativeCurrency` (migration 6). Üç yerde görünüyor:
+
+| Yer | Nasıl |
+|---|---|
+| Arama satırı | "NASDAQ · $308,91" (borsa adının yanında) |
+| Piyasa tablosu | "Borsa · $308,91" |
+| Varlık detayı | Ayrı satır: "Borsadaki fiyat — $308,91" |
+
+**Türetilmedi, saklandı.** Sembol ekinden ("`.L` ise sterlin") çıkarılabilirdi
+ama Londra'da dolarla işlem gören satırlar da var; yanlış para birimi yazmak
+hiç yazmamaktan kötüdür. Kaynağın söylediği ne ise o.
+
+**Elle fiyatta yazılmaz.** Kullanıcı TL girmiştir; yanında kaynaktan kalmış eski
+bir dolar rakamı dursa iki sayı birbirini tutmazdı.
+
+**Supabase'de değişiklik gerekmedi.** Fiyat tabloları eşitlenmiyor (her cihaz
+fiyatı kendi çekiyor), `asset_class` ve `unit` ise düz `text` — CHECK kısıtı da
+enum da yok, `"Stock"` ve `"Lot"` olduğu gibi gidiyor.
+
+**Doğrulama (gerçek cihaz).** AAPL: arama satırında "NASDAQ · $308,91",
+Piyasa'da "Borsa · $308,91" + ₺14.691, detayda "Borsadaki fiyat $308,91" +
+"Güncel birim fiyat ₺14.690,96". ASELS.IS (BIST) hiçbirinde ikinci rakam
+göstermiyor — orada zaten TL.
+
+## 34 · Piyasa tablosu kendi rakamlarını kırpıyormuş ✅
+
+**Nasıl bulundu.** Hisse satırı eklenince fiyatı "₺14.690," diye kesildi.
+Bakınca sorunun hisseye ait olmadığı görüldü: altın satırlarının **yarısı**
+zaten aynı haldeydi.
+
+| Satır | Görünen | Gerçek |
+|---|---|---|
+| Çeyrek | ₺10.027, | ₺10.027,02 |
+| Yarım | ₺20.054, | ₺20.054,04 |
+| Tam | ₺39.985, | ₺39.985,44 |
+| Ata/Cumh. | ₺41.457, | ₺41.457,30 |
+| Gram Altın | ₺6.175,3 | ₺6.175,37 |
+
+**Neden sessiz bir hataydı.** Metin sabit sütuna sığmayınca üç nokta bile
+çizilmiyor, olduğu yerden kesiliyor — yani eksik rakam, tam rakam gibi duruyor.
+"₺6.175,3" bir yuvarlama değil, yanlış sayı.
+
+**İki düzeltme, aynı arızaya.** ALIŞ/SATIŞ sütunları 58dp → 68dp: dört haneli
+binler artık olduğu gibi sığıyor. Ve **on bin liranın üstünde kuruş düşüyor**:
+iki hanelik taban, yavaş hareket eden satırlar donmuş görünmesin diye konmuştu;
+Ata altını dakikada yüzlerce lira oynuyor, orada kuruş hiçbir şey kazandırmayıp
+önündeki haneleri götürüyordu.
+
+**Hisse satırının alt metni de aynı şekildeydi:** "Borsa · 2026-07-31 · $30…".
+Yerel fiyat artık tarihin **yerine** yazılıyor, arkasına eklenmiyor. Tarih üçü
+içinde en az şey söyleyendi: sayfa başlığı zaten ne zaman yenilendiğini yazıyor
+ve bir borsa satırının tarihi hep son seans.
