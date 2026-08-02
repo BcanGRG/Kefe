@@ -46,6 +46,24 @@ data class FundResult(
 )
 
 /**
+ * Hisse arama sonucu satiri.
+ *
+ * [FundResult]'tan AYRI: fonun ihraccisi vardir ama borsasi yoktur, hissenin
+ * tersi. Ve hissede [currencyCode] gorunur olmak zorunda - ABD hissesinin
+ * fiyati TL'ye cevrilmis olarak yazilir, kullanici neyin cevrildigini bilmeli.
+ */
+data class StockResult(
+    val assetKey: String,
+    val symbol: String,
+    val name: String,
+    val exchange: String,
+    /** TL cinsinden - cevrim fiyat katmaninda yapilir. */
+    val price: Double,
+    val changePercent: Double,
+    val currencyCode: String,
+)
+
+/**
  * "Tekrar ekle" kisayolunun kaynagi. Yalniz etiket degil, formu dolduracak
  * alanlar da tasinir - kisayol tek dokunusta ikinci adima gecebilsin diye.
  */
@@ -74,6 +92,16 @@ data class AddTransactionUiState(
     val fundSearching: Boolean = false,
     /** Canli arama sonuc getirmediyse alanin altindaki uyari. */
     val fundSearchError: String? = null,
+    /**
+     * Hisse arama alani. Fondan farki: TEFAS yalniz KODLA sorgulanir, borsa ucu
+     * ADLA da arar - "aselsan" yazan biri ASELS.IS'i bulur. Bu yuzden arama
+     * elle tetiklenen bir dugme degil, yazdikca calisan bir sorgudur.
+     */
+    val stockQuery: String = "",
+    val stockResults: List<StockResult> = emptyList(),
+    val selectedStockKey: String? = null,
+    val stockSearching: Boolean = false,
+    val stockSearchError: String? = null,
     /** Doviz secimi. Once secim yoktu ve her kayit sessizce USD oluyordu. */
     val currency: Currency = Currency.Usd,
     val currencyOptions: List<CurrencyOption> = emptyList(),
@@ -151,6 +179,11 @@ sealed interface AddTransactionIntent {
     data class SelectFund(val assetKey: String) : AddTransactionIntent
     /** Yereldeki 5 fonda yoksa girilen kodu TEFAS'tan canli cek. */
     data object SearchFundOnline : AddTransactionIntent
+
+    data class ChangeStockQuery(val text: String) : AddTransactionIntent
+    data class SelectStock(val assetKey: String) : AddTransactionIntent
+    /** Borsada ada/sembole gore ara. Fondan farkli olarak yazdikca calisir. */
+    data object SearchStockOnline : AddTransactionIntent
 
     data object Continue : AddTransactionIntent
     data object Back : AddTransactionIntent
@@ -231,6 +264,7 @@ val AddTransactionUiState.selectionName: String
         }
 
         AssetClass.Fund -> selectedFund?.let { "${it.code} · ${it.name}" } ?: assetClass.label()
+        AssetClass.Stock -> selectedStock?.let { "${it.symbol} · ${it.name}" } ?: assetClass.label()
         // "Döviz" degil "Euro": ikinci adimda hangi para biriminin girildigi
         // gorunmezse kullanici yanlis kuru kaydettigini anlamaz.
         AssetClass.Fx -> currency.label()
@@ -239,6 +273,9 @@ val AddTransactionUiState.selectionName: String
 
 val AddTransactionUiState.selectedFund: FundResult?
     get() = fundResults.firstOrNull { it.assetKey == selectedFundKey }
+
+val AddTransactionUiState.selectedStock: StockResult?
+    get() = stockResults.firstOrNull { it.assetKey == selectedStockKey }
 
 /**
  * TEFAS'ta canli aranabilecek fon kodu - yoksa null (arama satiri gizli).
@@ -270,6 +307,7 @@ val AddTransactionUiState.quantityUnit: QuantityUnit
 
         AssetClass.Silver -> QuantityUnit.Gram
         AssetClass.Fund -> QuantityUnit.Share
+        AssetClass.Stock -> QuantityUnit.Lot
         AssetClass.Fx, AssetClass.Cash -> QuantityUnit.Currency
     }
 
@@ -377,6 +415,7 @@ val AddTransactionUiState.canContinue: Boolean
             if (selectedSubtype == GoldSubtype.Jewelry) gramText.parseTrNumber() > 0.0 else true
 
         AssetClass.Fund -> selectedFundKey != null
+        AssetClass.Stock -> selectedStockKey != null
         else -> true
     }
 

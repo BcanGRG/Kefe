@@ -28,7 +28,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -339,8 +341,8 @@ private fun StepAsset(
     Spacer(Modifier.height(Space.x8))
     Row(horizontalArrangement = Arrangement.spacedBy(Space.x8)) {
         AssetClassCard(AssetClass.Fund, state.assetClass, onIntent)
+        AssetClassCard(AssetClass.Stock, state.assetClass, onIntent)
         AssetClassCard(AssetClass.Cash, state.assetClass, onIntent)
-        Spacer(Modifier.weight(1f))
     }
 
     when (state.assetClass) {
@@ -368,6 +370,21 @@ private fun StepAsset(
             FundOnlineSearch(state, onIntent)
             Spacer(Modifier.height(Space.x10))
             InfoLine("Fon fiyatları günde bir kez, TEFAS kapanışıyla güncellenir.")
+        }
+
+        AssetClass.Stock -> {
+            Spacer(Modifier.height(Space.x20))
+            SectionLabel("Hisse ara")
+            Spacer(Modifier.height(Space.x8))
+            StockSearchField(state, onIntent)
+            Spacer(Modifier.height(Space.x10))
+            StockResults(state, onIntent)
+            StockSearchStatus(state)
+            Spacer(Modifier.height(Space.x10))
+            InfoLine(
+                "Borsa İstanbul ve ABD borsaları. Yabancı borsadaki fiyat " +
+                    "günün kuruyla TL'ye çevrilerek gösterilir.",
+            )
         }
 
         // Doviz secilebilir olmali: once secim YOKTU ve her kayit sessizce
@@ -835,6 +852,195 @@ private fun FundOnlineSearch(
         }
     }
 }
+
+// --- 1. adim: hisse ----------------------------------------------------------
+
+/**
+ * FONDAKINDEN FARKI: burada yazmak dogrudan borsada arama TETIKLER.
+ *
+ * TEFAS ucu ad-arama yapmadigi icin fonda once yerelde suzuluyor, sonra "TEFAS'ta
+ * ara" dugmesi cikiyor. Borsa ucu adla ariyor - "aselsan" yazan biri ASELS.IS'i
+ * gorsun diye ayri bir dugmeye gerek yok.
+ */
+@Composable
+private fun StockSearchField(
+    state: AddTransactionUiState,
+    onIntent: (AddTransactionIntent) -> Unit,
+) {
+    val c = KefeTheme.colors
+
+    // Her tusa basista istek atmamak icin kisa bir bekleme. Kullanici yazmayi
+    // birakinca aranir; yazmaya devam ederse onceki bekleme iptal olur.
+    LaunchedEffect(state.stockQuery) {
+        if (state.stockQuery.trim().length < 2) return@LaunchedEffect
+        delay(StockSearchDebounceMs)
+        onIntent(AddTransactionIntent.SearchStockOnline)
+    }
+
+    FieldRow(
+        height = Sizes.fieldDefault,
+        borderColor = c.accent,
+        gap = Space.x10,
+    ) {
+        KefeIcon(
+            icon = KefeIcons.Search,
+            contentDescription = null,
+            size = IconSize.medium,
+            tint = c.onSurfaceMuted,
+        )
+        SheetInput(
+            value = state.stockQuery,
+            onValueChange = { onIntent(AddTransactionIntent.ChangeStockQuery(it)) },
+            textStyle = KefeTheme.type.body,
+            modifier = Modifier.weight(1f),
+            placeholder = "Şirket adı veya sembol (THYAO, AAPL)",
+        )
+        if (state.stockQuery.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(c.surfaceSunken)
+                    .clickable(role = Role.Button) {
+                        onIntent(AddTransactionIntent.ChangeStockQuery(""))
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                KefeIcon(
+                    icon = KefeIcons.Close,
+                    contentDescription = "Aramayı temizle",
+                    size = 14.dp,
+                    tint = c.onSurfaceMuted,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StockResults(
+    state: AddTransactionUiState,
+    onIntent: (AddTransactionIntent) -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    if (state.stockResults.isEmpty()) return
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(KefeShapes.card)
+            .background(c.surface)
+            .border(Sizes.hairline, c.outline, KefeShapes.card),
+    ) {
+        state.stockResults.forEachIndexed { index, stock ->
+            if (index > 0) KefeHairline()
+            val selected = stock.assetKey == state.selectedStockKey
+            val stripe = 3.dp
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.RadioButton) {
+                        onIntent(AddTransactionIntent.SelectStock(stock.assetKey))
+                    }
+                    .drawBehind {
+                        if (selected) {
+                            drawRect(
+                                color = c.accent,
+                                size = Size(stripe.toPx(), size.height),
+                            )
+                        }
+                    }
+                    .padding(
+                        start = Space.x14 + (if (selected) stripe else 0.dp),
+                        end = Space.x14,
+                        top = Space.x12,
+                        bottom = Space.x12,
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    // ".IS" eki kirpilmaz: BIST'te ayni harflerle baslayan ABD
+                    // sembolleri var, kullanici hangi borsayi sectigini gormeli.
+                    text = stock.symbol,
+                    style = t.caption.copy(fontWeight = FontWeight.Bold),
+                    color = c.stock,
+                    maxLines = 1,
+                    modifier = Modifier.width(72.dp),
+                )
+                Spacer(Modifier.width(Space.x12))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stock.name,
+                        style = t.caption.copy(lineHeight = 17.sp),
+                        color = c.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (stock.exchange.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = stock.exchange,
+                            style = t.micro,
+                            color = c.onSurfaceMuted,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(Space.x12))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        // Arama fiyat getirmez; secilince cekilir. O ana kadar
+                        // "0" yazmak fiyatin sifir oldugunu soylerdi.
+                        text = if (stock.price > 0.0) {
+                            Money.tl(
+                                stock.price,
+                                decimals = Money.decimals(
+                                    stock.price,
+                                    AssetClass.Stock.maxPriceDecimals(),
+                                ),
+                            )
+                        } else {
+                            "—"
+                        },
+                        style = t.caption.tabular(),
+                        color = c.onSurface,
+                        maxLines = 1,
+                    )
+                    if (stock.price > 0.0) {
+                        Text(
+                            text = Money.delta(stock.changePercent),
+                            style = t.micro.tabular(),
+                            color = c.delta(stock.changePercent),
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Aranirken ya da sonuc yokken tek satirlik durum metni. */
+@Composable
+private fun StockSearchStatus(state: AddTransactionUiState) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    when {
+        state.stockSearching -> {
+            Spacer(Modifier.height(Space.x10))
+            Text("Borsada aranıyor…", style = t.caption, color = c.onSurfaceMuted)
+        }
+
+        state.stockSearchError != null -> {
+            Spacer(Modifier.height(Space.x10))
+            Text(state.stockSearchError, style = t.caption, color = c.negative)
+        }
+    }
+}
+
+private const val StockSearchDebounceMs = 350L
 
 @Composable
 private fun InfoLine(text: String) {
@@ -1541,6 +1747,7 @@ private fun AssetClass.icon(): ImageVector = when (this) {
     AssetClass.Silver -> KefeIcons.Silver
     AssetClass.Fx -> KefeIcons.Fx
     AssetClass.Fund -> KefeIcons.Fund
+    AssetClass.Stock -> KefeIcons.Stock
     AssetClass.Cash -> KefeIcons.Cash
 }
 

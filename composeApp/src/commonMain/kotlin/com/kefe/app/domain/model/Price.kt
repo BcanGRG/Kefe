@@ -34,11 +34,14 @@ data class Price(
 enum class PriceSource {
     FreeMarket,
     Tefas,
+    /** Borsa kotasyonu (BIST ve ABD borsalari). */
+    Exchange,
     Manual;
 
     fun label(): String = when (this) {
         FreeMarket -> "Serbest piyasa"
         Tefas -> "TEFAS"
+        Exchange -> "Borsa"
         Manual -> "Elle"
     }
 }

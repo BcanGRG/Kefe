@@ -18,6 +18,9 @@ fun AssetClass.maxPriceDecimals(): Int = when (this) {
     AssetClass.Fund -> 6
     // Kur dort haneye kadar anlamli (capraz kurlarda kurusun altina iner).
     AssetClass.Fx -> 4
+    // Borsa kotasyonu iki hane; ama ABD hissesinin TL karsiligi kurdan turedigi
+    // icin ucuncu-dorduncu hane bilgi tasiyor (₺1.294,7385 gibi).
+    AssetClass.Stock -> 4
     // Kiymetli maden kotasyonlari kurus mertebesinde.
     AssetClass.Gold, AssetClass.Silver -> 2
     AssetClass.Cash -> 2
@@ -31,6 +34,9 @@ fun AssetClass.maxPriceDecimals(): Int = when (this) {
  */
 fun QuantityUnit.maxQuantityDecimals(): Int = when (this) {
     QuantityUnit.Share -> 6
+    // Hisse de kesirli olabilir - ABD'de kesirli pay satiliyor ve BIST'te bedelsiz
+    // sonrasi bakiye tam sayi cikmayabiliyor. Ust sinirdir: 8 adet yine "8 adet".
+    QuantityUnit.Lot -> 6
     QuantityUnit.Gram -> 3
     QuantityUnit.Currency -> 2
     QuantityUnit.Piece -> 0
@@ -58,7 +64,9 @@ fun Position.quantityLabel(): String {
         QuantityUnit.Piece, QuantityUnit.Gram ->
             Money.quantity(quantity, unit.label(), quantityDecimalsOf())
 
-        QuantityUnit.Share ->
+        // Fon payi gibi hissede de birim fiyat satirda gorunur: "8 adet × ₺294,60".
+        // Adet tek basina "ne kadar param var" sorusunu yanitlamiyor.
+        QuantityUnit.Share, QuantityUnit.Lot ->
             Money.quantity(quantity, unit.label(), quantityDecimalsOf()) +
                 " × " + Money.tl(unitPrice, decimals = priceDecimals())
 
@@ -94,7 +102,7 @@ fun Position.shortQuantityLabel(): String = shortQuantityLabel(quantity)
  * "16 adet" yazarken hedefe 15'i sayiyorsa ekran yalan soyluyor demektir.
  */
 fun Position.shortQuantityLabel(amount: Double): String = when (unit) {
-    QuantityUnit.Piece, QuantityUnit.Gram, QuantityUnit.Share ->
+    QuantityUnit.Piece, QuantityUnit.Gram, QuantityUnit.Share, QuantityUnit.Lot ->
         Money.quantity(amount, unit.label(), quantityDecimalsOf(amount))
 
     QuantityUnit.Currency ->

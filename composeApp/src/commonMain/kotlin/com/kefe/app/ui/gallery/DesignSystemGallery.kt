@@ -1031,6 +1031,7 @@ private fun assetIcon(assetClass: AssetClass): ImageVector = when (assetClass) {
     AssetClass.Silver -> KefeIcons.Silver
     AssetClass.Fx -> KefeIcons.Fx
     AssetClass.Fund -> KefeIcons.Fund
+    AssetClass.Stock -> KefeIcons.Stock
     AssetClass.Cash -> KefeIcons.Cash
 }
 

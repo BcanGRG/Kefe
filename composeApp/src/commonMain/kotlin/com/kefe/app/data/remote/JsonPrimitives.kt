@@ -13,3 +13,9 @@ internal fun JsonPrimitive.doubleOrNullSafe(): Double? {
 }
 
 internal fun JsonPrimitive.contentOrNullSafe(): String? = content.takeIf { it.isNotBlank() }
+
+/** Zaman damgalari icin - seri bosluklarinda null gelebiliyor. */
+internal fun JsonPrimitive.longOrNullSafe(): Long? {
+    if (isString && content.isBlank()) return null
+    return content.toLongOrNull()
+}

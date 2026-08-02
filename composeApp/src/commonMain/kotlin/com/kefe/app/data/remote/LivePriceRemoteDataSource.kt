@@ -6,11 +6,12 @@ import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.PriceSource
 
 /**
- * Gercek fiyat kaynagi: uc ayri servisi tek tabloya indirir.
+ * Gercek fiyat kaynagi: dort ayri servisi tek tabloya indirir.
  *
  *   Altin, gumus  -> serbest piyasa (surekli guncellenir)
  *   Doviz         -> TCMB gunluk bulteni
  *   Fon           -> TEFAS (gunde bir fiyatlanir)
+ *   Hisse         -> borsa kotasyonu (BIST ve ABD)
  *
  * Uc kaynagin tazeligi FARKLIDIR ve bu ekranda gorunur: her satir kendi
  * zaman damgasini tasir.
@@ -29,10 +30,15 @@ class LivePriceRemoteDataSource(
     private val freeMarket: FreeMarketApi,
     private val tcmb: TcmbApi,
     private val tefas: TefasApi,
+    private val stocks: StockApi,
     // Cekilecek fon kodlari CALISMA ANINDA belli olur: kullanicinin tuttugu
     // fonlar (bkz. DI). Sabit liste yalniz varsayilan/test icin. Boylece eklenen
     // fon gunluk tazelenir, satilan fon bosuna cekilmez.
     private val fundCodes: suspend () -> List<String> = { DefaultFundCodes },
+    // Hissede SABIT LISTE YOK - fondan farki bu. Fonda uc kodluk bir varsayilan
+    // vardi cunku katalog kucuk; borsada iki ulkede binlerce sembol var, hicbir
+    // secim "varsayilan" olamaz. Kullanici hisse tutmuyorsa hic cagri yapilmaz.
+    private val stockSymbols: suspend () -> List<String> = { emptyList() },
 ) : PriceRemoteDataSource {
 
     override suspend fun fetchPrices(): List<Price> {
@@ -78,11 +84,16 @@ class LivePriceRemoteDataSource(
             runCatching { tcmb.fetch() }.getOrNull().orEmpty()
         }
 
+        // Yabanci borsadaki hisseyi TL'ye cevirmek icin kur lazim; bu dongude
+        // zaten hesaplaniyor, ikinci kez cagri yapmayalim.
+        val fxRates = mutableMapOf<String, Double>()
+
         CurrencyMapping.forEach { (assetKey, mapping) ->
             val free = quotes[mapping.symbol]
             val rate = official[mapping.symbol]
             val bid = free?.buying ?: rate?.buying
             val ask = free?.selling ?: rate?.selling ?: return@forEach
+            fxRates[mapping.symbol] = ask
             prices += Price(
                 assetKey = assetKey,
                 label = mapping.label,
@@ -119,7 +130,40 @@ class LivePriceRemoteDataSource(
             )
         }
 
-        // Uc kaynagin UCU DE dustu: gosterecek yeni bir sey yok, yenileme
+        // --- Hisse -----------------------------------------------------------
+        //
+        // Kotasyon borsanin KENDI para biriminde gelir; uygulama bastan sona
+        // TL ile calisir, o yuzden burada cevrilir. Kur yoksa satir ATLANIR -
+        // 180 sayisini TL sanip portfoye yazmaktansa fiyat gelmemis olsun.
+        runCatching { stockSymbols() }.getOrDefault(emptyList()).distinct().forEach { symbol ->
+            val quote = runCatching { stocks.fetch(symbol) }.getOrNull() ?: return@forEach
+            val rate = if (quote.currencyCode == TryCode) 1.0 else fxRates[quote.currencyCode]
+            if (rate == null || rate <= 0.0) return@forEach
+
+            prices += Price(
+                assetKey = stockAssetKey(symbol),
+                label = quote.symbol,
+                // Borsada tek fiyat vardir - fon gibi, makas yok.
+                bid = null,
+                ask = quote.price * rate,
+                // Yuzde CEVRILMEZ: oran para biriminden bagimsizdir. Ama kur da
+                // oynadigi icin TL bazindaki gunluk degisim bundan farkli olur;
+                // gosterilen, hissenin kendi borsasindaki degisimidir.
+                changePercent = quote.changePercent,
+                timestamp = quote.date?.let { "${it.day}.${it.month}" }.orEmpty(),
+                source = PriceSource.Exchange,
+                assetClass = AssetClass.Stock,
+                // TEFAS ile ayni karar: bir aylik seri gecmise yazilir, boylece
+                // haftalik/aylik degisim ve detaydaki egri ilk gunden gercek.
+                //
+                // Seri BUGUNKU kurla cevrilir - gecmis kur elimizde yok. Yuzdesel
+                // degisim bundan etkilenmez (sabitle carpmak orani degistirmez),
+                // ABD hissesinde okunan da zaten hissenin kendi getirisidir.
+                history = quote.history.map { it.copy(price = it.price * rate) },
+            )
+        }
+
+        // Kaynaklarin HEPSI dustu: gosterecek yeni bir sey yok, yenileme
         // basarisiz. Bos liste dondurmek "basariyla hicbir sey geldi" demek
         // olurdu ve onbellegi taze sayardik.
         if (prices.isEmpty()) {
@@ -181,3 +225,17 @@ private val CurrencyMapping: Map<String, SymbolMapping> = Currency.entries.assoc
  * liste, cunku fiyat tablosu portfoyu bilmiyor.
  */
 val DefaultFundCodes: List<String> = listOf("AFA", "IPV", "TTE")
+
+/** BIST TL ile fiyatlanir; cevrim gerekmez. */
+private const val TryCode = "TRY"
+
+/**
+ * Sembol -> fiyat tablosu anahtari: `THYAO.IS` -> `stock_thyao.is`.
+ *
+ * Nokta anahtarda KALIR. Temizlenseydi `BRK.B` ile `BRKB` ayni anahtara duserdi;
+ * anahtar zaten yalniz tablo icinde kullaniliyor, okunakliligi sart degil.
+ */
+fun stockAssetKey(symbol: String): String = "stock_" + symbol.lowercase()
+
+/** Anahtardan sembole geri: `stock_thyao.is` -> `THYAO.IS`. */
+fun stockSymbolOf(assetKey: String): String = assetKey.removePrefix("stock_").uppercase()

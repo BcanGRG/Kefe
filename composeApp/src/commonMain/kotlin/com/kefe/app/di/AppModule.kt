@@ -10,8 +10,11 @@ import com.kefe.app.data.remote.RealtimeApi
 import com.kefe.app.data.remote.SupabaseAuthApi
 import com.kefe.app.data.remote.SupabaseRealtimeApi
 import com.kefe.app.data.remote.SupabasePostgrestApi
+import com.kefe.app.data.remote.StockApi
 import com.kefe.app.data.remote.TcmbApi
 import com.kefe.app.data.remote.TefasApi
+import com.kefe.app.data.remote.stockSymbolOf
+import com.kefe.app.domain.model.PositionIdPrefix
 import com.kefe.app.data.remote.createKefeHttpClient
 import com.kefe.app.data.backup.FileTransfer
 import com.kefe.app.db.KefeDatabase
@@ -68,13 +71,18 @@ val appModule = module {
     single { FreeMarketApi(get()) }
     single { TcmbApi(get()) }
     single { TefasApi(get()) }
+    single { StockApi(get()) }
     // Cekilecek fonlar CALISMA ANINDA portfoyden gelir: kullanicinin tuttugu
     // fonlar (miktar > 0) gunluk tazelenir, satilan fon bosuna cekilmez. Portfoy
     // deposu fiyat deposuna bagli oldugu icin DONGUYE girmemek adina kodlar
     // dogrudan veritabanindan okunur.
     single<PriceRemoteDataSource> {
         val database = get<KefeDatabase>()
-        LivePriceRemoteDataSource(get(), get(), get(), fundCodes = { heldFundCodes(database) })
+        LivePriceRemoteDataSource(
+            get(), get(), get(), get(),
+            fundCodes = { heldFundCodes(database) },
+            stockSymbols = { heldStockSymbols(database) },
+        )
     }
 
     // Uygulamanin "bugun"u tek yerden gelir - getiri ve projeksiyon hesaplari
@@ -142,4 +150,11 @@ private suspend fun heldFundCodes(database: KefeDatabase): List<String> =
     withContext(Dispatchers.Default) {
         database.positionQueries.selectHeldFundIds().executeAsList()
             .map { it.removePrefix("pos_fund_").uppercase() }
+    }
+
+/** Ayni gerekce hisse icin: "pos_stock_thyao.is" -> "THYAO.IS". */
+private suspend fun heldStockSymbols(database: KefeDatabase): List<String> =
+    withContext(Dispatchers.Default) {
+        database.positionQueries.selectHeldStockIds().executeAsList()
+            .map { stockSymbolOf(it.removePrefix(PositionIdPrefix)) }
     }

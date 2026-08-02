@@ -101,6 +101,29 @@ internal object KefeIconsAsset {
             lineTo(19f, 7.5f)
         }.also { _fund = it }
 
+    private var _stock: ImageVector? = null
+
+    /**
+     * Hisse: eksen uzerinde sutun grafik.
+     *
+     * Fon cizgi grafik, hisse sutun: ikisi de "borsa" cagristirsin ama listede
+     * yan yana geldiklerinde ayirt edilebilsinler diye ayri gorsel dilde.
+     */
+    val Stock: ImageVector
+        get() = _stock ?: vector("KefeAssetStock") {
+            // eksen
+            moveTo(4f, 4f)
+            lineTo(4f, 20f)
+            lineTo(20f, 20f)
+            // sutunlar - soldan saga yukselen
+            moveTo(8f, 20f)
+            lineTo(8f, 14f)
+            moveTo(12.5f, 20f)
+            lineTo(12.5f, 10f)
+            moveTo(17f, 20f)
+            lineTo(17f, 6.5f)
+        }.also { _stock = it }
+
     private var _cash: ImageVector? = null
 
     /** Nakit: banknot (cerceve + merkez daire + yan cizgiler). */

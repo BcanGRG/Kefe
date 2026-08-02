@@ -132,6 +132,15 @@ class MarketViewModel(
 private const val FundNote = "Fon fiyatları günde bir kez güncellenir (TEFAS kapanışı)."
 
 /**
+ * Hisse bolumunun notu. Cevrimin YAZILMASI sart: ABD hissesinin satirinda TL
+ * yaziyor ama kotasyon dolar - kur da oynadigi icin TL rakami hissenin kendi
+ * degisiminden farkli hareket eder ve bu, aciklanmazsa hata gibi gorunur.
+ */
+private const val StockNote =
+    "Borsa İstanbul ve ABD borsaları. Yabancı borsadaki fiyatlar günün kuruyla " +
+        "TL'ye çevrilir; yüzde değişim hissenin kendi borsasındaki değişimidir."
+
+/**
  * Tabloda gorunen kisa adlar. Depo etiketleri urun adidir ("Gram Altın"), tablo
  * ise dar sutuna sigan ve ayirt edici olani ister ("Gram Altın 24"). Haritadaki
  * sira ayni zamanda bolum ici siralamayi belirler.
@@ -174,7 +183,11 @@ private fun List<Price>.toSections(period: ChangePeriod): List<MarketSection> =
                 assetClass = assetClass,
                 title = assetClass.label(),
                 rows = rows,
-                note = if (assetClass == AssetClass.Fund) FundNote else null,
+                note = when (assetClass) {
+                    AssetClass.Fund -> FundNote
+                    AssetClass.Stock -> StockNote
+                    else -> null
+                },
             )
         }
     }

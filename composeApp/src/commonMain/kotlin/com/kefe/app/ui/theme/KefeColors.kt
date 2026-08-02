@@ -39,6 +39,7 @@ data class KefeColors(
     val silver: Color,
     val fx: Color,
     val fund: Color,
+    val stock: Color,
     val cash: Color,
 
     // Avatar - kategori paletinden bagimsiz notrler
@@ -59,6 +60,7 @@ data class KefeColors(
         AssetClassColor.Silver -> silver
         AssetClassColor.Fx -> fx
         AssetClassColor.Fund -> fund
+        AssetClassColor.Stock -> stock
         AssetClassColor.Cash -> cash
     }
 
@@ -73,7 +75,7 @@ data class KefeColors(
     }
 }
 
-enum class AssetClassColor { Gold, Silver, Fx, Fund, Cash }
+enum class AssetClassColor { Gold, Silver, Fx, Fund, Stock, Cash }
 
 val KefeDarkColors = KefeColors(
     isDark = true,
@@ -96,6 +98,9 @@ val KefeDarkColors = KefeColors(
     silver = Color(0xFFA3B4C2),
     fx = Color(0xFF6FA694),
     fund = Color(0xFF8E92CB),
+    // Hisse: gul-mor. Nakit'in kiremidine (turuncu) ve fonun leylagina en uzak
+    // kalan ton - donut diliminde ikisiyle yan yana durdugunda ayirt edilebiliyor.
+    stock = Color(0xFFCE8DA6),
     cash = Color(0xFFC9917C),
     avatarA = Color(0x3D968C7D),
     avatarB = Color(0x42788796),
@@ -128,6 +133,7 @@ val KefeLightColors = KefeColors(
     silver = Color(0xFF5C7284),
     fx = Color(0xFF2F7565),
     fund = Color(0xFF5257A6),
+    stock = Color(0xFFA1466A),
     cash = Color(0xFF9B5B41),
     avatarA = Color(0x3D968C7D),
     avatarB = Color(0x42788796),

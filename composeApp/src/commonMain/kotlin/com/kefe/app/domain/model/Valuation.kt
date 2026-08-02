@@ -25,6 +25,9 @@ fun Position.priceKey(): String? = when (assetClass) {
     AssetClass.Silver -> "silver_gram"
     AssetClass.Fx -> id.removePrefix(PositionIdPrefix).takeIf { it.isNotBlank() }
     AssetClass.Fund -> id.removePrefix(PositionIdPrefix).takeIf { it.isNotBlank() }
+    // Fon ile ayni sozlesme: anahtar (sembol) baska hicbir alanda tasinmiyor,
+    // kimlikten okunur. `pos_stock_THYAO.IS` -> `stock_THYAO.IS`.
+    AssetClass.Stock -> id.removePrefix(PositionIdPrefix).takeIf { it.isNotBlank() }
     AssetClass.Cash -> null
 }
 

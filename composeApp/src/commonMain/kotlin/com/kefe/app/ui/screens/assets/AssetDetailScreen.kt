@@ -638,7 +638,7 @@ private fun Position.detailSubtitle(): String {
     val quantityText = when (unit) {
         QuantityUnit.Piece -> Money.quantity(quantity, unit.label())
         QuantityUnit.Gram -> Money.quantity(quantity, unit.label(), detailQuantityDecimals())
-        QuantityUnit.Share -> Money.quantity(quantity, unit.label())
+        QuantityUnit.Share, QuantityUnit.Lot -> Money.quantity(quantity, unit.label())
         QuantityUnit.Currency ->
             if (assetClass == AssetClass.Cash) Money.tlExact(quantity) else Money.number(quantity)
     }
