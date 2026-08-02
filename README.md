@@ -214,6 +214,6 @@ exact version — which releases were broken, which constraint set the floor.
 **Burak Can Görgülü** · Android Developer
 
 [![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/BcanGRG)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/burak-can-gorgulu23/)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](www.linkedin.com/in/burak-can-gorgulu23)
 
 </div>
