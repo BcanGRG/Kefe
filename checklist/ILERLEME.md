@@ -1254,3 +1254,27 @@ tutuyor. "SHELL" → NYSE, Amsterdam, Londra, Frankfurt, XETRA; Meksika elendi.
 **Bir ayrıntı daha.** Hisse fiyatı önce dört ondalık haneyle yazılıyordu
 (₺14.690,**9564**). Çevrimden doğan kuyruk bilgi değil gürültü: on dört bin
 liralık bir rakamda son iki hane hiçbir şey söylemiyor. İki haneye indirildi.
+
+**Kapsam daraltıldı (kullanıcı).** "Sadece Nasdaq'ta olanlar gelse yeterli, bir
+de Avrupa borsası." Süzgeç buna göre çizildi; ölçüm sonucu şu oldu:
+
+| Arama | Önce | Sonra |
+|---|---|---|
+| AAPL | NASDAQ, Buenos Aires, São Paulo, Buenos Aires, SET | **NASDAQ** |
+| SHELL | NYSE, Amsterdam, Londra, Meksika, XETRA, Frankfurt | NYSE, Amsterdam, **Londra**, Frankfurt, XETRA |
+
+**Peni tuzağının anatomisi.** Londra kotasyonu ilk denemede cihazda
+**₺217.325,59** göründü. Beklenen ~₺2.173 idi; fark tam yüz kat, yani bir
+birim hatası. Zincir şöyleydi: `currencyConversion("GBp")` doğru tarifi
+(100'e böl) üretiyordu, ama `StockApi.fetch` para birimini okurken
+`.uppercase()` uyguluyordu — `GBp` daha o noktada `GBP` olmuştu ve tarif hiç
+devreye girmiyordu. Birim testi bunu göremezdi çünkü yardımcıyı doğrudan
+çağırıyor; hatalı satır ağın arkasındaydı.
+
+Düzeltme iki parçalı: (1) `.uppercase()` kaldırıldı, (2) ayrıştırma
+`parseStockQuote` / `parseSearchResult` olarak dışarı alınıp gerçek yanıt
+gövdeleriyle sınandı. Artık aynı sınıftaki bir hata testte düşer.
+
+**Çapraz doğrulama.** Aynı şirketin iki kotasyonu: Londra ₺2.173,26,
+Amsterdam ₺2.179,05 — %0,3 içinde örtüşüyor. Peni ve euro çevrimlerinin ikisi
+de doğru demek, çünkü biri bozuk olsa iki rakam ayrışırdı.
