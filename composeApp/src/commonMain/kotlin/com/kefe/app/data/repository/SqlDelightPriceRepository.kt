@@ -224,6 +224,9 @@ class SqlDelightPriceRepository(
                         // Tazelik bu damgadan hesaplaniyor; 0 yazildigi surece
                         // "2 saatten eski" kurali isletilemiyordu.
                         fetchedAtEpochSeconds = nowSeconds,
+                        // Yalniz gosterim icin; hesap [ask] ile, yani TL ile.
+                        nativePrice = price.nativePrice,
+                        nativeCurrency = price.nativeCurrency,
                     )
                     // Gunun fiyati AYRICA gecmise yazilir: onbellek uzerine
                     // yazildigi icin gecmisi tutamaz, gecmis fiyat da sonradan
@@ -250,6 +253,18 @@ class SqlDelightPriceRepository(
                         )
                     }
                 }
+                // Cok eski gunler atilir. BOYUT SORUNU DEGIL - gercek cihazda
+                // olculdu: satir basi ~80 bayt, 19 varlik x 1 yil 0,53 MB, on
+                // yil 5 MB. Emniyet sinirlari: sinirsiz buyuyen bir tablo
+                // birakmiyoruz ve portfoyden cikarilan bir fonun anahtari da
+                // boylece zamanla dusuyor.
+                //
+                // Sinir GENIS: varlik detayindaki egri BU tablodan cizilir, yani
+                // eski satirlar olu veri degil grafigin kendisi. Iki yil, donem
+                // hesabinin ihtiyacindan (60 gun) kat kat fazla.
+                priceQueries.deletePriceHistoryBefore(
+                    dateKeyOf(today.plusMonths(-PriceHistoryKeepMonths)),
+                )
             }
         }
         lastRefreshFailed.value = false
@@ -284,6 +299,14 @@ class SqlDelightPriceRepository(
  */
 private fun dateKeyOf(date: KefeDate): Long =
     date.year * 10_000L + date.month * 100L + date.day
+
+/**
+ * Fiyat gecmisi kac ay saklanir.
+ *
+ * Iki yil: donem hesabi 60 gun istiyor, varlik detayindaki egri ise elde ne
+ * varsa onu ciziyor - sinir grafigi kirpmayacak kadar genis olmali.
+ */
+private const val PriceHistoryKeepMonths = 24
 
 /** Tasarimin "2 saatten eski" esigi. */
 private const val StaleAfterSeconds = 2L * 60 * 60

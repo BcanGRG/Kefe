@@ -57,6 +57,7 @@ object KefeIcons {
     val Silver: ImageVector get() = KefeIconsAsset.Silver
     val Fx: ImageVector get() = KefeIconsAsset.Fx
     val Fund: ImageVector get() = KefeIconsAsset.Fund
+    val Stock: ImageVector get() = KefeIconsAsset.Stock
     val Cash: ImageVector get() = KefeIconsAsset.Cash
 
     // --- Hedefler ---

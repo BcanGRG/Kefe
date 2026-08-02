@@ -29,16 +29,38 @@ data class Price(
      * birakir. Onbellekten okunan bir [Price] her zaman bos seri tasir.
      */
     val history: List<PricePoint> = emptyList(),
+    /**
+     * Kaynagin KENDI para birimindeki fiyat ve o birimin kodu - YALNIZ GOSTERIM.
+     *
+     * Hesap her yerde TL ile yapilir: [ask] tek bir sayidir ve portfoy toplami,
+     * dagilim, hedef ilerlemesi, net deger grafigi hep onu toplar. Apple'i dolar,
+     * altini lira tutup ikisini toplamak anlamsiz bir rakam uretirdi.
+     *
+     * Ama kullanicinin kafasindaki sayi ₺14.690 degil $308,91. Bu cift, TL
+     * degerin yanina o rakami yazabilmek icin var.
+     *
+     * TAHMIN EDILMEZ, KAYNAKTAN GELIR: sembol ekinden ("`.L` ise sterlin")
+     * cikarilabilirdi ama Londra'da dolarla isleyen satirlar da var - yanlis
+     * para birimi yazmak hic yazmamaktan kotudur.
+     *
+     * Altin, doviz, fon ve BIST hissesinde null: onlarda zaten TL disinda bir
+     * fiyat yok.
+     */
+    val nativePrice: Double? = null,
+    val nativeCurrency: String? = null,
 )
 
 enum class PriceSource {
     FreeMarket,
     Tefas,
+    /** Borsa kotasyonu (BIST ve ABD borsalari). */
+    Exchange,
     Manual;
 
     fun label(): String = when (this) {
         FreeMarket -> "Serbest piyasa"
         Tefas -> "TEFAS"
+        Exchange -> "Borsa"
         Manual -> "Elle"
     }
 }

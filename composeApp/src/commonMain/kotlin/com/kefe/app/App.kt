@@ -442,12 +442,27 @@ private fun KefeApp(
                             // SignIn gosterir; kilit kalintisini (stage/unlocked) yok
                             // sayar. Boylece ne kilit ekrani cizilir ne de enterApp
                             // tetiklenir - dogrudan e-posta/kod asamasi gelir.
+                            //
+                            // KOK LoginKey ve KILITLI ise asama ILK KAREDEN
+                            // itibaren Locked cizilir. ViewModel SignIn ile
+                            // dogar ve kilit ancak asagidaki LaunchedEffect ile
+                            // gelir; arada giris ekrani bir kare parliyordu -
+                            // splash'ten sonra "bir an login goruyorum" denen
+                            // sey buydu. Etki yine calisir, yalniz cizim onu
+                            // beklemez.
                             val asRoot = backStack.firstOrNull() == LoginKey
-                            val state = if (asRoot) vmState else vmState.copy(
-                                stage = LoginStage.SignIn,
-                                unlocked = false,
-                                unlockError = null,
-                            )
+                            val state = when {
+                                !asRoot -> vmState.copy(
+                                    stage = LoginStage.SignIn,
+                                    unlocked = false,
+                                    unlockError = null,
+                                )
+
+                                locked && !vmState.unlocked ->
+                                    vmState.copy(stage = LoginStage.Locked)
+
+                                else -> vmState
+                            }
 
                             // Kod dogrulanir dogrulanmaz iceri gireriz; ekranda
                             // ayrica "devam et" dedirtmek bos bir adim olurdu.

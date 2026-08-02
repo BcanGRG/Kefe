@@ -20,6 +20,7 @@ import com.kefe.app.domain.model.spreadPercent
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceRepository
+import com.kefe.app.ui.format.Money
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -190,6 +191,15 @@ class AssetDetailViewModel(
             spreadPercent = price?.spreadPercent(),
             firstBuyDate = if (hasLedger) basis.firstBuy else oldest?.date,
             priceSourceLabel = priceSourceLabel(price, position),
+            // Elle fiyatta YAZILMAZ: kullanici TL girmistir, yaninda kaynaktan
+            // kalmis eski bir dolar rakami durursa iki sayi birbirini tutmaz.
+            nativeUnitPrice = price
+                ?.takeIf { !it.isManual && !position.manualPrice }
+                ?.let { p ->
+                    val value = p.nativePrice ?: return@let null
+                    val code = p.nativeCurrency ?: return@let null
+                    Money.foreign(value, code)
+                },
             unrealizedProfit = if (hasLedger) {
                 basis.unrealizedProfit(position.unitPrice)
             } else {

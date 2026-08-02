@@ -2,6 +2,7 @@ package com.kefe.app
 
 import com.kefe.app.data.remote.FreeMarketApi
 import com.kefe.app.data.remote.LivePriceRemoteDataSource
+import com.kefe.app.data.remote.StockApi
 import com.kefe.app.data.remote.TcmbApi
 import com.kefe.app.data.remote.TefasApi
 import com.kefe.app.data.remote.createKefeHttpClient
@@ -54,7 +55,15 @@ class LivePriceProbeTest {
             }
             .onFailure { println("TEFAS HATA: ${it::class.simpleName} ${it.message} / neden=${it.cause}") }
 
-        runCatching { LivePriceRemoteDataSource(FreeMarketApi(client), TcmbApi(client), TefasApi(client)).fetchPrices() }
+        runCatching {
+            LivePriceRemoteDataSource(
+                FreeMarketApi(client),
+                TcmbApi(client),
+                TefasApi(client),
+                StockApi(client),
+                stockSymbols = { listOf("THYAO.IS", "AAPL") },
+            ).fetchPrices()
+        }
             .onSuccess { list -> println("BIRLESIK OK  ${list.size} satir"); list.forEach { println("   $it") } }
             .onFailure { println("BIRLESIK HATA: ${it::class.simpleName} ${it.message} / neden=${it.cause}") }
 

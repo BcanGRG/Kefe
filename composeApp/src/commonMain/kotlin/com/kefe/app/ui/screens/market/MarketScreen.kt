@@ -608,9 +608,16 @@ private fun ManualPriceSheet(
 
 // --- Olculer ---------------------------------------------------------------
 
-/** Baslik ve satirlarin ortak sutun duzeni. Ikisi de ayni degerleri kullanir. */
-private val ColBid = 58.dp
-private val ColAsk = 58.dp
+/**
+ * Baslik ve satirlarin ortak sutun duzeni. Ikisi de ayni degerleri kullanir.
+ *
+ * 58dp DAR GELDI: gercek cihazda gram altinin "₺6.175,37"si "₺6.175,3" diye
+ * kesiliyordu - metin tasinca ellipsis de cizilmedigi icin bu, eksik bir
+ * rakamin dogru rakam gibi durmasi demekti. Dort haneli binler artik siger;
+ * on binin ustu zaten kurussuz yaziliyor (bkz. AssetClass.priceDecimals).
+ */
+private val ColBid = 68.dp
+private val ColAsk = 68.dp
 private val ColChange = 48.dp
 private val ColAction = 32.dp
 private val ColGap = Space.x8

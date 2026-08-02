@@ -7,6 +7,8 @@ enum class AssetClass {
     Silver,
     Fx,
     Fund,
+    /** Borsa Istanbul ve Amerikan borsalarindaki hisse senetleri. */
+    Stock,
     Cash,
 }
 
@@ -16,6 +18,7 @@ fun AssetClass.color(): AssetClassColor = when (this) {
     AssetClass.Silver -> AssetClassColor.Silver
     AssetClass.Fx -> AssetClassColor.Fx
     AssetClass.Fund -> AssetClassColor.Fund
+    AssetClass.Stock -> AssetClassColor.Stock
     AssetClass.Cash -> AssetClassColor.Cash
 }
 
@@ -24,6 +27,7 @@ fun AssetClass.label(): String = when (this) {
     AssetClass.Silver -> "Gümüş"
     AssetClass.Fx -> "Döviz"
     AssetClass.Fund -> "Fon"
+    AssetClass.Stock -> "Hisse"
     AssetClass.Cash -> "Nakit"
 }
 
@@ -90,6 +94,15 @@ enum class QuantityUnit {
     Piece,
     Gram,
     Share,
+    /**
+     * Hisse senedi adedi.
+     *
+     * [Piece]'ten AYRI: ceyrek altin bolunmez ("15,000000 adet" gurultudur) ama
+     * hisse bolunebilir - ABD'de kesirli pay alinabiliyor ve Piece'in sifir
+     * hanesi bunu sessizce yuvarlardi. Etiket yine "adet": kullanicinin
+     * kullandigi kelime bu, "lot" degil.
+     */
+    Lot,
     Currency;
 
     /** Nakit/doviz miktarinda birim yazilmaz - tutar zaten para olarak bicimlenir. */
@@ -97,6 +110,7 @@ enum class QuantityUnit {
         Piece -> "adet"
         Gram -> "gr"
         Share -> "pay"
+        Lot -> "adet"
         Currency -> ""
     }
 }

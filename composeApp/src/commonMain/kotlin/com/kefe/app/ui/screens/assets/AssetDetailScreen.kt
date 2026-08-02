@@ -431,6 +431,13 @@ private fun SummaryCard(state: AssetDetailUiState, position: Position) {
             "Güncel birim fiyat",
             Money.tl(position.unitPrice, decimals = position.priceDecimals()),
         )
+        // Yabanci borsada kaynagin kendi rakami ayri bir satirda. Ustteki TL
+        // degeri o rakamin gunun kuruyla cevrilmis hali - hesaplar TL ile
+        // yapiliyor, bu satir yalniz "dolar olarak kac" sorusunu yanitliyor.
+        state.nativeUnitPrice?.let { native ->
+            KefeHairline()
+            SummaryRow("Borsadaki fiyat", native)
+        }
         // Makas gorunur olmali: deger piyasanin ALIS tarafiyla olculuyor, yani
         // "bugun satsam ne alirim". Bu satir olmasa bugun alinan varlik ilk anda
         // zararda gorunur ve bu bir hata sanilir.
@@ -638,7 +645,7 @@ private fun Position.detailSubtitle(): String {
     val quantityText = when (unit) {
         QuantityUnit.Piece -> Money.quantity(quantity, unit.label())
         QuantityUnit.Gram -> Money.quantity(quantity, unit.label(), detailQuantityDecimals())
-        QuantityUnit.Share -> Money.quantity(quantity, unit.label())
+        QuantityUnit.Share, QuantityUnit.Lot -> Money.quantity(quantity, unit.label())
         QuantityUnit.Currency ->
             if (assetClass == AssetClass.Cash) Money.tlExact(quantity) else Money.number(quantity)
     }

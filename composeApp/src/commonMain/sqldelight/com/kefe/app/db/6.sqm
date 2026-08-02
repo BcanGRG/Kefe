@@ -1,0 +1,23 @@
+-- Surum 6 -> 7: fiyat, KAYNAGIN kendi para birimindeki halini de tasir.
+--
+-- NEYDI. Yabanci borsadaki hisse TL'ye cevrilip yaziliyordu ve sadece o
+-- goruluyordu: AAPL portfoyde "₺14.690" idi. Rakam dogru ama kullanicinin
+-- kafasindaki sayi degil - Apple onun icin 308,91 dolar.
+--
+-- NEDEN HESAP YINE TL. `positions.value` tek bir sayidir ve HER YERDE toplanir:
+-- portfoy toplami, dagilim yuzdeleri, hedef ilerlemesi, net deger grafigi,
+-- kar/zarar, siralama. Altini lira, Apple'i dolar tutup ikisini toplamak
+-- anlamsiz bir rakam uretirdi. Ozetteki ₺/$/€ cipleri de pozisyonlari degil
+-- TEK BIR TL toplamini kura boluyor - yani onlar da bu sozlesmeye dayaniyor.
+--
+-- Bu yuzden cevrim kaliyor; eklenen sey yalniz GOSTERIM icin ikinci bir cift.
+--
+-- IKISI DE TURETILMEZ, SAKLANIR. Sembolun ekinden ("`.L` ise sterlin") tahmin
+-- edilebilirdi ama Londra'da dolar cinsinden isleyen satirlar da var; yanlis
+-- para birimi yazmak, hic yazmamaktan kotudur. Kaynagin soyledigi ne ise o.
+--
+-- Iki kolon da NULL kabul eder: altin, doviz, fon ve TL borsasindaki hisse
+-- icin "yerel fiyat" diye ayri bir sey yok - onlarda zaten TL yaziyor.
+
+ALTER TABLE cached_prices ADD COLUMN nativePrice REAL;
+ALTER TABLE cached_prices ADD COLUMN nativeCurrency TEXT;

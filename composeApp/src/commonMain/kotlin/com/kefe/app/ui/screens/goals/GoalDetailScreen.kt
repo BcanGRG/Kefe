@@ -65,6 +65,7 @@ import com.kefe.app.ui.components.KefeEmptyState
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
+import com.kefe.app.ui.components.KefeSkeletonBlock
 import com.kefe.app.ui.components.KefeSlider
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.quantityLabel
@@ -116,14 +117,23 @@ fun GoalDetailScreen(
                 editEnabled = goal != null,
             )
 
-            if (goal == null) {
-                KefeEmptyState(
+            when {
+                // "Yok" ile "HENUZ gelmedi" ayri seylerdir.
+                //
+                // Ekran yalniz `goal == null`a bakiyordu ve depo ilk emisyonunu
+                // yapana kadar "Hedef bulunamadı" parliyor, veri gelince normal
+                // ekran cizilyordu. Acilista bir an "silinmis" demek, silinmemis
+                // bir hedef icin yanlis bir cumle. Varlik detayi bu ayrimi zaten
+                // yapiyordu (bkz. AssetDetailScreen).
+                goal == null && state.stage == GoalDetailStage.Loading -> GoalDetailSkeleton()
+
+                goal == null -> KefeEmptyState(
                     icon = KefeIcons.Target,
                     title = "Hedef bulunamadı",
                     body = "Bu hedef silinmiş olabilir. Hedefler listesine dönebilirsiniz.",
                 )
-            } else {
-                Column(
+
+                else -> Column(
                     Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -137,6 +147,25 @@ fun GoalDetailScreen(
         if (state.assetPickerOpen) {
             AssetPickerSheet(state, onIntent)
         }
+    }
+}
+
+/**
+ * Veri gelene kadarki iskelet - halka, ozet ve katki karti yerinde durur.
+ *
+ * Bos ekran yerine iskelet cizilir ki sayfa acilirken "silinmis" izlenimi
+ * vermesin; olculer asagidaki gercek bloklarin yaklasik boyudur.
+ */
+@Composable
+private fun GoalDetailSkeleton() {
+    Column(
+        Modifier.padding(horizontal = Space.x16, vertical = Space.x4),
+        verticalArrangement = Arrangement.spacedBy(Space.x12),
+    ) {
+        KefeSkeletonBlock(width = 132.dp, height = 12.dp)
+        KefeSkeletonBlock(height = 224.dp, radius = 16.dp)
+        KefeSkeletonBlock(height = 132.dp, radius = 16.dp)
+        KefeSkeletonBlock(height = 96.dp, radius = 16.dp)
     }
 }
 

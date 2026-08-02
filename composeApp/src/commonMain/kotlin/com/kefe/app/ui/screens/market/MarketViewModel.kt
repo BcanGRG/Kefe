@@ -132,6 +132,15 @@ class MarketViewModel(
 private const val FundNote = "Fon fiyatları günde bir kez güncellenir (TEFAS kapanışı)."
 
 /**
+ * Hisse bolumunun notu. Cevrimin YAZILMASI sart: ABD hissesinin satirinda TL
+ * yaziyor ama kotasyon dolar - kur da oynadigi icin TL rakami hissenin kendi
+ * degisiminden farkli hareket eder ve bu, aciklanmazsa hata gibi gorunur.
+ */
+private const val StockNote =
+    "Borsa İstanbul, ABD ve Avrupa borsaları. Yabancı borsadaki fiyatlar günün " +
+        "kuruyla TL'ye çevrilir; yüzde değişim hissenin kendi borsasındaki değişimidir."
+
+/**
  * Tabloda gorunen kisa adlar. Depo etiketleri urun adidir ("Gram Altın"), tablo
  * ise dar sutuna sigan ve ayirt edici olani ister ("Gram Altın 24"). Haritadaki
  * sira ayni zamanda bolum ici siralamayi belirler.
@@ -174,10 +183,27 @@ private fun List<Price>.toSections(period: ChangePeriod): List<MarketSection> =
                 assetClass = assetClass,
                 title = assetClass.label(),
                 rows = rows,
-                note = if (assetClass == AssetClass.Fund) FundNote else null,
+                note = when (assetClass) {
+                    AssetClass.Fund -> FundNote
+                    AssetClass.Stock -> StockNote
+                    else -> null
+                },
             )
         }
     }
+
+/**
+ * Kaynagin kendi para birimindeki fiyat metni; TL kotasyonlarda null.
+ *
+ * ELLE GIRILEN fiyatta da null: kullanici TL yazmistir, yaninda kaynaktan
+ * kalmis eski bir dolar rakami durursa iki sayi birbirini tutmaz.
+ */
+private fun Price.nativeText(): String? {
+    if (isManual) return null
+    val value = nativePrice ?: return null
+    val code = nativeCurrency ?: return null
+    return Money.foreign(value, code)
+}
 
 private fun Price.toRow(period: ChangePeriod): MarketRow {
     val change = changeIn(period)
@@ -190,7 +216,15 @@ private fun Price.toRow(period: ChangePeriod): MarketRow {
         askText = Money.tl(ask, decimals = assetClass.priceDecimals(ask)),
         changePercent = change,
         changeText = changeText(change),
-        sourceLine = source.label() + " · " + timestamp,
+        // Yabanci borsada kaynagin KENDI rakami tarihin YERINE yazilir:
+        // "Borsa · $308,91". Ucunu birden koymak denendi ve cihazda
+        // "Borsa · 2026-07-31 · $30…" diye kirpildi - dar sutunda ucuncu alan
+        // yok. Tarih burada en az sey soyleyendi: sayfa basligi zaten ne zaman
+        // yenilendigini yaziyor, borsa satirinin tarihi de hep son seans.
+        sourceLine = listOfNotNull(
+            source.label(),
+            nativeText() ?: timestamp.takeIf { it.isNotBlank() },
+        ).joinToString(" · "),
         isManual = isManual,
     )
 }

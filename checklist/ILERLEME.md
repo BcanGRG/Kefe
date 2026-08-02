@@ -57,6 +57,9 @@ Gerçek kullanımda çıkan altı şey. Hepsi emülatörde doğrulandı.
 | 26 | Gram altında ayar seçilebiliyor (14/18/22/24) | ✅ **bitti** |
 | 27 | Varlıklarda tek rakam çifti: Gün/Hafta/Ay/Toplam | ✅ **bitti + gerçek cihazda doğrulandı** |
 | 28 | Net değer çipleri grafiği gerçekten değiştiriyor | ✅ **bitti + gerçek cihazda doğrulandı** |
+| 29 | Açılışta giriş ekranı parlamıyor, kilit ilk kareden | ✅ **bitti + gerçek cihazda doğrulandı** |
+| 30 | Hedef detayı yüklenirken "bulunamadı" demiyor | ✅ **bitti + gerçek cihazda doğrulandı** |
+| 31 | Fiyat geçmişine iki yıllık emniyet sınırı | ✅ **bitti** (ölçüldü: 0,53 MB/yıl) |
 
 **Canlı doğrulama (2026-07-30, gerçek cihaz + gerçek Supabase).** E-posta gönderimi
 Gmail SMTP + App Password ile açıldı (Resend domain istiyordu; domain alınmadı).
@@ -1125,3 +1128,223 @@ eklendi: fotoğraflar günlük olduğu için kısa vade de çizilebiliyor.
 **kırmızı**, `+35,78%` yeşil; Döviz'de `Gün +0,06%` yeşil. Net değer kartında
 yedi çip sığdı; "Hafta" → *Son 7 gün*, "Gün" → *Dün → bugün* ve eğri iki
 noktaya indi.
+
+---
+
+## 29 · Açılışta giriş ekranı parlamıyor ✅
+
+**Neydi.** Splash'ten sonra bir an giriş (e-posta) ekranı görünüyordu. Kare kare
+yakalandı: `Kefe` (splash) → boş kare → kilit ekranı.
+
+**Sebep.** `LoginViewModel` `stage = SignIn` ile **doğuyor**; kilit ancak
+`LaunchedEffect(locked, asRoot) { onIntent(Lock) }` ile, yani ilk bestelemeden
+SONRA geliyordu. Arada en az bir kare giriş aşaması çiziliyordu.
+
+**Ne yapıldı.** Kök `LoginKey` ve kilit açıkken **çizim etkiyi beklemez**:
+kabuk `stage`'i ilk kareden `Locked`'a zorluyor. Bu, itilmiş LoginKey'i temiz
+`SignIn`'e zorlayan mevcut hilenin simetriği (adım 9b) — aynı yerde, aynı
+gerekçeyle. Etki yine çalışıyor, yalnız ekran onu beklemiyor.
+
+**Doğrulama (gerçek cihaz).** Kare kare UI dökümü: `Kefe` → `Kefe kilitli ·
+Parmak izinizi tarayın` → `Birikimlerim`. Hiçbir karede giriş ekranı yok.
+
+*(Splash'in son karesi düz zemindir — adım 18'in kararı; o boş kare tasarımın
+kendisi, hata değil.)*
+
+---
+
+## 30 · Hedef detayı yüklenirken "bulunamadı" demiyor ✅
+
+**Neydi.** Hedef detayı ilk açılışta bir an *"Hedef bulunamadı — bu hedef
+silinmiş olabilir"* gösteriyor, veri gelince normal ekranı çiziyordu.
+Silinmemiş bir hedef için yanlış bir cümle.
+
+**Sebep.** Ekran `state.stage`'i hiç okumuyordu; yalnız `goal == null`a bakıp
+boş duruma düşüyordu. Oysa durum `Loading` ile başlar ve depo ilk emisyonunu
+yapana kadar hedef doğal olarak null'dur. **"Yok" ile "henüz gelmedi" ayrı
+şeylerdir** — varlık detayı bu ayrımı zaten yapıyordu (adım 22).
+
+**Ne yapıldı.** `Loading` iken iskelet çizilir; `Missing` iken boş durum.
+`GoalDetailSkeleton` halka, özet ve katkı kartının yerini tutuyor.
+
+**Doğrulama (gerçek cihaz).** Hedef kartına dokunuldu, ilk kareden itibaren
+`Ev · %31 · ₺939.170 / ₺3.000.000` — hiçbir karede "bulunamadı" yok.
+
+---
+
+## 31 · Fiyat geçmişine emniyet sınırı ✅
+
+**Soru.** Haftalık/aylık değişim için tutulan `price_history` zamanla çok mu
+büyür?
+
+**Ölçüldü, tahmin edilmedi.** Gerçek cihazın veritabanı çekilip `dbstat` ile
+bakıldı:
+
+| Ölçü | Değer |
+|---|---|
+| Satır başı (indeks dahil) | **~80 bayt** |
+| 19 varlık × 1 yıl | **0,53 MB** |
+| 19 varlık × 10 yıl | 5,3 MB |
+| 40 varlık × 10 yıl | 11 MB |
+
+O anki durum: 154 satır, 19 varlık, 25 gün; tüm veritabanı 164 KB.
+
+**Yani boyut sorunu YOK.** Buna rağmen sınırsız büyüyen bir tablo bırakmıyoruz:
+her başarılı çekimden sonra **iki yıldan eski** günler siliniyor. Portföyden
+çıkarılan bir fonun anahtarı da böylece zamanla düşüyor.
+
+**Sınır neden bu kadar geniş.** Varlık detayındaki eğri BU tablodan çizilir —
+eski satırlar ölü veri değil, grafiğin kendisi. Dönem hesabı 60 gün istiyor;
+iki yıl ondan kat kat fazla ve grafiği kırpmıyor.
+
+## 32 · Hisse senedi: BIST, ABD ve Avrupa borsaları ✅
+
+**Neydi.** Portföye girebilen tek piyasa aracı fondu. Kullanıcı "sadece fon da
+değil, hem Amerika hem Türkiye borsasında hisse senedi de görebilir miyiz?"
+diye sordu; sonra da "sadece Nasdaq'ta olanlar gelse yeterli, bir de Avrupa
+borsası" diyerek kapsamı daralttı.
+
+**Ne yapıldı.** Anahtar istemeyen tek bir borsa ucu; her iki pazar da aynı
+yanıt biçiminde geliyor (BIST sembolleri `.IS`, Londra `.L`, Paris `.PA` ekli,
+ABD sembolleri çıplak). Yeni `AssetClass.Stock`, kendi rengi (gül-mor), kendi
+ikonu (sütun grafik — fon çizgi grafik, listede yan yana ayrışsınlar diye) ve
+kendi miktar birimi.
+
+**Miktar birimi neden `Piece` değil.** Çeyrek altın bölünmez ama hisse
+bölünür — ABD'de kesirli pay satılıyor. `Piece`'in sıfır ondalık haneli olması
+kesirli payı sessizce yuvarlardı, üstelik `adetBolunmez` testi onu böyle
+kilitliyor. Ayrı bir birim açıldı; etiket yine "adet", çünkü kullanıcının
+kullandığı kelime bu.
+
+**Fiyat TL'ye çevrilir.** Uygulama baştan sona lira ile çalışıyor. Çevrim,
+aynı yenilemenin zaten çektiği USD/TRY kurundan yapılıyor. Kur yoksa satır
+**atlanır**: 308 sayısını lira sanıp portföy toplamına yazmaktansa fiyat hiç
+gelmesin.
+
+**Üç tuzak, üçü de ölçümle bulundu.**
+
+| Tuzak | Belirti | Kök neden |
+|---|---|---|
+| Gün içi seri | 78 nokta, hepsi 31 Temmuz | Uç parametresiz çağrıda intraday dönüyor; `range=1mo&interval=1d` şart |
+| Karşılıksız borsalar | "AAPL" araması Buenos Aires ve São Paulo getiriyor | Kuru olmayan para birimi → fiyat hiç gelmiyor |
+| **Peni** | SHEL.L cihazda **₺217.325**, doğrusunun tam yüz katı | Londra `GBP` değil **`GBp`** döner; ayrıştırmadaki `.uppercase()` küçük `p`'yi siliyordu |
+
+Peni tuzağı önemli çünkü **birim testi geçiyordu**: test yardımcıyı doğrudan
+çağırıyor, hatalı satır ise ağın arkasındaki `fetch` gövdesindeydi. Bu yüzden
+ayrıştırma `parseStockQuote` olarak dışarı alındı ve gerçek yanıt gövdeleriyle
+sınandı — aynı sınıftaki bir hata bir daha sadece cihazda görünmesin.
+
+**Arama fondan farklı çalışır.** TEFAS ucu ad araması yapmaz, o yüzden fonda
+kod yazılıp "TEFAS'ta ara" düğmesine basılıyor. Borsa ucu adla arıyor —
+"aselsan" yazan biri ASELS.IS'i buluyor — dolayısıyla yazdıkça aranır (350 ms
+bekleme, önceki istek iptal). Arama fiyat döndürmez; 12 sonuç için 12 kotasyon
+çekmek yerine fiyat yalnızca **seçilen** sembol için çekilir.
+
+**Süzgeci coğrafya değil KUR belirliyor.** Gösterilen borsalar, para birimini
+TL'ye çevirebildiklerimiz: IST, Nasdaq/NYSE aileleri, euro bölgesi ve Londra.
+İsviçre (CHF), İskandinav borsaları ve OTC dışarıda — seçilseler fiyat hiç
+gelmezdi. Borsa kodları tahmin edilmedi, uçtan ölçüldü.
+
+**Doğrulama (gerçek cihaz, R58N81SAZ1Y).** "aselsan" → ASELS.IS · IST ·
+₺342,25 · −%3,46. 40 adet kaydedildi: toplam ₺939.170 → ₺952.860, yani tam
+40 × ₺342,25 = ₺13.690. "AAPL" → tek satır NASDAQ (Buenos Aires ve São Paulo
+elendi), ₺14.690,96 · −%7,35; ham uçta 308,91 USD ve 47,56 kur ile birebir
+tutuyor. "SHELL" → NYSE, Amsterdam, Londra, Frankfurt, XETRA; Meksika elendi.
+
+**Bir ayrıntı daha.** Hisse fiyatı önce dört ondalık haneyle yazılıyordu
+(₺14.690,**9564**). Çevrimden doğan kuyruk bilgi değil gürültü: on dört bin
+liralık bir rakamda son iki hane hiçbir şey söylemiyor. İki haneye indirildi.
+
+**Kapsam daraltıldı (kullanıcı).** "Sadece Nasdaq'ta olanlar gelse yeterli, bir
+de Avrupa borsası." Süzgeç buna göre çizildi; ölçüm sonucu şu oldu:
+
+| Arama | Önce | Sonra |
+|---|---|---|
+| AAPL | NASDAQ, Buenos Aires, São Paulo, Buenos Aires, SET | **NASDAQ** |
+| SHELL | NYSE, Amsterdam, Londra, Meksika, XETRA, Frankfurt | NYSE, Amsterdam, **Londra**, Frankfurt, XETRA |
+
+**Peni tuzağının anatomisi.** Londra kotasyonu ilk denemede cihazda
+**₺217.325,59** göründü. Beklenen ~₺2.173 idi; fark tam yüz kat, yani bir
+birim hatası. Zincir şöyleydi: `currencyConversion("GBp")` doğru tarifi
+(100'e böl) üretiyordu, ama `StockApi.fetch` para birimini okurken
+`.uppercase()` uyguluyordu — `GBp` daha o noktada `GBP` olmuştu ve tarif hiç
+devreye girmiyordu. Birim testi bunu göremezdi çünkü yardımcıyı doğrudan
+çağırıyor; hatalı satır ağın arkasındaydı.
+
+Düzeltme iki parçalı: (1) `.uppercase()` kaldırıldı, (2) ayrıştırma
+`parseStockQuote` / `parseSearchResult` olarak dışarı alınıp gerçek yanıt
+gövdeleriyle sınandı. Artık aynı sınıftaki bir hata testte düşer.
+
+**Çapraz doğrulama.** Aynı şirketin iki kotasyonu: Londra ₺2.173,26,
+Amsterdam ₺2.179,05 — %0,3 içinde örtüşüyor. Peni ve euro çevrimlerinin ikisi
+de doğru demek, çünkü biri bozuk olsa iki rakam ayrışırdı.
+
+## 33 · Yabancı hissenin kendi fiyatı da görünür ✅
+
+**Soru (kullanıcı).** "Bunları TL'ye çevirmek yerine dolarsa dolar, euroysa
+euro bıraksak? Toplam birikimde zaten TL/dolar/euro'ya çevirebiliyoruz."
+
+**Önce bir yanlış anlama düzeltildi.** Özet'teki ₺/$/€ çipleri her varlığı ayrı
+çevirmiyor — **tek bir TL toplamını** kura bölüyor. Yani "zaten çevirebiliyoruz"
+bu iş için yeterli değil; TL'ye çevirmeyi bıraksak o çipler de bozulurdu.
+
+**Neden hesap TL kalıyor.** `Position.value` tek bir sayı ve her yerde
+**toplanıyor**: portföy toplamı, dağılım yüzdeleri, hedef ilerlemesi, net değer
+grafiği, kâr/zarar, sıralama. Altını lira, Apple'ı dolar tutup ikisini toplamak
+anlamsız bir rakam üretirdi. Gerçek çok para birimli portföy, pozisyonlara para
+birimi kolonu + bu sayım noktalarının hepsinin kur tablosuyla yeniden yazılması
+demekti; çevrim yine yapılacaktı, sadece daha geç ve daha çok yerde.
+
+**Yapılan.** Çevrim kaldı, yanına **yalnız gösterim için** ikinci bir çift
+eklendi: `nativePrice` + `nativeCurrency` (migration 6). Üç yerde görünüyor:
+
+| Yer | Nasıl |
+|---|---|
+| Arama satırı | "NASDAQ · $308,91" (borsa adının yanında) |
+| Piyasa tablosu | "Borsa · $308,91" |
+| Varlık detayı | Ayrı satır: "Borsadaki fiyat — $308,91" |
+
+**Türetilmedi, saklandı.** Sembol ekinden ("`.L` ise sterlin") çıkarılabilirdi
+ama Londra'da dolarla işlem gören satırlar da var; yanlış para birimi yazmak
+hiç yazmamaktan kötüdür. Kaynağın söylediği ne ise o.
+
+**Elle fiyatta yazılmaz.** Kullanıcı TL girmiştir; yanında kaynaktan kalmış eski
+bir dolar rakamı dursa iki sayı birbirini tutmazdı.
+
+**Supabase'de değişiklik gerekmedi.** Fiyat tabloları eşitlenmiyor (her cihaz
+fiyatı kendi çekiyor), `asset_class` ve `unit` ise düz `text` — CHECK kısıtı da
+enum da yok, `"Stock"` ve `"Lot"` olduğu gibi gidiyor.
+
+**Doğrulama (gerçek cihaz).** AAPL: arama satırında "NASDAQ · $308,91",
+Piyasa'da "Borsa · $308,91" + ₺14.691, detayda "Borsadaki fiyat $308,91" +
+"Güncel birim fiyat ₺14.690,96". ASELS.IS (BIST) hiçbirinde ikinci rakam
+göstermiyor — orada zaten TL.
+
+## 34 · Piyasa tablosu kendi rakamlarını kırpıyormuş ✅
+
+**Nasıl bulundu.** Hisse satırı eklenince fiyatı "₺14.690," diye kesildi.
+Bakınca sorunun hisseye ait olmadığı görüldü: altın satırlarının **yarısı**
+zaten aynı haldeydi.
+
+| Satır | Görünen | Gerçek |
+|---|---|---|
+| Çeyrek | ₺10.027, | ₺10.027,02 |
+| Yarım | ₺20.054, | ₺20.054,04 |
+| Tam | ₺39.985, | ₺39.985,44 |
+| Ata/Cumh. | ₺41.457, | ₺41.457,30 |
+| Gram Altın | ₺6.175,3 | ₺6.175,37 |
+
+**Neden sessiz bir hataydı.** Metin sabit sütuna sığmayınca üç nokta bile
+çizilmiyor, olduğu yerden kesiliyor — yani eksik rakam, tam rakam gibi duruyor.
+"₺6.175,3" bir yuvarlama değil, yanlış sayı.
+
+**İki düzeltme, aynı arızaya.** ALIŞ/SATIŞ sütunları 58dp → 68dp: dört haneli
+binler artık olduğu gibi sığıyor. Ve **on bin liranın üstünde kuruş düşüyor**:
+iki hanelik taban, yavaş hareket eden satırlar donmuş görünmesin diye konmuştu;
+Ata altını dakikada yüzlerce lira oynuyor, orada kuruş hiçbir şey kazandırmayıp
+önündeki haneleri götürüyordu.
+
+**Hisse satırının alt metni de aynı şekildeydi:** "Borsa · 2026-07-31 · $30…".
+Yerel fiyat artık tarihin **yerine** yazılıyor, arkasına eklenmiyor. Tarih üçü
+içinde en az şey söyleyendi: sayfa başlığı zaten ne zaman yenilendiğini yazıyor
+ve bir borsa satırının tarihi hep son seans.

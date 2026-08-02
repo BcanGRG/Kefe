@@ -108,6 +108,8 @@ internal fun Cached_prices.toDomain(): Price = Price(
     source = source,
     isManual = source == PriceSource.Manual,
     assetClass = assetClass,
+    nativePrice = nativePrice,
+    nativeCurrency = nativeCurrency,
 )
 
 /**

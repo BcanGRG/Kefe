@@ -325,6 +325,7 @@ private fun AssetClass.icon() = when (this) {
     AssetClass.Silver -> KefeIcons.Silver
     AssetClass.Fx -> KefeIcons.Fx
     AssetClass.Fund -> KefeIcons.Fund
+    AssetClass.Stock -> KefeIcons.Stock
     AssetClass.Cash -> KefeIcons.Cash
 }
 

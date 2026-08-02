@@ -66,6 +66,16 @@ WHERE id LIKE 'pos_fund_%'
 AND quantity > 0.0
 AND deletedAt IS NULL;
 
+-- Ayni gerekce hisse icin: tutulan sembollerin id'leri.
+-- "pos_stock_thyao.is" -> "THYAO.IS". Hissede sabit varsayilan liste YOK, bu
+-- yuzden hisse tutulmuyorsa borsaya hic gidilmez.
+selectHeldStockIds:
+SELECT id
+FROM positions
+WHERE id LIKE 'pos_stock_%'
+AND quantity > 0.0
+AND deletedAt IS NULL;
+
 selectPositionById:
 SELECT *
 FROM positions

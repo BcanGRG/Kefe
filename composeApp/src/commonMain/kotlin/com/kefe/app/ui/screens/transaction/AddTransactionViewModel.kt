@@ -1,7 +1,11 @@
 package com.kefe.app.ui.screens.transaction
 
 import androidx.lifecycle.viewModelScope
+import com.kefe.app.data.remote.StockApi
 import com.kefe.app.data.remote.TefasApi
+import com.kefe.app.data.remote.currencyConversion
+import com.kefe.app.data.remote.stockAssetKey
+import com.kefe.app.data.remote.stockSymbolOf
 import com.kefe.app.data.sync.CloudState
 import com.kefe.app.data.sync.SyncCoordinator
 import com.kefe.app.domain.KefeClock
@@ -14,6 +18,7 @@ import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.Karat
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.Position
+import com.kefe.app.domain.model.PositionIdPrefix
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.SyncState
@@ -33,6 +38,7 @@ import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.rawAmount
 import com.kefe.app.ui.mvi.MviViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -53,6 +59,8 @@ class AddTransactionViewModel(
     // Fon adiminda girilen kodu TEFAS'tan canli cekmek icin - yereldeki 5 fonun
     // disindaki fonlar da eklenebilsin.
     private val tefas: TefasApi,
+    // Hisse adiminda sembol/ad aramasi ve secilen sembolun kotasyonu icin.
+    private val stocks: StockApi,
     // Kaydin "Bekliyor" damgasi BULUT durumundan gelir, fiyat tazeliginden degil.
     private val syncCoordinator: SyncCoordinator,
 ) : MviViewModel<AddTransactionUiState, AddTransactionIntent, AddTransactionEffect>(
@@ -72,6 +80,13 @@ class AddTransactionViewModel(
     // Bu oturumda TEFAS'tan canli cekilen fonlar. fundResults her withPrices'ta
     // yeniden kuruldugu icin ayri saklanir; katalog ile birlestirilir.
     private var liveFunds: List<FundResult> = emptyList()
+
+    // Ayni gerekce hisse icin: bu oturumda borsadan aranan/cekilen semboller.
+    private var liveStocks: List<StockResult> = emptyList()
+
+    // Yazdikca arama: her tusa basista bir istek atmamak icin onceki arama
+    // iptal edilir. Fonda gerekmiyordu - orada arama elle tetikleniyor.
+    private var stockSearchJob: Job? = null
 
     /**
      * Bu cihazin profili. Eklenen islem BUNA yazilir - once kosulsuz Owner'a
@@ -96,6 +111,11 @@ class AddTransactionViewModel(
                     // Sinif degisince onceki sinifin secimi anlamsizlasir.
                     selectedFundKey = if (intent.assetClass == AssetClass.Fund) {
                         s.selectedFundKey
+                    } else {
+                        null
+                    },
+                    selectedStockKey = if (intent.assetClass == AssetClass.Stock) {
+                        s.selectedStockKey
                     } else {
                         null
                     },
@@ -135,6 +155,18 @@ class AddTransactionViewModel(
 
             AddTransactionIntent.SearchFundOnline -> searchFundOnline()
 
+            is AddTransactionIntent.ChangeStockQuery ->
+                update(s.copy(stockQuery = intent.text, stockSearchError = null))
+
+            is AddTransactionIntent.SelectStock -> {
+                // Onceki secimin cevrilemez-para-birimi uyarisi silinir.
+                update(s.copy(selectedStockKey = intent.assetKey, stockSearchError = null))
+                // Arama fiyat getirmiyor; secilen sembolunkini simdi cek.
+                fetchStockQuote(intent.assetKey)
+            }
+
+            AddTransactionIntent.SearchStockOnline -> searchStockOnline()
+
             // 2. adima gecerken secici, varlik zaten portfoydeyse onun MEVCUT
             // hedefini gosterir (yeni varlikta Hedefsiz).
             AddTransactionIntent.Continue ->
@@ -149,6 +181,7 @@ class AddTransactionViewModel(
                         selectedSubtype = last.subtype,
                         karat = last.karat,
                         selectedFundKey = null,
+                        selectedStockKey = null,
                     ).toAmountStep(quantityText = last.quantityText).withCurrentGoal()
                 )
             }
@@ -283,6 +316,8 @@ class AddTransactionViewModel(
             karat = position.karat ?: position.subtype?.defaultKarat() ?: karat,
             selectedFundKey = position.id.removePrefix("pos_")
                 .takeIf { position.assetClass == AssetClass.Fund },
+            selectedStockKey = position.id.removePrefix("pos_")
+                .takeIf { position.assetClass == AssetClass.Stock },
             currency = Currency.fromPriceKey(position.id.removePrefix("pos_")) ?: currency,
         ).toAmountStep().withCurrentGoal()
 
@@ -326,6 +361,10 @@ class AddTransactionViewModel(
                 )
             },
             fundResults = mergedFunds(prices).filter { it.matches(s.fundQuery) },
+            // Hissede sorgu SUZMEZ: liste zaten borsadan sorguya karsilik geldi.
+            // Yerelde suzmek "aselsan" yazildiginda ASELS satirini eleyip listeyi
+            // bosaltirdi - ad ile sembol tutmuyor.
+            stockResults = mergedStocks(prices),
             marketPrice = market,
             unitPriceText = when {
                 s.priceManual -> s.unitPriceText
@@ -395,6 +434,127 @@ class AddTransactionViewModel(
         }
     }
 
+    /**
+     * Hisse oneri listesi: kullanicinin TUTTUGU hisseler + bu oturumda aranip
+     * bulunanlar. Fiyat once fiyat tablosundan (TL'ye cevrilmis, canli), yoksa
+     * aramada cekilen degerden gelir.
+     */
+    private fun mergedStocks(prices: PriceBoard): List<StockResult> {
+        val held = heldStockResults(positions, prices)
+        val live = liveStocks.map { entry ->
+            val onBoard = prices.byKey(entry.assetKey)
+            entry.copy(
+                price = onBoard?.ask ?: entry.price,
+                changePercent = onBoard?.changePercent ?: entry.changePercent,
+            )
+        }
+        // Aranan sembol zaten portfoydeyse tutulan kazanir (once gelir).
+        return (held + live).distinctBy { it.assetKey }
+    }
+
+    /**
+     * Borsada ada ya da sembole gore arar.
+     *
+     * FONDAN FARKLI iki nokta var. Birincisi: TEFAS ucu ad-arama yapmaz, o
+     * yuzden fonda kod dogrudan sorgulanir ve arama elle tetiklenir; borsa ucu
+     * "aselsan" yazan biri icin ASELS.IS'i bulur, dolayisiyla yazdikca aranir ve
+     * onceki istek iptal edilir.
+     *
+     * Ikincisi: arama FIYAT DONDURMEZ. Her sonuc icin ayri kotasyon cekmek 12
+     * istek demekti; fiyat kullanici sec[me]digi sembol icin cekilir
+     * ([fetchStockQuote]).
+     */
+    private fun searchStockOnline() {
+        val query = _state.value.stockQuery.trim()
+        stockSearchJob?.cancel()
+        if (query.length < 2) {
+            _state.value = _state.value.copy(stockSearching = false, stockSearchError = null)
+            return
+        }
+        _state.value = _state.value.copy(stockSearching = true, stockSearchError = null)
+        stockSearchJob = viewModelScope.launch {
+            val results = runCatching { stocks.search(query) }.getOrNull()
+            if (results.isNullOrEmpty()) {
+                _state.value = _state.value.copy(
+                    stockSearching = false,
+                    stockSearchError = "'$query' için sonuç yok. Sembolü veya adı kontrol edin.",
+                )
+                return@launch
+            }
+            val mapped = results.map { hit ->
+                StockResult(
+                    assetKey = stockAssetKey(hit.symbol),
+                    symbol = hit.symbol,
+                    name = hit.name,
+                    exchange = hit.exchange,
+                    // Fiyat secimde cekilir; 0 = "henuz bilmiyoruz".
+                    price = 0.0,
+                    changePercent = 0.0,
+                )
+            }
+            // Tutulan hisselerin fiyati zaten var; onlari ezmesin diye
+            // sonuclarin ONUNE degil arkasina konur (bkz. mergedStocks).
+            liveStocks = mapped
+            _state.value = withPrices(
+                _state.value.copy(stockSearching = false, stockSearchError = null),
+            )
+        }
+    }
+
+    /**
+     * Secilen sembolun guncel kotasyonu. Arama fiyat getirmedigi icin ikinci
+     * adima gecmeden once bir kez cekilir - yoksa "Güncel piyasa" bos kalir ve
+     * kullanici fiyati elle yazmak zorunda kalirdi.
+     */
+    private fun fetchStockQuote(assetKey: String) {
+        val symbol = stockSymbolOf(assetKey)
+        viewModelScope.launch {
+            val quote = runCatching { stocks.fetch(symbol) }.getOrNull() ?: return@launch
+            // Arama DUNYA capinda sonuc veriyor: "AAPL" yazan biri Buenos Aires
+            // ve Sao Paulo kotasyonlarini da goruyor. Onlarin para birimi icin
+            // kurumuz yok, dolayisiyla fiyat cekilemez - satirda "—" birakmak
+            // "yukleniyor" gibi gorunurdu, sebebi YAZILIR.
+            val rate = fxRateFor(quote.currencyCode) ?: run {
+                _state.value = _state.value.copy(
+                    stockSearchError = "${quote.currencyCode} ile işlem gören borsalar " +
+                        "desteklenmiyor; TL, dolar, euro ve sterlin kotasyonları çevrilebiliyor.",
+                )
+                return@launch
+            }
+            liveStocks = liveStocks.map { entry ->
+                if (entry.assetKey != assetKey) {
+                    entry
+                } else {
+                    val conversion = currencyConversion(quote.currencyCode)
+                    entry.copy(
+                        name = entry.name.ifBlank { quote.name },
+                        price = quote.price * rate,
+                        changePercent = quote.changePercent,
+                        // Peni degil sterlin yazilir; bolen fiyat katmaniyla
+                        // AYNI yerden gelir, yoksa iki ekran ayrisirdi.
+                        nativePrice = conversion?.code?.let { quote.price / conversion.divisor },
+                        currencyCode = conversion?.code,
+                    )
+                }
+            }
+            _state.value = withPrices(_state.value)
+        }
+    }
+
+    /**
+     * Borsanin para biriminden TL'ye kur. Tarif [currencyConversion]'dan gelir -
+     * gunluk yenilemeyle AYNI kaynak, yoksa ayni hisse iki ekranda iki fiyat
+     * gosterirdi. Kur bilinmiyorsa null ve fiyat CEKILMEZ: 180 sayisini TL
+     * sanmaktansa alan bos kalsin.
+     */
+    private fun fxRateFor(currencyCode: String): Double? {
+        val conversion = currencyConversion(currencyCode) ?: return null
+        val code = conversion.code ?: return 1.0
+        val currency = Currency.entries.firstOrNull { it.code == code } ?: return null
+        val rate = board?.byKey(currency.priceKey())?.buyPrice() ?: return null
+        return (rate / conversion.divisor).takeIf { it > 0.0 }
+    }
+
     // --- Duzenleme ---------------------------------------------------------
 
     /**
@@ -424,6 +584,8 @@ class AddTransactionViewModel(
                     // secim bununla eslesmezse kayit yeni bir pozisyona yazilir.
                     selectedFundKey = position.id.removePrefix("pos_")
                         .takeIf { position.assetClass == AssetClass.Fund },
+                    selectedStockKey = position.id.removePrefix("pos_")
+                        .takeIf { position.assetClass == AssetClass.Stock },
                     // Doviz de kimlikten cozulur; yoksa euro kaydi duzenlenirken
                     // dolar secili gelir ve kaydedince dolara tasinirdi.
                     currency = Currency.fromPriceKey(position.id.removePrefix("pos_"))
@@ -672,6 +834,10 @@ private fun marketPriceOf(s: AddTransactionUiState, board: PriceBoard): Double =
         AssetClass.Fund -> s.selectedFundKey?.let { key ->
             s.fundResults.firstOrNull { it.assetKey == key }?.price
         } ?: 0.0
+
+        AssetClass.Stock -> s.selectedStockKey?.let { key ->
+            s.stockResults.firstOrNull { it.assetKey == key }?.price
+        } ?: 0.0
         // Nakitte birim fiyat yoktur; girilen tutar dogrudan degerdir.
         AssetClass.Cash -> 1.0
     }
@@ -700,6 +866,28 @@ private fun heldFundResults(positions: List<Position>, board: PriceBoard): List<
                 issuer = "",
                 price = onBoard?.ask ?: pos.unitPrice,
                 changePercent = onBoard?.changePercent ?: pos.dailyChangePercent,
+            )
+        }
+
+/** Ayni gerekce hisse icin: en cok tutulan ilk 5 sembol. */
+private fun heldStockResults(positions: List<Position>, board: PriceBoard): List<StockResult> =
+    positions
+        .filter { it.assetClass == AssetClass.Stock && it.quantity > 0.0 }
+        .sortedByDescending { it.value }
+        .take(5)
+        .map { pos ->
+            val assetKey = pos.id.removePrefix("pos_")
+            val onBoard = board.byKey(assetKey)
+            StockResult(
+                assetKey = assetKey,
+                symbol = stockSymbolOf(assetKey),
+                // Pozisyon adi "SEMBOL · Tam Ad"; oneride tam ad gosterilir.
+                name = pos.name.substringAfter(" · ", pos.name),
+                exchange = "",
+                price = onBoard?.ask ?: pos.unitPrice,
+                changePercent = onBoard?.changePercent ?: pos.dailyChangePercent,
+                nativePrice = onBoard?.nativePrice,
+                currencyCode = onBoard?.nativeCurrency,
             )
         }
 
@@ -743,6 +931,11 @@ private fun Position.matches(s: AddTransactionUiState): Boolean = when (s.assetC
     AssetClass.Fund -> assetClass == AssetClass.Fund &&
         s.selectedFund?.code?.let { name.startsWith(it) } == true
 
+    // Hissede ad degil ANAHTAR kiyaslanir: sembol kimlige gomulu ve borsanin
+    // dondurdugu sirket adi zamanla degisebiliyor.
+    AssetClass.Stock -> assetClass == AssetClass.Stock &&
+        s.selectedStockKey?.let { id == PositionIdPrefix + it } == true
+
     // Para birimi de eslesmeli. Once yalniz sinifa bakiliyordu: euro girilirse
     // kayit dolar pozisyonunun defterine yaziliyor, iki para birimi tek satirda
     // toplaniyordu.
@@ -759,6 +952,7 @@ private fun assetKeyOf(s: AddTransactionUiState): String = when (s.assetClass) {
     }
 
     AssetClass.Fund -> s.selectedFundKey.orEmpty()
+    AssetClass.Stock -> s.selectedStockKey.orEmpty()
     AssetClass.Silver -> "silver_gram"
     AssetClass.Fx -> s.currency.priceKey()
     AssetClass.Cash -> "cash"
@@ -775,6 +969,7 @@ private fun newPositionName(s: AddTransactionUiState): String = when (s.assetCla
     }
 
     AssetClass.Fund -> s.selectedFund?.let { "${it.code} · ${it.name}" } ?: "Fon"
+    AssetClass.Stock -> s.selectedStock?.let { "${it.symbol} · ${it.name}" } ?: "Hisse"
     AssetClass.Silver -> "Gram Gümüş"
     AssetClass.Fx -> s.currency.label()
     AssetClass.Cash -> "Nakit"
