@@ -32,6 +32,13 @@ data class AssetDetailUiState(
     val averageBuyPrice: Double = 0.0,
     val firstBuyDate: KefeDate? = null,
     val priceSourceLabel: String = "",
+    /**
+     * Yabanci borsadaki birim fiyatin KENDI para birimindeki hali: "$308,91".
+     *
+     * Deger ve kar/zarar TL ile hesaplanir; bu satir yalniz "peki dolar olarak
+     * kaca gelmis" sorusunu yanitlar. TL kotasyonlarda null, satir cizilmez.
+     */
+    val nativeUnitPrice: String? = null,
 
     /** Elde tutulanin henuz kesinlesmemis kar/zarari. */
     val unrealizedProfit: Double = 0.0,

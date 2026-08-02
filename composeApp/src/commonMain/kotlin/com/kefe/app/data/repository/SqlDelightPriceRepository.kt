@@ -224,6 +224,9 @@ class SqlDelightPriceRepository(
                         // Tazelik bu damgadan hesaplaniyor; 0 yazildigi surece
                         // "2 saatten eski" kurali isletilemiyordu.
                         fetchedAtEpochSeconds = nowSeconds,
+                        // Yalniz gosterim icin; hesap [ask] ile, yani TL ile.
+                        nativePrice = price.nativePrice,
+                        nativeCurrency = price.nativeCurrency,
                     )
                     // Gunun fiyati AYRICA gecmise yazilir: onbellek uzerine
                     // yazildigi icin gecmisi tutamaz, gecmis fiyat da sonradan

@@ -192,6 +192,19 @@ private fun List<Price>.toSections(period: ChangePeriod): List<MarketSection> =
         }
     }
 
+/**
+ * Kaynagin kendi para birimindeki fiyat metni; TL kotasyonlarda null.
+ *
+ * ELLE GIRILEN fiyatta da null: kullanici TL yazmistir, yaninda kaynaktan
+ * kalmis eski bir dolar rakami durursa iki sayi birbirini tutmaz.
+ */
+private fun Price.nativeText(): String? {
+    if (isManual) return null
+    val value = nativePrice ?: return null
+    val code = nativeCurrency ?: return null
+    return Money.foreign(value, code)
+}
+
 private fun Price.toRow(period: ChangePeriod): MarketRow {
     val change = changeIn(period)
     return MarketRow(
@@ -203,7 +216,14 @@ private fun Price.toRow(period: ChangePeriod): MarketRow {
         askText = Money.tl(ask, decimals = assetClass.priceDecimals(ask)),
         changePercent = change,
         changeText = changeText(change),
-        sourceLine = source.label() + " · " + timestamp,
+        // Yabanci borsada kaynagin KENDI rakami da bu satirda: "Borsa ·
+        // 2026-07-30 · $308,91". Ustteki tutar TL, cunku hesap TL ile yapiliyor;
+        // ama kullanicinin Apple icin bildigi sayi 308,91.
+        sourceLine = listOfNotNull(
+            source.label(),
+            timestamp.takeIf { it.isNotBlank() },
+            nativeText(),
+        ).joinToString(" · "),
         isManual = isManual,
     )
 }

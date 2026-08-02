@@ -978,10 +978,17 @@ private fun StockResults(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (stock.exchange.isNotBlank()) {
+                    // Borsa adinin yaninda kaynagin KENDI fiyati: "NASDAQ ·
+                    // $308,91". Sagdaki tutar TL, cunku kayit TL ile yapiliyor;
+                    // ama kullanicinin Apple icin bildigi sayi bu.
+                    val subtitle = listOfNotNull(
+                        stock.exchange.takeIf { it.isNotBlank() },
+                        stock.nativeText(),
+                    ).joinToString(" · ")
+                    if (subtitle.isNotEmpty()) {
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = stock.exchange,
+                            text = subtitle,
                             style = t.micro,
                             color = c.onSurfaceMuted,
                             maxLines = 1,

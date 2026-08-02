@@ -490,7 +490,6 @@ class AddTransactionViewModel(
                     // Fiyat secimde cekilir; 0 = "henuz bilmiyoruz".
                     price = 0.0,
                     changePercent = 0.0,
-                    currencyCode = "",
                 )
             }
             // Tutulan hisselerin fiyati zaten var; onlari ezmesin diye
@@ -526,11 +525,15 @@ class AddTransactionViewModel(
                 if (entry.assetKey != assetKey) {
                     entry
                 } else {
+                    val conversion = currencyConversion(quote.currencyCode)
                     entry.copy(
                         name = entry.name.ifBlank { quote.name },
                         price = quote.price * rate,
                         changePercent = quote.changePercent,
-                        currencyCode = quote.currencyCode,
+                        // Peni degil sterlin yazilir; bolen fiyat katmaniyla
+                        // AYNI yerden gelir, yoksa iki ekran ayrisirdi.
+                        nativePrice = conversion?.code?.let { quote.price / conversion.divisor },
+                        currencyCode = conversion?.code,
                     )
                 }
             }
@@ -883,7 +886,8 @@ private fun heldStockResults(positions: List<Position>, board: PriceBoard): List
                 exchange = "",
                 price = onBoard?.ask ?: pos.unitPrice,
                 changePercent = onBoard?.changePercent ?: pos.dailyChangePercent,
-                currencyCode = "",
+                nativePrice = onBoard?.nativePrice,
+                currencyCode = onBoard?.nativeCurrency,
             )
         }
 

@@ -46,6 +46,30 @@ object Money {
     }
 
     /**
+     * YABANCI para birimindeki fiyat: "$308,91", "€157,68", "£33,84".
+     *
+     * Yalniz borsa kotasyonlarinin yaninda kullanilir - hesap TL ile yapilir
+     * (bkz. [Price.nativePrice]). Sayi tr-TR bicimlenir: kullanici Turkce
+     * okuyor, "308.91" degil "308,91" bekliyor.
+     *
+     * Bilmedigimiz bir kod gelirse simge yerine KODUN KENDISI yazilir
+     * ("CHF 42,10"); uydurma bir simge basmaktansa duz kod dogrudur.
+     *
+     * `GBp` (peni) BURAYA GELMEZ: cevrim katmani onu sterline dondurur, cunku
+     * "£3.383,50" yazmak fiyati yuz kat buyuk gostermek olurdu.
+     */
+    fun foreign(value: Double, currencyCode: String, decimals: Int = 2): String {
+        val body = format(abs(value), decimals, forceSign = false)
+        val sign = if (value < 0) MINUS.toString() else ""
+        return when (currencyCode) {
+            "USD" -> "$sign$$body"
+            "EUR" -> "$sign€$body"
+            "GBP" -> "$sign£$body"
+            else -> "$sign$currencyCode $body"
+        }
+    }
+
+    /**
      * Tutarin GERCEKTEN tasidigi kurusu yazar - en cok iki hane.
      *
      * `Kuruslari goster` ayarindan BAGIMSIZDIR (bkz. [moneyTl]). Ayar ana

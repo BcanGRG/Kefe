@@ -60,8 +60,20 @@ data class StockResult(
     /** TL cinsinden - cevrim fiyat katmaninda yapilir. */
     val price: Double,
     val changePercent: Double,
-    val currencyCode: String,
+    /**
+     * Borsanin kendi para birimindeki fiyat ve kodu; BIST'te null.
+     * Yalniz gosterim - kayit TL ile yapilir.
+     */
+    val nativePrice: Double? = null,
+    val currencyCode: String? = null,
 )
+
+/** "$308,91" - yabanci borsada; TL kotasyonda null, yazacak ikinci bir sey yok. */
+fun StockResult.nativeText(): String? {
+    val value = nativePrice ?: return null
+    val code = currencyCode ?: return null
+    return Money.foreign(value, code)
+}
 
 /**
  * "Tekrar ekle" kisayolunun kaynagi. Yalniz etiket degil, formu dolduracak

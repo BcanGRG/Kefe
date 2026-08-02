@@ -160,6 +160,16 @@ class LivePriceRemoteDataSource(
                 timestamp = quote.date?.isoText().orEmpty(),
                 source = PriceSource.Exchange,
                 assetClass = AssetClass.Stock,
+                // TL disinda fiyatlanan borsalarda kaynagin kendi rakami da
+                // tasinir - ekranda TL degerin yaninda gorunsun diye. BIST'te
+                // null: orada zaten TL yaziyor, ikinci kez yazmak gurultu.
+                //
+                // PENI DEGIL STERLIN yazilir: Londra 3383,5 `GBp` doner, ekrana
+                // "£3.383,50" basmak fiyati yuz kat buyuk gostermek olurdu.
+                // Bolen burada da ayni yerden gelir ([currencyConversion]).
+                nativePrice = (quote.price / conversion.divisor)
+                    .takeIf { conversion.code != null },
+                nativeCurrency = conversion.code,
                 // TEFAS ile ayni karar: bir aylik seri gecmise yazilir, boylece
                 // haftalik/aylik degisim ve detaydaki egri ilk gunden gercek.
                 //
