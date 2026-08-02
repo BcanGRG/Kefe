@@ -18,9 +18,10 @@ fun AssetClass.maxPriceDecimals(): Int = when (this) {
     AssetClass.Fund -> 6
     // Kur dort haneye kadar anlamli (capraz kurlarda kurusun altina iner).
     AssetClass.Fx -> 4
-    // Borsa kotasyonu iki hane; ama ABD hissesinin TL karsiligi kurdan turedigi
-    // icin ucuncu-dorduncu hane bilgi tasiyor (₺1.294,7385 gibi).
-    AssetClass.Stock -> 4
+    // Borsa kotasyonu iki hanedir. Cevrimden dogan uzun kuyruk BILGI DEGIL
+    // gurultudur: cihazda AAPL "₺14.690,9564" yaziyordu - on dort bin liralik
+    // bir rakamda son iki hane hicbir sey soylemiyor, yalniz satiri tasiriyor.
+    AssetClass.Stock -> 2
     // Kiymetli maden kotasyonlari kurus mertebesinde.
     AssetClass.Gold, AssetClass.Silver -> 2
     AssetClass.Cash -> 2

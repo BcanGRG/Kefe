@@ -3,6 +3,7 @@ package com.kefe.app.ui.screens.transaction
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.data.remote.StockApi
 import com.kefe.app.data.remote.TefasApi
+import com.kefe.app.data.remote.currencyConversion
 import com.kefe.app.data.remote.stockAssetKey
 import com.kefe.app.data.remote.stockSymbolOf
 import com.kefe.app.data.sync.CloudState
@@ -158,7 +159,8 @@ class AddTransactionViewModel(
                 update(s.copy(stockQuery = intent.text, stockSearchError = null))
 
             is AddTransactionIntent.SelectStock -> {
-                update(s.copy(selectedStockKey = intent.assetKey))
+                // Onceki secimin cevrilemez-para-birimi uyarisi silinir.
+                update(s.copy(selectedStockKey = intent.assetKey, stockSearchError = null))
                 // Arama fiyat getirmiyor; secilen sembolunkini simdi cek.
                 fetchStockQuote(intent.assetKey)
             }
@@ -509,7 +511,17 @@ class AddTransactionViewModel(
         val symbol = stockSymbolOf(assetKey)
         viewModelScope.launch {
             val quote = runCatching { stocks.fetch(symbol) }.getOrNull() ?: return@launch
-            val rate = fxRateFor(quote.currencyCode) ?: return@launch
+            // Arama DUNYA capinda sonuc veriyor: "AAPL" yazan biri Buenos Aires
+            // ve Sao Paulo kotasyonlarini da goruyor. Onlarin para birimi icin
+            // kurumuz yok, dolayisiyla fiyat cekilemez - satirda "—" birakmak
+            // "yukleniyor" gibi gorunurdu, sebebi YAZILIR.
+            val rate = fxRateFor(quote.currencyCode) ?: run {
+                _state.value = _state.value.copy(
+                    stockSearchError = "${quote.currencyCode} ile işlem gören borsalar " +
+                        "desteklenmiyor; TL, dolar, euro ve sterlin kotasyonları çevrilebiliyor.",
+                )
+                return@launch
+            }
             liveStocks = liveStocks.map { entry ->
                 if (entry.assetKey != assetKey) {
                     entry
@@ -527,13 +539,17 @@ class AddTransactionViewModel(
     }
 
     /**
-     * Borsanin para biriminden TL'ye kur. TL borsasinda 1.0; kur bilinmiyorsa
-     * null ve fiyat CEKILMEZ - 180 sayisini TL sanmaktansa alan bos kalsin.
+     * Borsanin para biriminden TL'ye kur. Tarif [currencyConversion]'dan gelir -
+     * gunluk yenilemeyle AYNI kaynak, yoksa ayni hisse iki ekranda iki fiyat
+     * gosterirdi. Kur bilinmiyorsa null ve fiyat CEKILMEZ: 180 sayisini TL
+     * sanmaktansa alan bos kalsin.
      */
     private fun fxRateFor(currencyCode: String): Double? {
-        if (currencyCode.equals("TRY", ignoreCase = true)) return 1.0
-        val currency = Currency.entries.firstOrNull { it.code == currencyCode } ?: return null
-        return board?.byKey(currency.priceKey())?.buyPrice()?.takeIf { it > 0.0 }
+        val conversion = currencyConversion(currencyCode) ?: return null
+        val code = conversion.code ?: return 1.0
+        val currency = Currency.entries.firstOrNull { it.code == code } ?: return null
+        val rate = board?.byKey(currency.priceKey())?.buyPrice() ?: return null
+        return (rate / conversion.divisor).takeIf { it > 0.0 }
     }
 
     // --- Duzenleme ---------------------------------------------------------

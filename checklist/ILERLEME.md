@@ -1196,3 +1196,61 @@ her başarılı çekimden sonra **iki yıldan eski** günler siliniyor. Portföy
 **Sınır neden bu kadar geniş.** Varlık detayındaki eğri BU tablodan çizilir —
 eski satırlar ölü veri değil, grafiğin kendisi. Dönem hesabı 60 gün istiyor;
 iki yıl ondan kat kat fazla ve grafiği kırpmıyor.
+
+## 32 · Hisse senedi: BIST, ABD ve Avrupa borsaları ✅
+
+**Neydi.** Portföye girebilen tek piyasa aracı fondu. Kullanıcı "sadece fon da
+değil, hem Amerika hem Türkiye borsasında hisse senedi de görebilir miyiz?"
+diye sordu; sonra da "sadece Nasdaq'ta olanlar gelse yeterli, bir de Avrupa
+borsası" diyerek kapsamı daralttı.
+
+**Ne yapıldı.** Anahtar istemeyen tek bir borsa ucu; her iki pazar da aynı
+yanıt biçiminde geliyor (BIST sembolleri `.IS`, Londra `.L`, Paris `.PA` ekli,
+ABD sembolleri çıplak). Yeni `AssetClass.Stock`, kendi rengi (gül-mor), kendi
+ikonu (sütun grafik — fon çizgi grafik, listede yan yana ayrışsınlar diye) ve
+kendi miktar birimi.
+
+**Miktar birimi neden `Piece` değil.** Çeyrek altın bölünmez ama hisse
+bölünür — ABD'de kesirli pay satılıyor. `Piece`'in sıfır ondalık haneli olması
+kesirli payı sessizce yuvarlardı, üstelik `adetBolunmez` testi onu böyle
+kilitliyor. Ayrı bir birim açıldı; etiket yine "adet", çünkü kullanıcının
+kullandığı kelime bu.
+
+**Fiyat TL'ye çevrilir.** Uygulama baştan sona lira ile çalışıyor. Çevrim,
+aynı yenilemenin zaten çektiği USD/TRY kurundan yapılıyor. Kur yoksa satır
+**atlanır**: 308 sayısını lira sanıp portföy toplamına yazmaktansa fiyat hiç
+gelmesin.
+
+**Üç tuzak, üçü de ölçümle bulundu.**
+
+| Tuzak | Belirti | Kök neden |
+|---|---|---|
+| Gün içi seri | 78 nokta, hepsi 31 Temmuz | Uç parametresiz çağrıda intraday dönüyor; `range=1mo&interval=1d` şart |
+| Karşılıksız borsalar | "AAPL" araması Buenos Aires ve São Paulo getiriyor | Kuru olmayan para birimi → fiyat hiç gelmiyor |
+| **Peni** | SHEL.L cihazda **₺217.325**, doğrusunun tam yüz katı | Londra `GBP` değil **`GBp`** döner; ayrıştırmadaki `.uppercase()` küçük `p`'yi siliyordu |
+
+Peni tuzağı önemli çünkü **birim testi geçiyordu**: test yardımcıyı doğrudan
+çağırıyor, hatalı satır ise ağın arkasındaki `fetch` gövdesindeydi. Bu yüzden
+ayrıştırma `parseStockQuote` olarak dışarı alındı ve gerçek yanıt gövdeleriyle
+sınandı — aynı sınıftaki bir hata bir daha sadece cihazda görünmesin.
+
+**Arama fondan farklı çalışır.** TEFAS ucu ad araması yapmaz, o yüzden fonda
+kod yazılıp "TEFAS'ta ara" düğmesine basılıyor. Borsa ucu adla arıyor —
+"aselsan" yazan biri ASELS.IS'i buluyor — dolayısıyla yazdıkça aranır (350 ms
+bekleme, önceki istek iptal). Arama fiyat döndürmez; 12 sonuç için 12 kotasyon
+çekmek yerine fiyat yalnızca **seçilen** sembol için çekilir.
+
+**Süzgeci coğrafya değil KUR belirliyor.** Gösterilen borsalar, para birimini
+TL'ye çevirebildiklerimiz: IST, Nasdaq/NYSE aileleri, euro bölgesi ve Londra.
+İsviçre (CHF), İskandinav borsaları ve OTC dışarıda — seçilseler fiyat hiç
+gelmezdi. Borsa kodları tahmin edilmedi, uçtan ölçüldü.
+
+**Doğrulama (gerçek cihaz, R58N81SAZ1Y).** "aselsan" → ASELS.IS · IST ·
+₺342,25 · −%3,46. 40 adet kaydedildi: toplam ₺939.170 → ₺952.860, yani tam
+40 × ₺342,25 = ₺13.690. "AAPL" → tek satır NASDAQ (Buenos Aires ve São Paulo
+elendi), ₺14.690,96 · −%7,35; ham uçta 308,91 USD ve 47,56 kur ile birebir
+tutuyor. "SHELL" → NYSE, Amsterdam, Londra, Frankfurt, XETRA; Meksika elendi.
+
+**Bir ayrıntı daha.** Hisse fiyatı önce dört ondalık haneyle yazılıyordu
+(₺14.690,**9564**). Çevrimden doğan kuyruk bilgi değil gürültü: on dört bin
+liralık bir rakamda son iki hane hiçbir şey söylemiyor. İki haneye indirildi.

@@ -14,12 +14,12 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Hisse senedi fiyatlari - Borsa Istanbul ve Amerikan borsalari.
+ * Hisse senedi fiyatlari - Borsa Istanbul, ABD ve Avrupa borsalari.
  *
- * TEK KAYNAK, IKI BORSA. Ayri bir BIST ucuyla ayri bir ABD ucu tutmak, ayni
- * sorunun (fiyat + gecmis + sembol arama) iki ayri bicimde cozulmesi demekti.
- * Yahoo iki borsayi da ayni yanit bicimiyle veriyor; BIST sembolleri `.IS`
- * ekiyle (`THYAO.IS`), ABD sembolleri ciplak (`AAPL`).
+ * TEK KAYNAK, COK BORSA. Her borsa icin ayri bir uc tutmak, ayni sorunun
+ * (fiyat + gecmis + sembol arama) defalarca cozulmesi demekti. Kaynak hepsini
+ * ayni yanit biciminde veriyor; BIST sembolleri `.IS`, Londra `.L`, Paris `.PA`
+ * ekiyle, ABD sembolleri ciplak.
  *
  * Anahtar istemez. Kirilgandir - serbest piyasa ve TEFAS uclariyla ayni sinifta:
  * bicim degisirse fiyat gelmez, son bilinen deger ekranda kalir ve kullanici
@@ -57,51 +57,7 @@ class StockApi(private val client: HttpClient) {
             ?.get("result")?.jsonArray?.firstOrNull()?.jsonObject
             ?: return null
 
-        val meta = result["meta"]?.jsonObject ?: return null
-        val price = meta["regularMarketPrice"]?.jsonPrimitive?.doubleOrNullSafe() ?: return null
-        if (price <= 0.0) return null
-
-        val currency = meta["currency"]?.jsonPrimitive?.contentOrNullSafe()?.uppercase()
-            ?: return null
-
-        // Kapanis serisi: gun sayisi kadar zaman damgasi ve kapanis. Tatil
-        // gunlerinde kapanis null gelir - o gun atlanir, uydurulmaz.
-        val stamps = result["timestamp"]?.jsonArray.orEmpty()
-            .mapNotNull { it.jsonPrimitive.longOrNullSafe() }
-        val closes = result["indicators"]?.jsonObject
-            ?.get("quote")?.jsonArray?.firstOrNull()?.jsonObject
-            ?.get("close")?.jsonArray.orEmpty()
-            .map { it.jsonPrimitive.doubleOrNullSafe() }
-
-        val history = stamps.indices.mapNotNull { i ->
-            val close = closes.getOrNull(i) ?: return@mapNotNull null
-            if (close <= 0.0) return@mapNotNull null
-            val date = dateOfEpochSeconds(stamps[i], meta["gmtoffset"]?.jsonPrimitive?.longOrNullSafe() ?: 0L)
-            PricePoint(date, close)
-        }
-
-        // Gunluk degisim seriden: son iki kapanis. Meta'daki previousClose gun
-        // ici degisince kayabiliyor; seri ile ekrandaki egri ayni kaynaktan
-        // gelsin diye buradan hesaplanir.
-        val previous = history.getOrNull(history.lastIndex - 1)?.price
-        val changePercent = if (previous != null && previous > 0.0) {
-            (price - previous) / previous * 100.0
-        } else {
-            0.0
-        }
-
-        return StockQuote(
-            symbol = meta["symbol"]?.jsonPrimitive?.contentOrNullSafe() ?: symbol,
-            name = meta["longName"]?.jsonPrimitive?.contentOrNullSafe()
-                ?: meta["shortName"]?.jsonPrimitive?.contentOrNullSafe()
-                ?: symbol,
-            price = price,
-            currencyCode = currency,
-            exchange = meta["fullExchangeName"]?.jsonPrimitive?.contentOrNullSafe().orEmpty(),
-            changePercent = changePercent,
-            date = history.lastOrNull()?.date,
-            history = history,
-        )
+        return parseStockQuote(result, fallbackSymbol = symbol)
     }
 
     /**
@@ -109,7 +65,8 @@ class StockApi(private val client: HttpClient) {
      *
      * Fon aramasindaki ile ayni ihtiyac: kullanici sembolu degil SIRKETIN ADINI
      * biliyor. Yalniz hisse senetleri suzulur; endeks, kripto ve fon sonuclari
-     * bu ekranda karsiliksiz.
+     * bu ekranda karsiliksiz. Sonuclar ayrica BORSAYA gore de suzulur -
+     * bkz. [SupportedExchanges].
      */
     suspend fun search(query: String): List<StockSearchResult> {
         val text = retryOnTransient {
@@ -123,17 +80,7 @@ class StockApi(private val client: HttpClient) {
         return lenientJson.parseToJsonElement(text)
             .jsonObject["quotes"]?.jsonArray.orEmpty()
             .mapNotNull { it as? JsonObject }
-            .filter { it["quoteType"]?.jsonPrimitive?.contentOrNullSafe() == "EQUITY" }
-            .mapNotNull { quote ->
-                val symbol = quote["symbol"]?.jsonPrimitive?.contentOrNullSafe() ?: return@mapNotNull null
-                StockSearchResult(
-                    symbol = symbol,
-                    name = quote["longname"]?.jsonPrimitive?.contentOrNullSafe()
-                        ?: quote["shortname"]?.jsonPrimitive?.contentOrNullSafe()
-                        ?: symbol,
-                    exchange = quote["exchDisp"]?.jsonPrimitive?.contentOrNullSafe().orEmpty(),
-                )
-            }
+            .mapNotNull(::parseSearchResult)
     }
 
     private companion object {
@@ -147,6 +94,100 @@ class StockApi(private val client: HttpClient) {
         val lenientJson = Json { isLenient = true; ignoreUnknownKeys = true }
     }
 }
+
+/**
+ * Yanittaki `chart.result[0]`'i [StockQuote]'a cevirir.
+ *
+ * AGDAN AYRI DURUYOR ki sinanabilsin. Ilk hali `fetch`'in icindeydi ve bu yuzden
+ * test edilemiyordu: para birimini buyuk harfe ceviren TEK BIR SATIR Londra'nin
+ * peni isaretini siliyordu ve hata ancak gercek cihazda goruldu - SHEL.L
+ * ₺217.325 yaziyordu, dogrusunun yuz kati (bkz. [currencyConversion]).
+ */
+internal fun parseStockQuote(result: JsonObject, fallbackSymbol: String): StockQuote? {
+    val meta = result["meta"]?.jsonObject ?: return null
+    val price = meta["regularMarketPrice"]?.jsonPrimitive?.doubleOrNullSafe() ?: return null
+    if (price <= 0.0) return null
+
+    // BUYUK HARFE CEVIRMEYIN - kucuk `p` bilgi tasiyor (yukariya bkz.).
+    val currency = meta["currency"]?.jsonPrimitive?.contentOrNullSafe() ?: return null
+
+    // Kapanis serisi: gun sayisi kadar zaman damgasi ve kapanis. Tatil
+    // gunlerinde kapanis null gelir - o gun atlanir, uydurulmaz.
+    val offset = meta["gmtoffset"]?.jsonPrimitive?.longOrNullSafe() ?: 0L
+    val stamps = result["timestamp"]?.jsonArray.orEmpty()
+        .mapNotNull { it.jsonPrimitive.longOrNullSafe() }
+    val closes = result["indicators"]?.jsonObject
+        ?.get("quote")?.jsonArray?.firstOrNull()?.jsonObject
+        ?.get("close")?.jsonArray.orEmpty()
+        .map { it.jsonPrimitive.doubleOrNullSafe() }
+
+    val history = stamps.indices.mapNotNull { i ->
+        val close = closes.getOrNull(i) ?: return@mapNotNull null
+        if (close <= 0.0) return@mapNotNull null
+        PricePoint(dateOfEpochSeconds(stamps[i], offset), close)
+    }
+
+    // Gunluk degisim seriden: son iki kapanis. Meta'daki previousClose gun ici
+    // degisince kayabiliyor; seri ile ekrandaki egri ayni kaynaktan gelsin diye
+    // buradan hesaplanir.
+    val previous = history.getOrNull(history.lastIndex - 1)?.price
+    val changePercent = if (previous != null && previous > 0.0) {
+        (price - previous) / previous * 100.0
+    } else {
+        0.0
+    }
+
+    return StockQuote(
+        symbol = meta["symbol"]?.jsonPrimitive?.contentOrNullSafe() ?: fallbackSymbol,
+        name = meta["longName"]?.jsonPrimitive?.contentOrNullSafe()
+            ?: meta["shortName"]?.jsonPrimitive?.contentOrNullSafe()
+            ?: fallbackSymbol,
+        price = price,
+        currencyCode = currency,
+        exchange = meta["fullExchangeName"]?.jsonPrimitive?.contentOrNullSafe().orEmpty(),
+        changePercent = changePercent,
+        date = history.lastOrNull()?.date,
+        history = history,
+    )
+}
+
+/** Arama sonucu satiri; hisse olmayan ya da desteklenmeyen borsa null doner. */
+internal fun parseSearchResult(quote: JsonObject): StockSearchResult? {
+    if (quote["quoteType"]?.jsonPrimitive?.contentOrNullSafe() != "EQUITY") return null
+    if (quote["exchange"]?.jsonPrimitive?.contentOrNullSafe() !in SupportedExchanges) return null
+    val symbol = quote["symbol"]?.jsonPrimitive?.contentOrNullSafe() ?: return null
+    return StockSearchResult(
+        symbol = symbol,
+        name = quote["longname"]?.jsonPrimitive?.contentOrNullSafe()
+            ?: quote["shortname"]?.jsonPrimitive?.contentOrNullSafe()
+            ?: symbol,
+        exchange = quote["exchDisp"]?.jsonPrimitive?.contentOrNullSafe().orEmpty(),
+    )
+}
+
+/**
+ * Aramada gosterilen borsalar - kodlar olcumle alindi, tahmin edilmedi
+ * (`?q=SHELL` -> NYQ, AMS, LSE, GER, FRA; `?q=AAPL` -> NMS, BUE, SAO, SET).
+ *
+ * SUZGECI KUR BELIRLIYOR, cografya degil. Uygulama TL, dolar, euro ve sterlin
+ * kurunu biliyor; baska bir para biriminde fiyatlanan bir kotasyon secilse
+ * cevrilemez ve satirda hep "—" kalirdi. Buenos Aires ve Sao Paulo bu yuzden
+ * disarida - "AAPL" arayan biri her seferinde uc karsiliksiz satir goruyordu.
+ *
+ * Ayni gerekceyle Isvicre (EBS/CHF), Iskandinav borsalari ve OTC/pink sheet
+ * (PNK, OID) yok. Almanya'nin bolgesel borsalari (Stuttgart, Hannover...)
+ * XETRA'nin kopyasi oldugu icin listeyi sisirmesin diye alinmadi.
+ */
+internal val SupportedExchanges: Set<String> = setOf(
+    // Turkiye
+    "IST",
+    // ABD - Nasdaq katmanlari ve NYSE aileleri
+    "NMS", "NCM", "NGM", "NYQ", "NYS", "ASE", "PCX", "BTS",
+    // Avrupa - euro bolgesi
+    "GER", "FRA", "PAR", "AMS", "MIL", "MCE", "BRU", "LIS", "VIE",
+    // Avrupa - sterlin
+    "LSE",
+)
 
 /** Yahoo'nun tek sembol yaniti - TL'ye cevirme cagiran tarafin isi. */
 data class StockQuote(
@@ -169,12 +210,40 @@ data class StockSearchResult(
 )
 
 /**
+ * Borsanin para birimi kodundan cevrim tarifi.
+ *
+ * TEK YERDE, cunku iki cagiran var (gunluk yenileme ve islem ekleme ekrani) ve
+ * ayrisirlarsa ayni hisse iki ekranda iki fiyat gosterir.
+ *
+ * PENI TUZAGI: Londra `GBP` DEGIL `GBp` doner ve rakam penidir - SHEL.L canli
+ * sondada 3383,5 geldi, yani £33,84. Sterlin sanilsaydi portfoye yuz kat buyuk
+ * bir tutar yazilirdi. Kucuk harf `p` tek isarettir, o yuzden kod BUYUK-KUCUK
+ * HARF DUYARLI kiyaslanir ve yol boyunca hicbir yerde normallestirilmez.
+ *
+ * Tanimadigimiz para birimi null doner: cagiran taraf satiri atlar. Bilmedigimiz
+ * bir kuru 1.0 varsaymak sessizce yanlis bir rakam uretirdi.
+ */
+fun currencyConversion(currencyCode: String): CurrencyConversion? = when (currencyCode) {
+    "TRY" -> CurrencyConversion(code = null, divisor = 1.0)
+    "USD", "EUR", "GBP" -> CurrencyConversion(code = currencyCode, divisor = 1.0)
+    "GBp" -> CurrencyConversion(code = "GBP", divisor = 100.0)
+    else -> null
+}
+
+/**
+ * @param code Kurunu aramamiz gereken para birimi; null ise zaten TL.
+ * @param divisor Kur uygulanmadan ONCE bolunecek deger (peni -> sterlin).
+ */
+data class CurrencyConversion(
+    val code: String?,
+    val divisor: Double,
+)
+
+/**
  * Borsanin yerel gunune cevirir.
  *
- * Damga UTC saniyesidir; borsanin `gmtoffset`'i eklenmeden bolunurse New York
- * kapanisi (20:00 UTC) bir sonraki gune, Istanbul kapanisi bazen bir onceki
- * gune duserdi - gecmis bir gun kayarsa haftalik degisim yanlis noktadan
- * olculur.
+ * Damga UTC saniyesidir; borsanin `gmtoffset`'i eklenmeden bolunurse gun
+ * sinirinda bir gun kayar ve haftalik degisim yanlis noktadan olculur.
  */
 internal fun dateOfEpochSeconds(epochSeconds: Long, gmtOffsetSeconds: Long): KefeDate {
     val days = floorDiv(epochSeconds + gmtOffsetSeconds, 86_400L)

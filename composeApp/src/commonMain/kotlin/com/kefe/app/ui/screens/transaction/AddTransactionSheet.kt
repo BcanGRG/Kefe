@@ -382,8 +382,8 @@ private fun StepAsset(
             StockSearchStatus(state)
             Spacer(Modifier.height(Space.x10))
             InfoLine(
-                "Borsa İstanbul ve ABD borsaları. Yabancı borsadaki fiyat " +
-                    "günün kuruyla TL'ye çevrilerek gösterilir.",
+                "Borsa İstanbul, ABD ve Avrupa borsaları. Yabancı borsadaki " +
+                    "fiyat günün kuruyla TL'ye çevrilerek gösterilir.",
             )
         }
 

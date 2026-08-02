@@ -137,8 +137,8 @@ private const val FundNote = "Fon fiyatları günde bir kez güncellenir (TEFAS 
  * degisiminden farkli hareket eder ve bu, aciklanmazsa hata gibi gorunur.
  */
 private const val StockNote =
-    "Borsa İstanbul ve ABD borsaları. Yabancı borsadaki fiyatlar günün kuruyla " +
-        "TL'ye çevrilir; yüzde değişim hissenin kendi borsasındaki değişimidir."
+    "Borsa İstanbul, ABD ve Avrupa borsaları. Yabancı borsadaki fiyatlar günün " +
+        "kuruyla TL'ye çevrilir; yüzde değişim hissenin kendi borsasındaki değişimidir."
 
 /**
  * Tabloda gorunen kisa adlar. Depo etiketleri urun adidir ("Gram Altın"), tablo

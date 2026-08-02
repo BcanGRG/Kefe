@@ -137,8 +137,12 @@ class LivePriceRemoteDataSource(
         // 180 sayisini TL sanip portfoye yazmaktansa fiyat gelmemis olsun.
         runCatching { stockSymbols() }.getOrDefault(emptyList()).distinct().forEach { symbol ->
             val quote = runCatching { stocks.fetch(symbol) }.getOrNull() ?: return@forEach
-            val rate = if (quote.currencyCode == TryCode) 1.0 else fxRates[quote.currencyCode]
-            if (rate == null || rate <= 0.0) return@forEach
+            val conversion = currencyConversion(quote.currencyCode) ?: return@forEach
+            val rate = when (val code = conversion.code) {
+                null -> 1.0
+                else -> fxRates[code] ?: return@forEach
+            } / conversion.divisor
+            if (rate <= 0.0) return@forEach
 
             prices += Price(
                 assetKey = stockAssetKey(symbol),
@@ -225,9 +229,6 @@ private val CurrencyMapping: Map<String, SymbolMapping> = Currency.entries.assoc
  * liste, cunku fiyat tablosu portfoyu bilmiyor.
  */
 val DefaultFundCodes: List<String> = listOf("AFA", "IPV", "TTE")
-
-/** BIST TL ile fiyatlanir; cevrim gerekmez. */
-private const val TryCode = "TRY"
 
 /**
  * Sembol -> fiyat tablosu anahtari: `THYAO.IS` -> `stock_thyao.is`.
