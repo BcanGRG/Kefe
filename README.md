@@ -46,12 +46,12 @@
 
 ---
 
-## 🎨 One codebase, three shapes
+## 🎨 Same code, adaptive layouts
 
 <div align="center">
-<img src="docs/screenshots/desktop.png" width="760" />
-<br/><br/>
-<img src="docs/screenshots/tablet.png" width="380" />
+<img src="docs/screenshots/desktop.png" width="880" />
+<br/>
+<sub>Desktop — the phone's bottom bar becomes a rail, the market panel gets its own column</sub>
 </div>
 
 ---
