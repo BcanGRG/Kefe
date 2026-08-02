@@ -239,6 +239,13 @@ data class CurrencyConversion(
     val divisor: Double,
 )
 
+/** "2026-07-30" - kaynaklarin fiyat tablosunda kullandigi ortak bicim. */
+internal fun KefeDate.isoText(): String {
+    val mm = if (month < 10) "0$month" else "$month"
+    val dd = if (day < 10) "0$day" else "$day"
+    return "$year-$mm-$dd"
+}
+
 /**
  * Borsanin yerel gunune cevirir.
  *

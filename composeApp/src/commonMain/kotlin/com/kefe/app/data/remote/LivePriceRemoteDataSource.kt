@@ -154,7 +154,10 @@ class LivePriceRemoteDataSource(
                 // oynadigi icin TL bazindaki gunluk degisim bundan farkli olur;
                 // gosterilen, hissenin kendi borsasindaki degisimidir.
                 changePercent = quote.changePercent,
-                timestamp = quote.date?.let { "${it.day}.${it.month}" }.orEmpty(),
+                // TEFAS satirlariyla AYNI bicim (ISO). Once "30.7" yaziyordu ve
+                // Piyasa tablosunda hisse satiri tek basina baska turlu
+                // gorunuyordu - bicim farki bilgi tasimiyor, yalniz goze batiyor.
+                timestamp = quote.date?.isoText().orEmpty(),
                 source = PriceSource.Exchange,
                 assetClass = AssetClass.Stock,
                 // TEFAS ile ayni karar: bir aylik seri gecmise yazilir, boylece

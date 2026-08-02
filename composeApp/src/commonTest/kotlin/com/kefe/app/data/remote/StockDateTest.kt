@@ -55,6 +55,14 @@ class StockDateTest {
         assertEquals(KefeDate(1969, 12, 31), dateOfEpochDay(-1L))
     }
 
+    /** Piyasa tablosunda hisse satiri TEFAS satirlariyla ayni bicimde yazilir. */
+    @Test
+    fun isoBicimTefasIleAyni() {
+        assertEquals("2026-07-30", KefeDate(2026, 7, 30).isoText())
+        // Tek haneli ay ve gun sifirla doldurulur - "2026-1-5" degil.
+        assertEquals("2026-01-05", KefeDate(2026, 1, 5).isoText())
+    }
+
     @Test
     fun cevrimKefeDateIleTutarli() {
         // Iki yon birbirinin tersi olmali; biri degisirse digeri de degismeli.
