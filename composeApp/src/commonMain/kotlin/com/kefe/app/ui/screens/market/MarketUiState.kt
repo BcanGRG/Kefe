@@ -5,6 +5,7 @@ import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.ui.format.ChangePeriod
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.maxPriceDecimals
+import kotlin.math.abs
 
 /**
  * Piyasa tablosunun tek satiri. Rakamlar burada bicimlenir: ekran yalniz cizer,
@@ -76,8 +77,18 @@ sealed interface MarketIntent {
  * Kurus gosterimi varlik sinifina baglidir: altin/gumus tam TL ile,
  * doviz ve fon iki hane ile yazilir - tasarimdaki tablo boyle.
  */
-fun AssetClass.priceDecimals(value: Double): Int = when (this) {
-    AssetClass.Cash -> 0
+fun AssetClass.priceDecimals(value: Double): Int = when {
+    this == AssetClass.Cash -> 0
+
+    // BUYUK RAKAMDA KURUS DUSER. Kurus tabani (asagida) kucuk fiyatlar icin
+    // konmustu; on binin ustunde ise hem bilgi tasimiyor hem de sutuna
+    // sigmiyordu. Cihazda tablonun YARISI sessizce kirpilmis haldeydi:
+    // "₺10.027," "₺20.054," "₺39.985," "₺41.457," - hepsi son karakterini
+    // kaybediyordu, cunku metin tasinca ellipsis bile cizilmeden kesiliyor.
+    // Ata altininin dakikalik hareketi zaten yuzlerce lira; orada kurus
+    // gostermek, gosterilemeyen bir hane ugruna okunakli rakami feda etmekti.
+    abs(value) >= KurusEsigi -> 0
+
     // KURUS TABANI: kaynak dakikada bir guncelleniyor ve hareket cogu zaman
     // kurus mertebesinde. Tam liraya yuvarlandiginda tablo saatlerce ayni
     // rakami gosteriyor, fiyat donmus saniliyordu - o yuzden en az iki hane.
@@ -87,3 +98,6 @@ fun AssetClass.priceDecimals(value: Double): Int = when (this) {
     // kullanicinin gordugu fiyati kirpiyordu.
     else -> Money.decimals(value, maxPriceDecimals(), min = 2)
 }
+
+/** Bu tutarin ustunde kurus ne bilgi tasir ne de sutuna sigar. */
+private const val KurusEsigi = 10_000.0

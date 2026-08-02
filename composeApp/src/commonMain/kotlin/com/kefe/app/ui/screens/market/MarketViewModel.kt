@@ -216,13 +216,14 @@ private fun Price.toRow(period: ChangePeriod): MarketRow {
         askText = Money.tl(ask, decimals = assetClass.priceDecimals(ask)),
         changePercent = change,
         changeText = changeText(change),
-        // Yabanci borsada kaynagin KENDI rakami da bu satirda: "Borsa ·
-        // 2026-07-30 · $308,91". Ustteki tutar TL, cunku hesap TL ile yapiliyor;
-        // ama kullanicinin Apple icin bildigi sayi 308,91.
+        // Yabanci borsada kaynagin KENDI rakami tarihin YERINE yazilir:
+        // "Borsa · $308,91". Ucunu birden koymak denendi ve cihazda
+        // "Borsa · 2026-07-31 · $30…" diye kirpildi - dar sutunda ucuncu alan
+        // yok. Tarih burada en az sey soyleyendi: sayfa basligi zaten ne zaman
+        // yenilendigini yaziyor, borsa satirinin tarihi de hep son seans.
         sourceLine = listOfNotNull(
             source.label(),
-            timestamp.takeIf { it.isNotBlank() },
-            nativeText(),
+            nativeText() ?: timestamp.takeIf { it.isNotBlank() },
         ).joinToString(" · "),
         isManual = isManual,
     )
