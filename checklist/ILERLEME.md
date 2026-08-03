@@ -1348,3 +1348,104 @@ Ata altını dakikada yüzlerce lira oynuyor, orada kuruş hiçbir şey kazandı
 Yerel fiyat artık tarihin **yerine** yazılıyor, arkasına eklenmiyor. Tarih üçü
 içinde en az şey söyleyendi: sayfa başlığı zaten ne zaman yenilendiğini yazıyor
 ve bir borsa satırının tarihi hep son seans.
+
+## 35 · Günlük değişim yalnız o gün olduysa sayılır ✅
+
+**Neydi (kullanıcı).** "Borsada bazen işlem olmadığı dönemler oluyor (hafta
+sonları ya da tatiller); buna rağmen bugünkü getiri cumartesi pazar günü
+gözüküyordu ya da değişiyordu."
+
+**Rakam yanlış değildi, ETİKETİ yanlıştı.** Kaynağın verdiği `changePercent`
+"önceki kotasyondan bu yana" demektir. Borsa cuma kapandıysa cumartesi okunan
+bu değer **cumanın** hareketidir. Kullanıcının serveti ise cumartesi hiç
+değişmemiştir — hisse cuma akşamındaki değerinde durur. Yani doğru katkı
+**sıfırdır**.
+
+**Var olan `timestamp` bu işi göremezdi.** O bir gösterim metni ve kaynaktan
+kaynağa biçimi değişiyor: `"10:36"`, `"TCMB"`, `"2026-07-31"`. Bir ekran
+etiketini ayrıştırıp hesaba sokmak, biçim değiştiğinde sessizce bozulacak bir
+bağımlılık olurdu. Bu yüzden ayrı bir alan açıldı: kotasyonun ait olduğu
+**işlem günü** (migration 7).
+
+| Kaynak | İşlem günü |
+|---|---|
+| Serbest piyasa | Kaynağın kendi damgasından (`Update_Date`) |
+| TEFAS | Fonun kendi tarihi |
+| Borsa | Son seansın günü |
+| TCMB | **null** — bültenin hangi güne ait olduğunu bilmiyoruz |
+
+**null = "bugün değil".** Bilerek: elle girilen fiyatın günlük hareketi yoktur,
+TCMB'nin günü belirsizdir. İkisinin de doğru katkısı sıfır.
+
+**Haftalık/aylık değişime DOKUNULMADI.** Onlar geçmiş serisinden bir tolerans
+penceresiyle hesaplanıyor, yani kapalı günlere zaten dayanıklı. Sıfırlansalardı
+her hafta sonu bütün dönem rakamları kaybolurdu.
+
+**Bedava gelen ek fayda:** çevrimdışı durum da düzeldi. Pazar günü uygulamayı
+yenilemeden açan biri artık cumanın hareketini "bugün" diye görmüyor.
+
+**Doğrulama (gerçek cihaz, 3 Ağustos Pazartesi).** Kurulumdan sonra veritabanı
+çekilip bakıldı: yenilenen her satır `quoteDateKey = 20260803` almış (altın,
+gümüş, döviz, fonlar); portföyden çıkmış ve o gün tazelenmemiş satırlar `NULL`
+kalmış. Yenileme öncesi "bugün" +₺19 (sadece fonlar), sonrası +₺339 — altının
+gerçek gün içi hareketi hesaba girdi.
+
+## 36 · "Fiyatlar ne zaman güncellendi" satırı yalan söylüyormuş ✅
+
+**Nasıl bulundu.** 35. maddeyi cihazda doğrularken görüldü: yenileme **az önce**
+başarıyla tamamlanmışken başlık "Fiyatlar 2026-07-30'da güncellendi" diyordu.
+
+**Kök neden.** Etiket, listedeki **ilk** elle-olmayan fiyatın damgasını
+alıyordu — hangi satır öne düştüyse o. Listenin başında portföyden çıkmış ve o
+günden beri tazelenmemiş bir fon vardı.
+
+Kullanıcıya fiyatlarının dört gün eski olduğunu söylemek, işi tam da tazelik
+olan tek satırda yalan söylemekti.
+
+**Düzeltme.** En yeni kotasyon seçilir: önce gününe, günler eşitse damganın
+biçimine göre. Saat taşıyan damga (`09:56`) gün içi demektir ve tarih
+taşıyandan (`2026-08-03`) daha kesindir. Günü bilinmeyen satırlar en sona
+düşer — ne zamana ait olduğunu bilmediğimiz bir damgayı tazelik diye sunamayız.
+
+Bu hata hep vardı; işlem gününü eklemek onu hem **görünür** hem **düzeltilebilir**
+kıldı.
+
+## 37 · Hedefin kendi getirisi ve dağılımı ✅
+
+**Neydi.** Hedef detayı ne kadar biriktiğini gösteriyordu ama o paranın ne
+yaptığını hiç söylemiyordu. Özet ekranındaki iki satır (bugün / toplam getiri)
+ve "Ne kadarı nerede" kartı hedef özelinde yoktu.
+
+**İncelik: KISMİ ATAMA.** 10 çeyreğin 6'sı bu hedefteyse hedef 6 çeyreklik
+**değer** sayıyor — o hâlde 6 çeyreklik **maliyet** de saymalı. Tam maliyeti
+kısmi değerle karşılaştırmak, kazandıran bir hedefi zararda gösterirdi:
+₺600 değere karşı ₺800 maliyet.
+
+**Üç rakam da TEK listeden türer** (`composingAssets`), böylece rakamlarla
+altındaki varlık listesi zamanla ayrışamaz.
+
+**Atama yoksa satırlar hiç çizilmez.** "₺0 · %0,00" yazmak "hedef bugün
+oynamadı" demek olurdu; doğrusu "ölçecek bir şey yok" ve kart zaten ilerlemenin
+%0 olduğunu söyleyip varlık seçiciyi sunuyor.
+
+## 38 · Silinenler de aktivite akışında ✅
+
+**Neydi (kullanıcı).** "Son hareketler kısmında sadece eklenenler gözüküyor,
+silinenler falan da gözükmeli."
+
+Bir işlem silindiğinde "ekledi" satırı da siliniyordu — yani akış silmeyi
+atlamakla kalmıyor, o kaydın **var olduğuna dair izi de** siliyordu. İki
+kişinin paylaştığı bir defterde bu, "sen mi sildin ben mi" sorusunun uygulamanın
+hiçbir yerinde cevabının olmaması demek. Varlık ve hedef silmek ise aktivite
+tablosuna hiç dokunmuyordu.
+
+**Ekleme satırı yine kaldırılıyor.** İşlem Ekle'deki "son eklediğin" kısayolu o
+cümleyi ayrıştırıyor; kalsaydı az önce silinen miktarı geri önerirdi. Yerine
+silmenin kendisi yazılıyor.
+
+Silme cümleleri **ayrı bir yazıcıdan** geçiyor, tam da o ayrıştırıcıya hiç
+girmesinler diye. Silinen şeyin adı satır gitmeden **önce** okunuyor, yoksa
+akışta "Varlık sildi" gibi anlamsız bir cümle kalırdı.
+
+Kimlik zaman damgası taşıyor: silinip yeniden eklenen bir varlığın ikinci
+silinişi, `INSERT OR REPLACE` yüzünden birincisinin üstüne yazardı.

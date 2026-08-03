@@ -141,8 +141,11 @@ class SqlDelightPortfolioRepository(
             .map { rows -> rows.map { it.toDomain() } },
         priceRepository.observePrices(),
     ) { positions, board ->
+        // Bugun HER EMISYONDA yeniden okunur: uygulama gece boyunca acik
+        // kalirsa gun donuyor ve dunun degisimi "bugun" olarak asili kalirdi.
+        val today = clock.today()
         positions.map { position ->
-            position.valuedAt(position.priceKey()?.let { board.byKey(it) })
+            position.valuedAt(position.priceKey()?.let { board.byKey(it) }, today)
         }
     }
 
@@ -251,6 +254,22 @@ class SqlDelightPortfolioRepository(
                 // "son eklediginiz" kisayolu artik var olmayan bir kaydi onerir.
                 // Soft-delete: mezar tasi ese de gider.
                 activityQueries.deleteActivityById(deletedAt = now, id = "act_${removed.id}")
+                // ...ve yerine silmenin KENDISI yazilir. Onceden burasi
+                // sessizdi: kayit akistan tamamen kayboldugu icin gecmise bakan
+                // biri onun hic var olmadigini saniyordu. Iki kisilik bir
+                // defterde "sen mi sildin ben mi" sorusu cevapsiz kaliyordu.
+                appendDeletion(
+                    id = "act_del_${removed.id}",
+                    memberId = removed.addedByMemberId,
+                    kind = ActivityKind.DeleteTransaction,
+                    description = buildString {
+                        append(formatQuantity(removed.quantity))
+                        append(' ')
+                        append(positionName(removed.positionId))
+                        append(if (removed.side == TradeSide.Sell) " satışını sildi" else " alımını sildi")
+                    },
+                    amount = removed.quantity * removed.unitPrice + removed.fee,
+                )
                 recomputePosition(removed.positionId)
             }
         }
@@ -607,6 +626,58 @@ class SqlDelightPortfolioRepository(
     private fun formatQuantity(value: Double): String =
         if (value % 1.0 == 0.0) value.toLong().toString() else value.toString().replace('.', ',')
 
+    private fun positionName(positionId: String): String =
+        positionQueries.selectPositionById(positionId).executeAsOneOrNull()?.name ?: "Varlık"
+
+    /**
+     * Silme olayini akisa yazar.
+     *
+     * [appendActivity]'den AYRI: onun metin bicimi Islem Ekle'deki "son
+     * eklediğin" kisayolu tarafindan AYRISTIRILIYOR ve o sozlesme korunmali.
+     * Silme cumleleri o ayristiriciya hic girmemeli, yoksa kisayol silinmis bir
+     * kaydi onerir.
+     *
+     * Uye kimligi cagirandan gelir; bilinmiyorsa cihazin etkin profili okunur.
+     * Bos birakmak, akista sahipsiz bir satir uretirdi.
+     */
+    private fun appendDeletion(
+        id: String,
+        memberId: String?,
+        kind: ActivityKind,
+        description: String,
+        amount: Double,
+    ) {
+        val today = clock.today()
+        val now = clock.nowEpochMillis()
+        activityQueries.insertActivity(
+            // Zaman damgasi kimlige GIRER. Yalniz varlik kimligi kullanilsaydi
+            // silinip yeniden eklenen bir varligin ikinci silinisi, INSERT OR
+            // REPLACE yuzunden birincisinin ustune yazardi - defterde iki olay
+            // varken tek satir kalirdi.
+            id = "${id}_$now",
+            memberId = memberId?.takeIf { it.isNotBlank() } ?: activeMemberId(),
+            kind = kind,
+            description = description,
+            amount = amount,
+            isManualPrice = false,
+            occurredYear = today.year.toLong(),
+            occurredMonth = today.month.toLong(),
+            occurredDay = today.day.toLong(),
+            timeLabel = null,
+            updatedAt = now,
+        )
+    }
+
+    /**
+     * Bu cihazin profili. Kurulum yarim kaldiysa ilk uyeye duseriz - akistaki
+     * satirin bir sahibi olmali, yoksa "kim" sutunu bos cizilir.
+     */
+    private fun activeMemberId(): String =
+        settingQueries.selectSetting(PreferenceKeys.ActiveMemberId).executeAsOneOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: portfolioQueries.selectMembers().executeAsList().firstOrNull()?.id
+            ?: ""
+
     // --- Pozisyonlar --------------------------------------------------------
 
     /**
@@ -650,10 +721,22 @@ class SqlDelightPortfolioRepository(
     override suspend fun deletePosition(positionId: String) {
         withContext(dispatcher) {
             database.transaction {
+                // Ad silmeden ONCE okunur; sonra satir gitmis olur ve akista
+                // "Varlık sildi" gibi anlamsiz bir cumle kalirdi.
+                val name = positionName(positionId)
+                val value = positionQueries.selectPositionById(positionId)
+                    .executeAsOneOrNull()?.let { it.quantity * it.unitPrice } ?: 0.0
                 // CASCADE zaten silerdi; yabanci anahtar zorlamasi kapali bir
                 // surucuye dusulurse diye defter acikca temizlenir.
                 transactionQueries.deleteTransactionsByPosition(deletedAt = clock.nowEpochMillis(), positionId = positionId)
                 positionQueries.deletePositionById(deletedAt = clock.nowEpochMillis(), id = positionId)
+                appendDeletion(
+                    id = "act_del_$positionId",
+                    memberId = null,
+                    kind = ActivityKind.DeletePosition,
+                    description = "$name varlığını sildi",
+                    amount = value,
+                )
             }
         }
     }
@@ -686,7 +769,19 @@ class SqlDelightPortfolioRepository(
 
     override suspend fun deleteGoal(goalId: String) {
         withContext(dispatcher) {
-            goalQueries.deleteGoalById(deletedAt = clock.nowEpochMillis(), id = goalId)
+            database.transaction {
+                val goal = goalQueries.selectGoalById(goalId).executeAsOneOrNull()
+                goalQueries.deleteGoalById(deletedAt = clock.nowEpochMillis(), id = goalId)
+                appendDeletion(
+                    id = "act_del_$goalId",
+                    memberId = null,
+                    kind = ActivityKind.DeleteGoal,
+                    description = "${goal?.name ?: "Hedef"} hedefini sildi",
+                    // Hedefin TUTARI - silinen bir hedefte "ne kadarlik plan
+                    // kalkti" sorusunun cevabi bu.
+                    amount = goal?.amount ?: 0.0,
+                )
+            }
         }
     }
 

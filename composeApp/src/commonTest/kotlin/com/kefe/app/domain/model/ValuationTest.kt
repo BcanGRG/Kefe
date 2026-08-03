@@ -28,6 +28,8 @@ private fun position(
     cost = quantity * unitPrice,
 )
 
+private val Today = KefeDate(2026, 7, 31)
+
 private fun price(
     assetKey: String = "gold_quarter",
     bid: Double? = 9_850.0,
@@ -35,6 +37,7 @@ private fun price(
     changePercent: Double = 1.5,
     weekChangePercent: Double? = null,
     monthChangePercent: Double? = null,
+    quoteDate: KefeDate? = Today,
 ): Price = Price(
     assetKey = assetKey,
     label = "Çeyrek Altın",
@@ -46,6 +49,7 @@ private fun price(
     assetClass = AssetClass.Gold,
     weekChangePercent = weekChangePercent,
     monthChangePercent = monthChangePercent,
+    quoteDate = quoteDate,
 )
 
 class ValuationTest {
@@ -83,7 +87,7 @@ class ValuationTest {
     @Test
     fun degerGuncelFiyattanHesaplanir() {
         // Saklanan birim fiyat 10.000'di ve hic guncellenmiyordu.
-        val valued = position().valuedAt(price())
+        val valued = position().valuedAt(price(), Today)
 
         assertEquals(9_850.0, valued.unitPrice, EPS)
         assertEquals(29_550.0, valued.value, EPS)
@@ -94,6 +98,7 @@ class ValuationTest {
     fun donemselDegisimlerTasinir() {
         val valued = position().valuedAt(
             price(weekChangePercent = 2.4, monthChangePercent = -3.1),
+            Today,
         )
 
         assertEquals(2.4, valued.weekChangePercent!!, EPS)
@@ -104,7 +109,7 @@ class ValuationTest {
     fun bilinmeyenDonemNullKalir() {
         // Gunlukten farkli: sifira dusurmek "degismedi" demek olurdu, oysa
         // dogrusu "bilmiyoruz" - ekran "—" yazmali.
-        val valued = position().valuedAt(price())
+        val valued = position().valuedAt(price(), Today)
 
         assertNull(valued.weekChangePercent)
         assertNull(valued.monthChangePercent)
@@ -114,7 +119,7 @@ class ValuationTest {
     fun maliyetVeMiktarDokunulmaz() {
         // Ikisi de DEFTERDEN turer; fiyat onlari degistirmez.
         val original = position()
-        val valued = original.valuedAt(price())
+        val valued = original.valuedAt(price(), Today)
 
         assertEquals(original.cost, valued.cost, EPS)
         assertEquals(original.quantity, valued.quantity, EPS)
@@ -124,13 +129,84 @@ class ValuationTest {
     fun fiyatYoksaSonBilinenDegerKorunur() {
         // Sifire dusurmek "varligin degeri yok" demek olurdu.
         val original = position()
-        assertEquals(original, original.valuedAt(null))
+        assertEquals(original, original.valuedAt(null, Today))
     }
 
     @Test
     fun sifirFiyatDegerlemeSayilmaz() {
         val original = position()
-        assertEquals(original, original.valuedAt(price(bid = 0.0, ask = 0.0)))
+        assertEquals(original, original.valuedAt(price(bid = 0.0, ask = 0.0), Today))
+    }
+
+    // --- Gunluk degisim yalnizca BUGUNE aitse ---
+
+    /**
+     * ASIL HATA BUYDU. Borsa cuma kapaniyor; cumartesi okunan `changePercent`
+     * cumanin hareketidir. Kullanicinin serveti cumartesi degismedi - varlik
+     * cuma aksamindaki degerinde duruyor - dolayisiyla "bugunku getiri"ye
+     * katkisi SIFIR olmali, cumanin yuzdesi degil.
+     */
+    @Test
+    fun kapaliGunDegisimSIFIR() {
+        val cuma = KefeDate(2026, 7, 31)
+        val cumartesi = KefeDate(2026, 8, 1)
+
+        val valued = position().valuedAt(price(quoteDate = cuma), cumartesi)
+
+        assertEquals(0.0, valued.dailyChangePercent, EPS)
+        // Deger yine de guncel fiyattan hesaplanir; sifirlanan yalniz DEGISIM.
+        assertEquals(9_850.0, valued.unitPrice, EPS)
+        assertEquals(29_550.0, valued.value, EPS)
+    }
+
+    @Test
+    fun ayniGunDegisimAYNEN_gecer() {
+        val valued = position().valuedAt(price(quoteDate = Today), Today)
+        assertEquals(1.5, valued.dailyChangePercent, EPS)
+    }
+
+    /**
+     * Gunu bilinmeyen kotasyon bugun SAYILMAZ: elle girilen fiyatin gunluk
+     * hareketi yoktur, TCMB bulteninin hangi gune ait oldugunu bilmiyoruz.
+     * Ikisinde de dogru cevap "bugun oynamadi".
+     */
+    @Test
+    fun gunuBilinmeyenKotasyonBugunSAYILMAZ() {
+        val valued = position().valuedAt(price(quoteDate = null), Today)
+        assertEquals(0.0, valued.dailyChangePercent, EPS)
+    }
+
+    /**
+     * Haftalik/aylik degisim bu kuraldan ETKILENMEZ: onlar gecmis serisinden
+     * bir tolerans penceresiyle hesaplaniyor, yani kapali gunlere zaten
+     * dayanikli. Sifirlansalardi hafta sonu butun donem rakamlari kaybolurdu.
+     */
+    @Test
+    fun kapaliGunDonemselDegisimiBOZMAZ() {
+        val valued = position().valuedAt(
+            price(
+                quoteDate = KefeDate(2026, 7, 31),
+                weekChangePercent = 2.4,
+                monthChangePercent = -3.1,
+            ),
+            KefeDate(2026, 8, 2),
+        )
+
+        assertEquals(0.0, valued.dailyChangePercent, EPS)
+        assertEquals(2.4, valued.weekChangePercent!!, EPS)
+        assertEquals(-3.1, valued.monthChangePercent!!, EPS)
+    }
+
+    /**
+     * Gun DONDUGUNDE de sifirlanmali: uygulama gece boyunca acik kalirsa dunun
+     * degisimi "bugun" olarak asili kalirdi.
+     */
+    @Test
+    fun gunDonuncePLAKA_dusar() {
+        val dun = KefeDate(2026, 7, 30)
+        val bugun = KefeDate(2026, 7, 31)
+        assertEquals(1.5, price(quoteDate = bugun).todayChangePercent(bugun), EPS)
+        assertEquals(0.0, price(quoteDate = dun).todayChangePercent(bugun), EPS)
     }
 
     // --- Anahtar cozumleme ---

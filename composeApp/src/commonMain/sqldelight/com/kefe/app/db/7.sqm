@@ -1,0 +1,23 @@
+-- Surum 7 -> 8: kotasyonun ait oldugu ISLEM GUNU.
+--
+-- NEYDI. "Bugunku getiri" cumartesi ve pazar gunleri de bir rakam yaziyor,
+-- hatta degisiyordu. Kaynagin verdigi `changePercent` "onceki kotasyondan bu
+-- yana" demektir; borsa cuma kapandiysa cumartesi okunan bu deger CUMANIN
+-- hareketidir. Rakam yanlis degil, ETIKETI yanlisti - kullanicinin serveti
+-- cumartesi degismemisti.
+--
+-- Var olan `timestamp` kolonu bu isi goremez: o bir GOSTERIM metni ve
+-- kaynaktan kaynaga bicimi degisiyor ("10:36", "TCMB", "2026-07-31"). Bir
+-- ekran metnini ayristirip hesaba sokmak, bicim degistiginde sessizce
+-- bozulacak bir bagimlilik olurdu.
+--
+-- Gun anahtari olarak yazilir (yyyymmdd), price_history'deki ile ayni bicim.
+--
+-- NULL = BILMIYORUZ ve "bugun degil" sayilir. Bu, bilerek boyle: TCMB gunluk
+-- bulteninin hangi gune ait oldugunu bilmiyoruz ve elle girilen fiyatin gunluk
+-- hareketi yoktur. Ikisi de gunluk degisime SIFIR katkida bulunmali.
+--
+-- Bu migrationdan onceki onbellek satirlari da null kalir: ilk yenilemeye
+-- kadar gunluk degisim sifir gorunur, sonra kendiliginden duzelir.
+
+ALTER TABLE cached_prices ADD COLUMN quoteDateKey INTEGER;

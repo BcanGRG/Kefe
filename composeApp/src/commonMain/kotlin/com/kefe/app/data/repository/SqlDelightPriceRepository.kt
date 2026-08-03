@@ -134,7 +134,7 @@ class SqlDelightPriceRepository(
         }
         PriceBoard(
             prices = merged,
-            updatedAtLabel = merged.firstOrNull { !it.isManual }?.timestamp ?: "—",
+            updatedAtLabel = updatedAtLabelOf(merged),
             freshness = freshnessOf(cached.maxOfOrNull { it.fetchedAtEpochSeconds }, failed),
         )
     }
@@ -227,6 +227,9 @@ class SqlDelightPriceRepository(
                         // Yalniz gosterim icin; hesap [ask] ile, yani TL ile.
                         nativePrice = price.nativePrice,
                         nativeCurrency = price.nativeCurrency,
+                        // Cekildigi gun DEGIL, kotasyonun ait oldugu islem gunu:
+                        // pazar gunu cekilen bir hisse fiyati cumaya aittir.
+                        quoteDateKey = price.quoteDate?.let(::dateKeyOf),
                     )
                     // Gunun fiyati AYRICA gecmise yazilir: onbellek uzerine
                     // yazildigi icin gecmisi tutamaz, gecmis fiyat da sonradan
@@ -290,6 +293,34 @@ class SqlDelightPriceRepository(
         }
     }
 }
+
+/**
+ * "Fiyatlar ... güncellendi" satirindaki damga.
+ *
+ * Once listedeki ILK elle-olmayan fiyatin damgasi aliniyordu - yani hangi satir
+ * one dustuyse o. Cihazda su goruntuyu verdi: yenileme az once basariyla
+ * tamamlanmisken baslik "Fiyatlar 2026-07-30'da güncellendi" diyordu, cunku
+ * listenin basinda portfoyden cikmis ve o gunden beri tazelenmemis bir fon
+ * satiri duruyordu. Kullaniciya fiyatlarinin dort gun eski oldugunu soylemek,
+ * en cok guvenmesi gereken satirda yalan soylemekti.
+ *
+ * Artik EN YENI kotasyon secilir: once gunune, gunler esitse damganin
+ * bicimine gore. Saat tasiyan damga ("09:56") gun ici demektir ve tarih
+ * tasiyandan ("2026-08-03") daha kesindir.
+ *
+ * Gunu bilinmeyen satirlar en sona duser: ne zamana ait olduklarini
+ * bilmedigimiz bir damgayi tazelik olarak sunamayiz.
+ */
+private fun updatedAtLabelOf(prices: List<Price>): String = prices
+    .filter { !it.isManual && it.timestamp.isNotBlank() }
+    .maxWithOrNull(
+        compareBy<Price>(
+            { it.quoteDate?.let(::dateKeyOf) ?: Long.MIN_VALUE },
+            { if (it.timestamp.contains(':')) 1 else 0 },
+        ),
+    )
+    ?.timestamp
+    ?: "—"
 
 /**
  * Tarihi karsilastirilabilir tek sayiya cevirir: 2026-07-31 -> 20260731.

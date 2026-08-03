@@ -49,11 +49,16 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.PeriodTotal
 import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.formatMonthYear
+import com.kefe.app.domain.model.label
 import com.kefe.app.domain.model.monthLabel
 import com.kefe.app.ui.charts.BarSegment
+import com.kefe.app.ui.charts.DonutSlice
+import com.kefe.app.ui.charts.KefeDonutChart
+import com.kefe.app.ui.charts.KefeDonutLegend
 import com.kefe.app.ui.charts.KefeGoalRing
 import com.kefe.app.ui.charts.KefeProjectionChart
 import com.kefe.app.ui.charts.KefeStackedBarChart
@@ -245,6 +250,10 @@ private fun DetailBody(
     AssignedAssetsCard(state, onIntent)
     Spacer(Modifier.height(BlockGap))
 
+    // Dagilim, varlik listesinin HEMEN ALTINDA: ustteki liste "hangi
+    // varliklar", bu kart "hangi sinifta ne kadar". Ayni kalemler, iki soru.
+    GoalAllocationCard(state)
+
     if (state.showAnalysis) {
         ProjectionCard(goal, state)
         Spacer(Modifier.height(BlockGap))
@@ -255,6 +264,51 @@ private fun DetailBody(
         HistoryCard(state, onIntent)
         Spacer(Modifier.height(Space.x24))
     }
+}
+
+// --- Ne kadari nerede -------------------------------------------------------
+
+/**
+ * Hedefi karsilayan varliklarin sinif dagilimi.
+ *
+ * Ozet ekranindaki kartin hedefe ozel hali ve AYNI bilesenleri kullanir -
+ * donut, legend ve renkler tek yerden geliyor, boylece iki ekran ayni varlik
+ * sinifini ayni renkte gosteriyor.
+ *
+ * Atama yoksa cizilmez; tek sinif varsa da cizilir (bir dilimlik halka
+ * "hepsi altin" demenin en kisa yolu).
+ */
+@Composable
+private fun GoalAllocationCard(state: GoalDetailUiState) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    if (state.allocation.isEmpty()) return
+
+    val slices = state.allocation.map {
+        DonutSlice(it.assetClass.label(), it.value, c.assetClass(it.assetClass.color()))
+    }
+    val largest = state.allocation.maxByOrNull { it.value }
+
+    KefeCard(modifier = Modifier.padding(horizontal = Space.x16)) {
+        Text("Ne kadarı nerede", style = t.bodyStrong, color = c.onSurface)
+        Spacer(Modifier.height(Space.x14))
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            KefeDonutChart(
+                slices = slices,
+                centerLabel = largest?.assetClass?.label().orEmpty(),
+                centerValue = Money.ratio(largest?.percent ?: 0.0),
+            )
+        }
+        Spacer(Modifier.height(Space.x4))
+        // Toplam HEDEFE ATANAN kisimdir, portfoyun tamami degil - yuzdeler bu
+        // paydadan cikiyor ve legend ayni rakami tekrar etmeli.
+        KefeDonutLegend(
+            slices = slices,
+            total = state.allocation.sumOf { it.value },
+            divided = true,
+        )
+    }
+    Spacer(Modifier.height(BlockGap))
 }
 
 // --- Bu hedefi karsilayanlar ------------------------------------------------
@@ -672,6 +726,11 @@ private fun RingCard(
             modifier = Modifier.fillMaxWidth(),
         )
 
+        // Ozet ekranindaki iki satirin hedefe ozel hali. Tutarin hemen altinda
+        // duruyor cunku ayni soruyu tamamliyorlar: "ne kadar birikti" -
+        // "bugun ne oldu" - "koydugum paraya gore ne kazandim".
+        GoalReturnRows(state)
+
         Spacer(Modifier.height(Space.x12))
         Row(horizontalArrangement = Arrangement.spacedBy(Space.x10)) {
             SunkenInfoBox(
@@ -709,6 +768,70 @@ private fun RingCard(
         }
     }
 }
+
+/**
+ * Hedefin "bugün" ve "toplam getiri" satirlari.
+ *
+ * Hedefe hicbir varlik atanmamissa HIC CIZILMEZ: "₺0 · %0,00" yazmak "hedef
+ * bugun oynamadi" demek olurdu, oysa dogrusu "olcecek bir sey yok". Kart zaten
+ * ilerlemenin %0 oldugunu ve varlik seciciyi gosteriyor.
+ */
+@Composable
+private fun GoalReturnRows(state: GoalDetailUiState) {
+    val today = state.todayChange
+    val total = state.totalReturn
+    if (today == null && total == null) return
+
+    Spacer(Modifier.height(Space.x12))
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(GoalDeltaRowGap),
+    ) {
+        today?.let { GoalDeltaRow(it, "bugün") }
+        total?.let { GoalDeltaRow(it, "toplam getiri") }
+    }
+}
+
+/**
+ * Tek satir: ok + TL + yuzde + etiket. Ozet ekranindaki DeltaRow ile ayni
+ * dizilim; ikisi ayni sozlesmeyi anlatiyor, farkli kapsamda.
+ *
+ * Isaret her zaman yazilir - renk tek sinyal degildir.
+ */
+@Composable
+private fun GoalDeltaRow(change: PeriodTotal, caption: String) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    val positive = change.amount >= 0
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(GoalDeltaGap),
+    ) {
+        KefeIcon(
+            icon = if (positive) KefeIcons.ArrowUp else KefeIcons.ArrowDown,
+            contentDescription = null,
+            size = GoalDeltaArrowSize,
+            tint = c.delta(change.amount),
+        )
+        Text(
+            text = Money.tlSignedExact(change.amount),
+            style = t.bodyStrong.tabular(),
+            color = c.delta(change.amount),
+        )
+        Text(
+            text = Money.delta(change.percent, 2),
+            style = t.body.tabular(),
+            color = c.delta(change.amount),
+        )
+        Text(caption, style = t.caption, color = c.onSurfaceMuted)
+    }
+}
+
+private val GoalDeltaRowGap = 4.dp
+private val GoalDeltaGap = 6.dp
+private val GoalDeltaArrowSize = 14.dp
 
 @Composable
 private fun SunkenInfoBox(label: String, value: String, modifier: Modifier = Modifier) {

@@ -88,15 +88,37 @@ fun Price.spreadPercent(): Double? {
  * [price] null ise - tabloda o varlik yoksa - saklanan deger korunur: son
  * bilinen fiyat, sifirdan iyidir.
  */
-fun Position.valuedAt(price: Price?): Position {
+fun Position.valuedAt(price: Price?, today: KefeDate): Position {
     if (price == null) return this
     val unit = price.sellPrice()
     if (unit <= 0.0) return this
     return copy(
         unitPrice = unit,
         value = quantity * unit,
-        dailyChangePercent = price.changePercent,
+        dailyChangePercent = price.todayChangePercent(today),
         weekChangePercent = price.weekChangePercent,
         monthChangePercent = price.monthChangePercent,
     )
 }
+
+/**
+ * BUGUNE ait gunluk degisim - kotasyon bugunden degilse SIFIR.
+ *
+ * [Price.changePercent] "onceki kotasyondan bu yana" demektir, "bugun" demek
+ * degil. Borsa cuma kapandiysa cumartesi okunan bu deger cumanin hareketidir;
+ * kullanicinin serveti ise cumartesi hic degismemistir - varligi cuma
+ * aksamindaki degerinde durur. Dolayisiyla dogru katki SIFIRDIR, cumanin
+ * yuzdesi degil.
+ *
+ * Hafta sonu "bugunku getiri" satirinin dolu gorunmesinin ve gun icinde
+ * degismesinin sebebi buydu.
+ *
+ * Gunu BILINMEYEN kotasyon da bugun sayilmaz: elle girilen fiyatin gunluk
+ * hareketi yoktur, TCMB bulteninin hangi gune ait oldugunu ise bilmiyoruz.
+ * Ikisinde de dogru cevap "bugun oynamadi".
+ *
+ * Haftalik/aylik degisim BU KURALDAN ETKILENMEZ: onlar gecmis serisinden ve
+ * bir tolerans penceresiyle hesaplaniyor, yani zaten kapali gunlere dayanikli.
+ */
+fun Price.todayChangePercent(today: KefeDate): Double =
+    if (quoteDate == today) changePercent else 0.0

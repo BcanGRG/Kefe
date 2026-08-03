@@ -48,6 +48,20 @@ data class Price(
      */
     val nativePrice: Double? = null,
     val nativeCurrency: String? = null,
+    /**
+     * Bu kotasyonun ait oldugu ISLEM GUNU. null = bilmiyoruz.
+     *
+     * [timestamp]'ten AYRI: o bir gosterim metni ("10:36", "TCMB"), bu ise
+     * hesaba giren bir olgu. [changePercent] "onceki kotasyondan bu yana" ne
+     * kadar oynandigini soyler; o degisimin BUGUNE ait olup olmadigi ancak
+     * buradan bilinir.
+     *
+     * Neden gerekti: cumartesi gunu borsa kapaliyken "bugunku getiri" cumanin
+     * hareketini yaziyordu. Rakam yanlis degildi, ETIKETI yanlisti - kullanicinin
+     * serveti cumartesi degismemisti. Artik gunluk degisim yalnizca kotasyon
+     * BUGUNE aitse sayiliyor (bkz. [Position.valuedAt]).
+     */
+    val quoteDate: KefeDate? = null,
 )
 
 enum class PriceSource {
