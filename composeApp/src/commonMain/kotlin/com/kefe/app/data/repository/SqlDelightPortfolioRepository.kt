@@ -648,8 +648,13 @@ class SqlDelightPortfolioRepository(
         amount: Double,
     ) {
         val today = clock.today()
+        val now = clock.nowEpochMillis()
         activityQueries.insertActivity(
-            id = id,
+            // Zaman damgasi kimlige GIRER. Yalniz varlik kimligi kullanilsaydi
+            // silinip yeniden eklenen bir varligin ikinci silinisi, INSERT OR
+            // REPLACE yuzunden birincisinin ustune yazardi - defterde iki olay
+            // varken tek satir kalirdi.
+            id = "${id}_$now",
             memberId = memberId?.takeIf { it.isNotBlank() } ?: activeMemberId(),
             kind = kind,
             description = description,
@@ -659,7 +664,7 @@ class SqlDelightPortfolioRepository(
             occurredMonth = today.month.toLong(),
             occurredDay = today.day.toLong(),
             timeLabel = null,
-            updatedAt = clock.nowEpochMillis(),
+            updatedAt = now,
         )
     }
 
