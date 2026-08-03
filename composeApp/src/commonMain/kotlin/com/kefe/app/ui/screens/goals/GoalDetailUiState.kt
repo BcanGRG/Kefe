@@ -1,11 +1,13 @@
 package com.kefe.app.ui.screens.goals
 
+import com.kefe.app.domain.model.AllocationSlice
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAsset
 import com.kefe.app.domain.model.GoalMilestone
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.MonthlyContribution
+import com.kefe.app.domain.model.PeriodTotal
 import com.kefe.app.domain.model.Position
 
 enum class GoalDetailStage { Loading, Ready, Missing }
@@ -58,6 +60,18 @@ data class GoalDetailUiState(
     /** Ilerleme TOPLAM birikime gore olculur. */
     val currentWealth: Double = 0.0,
     val progress: Float = 0f,
+
+    /**
+     * Bu hedefe ATANAN kisimlarin bugunku degisimi ve toplam getirisi.
+     *
+     * Ozet ekranindaki iki satirin hedefe ozel hali - ayni tanimlar, farkli
+     * kapsam. Hedefe hicbir varlik atanmamissa null: sifir yazmak "hedef bugun
+     * oynamadi" demek olurdu, oysa dogrusu "olcecek bir sey yok".
+     */
+    val todayChange: PeriodTotal? = null,
+    val totalReturn: PeriodTotal? = null,
+    /** Hedefi karsilayan varliklarin sinif dagilimi - donut ve legend. */
+    val allocation: List<AllocationSlice> = emptyList(),
 
     /** Bugunden hedef tarihine kalan ay. */
     val monthsToTarget: Int = 0,

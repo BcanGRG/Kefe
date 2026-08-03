@@ -11,6 +11,7 @@ import com.kefe.app.domain.model.MonthlyContribution
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.Transaction
+import com.kefe.app.domain.model.allocation
 import com.kefe.app.domain.model.assetsOf
 import com.kefe.app.domain.model.effectiveQuantity
 import com.kefe.app.domain.model.goalMilestones
@@ -24,6 +25,8 @@ import com.kefe.app.domain.model.monthsToReach
 import com.kefe.app.domain.model.otherGoalOf
 import com.kefe.app.domain.model.plusMonths
 import com.kefe.app.domain.model.progress
+import com.kefe.app.domain.model.todayChange
+import com.kefe.app.domain.model.totalReturn
 import com.kefe.app.domain.repository.PortfolioRepository
 import kotlin.math.round
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -169,6 +172,9 @@ class GoalDetailViewModel(
         // Hedefe varlik atanmissa yalniz onlar sayilir; atanmamissa tum birikim.
         val wealth = goalWealth(goal, positions, assignments)
         val today = clock.today()
+        // Hedefi karsilayan kalemler TEK KEZ cozulur: liste, getiri rakamlari
+        // ve dagilim hep bundan turer, yoksa uc ayri cagri zamanla ayrisabilir.
+        val composing = assetsOf(goal, positions, assignments)
 
         // Katki gecmisi DEFTERDEN, projeksiyon FOTOGRAFLARDAN. Ikisi de once
         // ornek seriden okunuyordu: kullanicinin kendi rakami tepede dururken
@@ -199,7 +205,12 @@ class GoalDetailViewModel(
             assignedAssets = assetsOf(goal, positions, assignments),
             // Kati atama: hedefi olusturan varliklar = yalniz ona atananlar.
             // Atama yoksa liste bos (ilerleme %0), tum birikim GELMEZ.
-            composingAssets = assetsOf(goal, positions, assignments),
+            composingAssets = composing,
+            // Ucu de AYNI listeden turer - hedefin rakamlariyla altindaki
+            // varlik listesi birbirini tutsun diye.
+            todayChange = composing.todayChange(),
+            totalReturn = composing.totalReturn(),
+            allocation = composing.allocation(),
             // Secici: her varlik, varsa baska hedefin adiyla. Secmek TASIR;
             // kullanici bunu okumadan yapmamali.
             assignableAssets = positions.map { position ->

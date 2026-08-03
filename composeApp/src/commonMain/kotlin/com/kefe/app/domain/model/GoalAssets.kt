@@ -82,6 +82,26 @@ data class GoalAsset(
     val value: Double get() = assignment.valueIn(position)
 
     /**
+     * Hedefe sayilan kismin MALIYETI - [value] ile ayni oranda.
+     *
+     * Hedefe ozel getiri ancak bununla hesaplanabilir: 16 ceyregin 15'i bu
+     * hedefteyse maliyet de 15/16'sidir. Tam maliyeti kullanmak, hedefin
+     * getirisini oldugundan dusuk gosterirdi.
+     *
+     * Ortalama maliyet varsayimi: hangi ceyregin hedefe sayildigi bilinmiyor
+     * ve bilinemez - atama miktar tutuyor, belli bir islemi degil.
+     */
+    val cost: Double
+        get() = if (position.quantity <= 0.0) {
+            0.0
+        } else {
+            position.cost * (quantity / position.quantity)
+        }
+
+    /** Hedefe dusen kismin kar/zarari. */
+    val profit: Double get() = value - cost
+
+    /**
      * Varligin tamami mi sayiliyor. Kismi ise ekran bunu acikca yazmali;
      * "tamami" ise miktar tekrar edilmemeli.
      */
@@ -162,3 +182,57 @@ fun otherGoalOf(
     goal: Goal,
     assignments: Map<String, GoalAssignment>,
 ): String? = assignments[positionId]?.goalId?.takeIf { it != goal.id }
+
+// --- Hedef bazli rakamlar ----------------------------------------------------
+
+/**
+ * Bu hedefin BUGUNKU degisimi - atanan kisimlarla.
+ *
+ * Portfoy geneliyle ayni mantik ([weightedPeriodTotal]): yuzdeler ortalanmaz,
+ * her kalem gun basindaki degerine geri cozulur ve TL farklar toplanir. Aksi
+ * halde hedefteki kucuk bir fonun %10'u, buyuk altinin %1'iyle ayni agirligi
+ * tasirdi.
+ *
+ * Yuzde SIFIR olabilir ve bu dogrudur: hafta sonu hicbir piyasa oynamaz
+ * (bkz. [Price.todayChangePercent]).
+ */
+fun List<GoalAsset>.todayChange(): PeriodTotal? =
+    weightedPeriodTotal(map { it.value to it.position.dailyChangePercent })
+
+/**
+ * Bu hedefin TOPLAM getirisi - atanan kisimlarin kar/zarari.
+ *
+ * Payda MALIYETTIR, guncel deger degil: "koydugum paraya gore ne kazandim"
+ * sorusu bu. Ozet ekranindaki toplam getiriyle ayni tanim, boylece iki ekran
+ * birbiriyle celismez.
+ *
+ * Maliyeti sifir olan hedef (hepsi elle fiyatli, defteri olmayan varlik) null
+ * doner - sifira bolmek yerine ekran "—" yazar.
+ */
+fun List<GoalAsset>.totalReturn(): PeriodTotal? {
+    val cost = sumOf { it.cost }
+    if (cost <= 0.0) return null
+    val profit = sumOf { it.profit }
+    return PeriodTotal(amount = profit, percent = profit / cost * 100.0)
+}
+
+/**
+ * Hedefe atanan kisimlarin varlik sinifi dagilimi.
+ *
+ * [List<Position>.allocation] ile ayni cikti, farkli girdi: orada pozisyonun
+ * TAMAMI sayilir, burada yalniz hedefe dusen kismi. Ikisini tek fonksiyona
+ * sigdirmak, "deger" kelimesinin iki ayri sey demesine yol acardi.
+ */
+fun List<GoalAsset>.allocation(): List<AllocationSlice> {
+    val total = sumOf { it.value }
+    if (total <= 0.0) return emptyList()
+
+    val sums = LinkedHashMap<AssetClass, Double>()
+    for (asset in this) {
+        val key = asset.position.assetClass
+        sums[key] = (sums[key] ?: 0.0) + asset.value
+    }
+    return sums.entries
+        .sortedByDescending { it.value }
+        .map { AllocationSlice(it.key, it.value, it.value / total * 100.0) }
+}
