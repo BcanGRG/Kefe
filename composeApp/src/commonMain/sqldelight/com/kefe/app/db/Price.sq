@@ -28,7 +28,10 @@ CREATE TABLE cached_prices (
     -- "$308,91" yazabilmek icin duruyor. Altin/doviz/fon ve TL borsasindaki
     -- hissede NULL: onlarda zaten TL disinda bir fiyat yok.
     nativePrice REAL,
-    nativeCurrency TEXT
+    nativeCurrency TEXT,
+    -- Kotasyonun ait oldugu islem gunu (yyyymmdd). NULL = bilmiyoruz ve
+    -- "bugun degil" sayilir; gunluk degisime katkisi sifir olur (bkz. 7.sqm).
+    quoteDateKey INTEGER
 );
 
 -- Elle girilen fiyatlar. Kalici olmasi ZORUNLU: "elle girilen deger otomatik
@@ -111,8 +114,8 @@ FROM cached_prices;
 
 -- Bagli tablo yok, REPLACE guvenli.
 upsertCachedPrice:
-INSERT OR REPLACE INTO cached_prices(assetKey, label, bid, ask, changePercent, timestamp, source, assetClass, fetchedAtEpochSeconds, nativePrice, nativeCurrency)
-VALUES (:assetKey, :label, :bid, :ask, :changePercent, :timestamp, :source, :assetClass, :fetchedAtEpochSeconds, :nativePrice, :nativeCurrency);
+INSERT OR REPLACE INTO cached_prices(assetKey, label, bid, ask, changePercent, timestamp, source, assetClass, fetchedAtEpochSeconds, nativePrice, nativeCurrency, quoteDateKey)
+VALUES (:assetKey, :label, :bid, :ask, :changePercent, :timestamp, :source, :assetClass, :fetchedAtEpochSeconds, :nativePrice, :nativeCurrency, :quoteDateKey);
 
 deleteCachedPrice:
 DELETE FROM cached_prices

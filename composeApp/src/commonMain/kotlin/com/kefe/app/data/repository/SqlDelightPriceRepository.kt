@@ -227,6 +227,9 @@ class SqlDelightPriceRepository(
                         // Yalniz gosterim icin; hesap [ask] ile, yani TL ile.
                         nativePrice = price.nativePrice,
                         nativeCurrency = price.nativeCurrency,
+                        // Cekildigi gun DEGIL, kotasyonun ait oldugu islem gunu:
+                        // pazar gunu cekilen bir hisse fiyati cumaya aittir.
+                        quoteDateKey = price.quoteDate?.let(::dateKeyOf),
                     )
                     // Gunun fiyati AYRICA gecmise yazilir: onbellek uzerine
                     // yazildigi icin gecmisi tutamaz, gecmis fiyat da sonradan

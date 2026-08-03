@@ -110,6 +110,14 @@ internal fun Cached_prices.toDomain(): Price = Price(
     assetClass = assetClass,
     nativePrice = nativePrice,
     nativeCurrency = nativeCurrency,
+    quoteDate = quoteDateKey?.let(::dateOfKey),
+)
+
+/** 20260731 -> 2026-07-31. Gun anahtarinin tersi (bkz. 7.sqm). */
+private fun dateOfKey(key: Long): KefeDate = KefeDate(
+    year = (key / 10_000L).toInt(),
+    month = ((key / 100L) % 100L).toInt(),
+    day = (key % 100L).toInt(),
 )
 
 /**

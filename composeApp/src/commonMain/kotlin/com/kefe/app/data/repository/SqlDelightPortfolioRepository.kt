@@ -141,8 +141,11 @@ class SqlDelightPortfolioRepository(
             .map { rows -> rows.map { it.toDomain() } },
         priceRepository.observePrices(),
     ) { positions, board ->
+        // Bugun HER EMISYONDA yeniden okunur: uygulama gece boyunca acik
+        // kalirsa gun donuyor ve dunun degisimi "bugun" olarak asili kalirdi.
+        val today = clock.today()
         positions.map { position ->
-            position.valuedAt(position.priceKey()?.let { board.byKey(it) })
+            position.valuedAt(position.priceKey()?.let { board.byKey(it) }, today)
         }
     }
 

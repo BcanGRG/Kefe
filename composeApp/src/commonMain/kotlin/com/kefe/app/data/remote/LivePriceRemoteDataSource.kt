@@ -47,6 +47,10 @@ class LivePriceRemoteDataSource(
         // TCMB'den gelir, fonlar TEFAS'tan.
         val metals = runCatching { freeMarket.fetch() }.getOrNull()
         val metalStamp = metals?.updatedAt.toClockLabel()
+        // Serbest piyasa gun ici calisir, ama gunu VARSAYMAYIZ: kaynagin kendi
+        // damgasindan okunur. Kaynak hafta sonu cumanin damgasini donerse
+        // gunluk degisim de cumaya ait sayilir ve "bugun" satirina girmez.
+        val metalDay = parseIsoDate(metals?.updatedAt?.substringBefore(' '))
 
         val prices = mutableListOf<Price>()
         val quotes = metals?.quotes.orEmpty()
@@ -62,6 +66,7 @@ class LivePriceRemoteDataSource(
                 timestamp = metalStamp,
                 source = PriceSource.FreeMarket,
                 assetClass = mapping.assetClass,
+                quoteDate = metalDay,
             )
         }
 
@@ -104,6 +109,11 @@ class LivePriceRemoteDataSource(
                 timestamp = if (free != null) metalStamp else "TCMB",
                 source = PriceSource.FreeMarket,
                 assetClass = AssetClass.Fx,
+                // TCMB'ye dusulduyse gun BILINMIYOR: bulten hafta sonu bir
+                // onceki is gununu doner ve hangi gune ait oldugunu soylemez.
+                // null kalir, gunluk degisime katkisi sifir olur - zaten
+                // yuzdesi de sifir geliyor.
+                quoteDate = if (free != null) metalDay else null,
             )
         }
 
@@ -127,6 +137,10 @@ class LivePriceRemoteDataSource(
                 // TEFAS'in bir aylik serisi: depo bunu gecmise yazar, boylece
                 // fonlarda haftalik/aylik degisim ilk gunden gercek olur.
                 history = quote.history,
+                // Fon gunde bir fiyatlanir; kotasyonun gunu kaynagin kendi
+                // tarihidir. Hafta sonu okundugunda bu cumadir ve degisimi
+                // "bugun"e yazmayiz.
+                quoteDate = parseIsoDate(quote.date),
             )
         }
 
@@ -177,6 +191,10 @@ class LivePriceRemoteDataSource(
                 // degisim bundan etkilenmez (sabitle carpmak orani degistirmez),
                 // ABD hissesinde okunan da zaten hissenin kendi getirisidir.
                 history = quote.history.map { it.copy(price = it.price * rate) },
+                // ASIL SEBEP BURASI: borsa hafta sonu kapali. Kotasyonun gunu
+                // son seansin gunudur; cumartesi okunan degisim cumanindir ve
+                // "bugunku getiri" satirina girmemelidir.
+                quoteDate = quote.date,
             )
         }
 
