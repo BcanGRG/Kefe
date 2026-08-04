@@ -237,6 +237,8 @@ class SqlDelightPortfolioRepository(
                     updatedAt = clock.nowEpochMillis(),
                 )
                 recomputePosition(stored.positionId)
+                // Satis miktari sifirlamis olabilir; oyleyse kotasyon duser.
+                dropUnheldInstrumentPrices()
                 appendActivity(stored)
             }
         }
@@ -271,6 +273,8 @@ class SqlDelightPortfolioRepository(
                     amount = removed.quantity * removed.unitPrice + removed.fee,
                 )
                 recomputePosition(removed.positionId)
+                // Son alim silindiyse varlik artik tutulmuyor demektir.
+                dropUnheldInstrumentPrices()
             }
         }
     }
@@ -589,6 +593,22 @@ class SqlDelightPortfolioRepository(
         )
     }
 
+    /**
+     * Tutulmayan fon/hisse kotasyonlarini tahtadan duser.
+     *
+     * YALNIZ bir seyin EKSILDIGI yollardan cagrilir - silme ve islem yazma.
+     * [recomputePosition]'in icine konmustu ve orasi YANLISTI: `upsertPosition`
+     * da recompute cagiriyor ve yeni bir fon olusturulurken pozisyon bir an icin
+     * miktarsiz duruyor. Supurme o anda calisip fonun kotasyonunu daha kullanici
+     * ilk islemini yazmadan siliyordu.
+     *
+     * Alim ya da pozisyon olusturmak hicbir seyi tutulmaz hale getiremez; o
+     * yollardan cagirmak gereksizdi.
+     */
+    private fun dropUnheldInstrumentPrices() {
+        priceQueries.deleteUnheldInstrumentPrices()
+    }
+
 
     /** Yeni islem Aktivite akisina da dusmeli - tasarimda "kim ne ekledi" oradan okunur. */
     private fun appendActivity(transaction: Transaction) {
@@ -730,6 +750,14 @@ class SqlDelightPortfolioRepository(
                 // surucuye dusulurse diye defter acikca temizlenir.
                 transactionQueries.deleteTransactionsByPosition(deletedAt = clock.nowEpochMillis(), positionId = positionId)
                 positionQueries.deletePositionById(deletedAt = clock.nowEpochMillis(), id = positionId)
+                // Silinen fon/hissenin kotasyonu Piyasa tahtasinda kalmasin:
+                // o satir yalnizca varlik TUTULDUGU icin vardi. Altin ve doviz
+                // kalir - onlar piyasanin standart kalemleri.
+                //
+                // Tek satir degil SUPURME: kural "tutulmayan her fon/hisse"
+                // seklinde yazildigi icin eski surumlerden kalmis artiklar da
+                // ilk portfoy yazmasinda kendiliginden temizlenir.
+                dropUnheldInstrumentPrices()
                 appendDeletion(
                     id = "act_del_$positionId",
                     memberId = null,

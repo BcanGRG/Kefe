@@ -1449,3 +1449,42 @@ akışta "Varlık sildi" gibi anlamsız bir cümle kalırdı.
 
 Kimlik zaman damgası taşıyor: silinip yeniden eklenen bir varlığın ikinci
 silinişi, `INSERT OR REPLACE` yüzünden birincisinin üstüne yazardı.
+
+## 39 · Silinen varlık Piyasa tahtasında kalmıyor ✅
+
+**Neydi (kullanıcı).** Silinen varlıklar Piyasa listesinde görünmeye devam
+ediyordu — hisse testi için eklenip silinen ASELS.IS ve AAPL, portföyde
+yokken tahtada duruyordu.
+
+**Ayrım.** Altın, gümüş, döviz ve nakit tahtada **her zaman** durur: onlar
+piyasanın standart kalemleri, tutuluyor olmaları gerekmiyor. Fon ve hisse
+satırları ise **yalnızca** kullanıcı o aracı tuttuğu için var — hangi kodların
+çekileceği de portföyden türüyor (`selectHeldFundIds` / `selectHeldStockIds`).
+Varlık silinince kotasyonun tahtada kalması için bir sebep kalmıyor.
+
+`Position.sq` bunu zaten söylüyordu ("satılan fon Piyasa'da yeniden
+belirmesin") ama hiçbir yerde **uygulanmıyordu**: o yorum yalnızca çekmeyi
+durduruyordu, önbellekteki satır duruyordu.
+
+**Kural `selectHeldFundIds`'in tersi olarak yazıldı**, aynı ölçüyle: miktar
+sıfırsa ya da satır silinmişse tutulmuyordur. Tekil silme yerine **süpürme**
+seçildi — böylece eski sürümlerden kalmış artıklar ilk portföy yazmasında
+kendiliğinden temizleniyor.
+
+**Elle girilen fiyata dokunulmuyor.** O kullanıcının verisi ve kaynaktan
+yeniden üretilemez. Önbellek satırı gidince zaten tahtada satır kalmıyor: elle
+fiyat mevcut satırın üzerine binen bir katman, kendi başına satır açmıyor.
+
+**Testin yakaladığı yerleşim hatası.** Süpürme ilk olarak `recomputePosition`
+içine konmuştu ve orası yanlıştı: `upsertPosition` de recompute çağırıyor ve
+yeni bir fon oluşturulurken pozisyon bir an için miktarsız duruyor. Süpürme o
+pencerede çalışıp, kullanıcının **eklemekte olduğu** fonun kotasyonunu
+siliyordu.
+
+Artık yalnız bir şeyin **eksildiği** yollardan çağrılıyor: varlık silme, işlem
+silme ve işlem yazma (satış miktarı sıfırlamış olabilir). Alım ya da pozisyon
+oluşturmak hiçbir şeyi tutulmaz hâle getiremez.
+
+Kural SQL'de yaşadığı için testler gerçek veritabanıyla yazıldı; en önemlisi
+**altın/gümüş/dövizin tahtada kaldığını** doğrulayan test — fazla hevesli bir
+temizlik, tahtayı altınsız bırakırdı.

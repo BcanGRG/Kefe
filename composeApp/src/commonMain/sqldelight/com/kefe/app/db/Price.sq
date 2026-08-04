@@ -121,6 +121,32 @@ deleteCachedPrice:
 DELETE FROM cached_prices
 WHERE assetKey = :assetKey;
 
+-- Artik TUTULMAYAN fon/hisse kotasyonlarini onbellekten duser.
+--
+-- Altin, gumus, doviz ve nakit tahtada HER ZAMAN durur: onlar piyasanin
+-- standart kalemleri, tutuluyor olmalari gerekmiyor. Fon ve hisse satirlari
+-- ise yalnizca kullanici o araci tuttugu icin var - hangi kodlarin cekilecegi
+-- de portfoyden turuyor (bkz. selectHeldFundIds/selectHeldStockIds). Varlik
+-- silinince ya da tamami satilinca kotasyonun tahtada kalmasi icin bir sebep
+-- kalmiyor; Piyasa listesi elde olmayan bir sembolu gostermeye devam ediyordu.
+--
+-- Kosul selectHeldFundIds'in TERSIDIR ve ayni olcuyu kullanir: miktar sifirsa
+-- ya da satir silinmisse tutulmuyor demektir. Kimlik sozlesmesi
+-- "pos_<anahtar>" (bkz. Position.priceKey).
+--
+-- Elle girilen fiyata DOKUNULMAZ: o kullanicinin verisi, kaynaktan yeniden
+-- uretilemez. Onbellek satiri gidince zaten tahtada satir kalmiyor - elle
+-- fiyat mevcut satirin uzerine binen bir katman, kendi basina satir acmiyor.
+deleteUnheldInstrumentPrices:
+DELETE FROM cached_prices
+WHERE (assetKey LIKE 'fund\_%' ESCAPE '\' OR assetKey LIKE 'stock\_%' ESCAPE '\')
+AND NOT EXISTS (
+    SELECT 1 FROM positions
+    WHERE positions.id = 'pos_' || cached_prices.assetKey
+    AND positions.quantity > 0.0
+    AND positions.deletedAt IS NULL
+);
+
 deleteAllCachedPrices:
 DELETE FROM cached_prices;
 
