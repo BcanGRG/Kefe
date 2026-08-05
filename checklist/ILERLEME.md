@@ -1488,3 +1488,51 @@ oluşturmak hiçbir şeyi tutulmaz hâle getiremez.
 Kural SQL'de yaşadığı için testler gerçek veritabanıyla yazıldı; en önemlisi
 **altın/gümüş/dövizin tahtada kaldığını** doğrulayan test — fazla hevesli bir
 temizlik, tahtayı altınsız bırakırdı.
+
+## 40 · Kaynak günlük değişimi vermiyormuş ✅
+
+**Soru (kullanıcı).** "Piyasa ve varlıklar kısmında 22 ayar takı, Çeyrek, Tam,
+Yarım bunların değişim verisi 0 gözüküyor. Veri mi gelmiyor yoksa
+gösterilemiyor mu? Bunların verileri günlük toplam getiri kısmına da yansımıyor
+sanki."
+
+**Cevap: veri gelmiyor.** Tahmin edilmedi, uç ölçüldü:
+
+| Sembol | Kaynağın verdiği `Change` |
+|---|---|
+| GRA (gram altın) | **2,14** |
+| HAS | dolu |
+| GUMUS | **3,3** |
+| CEYREKALTIN | **0** |
+| YARIMALTIN | **0** |
+| TAMALTIN | **0** |
+| ATAALTIN | **0** |
+| 14 / 18 / 22 AYAR | **0** |
+
+Serbest piyasa ucu `Change` alanını yalnızca üç anahtar için dolduruyor.
+Diğerlerinin `Buying`/`Selling` rakamları gün içinde oynuyor ama değişim alanı
+düz sıfır geliyor.
+
+**Üçüncü gözlem de bunun sonucu.** Portföyün %95'i altın ve neredeyse hepsi
+sıfır katkı verdiği için "bugünkü getiri" bir milyona yaklaşan bir portföyde
+birkaç yüz lira görünüyordu. Rakam kaybolmuyordu — hiç doğmuyordu.
+
+**Çözüm: kaynak önce, geçmiş yedek.** `price_history` zaten varlık başına
+günlük bir nokta tutuyor ve haftalık/aylık değişim ondan hesaplanıyor, çalışıyor.
+Günlük de aynı makineye düşüyor; ama yalnızca kaynak susarsa. Kaynağın rakamı
+gün içi ve günde tek noktadan daha ince, o yüzden varsa ona dokunulmuyor.
+
+**Sıfırı "verilmedi" saymak yanlış tetiklenemiyor:** fiyat gerçekten
+oynamadıysa geçmişten hesaplanan da sıfır çıkar, yani yedek yol kaynağın
+verdiği cevabın aynısını verir.
+
+**Bu, daha önce yazılmış bir kararı geri alıyor.** `PeriodChanges` üzerinde
+"günlük değişim kaynağın kendi Change alanından gelir ve kanıtlanmıştır;
+geçmişten yeniden türetmek çalışan bir şeyi bozardı" yazıyordu. O gerekçe
+kaynağın gerçekten veriyor olmasına dayanıyordu; ölçüm on altın anahtarının
+yedisi için bunun doğru olmadığını gösterdi. Çalışan yola dokunulmadı, yedek
+yalnızca sessizliği dolduruyor.
+
+**Tolerans üç gün.** Geçmiş ancak uygulama açıldığında yazılıyor; hafta sonu
+bakılmayan bir portföyde dünün satırı hiç oluşmuyor. Daha genişi, bir haftalık
+hareketi "bugün" diye yazmak olurdu.
