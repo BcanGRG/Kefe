@@ -174,4 +174,48 @@ class PeriodChangeTest {
     fun yuzdesiBilinmeyenPozisyonNullDoner() {
         assertNull(periodTotalOf(value = 1_000.0, percent = null))
     }
+
+    // --- Gunluk degisim: kaynak susarsa gecmisten ----------------------------
+
+    /**
+     * Serbest piyasa ucu OLCULDU: yalnizca gram/has altin ve gumus icin Change
+     * dolduruyor; ceyrek, yarim, tam, ata ve butun ayar kalemlerine duz SIFIR
+     * yaziyor - fiyatlari gun icinde oynadigi halde. Portfoyunun %95'i altin
+     * olan bir kullanicinin "bugunku getiri" satiri bu yuzden bostu.
+     */
+    @Test
+    fun gunlukDegisimGecmistenHesaplanabilir() {
+        val history = listOf(daysAgo(1, 10_000.0), daysAgo(0, 10_200.0))
+        assertEquals(2.0, periodChangesOf(history, 10_200.0, today).day!!, 1e-9)
+    }
+
+    /**
+     * Dun yoksa bir onceki KAYITLI gune bakilir: gecmis ancak uygulama
+     * acildiginda yaziliyor, hafta sonu bakilmayan portfoyde dunun satiri hic
+     * olusmaz.
+     */
+    @Test
+    fun dunYoksaOncekiKayitliGuneBakilir() {
+        val history = listOf(daysAgo(3, 10_000.0))
+        assertEquals(2.0, periodChangesOf(history, 10_200.0, today).day!!, 1e-9)
+    }
+
+    /**
+     * Tolerans disi kalirsa null: bes gun onceki fiyata gore hesaplanan farki
+     * "bugun" diye yazmak uydurmak olurdu.
+     */
+    @Test
+    fun toleransDisiGunNullDoner() {
+        assertNull(periodChangesOf(listOf(daysAgo(5, 10_000.0)), 10_200.0, today).day)
+    }
+
+    /**
+     * Gercekten oynamayan varlikta gecmisten hesaplanan da sifir cikar - yedek
+     * yol "degismedi" durumunu bozmuyor.
+     */
+    @Test
+    fun gercektenOynamayanSifirKALIR() {
+        val history = listOf(daysAgo(1, 10_000.0))
+        assertEquals(0.0, periodChangesOf(history, 10_000.0, today).day!!, 1e-9)
+    }
 }

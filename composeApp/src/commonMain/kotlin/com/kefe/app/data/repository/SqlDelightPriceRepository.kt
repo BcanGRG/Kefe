@@ -127,6 +127,21 @@ class SqlDelightPriceRepository(
                     ?.let { periodChangesOf(it, price.ask, today) }
                     ?: PeriodChanges.Unknown
                 price.copy(
+                    // KAYNAK ONCE, gecmis YEDEK. Serbest piyasa ucu yalnizca
+                    // gram/has altin ve gumus icin Change dolduruyor; ceyrek,
+                    // yarim, tam, ata ve ayar kalemlerine duz sifir yaziyor -
+                    // fiyatlari oynadigi halde. Portfoyun %95'i altin olan bir
+                    // kullanicinin "bugunku getiri" satiri bu yuzden bostu.
+                    //
+                    // Sifir "degismedi" ile "kaynak soylemedi" arasini ayirt
+                    // etmiyor; ama ayirt etmesi de gerekmiyor: gercekten
+                    // oynamadiysa gecmisten hesaplanan da sifir cikar. Kaynagin
+                    // rakami varsa ona dokunulmaz - o gun ici ve daha kesin.
+                    changePercent = if (price.changePercent != 0.0) {
+                        price.changePercent
+                    } else {
+                        changes.day ?: 0.0
+                    },
                     weekChangePercent = changes.week,
                     monthChangePercent = changes.month,
                 )
