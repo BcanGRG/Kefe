@@ -7,14 +7,27 @@ data class PricePoint(
 )
 
 /**
- * Bir varligin haftalik ve aylik yuzde degisimi. Gunluk degisim burada YOK -
- * o kaynagin kendi `Change` alanindan gelir ve kanitlanmistir; gecmisten
- * yeniden turetmek calisan bir seyi bozardi.
+ * Bir varligin gunluk, haftalik ve aylik yuzde degisimi.
+ *
+ * GUNLUK BURAYA SONRADAN EKLENDI. Onceki karar "gunluk degisim kaynagin kendi
+ * Change alanindan gelir, gecmisten turetmek calisan bir seyi bozardi" idi.
+ * Kaynak OLCULDU ve varsayim yanlis cikti: serbest piyasa ucu yalnizca gram
+ * altin, has altin ve gumus icin Change dolduruyor; ceyrek, yarim, tam, ata ve
+ * butun ayar kalemleri icin duz SIFIR gonderiyor - fiyatlari gun icinde
+ * oynadigi halde.
+ *
+ * Sonuc kullanicinin ekraninda soyleydi: portfoyunun %95'i altin, "bugunku
+ * getiri" ise neredeyse bos. Rakam yok degildi, KAYNAKTA yoktu.
+ *
+ * Bu yuzden gunluk da gecmisten hesaplanabiliyor - ama YEDEK olarak: kaynagin
+ * verdigi rakam varsa o kullanilir (gun ici ve daha kesindir), yoksa buraya
+ * dusulur.
  *
  * Alanlar null olabilir ve olmalidir: veri yoksa ekran "—" yazar. Sifir
  * yazmak "hic degismedi" demek olurdu, oysa dogrusu "bilmiyoruz".
  */
 data class PeriodChanges(
+    val day: Double? = null,
     val week: Double? = null,
     val month: Double? = null,
 ) {
@@ -22,6 +35,17 @@ data class PeriodChanges(
         val Unknown = PeriodChanges()
     }
 }
+
+/** Gunluk degisimde geriye bakilan gun. */
+private const val DayDaysBack = 1
+
+/**
+ * Bir onceki KAYITLI gun. Tolerans var cunku gecmis ancak uygulama acildiginda
+ * yaziliyor: hafta sonu bakilmayan bir portfoyde dunun satiri hic olusmaz.
+ * Uc gun, "en son ne zaman baktiysak ondan bu yana" demenin makul siniri;
+ * daha genisi bir haftalik hareketi "bugun" diye yazmak olurdu.
+ */
+private const val DayTolerance = 3
 
 /** Haftalik degisimde geriye bakilan gun ve kabul edilen sapma. */
 private const val WeekDaysBack = 7
@@ -68,12 +92,13 @@ fun periodChangePercent(
     return (latest - reference.price) / reference.price * 100.0
 }
 
-/** Hafta ve ay degisimini tek cagriyla verir. */
+/** Gun, hafta ve ay degisimini tek cagriyla verir. */
 fun periodChangesOf(
     history: List<PricePoint>,
     latest: Double,
     today: KefeDate,
 ): PeriodChanges = PeriodChanges(
+    day = periodChangePercent(history, latest, today, DayDaysBack, DayTolerance),
     week = periodChangePercent(history, latest, today, WeekDaysBack, WeekTolerance),
     month = periodChangePercent(history, latest, today, MonthDaysBack, MonthTolerance),
 )
