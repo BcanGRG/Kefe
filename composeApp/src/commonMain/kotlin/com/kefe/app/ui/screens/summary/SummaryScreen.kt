@@ -339,6 +339,33 @@ private fun SummaryContent(
             }
         }
 
+        // Piyasa telefonda GORUNUR bir yer kazandi.
+        //
+        // Tek girisi ust bardaki "Fiyatlar 19:38'de güncellendi" satiriydi: gri,
+        // kucuk ve durum etiketi gibi duruyordu; masaustunde sag panelde acikca
+        // duran bolumun telefonda karsiligi yok sanildi.
+        //
+        // Dagilimin USTUNDE duruyor: "bugun piyasa ne yapti" gunde birkac kez
+        // bakilan bir sey, "birikimim hangi sinifta duruyor" ise ayda bir
+        // sorulan bir soru. Once dagilim geliyordu ve piyasa iki kart asagida
+        // kaliyordu.
+        if (state.marketRows.isNotEmpty()) {
+            item {
+                SectionHeader(
+                    title = "Piyasa",
+                    actionText = "Tümünü gör",
+                    onAction = onOpenMarket,
+                )
+            }
+            item {
+                MarketCard(
+                    rows = state.marketRows.take(MarketPreviewCount),
+                    onOpen = onOpenMarket,
+                    modifier = Modifier.padding(horizontal = Space.x16),
+                )
+            }
+        }
+
         item {
             AllocationCard(
                 allocation = state.allocation,
@@ -358,28 +385,6 @@ private fun SummaryContent(
                 // basligin kendi 20dp ust dolgusundan gelir.
                 modifier = Modifier.padding(horizontal = Space.x16),
             )
-        }
-
-        // Piyasa telefonda GORUNUR bir yer kazandi.
-        //
-        // Tek girisi ust bardaki "Fiyatlar 19:38'de güncellendi" satiriydi: gri,
-        // kucuk ve durum etiketi gibi duruyordu; masaustunde sag panelde acikca
-        // duran bolumun telefonda karsiligi yok sanildi.
-        if (state.marketRows.isNotEmpty()) {
-            item {
-                SectionHeader(
-                    title = "Piyasa",
-                    actionText = "Tümünü gör",
-                    onAction = onOpenMarket,
-                )
-            }
-            item {
-                MarketCard(
-                    rows = state.marketRows.take(MarketPreviewCount),
-                    onOpen = onOpenMarket,
-                    modifier = Modifier.padding(horizontal = Space.x16),
-                )
-            }
         }
 
         if (state.activity.isNotEmpty()) {
