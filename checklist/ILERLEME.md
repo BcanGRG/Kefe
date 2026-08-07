@@ -1536,3 +1536,40 @@ yalnızca sessizliği dolduruyor.
 **Tolerans üç gün.** Geçmiş ancak uygulama açıldığında yazılıyor; hafta sonu
 bakılmayan bir portföyde dünün satırı hiç oluşmuyor. Daha genişi, bir haftalık
 hareketi "bugün" diye yazmak olurdu.
+
+## 41 · Özette Piyasa dağılımın üstüne alındı ✅
+
+**İstek.** "Özet kısmında piyasayı ne kadarı nerede'nin üstüne al."
+
+Yeni sıra: **Ana hedef → Piyasa → Ne kadarı nerede → Net değer → Bu ay → Son
+hareketler → Öne çıkan hareketler.**
+
+Okunma sıklığıyla da örtüşüyor: "bugün piyasa ne yaptı" günde birkaç kez
+bakılan bir şey, "birikimim hangi sınıfta duruyor" ise ayda bir sorulan bir
+soru. Önce dağılım geliyordu ve Piyasa iki kart aşağıda kalıyordu.
+
+Yalnız telefon düzeni. Tablet ve masaüstünde Piyasa zaten kendi panelinde —
+telefondaki bu bölüm de onun karşılığı olsun diye eklenmişti.
+
+---
+
+### 35–41 arası cihaz doğrulaması (R58N81SAZ1Y, 7 Ağustos)
+
+Dört PR'ın işi tek kurulumda birlikte doğrulandı:
+
+| Kural | Ekranda |
+|---|---|
+| Günlük değişim yedeği (§40) | Çeyrek/Yarım/Tam/Ata ve 14-18-22 ayar **+%2,09** (türetilen); Gram ve Has **+%2,57** (kaynağın kendisi, gün içi olduğu için farklı) |
+| Aynı kural, varlıklarda | 22 ayar Takı +₺14.905,39 · Çeyrek +₺3.268,73 · Tam +₺871,66 · Yarım +₺434,47 |
+| Toplam getiriye yansıma | "bugün" satırı birkaç yüz liradan **+₺20.549 · +%2,06**'ya çıktı |
+| Piyasa temizliği (§39) | Bir portföy yazmasından sonra önbellekte yalnız tutulan dört fon kaldı; `fund_afa`, `fund_ipv`, `stock_aapl`, `stock_asels.is` düştü |
+| Silme olayları (§38) | Akışta "1 Gram Gümüş alımını sildi" |
+| Sıralama (§41) | Piyasa, hedef kartının hemen altında |
+
+Temizlik testi için 1 gr gümüş eklenip silindi; portföy 201 gr'a geri döndü.
+
+**Yolda görülen, henüz ele alınmamış bir kusur:** varlık detayındaki "Yıllık
+getiri" satırı çok kısa elde tutma süresinde anlamsız bir rakam üretiyor
+(gümüşte `+14.213.458.746.011.397,12%`). Yıllıklandırma matematiksel olarak
+doğru çalışıyor — sekiz günde %90 kazanç yıla çevrilince gerçekten bu mertebeye
+çıkıyor — ama ekranda gösterilecek bir sayı değil. Ayrıca ele alınmalı.
