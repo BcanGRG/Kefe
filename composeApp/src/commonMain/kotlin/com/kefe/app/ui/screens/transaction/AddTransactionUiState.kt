@@ -12,6 +12,7 @@ import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.label
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.maxPriceDecimals
+import com.kefe.app.ui.format.parseTrAmountOrNull
 import com.kefe.app.ui.format.trLower
 
 /** Iki adimli akis: once "ne", sonra "ne kadar". */
@@ -447,18 +448,15 @@ fun FundResult.matches(query: String): Boolean {
 // --- Ayristirma / ek yardimcilari -------------------------------------------
 
 /**
- * tr-TR sayi girisi: ondalik virgul, binlik nokta. Virgul yoksa nokta binlik
- * ayraci sayilir - kullanici "26.400" yazdiginda 26,4 olmaz.
+ * tr-TR sayi girisi. Ayristirma [parseTrAmountOrNull] ile ORTAKTIR: bu mantik
+ * bir zamanlar Piyasa ekraninda ayri bir kopya olarak duruyordu, iki kopya
+ * ayristi ve oradaki fiyati bin kat kucultuyordu.
+ *
+ * Bos/cozulemeyen metinde 0.0 doner - alanlar bos baslar ve "henuz yazmadi"
+ * ile "sifir yazdi" bu ekranda ayni sey demektir (gecerlilik `> 0.0` ile
+ * ayrica sinaniyor).
  */
-fun String.parseTrNumber(): Double {
-    val cleaned = trim().replace(" ", "").replace(Money.LIRA, "")
-    val normalized = if (cleaned.contains(',')) {
-        cleaned.replace(".", "").replace(',', '.')
-    } else {
-        cleaned.replace(".", "")
-    }
-    return normalized.toDoubleOrNull() ?: 0.0
-}
+fun String.parseTrNumber(): Double = parseTrAmountOrNull() ?: 0.0
 
 private const val Vowels = "aeıioöuüAEİIOÖUÜ"
 

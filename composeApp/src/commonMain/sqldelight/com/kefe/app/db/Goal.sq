@@ -84,10 +84,43 @@ SET name = :name,
     deletedAt = :deletedAt
 WHERE id = :id;
 
--- Hedefin cocuk tablosu yok; REPLACE burada guvenli (silinecek bagli satir yok).
-upsertGoal:
-INSERT OR REPLACE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, allocation, status, sortOrder, estimatedYear, estimatedMonth, estimatedDay, updatedAt)
+-- Yerel yazma: hedefi duzenleyip kaydetme, tamamlandi isaretleme, ana hedefi
+-- degistirme ve yedekten geri yukleme buradan gecer. Pull yolu gibi IKI ADIM.
+--
+-- Burada bir zamanlar tek bir INSERT OR REPLACE ve ustunde "Hedefin cocuk
+-- tablosu yok; REPLACE burada guvenli" yaziyordu. Yanlisti: goal_assets.goalId
+-- bu tabloya ON DELETE CASCADE bagli. REPLACE catisan satiri once SILDIGI icin
+-- hedefi her kaydetme o hedefin BUTUN varlik atamalarini sessizce goturuyor,
+-- goalWealth() atama bulamayip 0 donuyor ve ilerleme %0'a dusuyordu.
+--
+-- Kural yukaridaki pull yolunda zaten dogru yazilmisti; eksik olan onu yerel
+-- yola da uygulamakti.
+insertOrIgnoreGoal:
+INSERT OR IGNORE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, allocation, status, sortOrder, estimatedYear, estimatedMonth, estimatedDay, updatedAt)
 VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :allocation, :status, :sortOrder, :estimatedYear, :estimatedMonth, :estimatedDay, :updatedAt);
+
+-- deletedAt NULL'lanir: REPLACE satiri sifirdan yazdigi icin zaten oyle
+-- davraniyordu ve "kullanici bu hedefi kaydediyor" demek onu diri tutmak demek.
+applyGoalMeta:
+UPDATE goals
+SET name = :name,
+    iconKey = :iconKey,
+    amount = :amount,
+    unit = :unit,
+    targetYear = :targetYear,
+    targetMonth = :targetMonth,
+    targetDay = :targetDay,
+    monthlyContribution = :monthlyContribution,
+    isMain = :isMain,
+    allocation = :allocation,
+    status = :status,
+    sortOrder = :sortOrder,
+    estimatedYear = :estimatedYear,
+    estimatedMonth = :estimatedMonth,
+    estimatedDay = :estimatedDay,
+    updatedAt = :updatedAt,
+    deletedAt = NULL
+WHERE id = :id;
 
 -- reorderGoals: verilen kimlik listesi tek transaction icinde indeksleriyle
 -- yazilir. Listede olmayan hedefler sortOrder'ini korur. updatedAt bumped:
