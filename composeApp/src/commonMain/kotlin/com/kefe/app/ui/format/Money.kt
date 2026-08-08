@@ -30,6 +30,21 @@ object Money {
     fun number(value: Double, decimals: Int = 0): String = format(value, decimals, forceSign = false)
 
     /**
+     * `3180400` / `6175,37` - binlik ayrac YOK, ondalik virgullu.
+     *
+     * Duzenlenebilir bir tutar ALANINI doldurmak icindir. [number] buraya
+     * uymaz: gruplanmis metin ayristiriciya geri verildiginde noktanin ondalik
+     * mi binlik mi oldugu belirsizlesir ve on bin lira ustu fiyatlarda kurus
+     * hic yazilmadigi icin metinde ipucu birakan virgul de bulunmaz.
+     *
+     * [rawAmount] da uymaz: o tam sayilarda ondaligi hic yazmaz ve kesirli
+     * degerde `toString()` kullandigi icin cevrimden kalan uzun kuyrugu
+     * (`14690,925543000001`) oldugu gibi alana tasir.
+     */
+    fun plain(value: Double, decimals: Int = 0): String =
+        format(value, decimals, forceSign = false, grouped = false)
+
+    /**
      * `₺3.180.400` / `₺ 3.180.400`
      *
      * Sub-lira tutari tam-TL'ye yuvarlamak yaniltir (₺0,76 -> ₺1, hatta ₺0);
@@ -180,7 +195,12 @@ object Money {
     private fun centDecimals(value: Double): Int =
         if (decimals(value, max = MaxCents) == 0) 0 else MaxCents
 
-    private fun format(value: Double, decimals: Int, forceSign: Boolean): String {
+    private fun format(
+        value: Double,
+        decimals: Int,
+        forceSign: Boolean,
+        grouped: Boolean = true,
+    ): String {
         val negative = value < 0
         val a = abs(value)
 
@@ -191,7 +211,7 @@ object Money {
 
         val sb = StringBuilder()
         if (negative) sb.append(MINUS) else if (forceSign) sb.append('+')
-        sb.append(group(intPart.toString()))
+        sb.append(if (grouped) group(intPart.toString()) else intPart.toString())
         if (decimals > 0) {
             sb.append(',')
             sb.append(fracPart.toString().padStart(decimals, '0'))
@@ -234,4 +254,29 @@ fun rawAmount(value: Double): String = when {
     value <= 0.0 -> ""
     value % 1.0 == 0.0 -> value.toLong().toString()
     else -> value.toString().replace('.', ',')
+}
+
+/**
+ * tr-TR tutar girisini sayiya cevirir: ondalik VIRGUL, binlik NOKTA.
+ *
+ * NOKTA HER ZAMAN BINLIK AYRACIDIR. Once "virgul varsa noktalari temizle,
+ * yoksa metne dokunma" deneniyordu; Piyasa ekranindaki elle fiyat alani bu
+ * yuzden cokuyordu. Alan gruplanmis metinle doluyor ("41.457") ve on bin lira
+ * ustu fiyatlarda kurus yazilmadigi icin metinde ipucu birakacak virgul hic
+ * bulunmuyor: `"41.457".toDoubleOrNull()` 41,457 donuyordu. Kullanicinin
+ * alanda hicbir seyi degistirmesi gerekmiyordu - sayfayi acip Kaydet'e basmak
+ * ata altinini ₺41.457,30 yerine ₺41,46 olarak kaydetmeye yetiyordu.
+ *
+ * Nokta ile yazilan ondaligi ("24.60") kaybetmeyiz: tutar alanlari girisi
+ * [com.kefe.app.ui.components.asAmountInput] ile suzuyor ve o, kullanicinin
+ * bastigi noktayi zaten virgule ceviriyor. Alana nokta ancak bizim yazdigimiz
+ * baslangic metninden gelebilir.
+ *
+ * Cozulemeyen metinde null doner ki cagiran "gecersiz" diyebilsin; sifira
+ * dusmek "kullanici 0 yazdi" ile "anlayamadim"i ayni sey yapardi.
+ */
+fun String.parseTrAmountOrNull(): Double? {
+    val cleaned = trim().replace(" ", "").replace(Money.LIRA, "")
+    if (cleaned.isEmpty()) return null
+    return cleaned.replace(".", "").replace(',', '.').toDoubleOrNull()
 }

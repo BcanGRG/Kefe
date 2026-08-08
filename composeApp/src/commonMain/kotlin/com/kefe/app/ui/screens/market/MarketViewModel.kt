@@ -11,6 +11,7 @@ import com.kefe.app.ui.format.ChangePeriod
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.changeIn
 import com.kefe.app.ui.format.changeText
+import com.kefe.app.ui.format.parseTrAmountOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -105,8 +106,13 @@ class MarketViewModel(
                 name = displayName(assetKey, price?.label.orEmpty()),
                 // Alan bos degil mevcut fiyatla acilir: kullanici genelde kucuk bir
                 // duzeltme yapar, sifirdan yazmaz.
+                //
+                // Metin GRUPLANMAZ. Once Money.number kullaniliyordu ve alandaki
+                // binlik noktasi ayristiriciya geri dondugunde ondalik ayirici
+                // saniliyordu: ata altini "41.457" olarak aciliyor, hicbir sey
+                // degistirilmeden kaydedilince ₺41,46 olarak yaziliyordu.
                 input = price?.let {
-                    Money.number(it.ask, it.assetClass.priceDecimals(it.ask))
+                    Money.plain(it.ask, it.assetClass.priceDecimals(it.ask))
                 }.orEmpty(),
                 isManual = price?.isManual == true,
             ),
@@ -115,7 +121,7 @@ class MarketViewModel(
 
     private fun commitManualPrice() {
         val edit = _state.value.edit ?: return
-        val value = edit.input.toTurkishDoubleOrNull()
+        val value = edit.input.parseTrAmountOrNull()
         if (value == null || value <= 0.0) {
             _state.value = _state.value.copy(edit = edit.copy(invalid = true))
             return
@@ -227,19 +233,4 @@ private fun Price.toRow(period: ChangePeriod): MarketRow {
         ).joinToString(" · "),
         isManual = isManual,
     )
-}
-
-/**
- * tr-TR giris: ondalik virgul, binlik nokta. Virgul yoksa metin oldugu gibi
- * denenir - "24.60" yazan kullaniciyi da kirmayalim diye degil, aksine nokta
- * binlik ayraci olabileceginden yalniz virgullu girdide temizlik yapilir.
- */
-private fun String.toTurkishDoubleOrNull(): Double? {
-    val cleaned = trim().replace(" ", "").replace("₺", "")
-    val normalized = if (cleaned.contains(',')) {
-        cleaned.replace(".", "").replace(',', '.')
-    } else {
-        cleaned
-    }
-    return normalized.toDoubleOrNull()
 }
