@@ -27,7 +27,7 @@ Ayrıca en ağır beş bulgu elle, kod okunarak ayrıca teyit edildi.
 Kullanıcının verisini geri dönülemez biçimde bozan, hiçbir uyarı vermeyen
 kusurlar. Önce bunlar.
 
-### P0.1 · Elle fiyat girişi değeri 1000 kat küçültüyor
+### P0.1 · Elle fiyat girişi değeri 1000 kat küçültüyor — ✅ ÇÖZÜLDÜ
 
 `ui/screens/market/MarketViewModel.kt:237-245` (+ `:109`)
 
@@ -54,12 +54,13 @@ ayrışmış. Bu fonksiyonun hiç birim testi yok.
 Bu ekran `MarketViewModel.kt:20-22`'de "uygulamanın emniyet supabı" diye
 tanımlanmış; elle girilen fiyat tüm portföy değerlemesini besliyor.
 
-**Düzeltme:** virgülsüz dalda da `cleaned.replace(".", "")` uygula; iki
-ayrıştırıcıyı tek ortak fonksiyonda birleştir; alanı `Money.number` yerine
-ayraçsız ham metinle tohumla (işlem sayfası zaten böyle çalışıyor); birim testi
-yaz.
+**Yapıldı** (`Read a manually entered price at its real size`): iki ayrıştırıcı
+`Money.parseTrAmountOrNull` altında birleştirildi ve nokta artık her zaman
+binlik ayracı; alan `Money.plain` ile gruplanmamış metinle dolduruluyor.
+`TrAmountTest` (8 test) ve `ManualPriceRoundTripTest` (3 test) eklendi — düzeltme
+geri alındığında ikisi de düşüyor, doğrulandı.
 
-### P0.2 · Hedefi güncellemek tüm varlık atamalarını siliyor
+### P0.2 · Hedefi güncellemek tüm varlık atamalarını siliyor — ✅ ÇÖZÜLDÜ
 
 `sqldelight/.../Goal.sq:87-90`
 
@@ -89,10 +90,13 @@ iken atama sayısı 1 → 0; `OFF` iken 1 → 1. Testlerin yakalamama sebebi de 
 `SoftDeleteTest.kt:52` test veritabanını yabancı anahtar zorlaması kapalı
 kuruyor.
 
-**Düzeltme:** `upsertGoal`'ü senkron yolundaki gibi ikiye böl
-(`insertOrIgnoreGoal` + `applyGoalMeta` UPDATE). `goals` üzerinde hiçbir yerde
-`INSERT OR REPLACE` kalmamalı. `Goal.sq:87`'deki yanıltıcı yorum düzeltilmeli.
-Testler FK açık kurulmalı.
+**Yapıldı** (`Keep a goal's asset assignments when the goal is saved`):
+`upsertGoal` senkron yolundaki gibi `insertOrIgnoreGoal` + `applyGoalMeta`
+olarak ikiye bölündü ve tek transaction içine alındı; `goals` üzerinde hiçbir
+`INSERT OR REPLACE` kalmadı; yanıltıcı yorum düzeltildi.
+`GoalAssignmentSurvivalTest` (6 test) yabancı anahtar zorlamasını üç platform
+sürücüsü gibi **açık** kuruyor ve ona güvenmeden önce açık olduğunu ayrıca
+sınıyor. Eski SQL geri konduğunda dört test düşüyor, doğrulandı.
 
 ### P0.3 · Gram altında ayar pozisyon kimliğinde taşınmıyor: 22 ile 24 ayar birleşiyor
 
@@ -472,9 +476,9 @@ Hakem ajanların somut kod kanıtıyla reddettiği 21 iddia. Öne çıkanlar:
 Sıra bilinçli: her aşama bir öncekinin açtığı zemini kullanıyor.
 
 **Aşama 1 — Veri kaybını durdur (P0)**
-1. `toTurkishDoubleOrNull` + `parseTrNumber` tek ortak ayrıştırıcıda birleştir;
-   Piyasa alanını ham metinle tohumla · testleri yaz
-2. `upsertGoal`'ü iki adıma böl; `goals` üzerindeki tüm `INSERT OR REPLACE`'i
+1. ✅ `toTurkishDoubleOrNull` + `parseTrNumber` tek ortak ayrıştırıcıda
+   birleştir; Piyasa alanını ham metinle tohumla · testleri yaz
+2. ✅ `upsertGoal`'ü iki adıma böl; `goals` üzerindeki tüm `INSERT OR REPLACE`'i
    temizle; yanlış yorumu düzelt; test veritabanını FK açık kur
 3. `assetKeyOf`'u ayar duyarlı yap; Bullion'a ayrı anahtar; testi
    `newPositionId()` üzerinden yaz
