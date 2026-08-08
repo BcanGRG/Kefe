@@ -87,8 +87,9 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
             )
         }
 
+        // Tohumlama bos veritabanina yazar: tek adim yeterli.
         SampleData.goals.forEach { goal ->
-            goalQueries.upsertGoal(
+            goalQueries.insertOrIgnoreGoal(
                 id = goal.id,
                 name = goal.name,
                 iconKey = goal.iconKey,

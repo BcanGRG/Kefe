@@ -472,8 +472,10 @@ class SqlDelightPortfolioRepository(
                 // Miktar ve maliyet DEFTERDEN yeniden hesaplanir.
                 file.positions.forEach { recomputePosition(it.id) }
 
+                // Tablo yukarida bosaltildi, kimlikler taze: tek adim yeterli
+                // (komsu insertOrIgnorePosition/Member ile ayni desen).
                 file.goals.forEach { goal ->
-                    goalQueries.upsertGoal(
+                    goalQueries.insertOrIgnoreGoal(
                         id = goal.id,
                         name = goal.name,
                         iconKey = goal.iconKey,
@@ -771,27 +773,56 @@ class SqlDelightPortfolioRepository(
 
     // --- Hedefler -----------------------------------------------------------
 
+    /**
+     * Ekle-ya-da-guncelle IKI ADIMDIR ve tek transaction icindedir.
+     *
+     * Tek bir INSERT OR REPLACE olamaz: goal_assets hedefe CASCADE bagli ve
+     * REPLACE catisan satiri once sildigi icin hedefi kaydetmek o hedefin butun
+     * varlik atamalarini goturuyordu (bkz. Goal.sq).
+     */
     override suspend fun upsertGoal(goal: Goal) {
         withContext(dispatcher) {
-            goalQueries.upsertGoal(
-                id = goal.id,
-                name = goal.name,
-                iconKey = goal.iconKey,
-                amount = goal.amount,
-                unit = goal.unit,
-                targetYear = goal.targetDate.year.toLong(),
-                targetMonth = goal.targetDate.month.toLong(),
-                targetDay = goal.targetDate.day.toLong(),
-                monthlyContribution = goal.monthlyContribution,
-                isMain = goal.isMain,
-                allocation = goal.allocation,
-                status = goal.status,
-                sortOrder = goal.order.toLong(),
-                estimatedYear = goal.estimatedArrival?.year?.toLong(),
-                estimatedMonth = goal.estimatedArrival?.month?.toLong(),
-                estimatedDay = goal.estimatedArrival?.day?.toLong(),
-                updatedAt = clock.nowEpochMillis(),
-            )
+            val now = clock.nowEpochMillis()
+            database.transaction {
+                goalQueries.insertOrIgnoreGoal(
+                    id = goal.id,
+                    name = goal.name,
+                    iconKey = goal.iconKey,
+                    amount = goal.amount,
+                    unit = goal.unit,
+                    targetYear = goal.targetDate.year.toLong(),
+                    targetMonth = goal.targetDate.month.toLong(),
+                    targetDay = goal.targetDate.day.toLong(),
+                    monthlyContribution = goal.monthlyContribution,
+                    isMain = goal.isMain,
+                    allocation = goal.allocation,
+                    status = goal.status,
+                    sortOrder = goal.order.toLong(),
+                    estimatedYear = goal.estimatedArrival?.year?.toLong(),
+                    estimatedMonth = goal.estimatedArrival?.month?.toLong(),
+                    estimatedDay = goal.estimatedArrival?.day?.toLong(),
+                    updatedAt = now,
+                )
+                goalQueries.applyGoalMeta(
+                    id = goal.id,
+                    name = goal.name,
+                    iconKey = goal.iconKey,
+                    amount = goal.amount,
+                    unit = goal.unit,
+                    targetYear = goal.targetDate.year.toLong(),
+                    targetMonth = goal.targetDate.month.toLong(),
+                    targetDay = goal.targetDate.day.toLong(),
+                    monthlyContribution = goal.monthlyContribution,
+                    isMain = goal.isMain,
+                    allocation = goal.allocation,
+                    status = goal.status,
+                    sortOrder = goal.order.toLong(),
+                    estimatedYear = goal.estimatedArrival?.year?.toLong(),
+                    estimatedMonth = goal.estimatedArrival?.month?.toLong(),
+                    estimatedDay = goal.estimatedArrival?.day?.toLong(),
+                    updatedAt = now,
+                )
+            }
         }
     }
 
