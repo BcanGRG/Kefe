@@ -70,3 +70,15 @@ clearPositionAssignment:
 UPDATE goal_assets
 SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE positionId = :positionId;
+
+-- Hedef silinince ATAMALARI da mezar taslanir.
+--
+-- CASCADE burada calismaz: hedef silme YUMUSAKTIR (deletedAt doldurulur), satir
+-- tabloda kalir. Atama satiri diri kaldigi icin yedege giriyor ama hedefin
+-- kendisi yedege girmiyordu (selectGoals deletedAt IS NULL filtreliyor); geri
+-- yuklemede oksuz atama FOREIGN KEY hatasi atiyor ve TUM geri yukleme geri
+-- aliniyordu - kullanicinin yedegi kullanilamaz hale geliyordu.
+clearGoalAssignments:
+UPDATE goal_assets
+SET deletedAt = :deletedAt, updatedAt = :deletedAt
+WHERE goalId = :goalId AND deletedAt IS NULL;
