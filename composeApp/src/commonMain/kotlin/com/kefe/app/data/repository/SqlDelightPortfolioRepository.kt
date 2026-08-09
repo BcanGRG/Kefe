@@ -497,14 +497,26 @@ class SqlDelightPortfolioRepository(
                 }
 
                 // Atamalar hedeflerden ve pozisyonlardan SONRA: yabanci anahtar.
-                file.goalAssets.forEach { assignment ->
-                    goalAssetQueries.assignPositionToGoal(
-                        positionId = assignment.positionId,
-                        goalId = assignment.goalId,
-                        quantity = assignment.quantity,
-                        updatedAt = clock.nowEpochMillis(),
-                    )
-                }
+                //
+                // OKSUZ satir ATLANIR. Eski surumler hedefi/varligi yumusak
+                // silerken atamayi diri birakiyordu; boyle bir yedekte atama
+                // var ama hedefi yok ve yazmaya kalkmak FOREIGN KEY hatasi
+                // atiyor. Cagri transaction icinde oldugu icin TUM geri yukleme
+                // geri aliniyor, yani tek bir artik satir yedegin tamamini
+                // kullanilamaz kiliyordu. Bir atamayi atlamak, yedegi hic
+                // yukleyememekten iyidir.
+                val restoredGoals = file.goals.mapTo(mutableSetOf()) { it.id }
+                val restoredPositions = file.positions.mapTo(mutableSetOf()) { it.id }
+                file.goalAssets
+                    .filter { it.goalId in restoredGoals && it.positionId in restoredPositions }
+                    .forEach { assignment ->
+                        goalAssetQueries.assignPositionToGoal(
+                            positionId = assignment.positionId,
+                            goalId = assignment.goalId,
+                            quantity = assignment.quantity,
+                            updatedAt = clock.nowEpochMillis(),
+                        )
+                    }
 
                 file.snapshots.forEach { snapshot ->
                     snapshotQueries.upsertSnapshot(
@@ -751,6 +763,12 @@ class SqlDelightPortfolioRepository(
                 // CASCADE zaten silerdi; yabanci anahtar zorlamasi kapali bir
                 // surucuye dusulurse diye defter acikca temizlenir.
                 transactionQueries.deleteTransactionsByPosition(deletedAt = clock.nowEpochMillis(), positionId = positionId)
+                // Ayni gerekce hedef atamasi icin de gecerli: yumusak silmede
+                // CASCADE calismaz ve geride kalan satir yedegi bozardi.
+                goalAssetQueries.clearPositionAssignment(
+                    deletedAt = clock.nowEpochMillis(),
+                    positionId = positionId,
+                )
                 positionQueries.deletePositionById(deletedAt = clock.nowEpochMillis(), id = positionId)
                 // Silinen fon/hissenin kotasyonu Piyasa tahtasinda kalmasin:
                 // o satir yalnizca varlik TUTULDUGU icin vardi. Altin ve doviz
@@ -831,6 +849,13 @@ class SqlDelightPortfolioRepository(
             database.transaction {
                 val goal = goalQueries.selectGoalById(goalId).executeAsOneOrNull()
                 goalQueries.deleteGoalById(deletedAt = clock.nowEpochMillis(), id = goalId)
+                // Silme YUMUSAK oldugu icin CASCADE calismaz; atamalar acikca
+                // mezar taslanir. Yoksa oksuz kalan satir yedege girip geri
+                // yuklemeyi FOREIGN KEY hatasiyla tumden dusuruyordu.
+                goalAssetQueries.clearGoalAssignments(
+                    deletedAt = clock.nowEpochMillis(),
+                    goalId = goalId,
+                )
                 appendDeletion(
                     id = "act_del_$goalId",
                     memberId = null,
