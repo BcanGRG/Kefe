@@ -4,6 +4,7 @@ import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAllocation
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.ui.format.parseTrAmountOrNull
 
 /** Ekranin veri durumu. Tasarimda liste ve bos durum ayri cerceveler. */
 enum class GoalsStage { Loading, Empty, Ready }
@@ -62,11 +63,18 @@ data class GoalEditorState(
     val isNew: Boolean get() = goalId == null
 }
 
-/** Alanlarda binlik noktali metin tutulur; sayiya cevirirken ayraclar atilir. */
-// Ham metin ("3000000" / "2,5") sayiya. Binlik ayrac (nokta) atilir, ondalik
-// virgul noktaya cevrilir - boylece "2,5 gram" gibi degerler dogru okunur.
-fun String.parseAmount(): Double =
-    filter { it.isDigit() || it == ',' }.replace(',', '.').toDoubleOrNull() ?: 0.0
+/**
+ * Ham metin ("3000000" / "2,5") sayiya. Ayristirma [parseTrAmountOrNull] ile
+ * ORTAKTIR.
+ *
+ * Once tanimadigi her karakteri SESSIZCE ATIYORDU (`filter { isDigit() || ',' }`)
+ * ve bu, bozuk bir metni hataya dusurmek yerine BASKA bir sayiya ceviriyordu:
+ * "1,2485419999999998E7" metninden 'E' atilinca geriye 1,2485... kaliyor ve
+ * ₺12,5 milyonluk hedef 1,25 TL olarak kaydediliyordu. Cozulemeyen metin artik
+ * 0.0'a duser, uydurma bir tutara degil - save() zaten `amount <= 0` kontrolu
+ * yapiyor.
+ */
+fun String.parseAmount(): Double = parseTrAmountOrNull() ?: 0.0
 
 /** Secili birimin TL karsiligi. Fiyat yoksa 1.0 - bolme hatasi olmasin. */
 fun GoalEditorState.rateOf(target: GoalUnit): Double = when (target) {
