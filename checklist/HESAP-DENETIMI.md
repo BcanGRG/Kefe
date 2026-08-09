@@ -316,14 +316,30 @@ sorusunu yanıtlıyor ve kapalı günlere dayanıklı olmaları gerekiyor.
 Eski davranışı sabitleyen bir test vardı (`dunYoksaOncekiKayitliGuneBakilir`);
 yeni kurala göre yazıldı. Üç yeni test eklendi — eski toleransla ikisi düşüyor.
 
-### Karar bekleyen: günlük değişimde "bilinmiyor" durumu yok
+### Çözüldü: günlük değişim artık "bilinmiyor" diyebiliyor — ✅
 
-`weekChangePercent` ve `monthChangePercent` nullable, `dailyChangePercent`
-değil. Bu yüzden "Gün" penceresi hiçbir zaman "—" olamıyor; veri yokken sıfır
-sayılıyor ve `weightedPeriodTotal` bu sıfırı hesaba katarak grup yüzdesini
-sulandırıyor. §25 "Veri yoksa —, sıfır değil" kuralı yalnız hafta/ay için
-uygulanmış. Alanı nullable yapmak `todayChange()`, `portfolioTotals` ve üç
-ekrana yayılan bir değişiklik; ayrı bir adım olarak planlanmalı.
+`weekChangePercent` ve `monthChangePercent` her zaman nullable'dı, çünkü
+"değişmedi" ile "bilmiyoruz" ayrı cevaplar. `dailyChangePercent` değildi ve veri
+yokluğu sıfır okunuyordu. İki zararı vardı: "Gün" penceresi hiçbir zaman "—"
+olamıyordu, ve o sahte sıfır grup toplamlarına **paya ve paydaya** girip gerçek
+oranı sulandırıyordu.
+
+**Yapıldı** (`Let the daily change say "unknown"`): `Price.changePercent` ve
+`Position.dailyChangePercent` nullable oldu; depo son dalı artık sıfıra
+düşürmüyor — kaynak sustuysa ve dünün kaydı da yoksa cevap null. Önceki güne ait
+kotasyon hâlâ sıfır veriyor; onu **biliyoruz**, piyasa bugün oynamadı.
+
+`List<Position>.todayChange` artık hedef kartının zaten kullandığı
+`weightedPeriodTotal`'dan geçiyor. Elle yazılmış bir kopyaydı ve iki farkı
+vardı: bilinmeyeni sıfır sayıyordu, ve kardeşindeki "dönem başı değeri pozitif
+olmalı" koruması yoktu. `PortfolioTotals` bilinmeyeni taşıyor, üç özet düzeni de
+"—" çiziyor.
+
+Önbellek kolonu NOT NULL kaldı — orada kaynağın ham rakamı duruyor, etkin değer
+zaten okuma anında yeniden hesaplanıyor.
+
+Beş yeni test eklendi; ikisi bilinmeyenin grup yüzdesini sulandırmadığını
+doğruluyor. Eski sıfırı sabitleyen iki test yeni kurala göre yazıldı.
 
 ### İncelenip sorun bulunmayanlar
 
@@ -498,7 +514,7 @@ Aynı işlem iki ekranda iki farklı tutarla görünüyor; "Toplam" kutusunun yo
 | 62 | `SqlDelightPriceRepository.kt:140` | "Sıfırı verilmedi saymak yanlış tetiklenemez" iddiası doğru değil: `price_history` günün kapanışını değil uygulamanın açıldığı andaki fiyatı tutuyor, kaynağın geçerli sıfırı eziliyor |
 | ~~63~~ | `PriceChange.kt:48` | ✅ **ÇÖZÜLDÜ** — Türetilen "günlük" pencere `[bugün-4, bugün-1]`; 4 güne kadar hareket tek "günlük" değişim olarak bugüne yazılıyor — §35 ile çelişiyor |
 | 65 | `SqlDelightPriceRepository.kt:153` | Tazelik en yeni satırdan hesaplanıyor: kısmi çekimde tek taze satır bütün bayat satırları maskeliyor, "Fresh" kalıyor |
-| 81 | `Position.kt:19` | `dailyChangePercent` non-null olduğu için "Gün" penceresi hiç "—" olamıyor; bilinmeyen sıfır sayılıp grup yüzdesini sulandırıyor (§25 "Veri yoksa —, sıfır değil" yalnız hafta/ay için uygulanmış) |
+| ~~81~~ | `Position.kt:19` | ✅ **ÇÖZÜLDÜ** — `dailyChangePercent` non-null olduğu için "Gün" penceresi hiç "—" olamıyor; bilinmeyen sıfır sayılıp grup yüzdesini sulandırıyor |
 | 67 | `SqlDelightPriceRepository.kt:252` | Geçmiş satırı kotasyonun işlem günüyle değil çekim günüyle yazılıyor |
 | 68 | `SqlDelightPriceRepository.kt:209` | Saat geriye giderse yenileme kilitleniyor, anlamsız bekleme süresi yazılıyor |
 
