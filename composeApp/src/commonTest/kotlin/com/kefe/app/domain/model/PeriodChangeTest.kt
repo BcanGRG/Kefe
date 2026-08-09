@@ -190,23 +190,29 @@ class PeriodChangeTest {
     }
 
     /**
-     * Dun yoksa bir onceki KAYITLI gune bakilir: gecmis ancak uygulama
-     * acildiginda yaziliyor, hafta sonu bakilmayan portfoyde dunun satiri hic
-     * olusmaz.
+     * DUN YOKSA GUNLUK HESAPLANMAZ (§35).
+     *
+     * Once bir onceki kayitli gune dusuluyordu ("hafta sonu bakilmayan
+     * portfoyde dunun satiri hic olusmaz") ve bu, uc gunluk BIRIKMIS hareketi
+     * tek bir "bugunku getiri" olarak yaziyordu. Kural: gunluk degisim yalniz o
+     * gun olduysa sayilir - dunle kiyaslayamiyorsak cevap yoktur, sifir ya da
+     * baska bir gunun rakami degil.
+     *
+     * Fiyatin bugun hic oynamadigini ANLAMAK icin daha genise bakan ayri bir
+     * yol var (bkz. previousDayPrice); o, hesaplamaz - yalnizca bayat rakami
+     * susturur.
      */
     @Test
-    fun dunYoksaOncekiKayitliGuneBakilir() {
-        val history = listOf(daysAgo(3, 10_000.0))
-        assertEquals(2.0, periodChangesOf(history, 10_200.0, today).day!!, 1e-9)
+    fun dunYoksaGunlukHESAPLANMAZ() {
+        assertNull(periodChangesOf(listOf(daysAgo(2, 10_000.0)), 10_200.0, today).day)
+        assertNull(periodChangesOf(listOf(daysAgo(3, 10_000.0)), 10_200.0, today).day)
+        assertNull(periodChangesOf(listOf(daysAgo(5, 10_000.0)), 10_200.0, today).day)
     }
 
-    /**
-     * Tolerans disi kalirsa null: bes gun onceki fiyata gore hesaplanan farki
-     * "bugun" diye yazmak uydurmak olurdu.
-     */
+    /** Bugunun kaydi gunluk icin karsilastirma noktasi OLAMAZ - kendisiyle kiyaslanmaz. */
     @Test
-    fun toleransDisiGunNullDoner() {
-        assertNull(periodChangesOf(listOf(daysAgo(5, 10_000.0)), 10_200.0, today).day)
+    fun bugununKaydiGunlukIcinKullanilmaz() {
+        assertNull(periodChangesOf(listOf(daysAgo(0, 10_200.0)), 10_200.0, today).day)
     }
 
     /**

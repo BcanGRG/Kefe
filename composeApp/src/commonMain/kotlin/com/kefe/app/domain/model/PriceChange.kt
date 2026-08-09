@@ -40,12 +40,33 @@ data class PeriodChanges(
 private const val DayDaysBack = 1
 
 /**
- * Bir onceki KAYITLI gun. Tolerans var cunku gecmis ancak uygulama acildiginda
- * yaziliyor: hafta sonu bakilmayan bir portfoyde dunun satiri hic olusmaz.
- * Uc gun, "en son ne zaman baktiysak ondan bu yana" demenin makul siniri;
- * daha genisi bir haftalik hareketi "bugun" diye yazmak olurdu.
+ * Gunlukte TOLERANS YOK: karsilastirma noktasi yalnizca DUNDUR.
+ *
+ * Onceki hali uc gundu ve "en son ne zaman baktiysak ondan bu yana" demek
+ * istiyordu. Ama o, §35 ile ("gunluk degisim yalniz o gun olduysa sayilir")
+ * dogrudan celisiyordu: uygulama dort gundur acilmamissa dort gunluk toplam
+ * hareket tek bir "bugunku getiri" olarak yaziliyordu.
+ *
+ * Dunun kaydi yoksa gunluk degisim HESAPLANAMAZ ve null doner - uydurmak
+ * yerine susariz. Hafta ve ay toleransi yerinde: onlar zaten "yaklasik su
+ * kadar once" sorusunu yanitliyor.
  */
-private const val DayTolerance = 3
+private const val DayTolerance = 0
+
+/**
+ * Bayatlik kontrolunde geriye bakilan en fazla gun.
+ *
+ * Bu, gunluk degisimi HESAPLAMAK icin degil, kaynagin verdigi rakamin bayat
+ * olup olmadigini ANLAMAK icin. Iki soru ayri: "bugun ne kadar oynadi"
+ * yalnizca dunle kiyaslanarak yanitlanir (bkz. [DayTolerance]); "bugun hic
+ * oynadi mi" ise en son ne zaman kaydettiysek onunla kiyaslanarak.
+ *
+ * Genis tutulmasi §35'i GUCLENDIRIYOR, gevsetmiyor: cumartesi uygulamayi
+ * acmayan biri pazar gunu baktiginda dunun kaydi olmaz, ama cumanin kaydi
+ * durur ve fiyat ona esitse "bugun oynamadi" diyebiliriz. Dar tutulsaydi
+ * kaynagin cumadan donmus rakami yine "bugun" diye sayilirdi.
+ */
+private const val StaleLookbackDays = 4
 
 /** Haftalik degisimde geriye bakilan gun ve kabul edilen sapma. */
 private const val WeekDaysBack = 7
@@ -93,7 +114,7 @@ fun periodChangePercent(
 }
 
 /**
- * Bugunden ONCEKI en yeni kayitli fiyat - "en son kapanista neredeydi".
+ * Bugunden ONCEKI en yeni kayitli fiyat - "en son ne zaman baktiysak oradaydi".
  *
  * Fiyatin bugun GERCEKTEN oynayip oynamadigini anlamak icin gerekiyor. Kaynagin
  * kendi damgasi bu soruyu yanitlamiyor: serbest piyasa ucu hafta sonu da
@@ -103,12 +124,13 @@ fun periodChangePercent(
  * 10:04:01'den 10:16:01'e ilerlerken butun altin fiyatlari ve Change alanlari
  * TEK BIR kez bile degismedi).
  *
- * Fiyatin kendisi bu soruyu yanitliyor: deger onceki gunun kaydiyla AYNI ise
- * piyasa o gun oynamamistir.
+ * Fiyatin kendisi bu soruyu yanitliyor: deger onceki kayitla AYNI ise o gun
+ * oynamamistir. Pencere [StaleLookbackDays] gune kadar geriye bakar - gunluk
+ * degisimin HESAPLANDIGI pencere degil, bkz. [DayTolerance].
  */
 fun previousDayPrice(history: List<PricePoint>, today: KefeDate): Double? {
     val newest = today.toEpochDay() - DayDaysBack
-    val oldest = newest - DayTolerance
+    val oldest = today.toEpochDay() - StaleLookbackDays
     return history
         .filter { it.date.toEpochDay() in oldest..newest }
         .maxByOrNull { it.date.toEpochDay() }

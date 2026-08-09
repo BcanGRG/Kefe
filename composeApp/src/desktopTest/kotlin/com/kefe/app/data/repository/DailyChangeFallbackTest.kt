@@ -178,6 +178,70 @@ class DailyChangeFallbackTest {
     }
 
     /**
+     * §35: GUNLUK YALNIZ DUNDEN hesaplanir.
+     *
+     * Once tolerans uc gundu ve uygulama bir sure acilmamissa BIRIKMIS hareket
+     * tek bir "bugunku getiri" olarak yaziliyordu. Burada dunun kaydi yok, uc
+     * gun oncesinin kaydi var: eski kural (10.000 -> 10.500) %5 yazardi.
+     */
+    @Test
+    fun gunlukYALNIZDundenHesaplanir() = runTest {
+        val (repo, db) = harness(listOf(price("gold_quarter", 10_500.0, 0.0)))
+        // Dun (2 Agustos) YOK; yalnizca 31 Temmuz var.
+        db.history("gold_quarter", KefeDate(2026, 7, 31), 10_000.0)
+        repo.refresh()
+
+        val board = repo.observePrices().first()
+        assertEquals(
+            0.0,
+            board.prices.single { it.assetKey == "gold_quarter" }.changePercent,
+            1e-9,
+        )
+    }
+
+    /**
+     * Dunun kaydi VARSA gunluk normal hesaplanir - kural yalniz birikmis
+     * hareketi susturuyor, calisan seyi bozmuyor.
+     */
+    @Test
+    fun dununKaydiVarsaGunlukHESAPLANIR() = runTest {
+        val (repo, db) = harness(listOf(price("gold_quarter", 10_500.0, 0.0)))
+        db.history("gold_quarter", Dun, 10_000.0)
+        db.history("gold_quarter", KefeDate(2026, 7, 31), 9_000.0)
+        repo.refresh()
+
+        val board = repo.observePrices().first()
+        // Dunden: (10.500 - 10.000) / 10.000 = %5. Onceki gunler karismaz.
+        assertEquals(
+            5.0,
+            board.prices.single { it.assetKey == "gold_quarter" }.changePercent,
+            1e-9,
+        )
+    }
+
+    /**
+     * BAYATLIK KONTROLU daha genis bakar ve bakmali.
+     *
+     * Cumartesi uygulamayi acmayan biri pazar gunu baktiginda dunun kaydi
+     * yoktur; ama cumanin kaydi durur ve fiyat ona esittir. §35 burada
+     * GUCLENIYOR: kaynagin cumadan donmus +%2,09'u yine "bugun" sayilmaz.
+     */
+    @Test
+    fun dunYokAmaFiyatESKIKayitlaAyniysaSifir() = runTest {
+        val (repo, db) = harness(listOf(price("gold_quarter", 10_887.46, 2.09)))
+        // Dun (2 Agustos) YOK - uygulama o gun acilmamis.
+        db.history("gold_quarter", KefeDate(2026, 7, 31), 10_887.46)
+        repo.refresh()
+
+        val board = repo.observePrices().first()
+        assertEquals(
+            0.0,
+            board.prices.single { it.assetKey == "gold_quarter" }.changePercent,
+            1e-9,
+        )
+    }
+
+    /**
      * Haftalik ve aylik BU KURALDAN ETKILENMEZ: onlar zaten gecmis serisinden
      * ve tolerans penceresiyle hesaplaniyor, kapali gunlere dayanikli.
      */
