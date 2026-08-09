@@ -34,7 +34,7 @@ private fun price(
     assetKey: String = "gold_quarter",
     bid: Double? = 9_850.0,
     ask: Double = 10_018.0,
-    changePercent: Double = 1.5,
+    changePercent: Double? = 1.5,
     weekChangePercent: Double? = null,
     monthChangePercent: Double? = null,
     quoteDate: KefeDate? = Today,
@@ -91,7 +91,7 @@ class ValuationTest {
 
         assertEquals(9_850.0, valued.unitPrice, EPS)
         assertEquals(29_550.0, valued.value, EPS)
-        assertEquals(1.5, valued.dailyChangePercent, EPS)
+        assertEquals(1.5, valued.dailyChangePercent!!, EPS)
     }
 
     @Test
@@ -153,7 +153,7 @@ class ValuationTest {
 
         val valued = position().valuedAt(price(quoteDate = cuma), cumartesi)
 
-        assertEquals(0.0, valued.dailyChangePercent, EPS)
+        assertEquals(0.0, valued.dailyChangePercent!!, EPS)
         // Deger yine de guncel fiyattan hesaplanir; sifirlanan yalniz DEGISIM.
         assertEquals(9_850.0, valued.unitPrice, EPS)
         assertEquals(29_550.0, valued.value, EPS)
@@ -162,7 +162,7 @@ class ValuationTest {
     @Test
     fun ayniGunDegisimAYNEN_gecer() {
         val valued = position().valuedAt(price(quoteDate = Today), Today)
-        assertEquals(1.5, valued.dailyChangePercent, EPS)
+        assertEquals(1.5, valued.dailyChangePercent!!, EPS)
     }
 
     /**
@@ -173,7 +173,7 @@ class ValuationTest {
     @Test
     fun gunuBilinmeyenKotasyonBugunSAYILMAZ() {
         val valued = position().valuedAt(price(quoteDate = null), Today)
-        assertEquals(0.0, valued.dailyChangePercent, EPS)
+        assertEquals(0.0, valued.dailyChangePercent!!, EPS)
     }
 
     /**
@@ -192,7 +192,7 @@ class ValuationTest {
             KefeDate(2026, 8, 2),
         )
 
-        assertEquals(0.0, valued.dailyChangePercent, EPS)
+        assertEquals(0.0, valued.dailyChangePercent!!, EPS)
         assertEquals(2.4, valued.weekChangePercent!!, EPS)
         assertEquals(-3.1, valued.monthChangePercent!!, EPS)
     }
@@ -205,8 +205,26 @@ class ValuationTest {
     fun gunDonuncePLAKA_dusar() {
         val dun = KefeDate(2026, 7, 30)
         val bugun = KefeDate(2026, 7, 31)
-        assertEquals(1.5, price(quoteDate = bugun).todayChangePercent(bugun), EPS)
-        assertEquals(0.0, price(quoteDate = dun).todayChangePercent(bugun), EPS)
+        assertEquals(1.5, price(quoteDate = bugun).todayChangePercent(bugun)!!, EPS)
+        assertEquals(0.0, price(quoteDate = dun).todayChangePercent(bugun)!!, EPS)
+    }
+
+    /**
+     * SIFIR ile BILINMIYOR ayri seylerdir.
+     *
+     * Kotasyon bugunden degilse cevap sifirdir - bunu BILIYORUZ, piyasa bugun
+     * oynamadi. Kotasyon bugunden ama degisim bilinmiyorsa (kaynak sustu ve
+     * dunun kaydi da yok) cevap NULL'dur: ekran "—" yazar ve o pozisyon grup
+     * toplamlarina hic girmez. Once ikisi de sifir okunuyordu.
+     */
+    @Test
+    fun bilinmeyenDegisimSIFIRDegilNULL() {
+        val bilinmeyen = position().valuedAt(price(changePercent = null), Today)
+        assertNull(bilinmeyen.dailyChangePercent)
+
+        // Kapali gun hala BILINEN sifir.
+        val kapali = position().valuedAt(price(quoteDate = KefeDate(2026, 7, 30)), Today)
+        assertEquals(0.0, kapali.dailyChangePercent!!, EPS)
     }
 
     // --- Anahtar cozumleme ---
@@ -269,6 +287,31 @@ class ValuationTest {
         val k22 = position(subtype = GoldSubtype.Gram, karat = Karat.K22).priceKey()
         val k24 = position(subtype = GoldSubtype.Gram, karat = Karat.K24).priceKey()
         assertTrue(k22 != k24, "22 ve 24 ayar ayni anahtara dusuyor: $k22")
+    }
+
+    /**
+     * Has/Kulce KENDI kotasyonundan degerlenir.
+     *
+     * Once gram anahtarina dusuyordu; tahtada iki fiyat farkli (9 Agustos 2026:
+     * Has ₺6.627,24, gram ₺6.660,55) ve Has tutan bir pozisyon yaklasik %0,5
+     * fazla degerleniyordu. Kaynak Has satirini zaten cekiyor.
+     */
+    @Test
+    fun hasKulceKendiKotasyonundanDEGERLENIR() {
+        val bullion = position(subtype = GoldSubtype.Bullion).priceKey()
+        val gram = position(subtype = GoldSubtype.Gram, karat = Karat.K24).priceKey()
+        assertEquals("gold_bullion", bullion)
+        assertTrue(bullion != gram, "Has/Kulce gram anahtarina dusuyor: $bullion")
+    }
+
+    /** Has/Kulce fiyati tahtadan gercekten okunabilmeli - anahtar kaynakla eslesir. */
+    @Test
+    fun hasKulceFiyatiTAHTADANOkunur() {
+        val has = price(assetKey = "gold_bullion", bid = 6_626.39, ask = 6_627.24)
+        val valued = position(subtype = GoldSubtype.Bullion, quantity = 10.0)
+            .valuedAt(has, Today)
+        // Satis tarafindan: 10 gr x 6.626,39
+        assertEquals(66_263.9, valued.value, 1e-6)
     }
 
     @Test

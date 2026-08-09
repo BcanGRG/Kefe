@@ -145,11 +145,14 @@ class GoalsViewModel(
                 board.byKey("gold_gram")?.ask?.takeIf { it > 0.0 }?.let { latestGoldPrice = it }
                 board.byKey("usd_try")?.ask?.takeIf { it > 0.0 }?.let { latestUsdPrice = it }
                 update { current ->
+                    val editor = current.editor?.copy(
+                        goldGramPrice = latestGoldPrice,
+                        usdPrice = latestUsdPrice,
+                    )
+                    // Kur beklerken TL olarak acilmis bir hedef varsa gecis
+                    // SIMDI tamamlanir - tutar dogru kurla cevrilir.
                     current.copy(
-                        editor = current.editor?.copy(
-                            goldGramPrice = latestGoldPrice,
-                            usdPrice = latestUsdPrice,
-                        ),
+                        editor = editor?.pendingUnit?.let { editor.convertTo(it) } ?: editor,
                     )
                 }
             }
@@ -191,25 +194,39 @@ class GoalsViewModel(
             openGoalCount = current.goals.size,
         )
         // Hedef TL disi bir birime sabitlenmisse tutar o birime cevrilerek acilir.
-        return if (goal.unit == GoalUnit.Try) base else base.convertTo(goal.unit)
+        // Kur henuz gelmediyse cevrim YAPILMAZ: alan TL olarak acilir ve gecis
+        // pendingUnit'e yazilir, observePrices kur gelince tamamlar.
+        if (goal.unit == GoalUnit.Try) return base
+        val converted = base.convertTo(goal.unit)
+        return if (converted.unit == goal.unit) converted else base.copy(pendingUnit = goal.unit)
     }
 
-    /** Tutari TL uzerinden yeni birime cevirir; yazilan deger anlamini korur. */
+    /**
+     * Tutari TL uzerinden yeni birime cevirir; yazilan deger anlamini korur.
+     *
+     * Iki kurdan biri bile bilinmiyorsa CEVRIM YAPILMAZ ve birim degismez -
+     * beklemek, yanlis bir sayi yazmaktan iyidir. Cagiran gerekiyorsa
+     * [GoalEditorState.pendingUnit] ile gecisi kur gelene kadar erteler.
+     */
     private fun GoalEditorState.convertTo(target: GoalUnit): GoalEditorState {
         if (target == unit) return this
+        val from = rateOrNull(unit) ?: return this
+        val to = rateOrNull(target) ?: return this
         // Cevrim uzun ondalik uretebilir (22 TL -> 0,003523162... gr altin);
         // birime yakisan inceliğe yuvarlanir, yoksa alanda 18 haneli sayi belirir.
-        val converted = (amountInTry() / rateOf(target)).roundTo(target.editDecimals())
-        return copy(unit = target, amountText = rawAmount(converted))
+        val converted = ((amountText.parseAmount() * from) / to).roundTo(target.editDecimals())
+        return copy(unit = target, amountText = rawAmount(converted), pendingUnit = null)
     }
 
     private fun save() {
         val editor = _state.value.editor ?: return
-        val amount = editor.amountInTry()
+        // Kur bilinmiyorsa null doner ve kayit ENGELLENIR: 1.0 kuruyla yazmak
+        // "400 gram" hedefini ₺400 olarak kaydediyordu.
+        val amount = editor.amountInTryOrNull()
         // Bos zorunlu alan SESSIZCE yutulmaz: hangisiyse isaretlenir (ekran kirmizi
         // cizip o alana kaydirir) ve kayit yapilmaz.
         val nameBlank = editor.name.isBlank()
-        val amountEmpty = amount <= 0.0
+        val amountEmpty = amount == null || amount <= 0.0
         if (nameBlank || amountEmpty) {
             this.editor { it.copy(nameError = nameBlank, amountError = amountEmpty) }
             return

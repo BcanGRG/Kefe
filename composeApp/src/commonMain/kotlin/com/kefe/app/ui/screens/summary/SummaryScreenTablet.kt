@@ -80,6 +80,7 @@ import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
 import com.kefe.app.ui.theme.Space
 import com.kefe.app.ui.theme.tabular
+import com.kefe.app.ui.format.UnknownChangeText
 
 /**
  * Ozet - tablet yerlesimi (840x1180 cercevesi).
@@ -304,9 +305,20 @@ private fun HeroCard(state: SummaryUiState, totals: PortfolioTotals) {
 
 /** Tablet hero'sunda yuzde YOKTUR - yalniz tutar ve etiket. */
 @Composable
-private fun DeltaItem(amount: Double, caption: String, masked: Boolean) {
+private fun DeltaItem(amount: Double?, caption: String, masked: Boolean) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
+    // Bilinmeyen degisim "—" yazilir (bkz. SummaryScreen.DeltaRow).
+    if (amount == null) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(UnknownChangeText, style = t.bodyStrong.tabular(), color = c.onSurfaceMuted)
+            Text(caption, style = t.caption, color = c.onSurfaceMuted)
+        }
+        return
+    }
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),

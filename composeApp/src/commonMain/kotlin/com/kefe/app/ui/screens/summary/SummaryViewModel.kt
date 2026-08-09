@@ -17,6 +17,7 @@ import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.goalWealth
 import com.kefe.app.domain.model.toEpochDay
 import com.kefe.app.domain.model.portfolioTotals
+import com.kefe.app.domain.model.todayChangePercent
 import com.kefe.app.domain.model.topGainer
 import com.kefe.app.domain.model.topLoser
 import com.kefe.app.domain.repository.PortfolioRepository
@@ -286,7 +287,12 @@ class SummaryViewModel(
                         KefeMarketRow(
                             name = price.label,
                             priceText = Money.tl(price.ask, decimals = 2),
-                            changePercent = price.changePercent,
+                            // Kotasyon gunu kapisindan GECER - hemen ustundeki
+                            // "bugün" satiri da oradan geciyor. Once ham
+                            // changePercent okunuyordu ve pazar gunu ayni
+                            // ekranda kart cumanin hareketini yazarken "bugün"
+                            // satiri dogru sekilde ₺0 gosteriyordu.
+                            changePercent = price.todayChangePercent(clock.today()),
                             assetClass = price.assetClass.color(),
                         )
                     },

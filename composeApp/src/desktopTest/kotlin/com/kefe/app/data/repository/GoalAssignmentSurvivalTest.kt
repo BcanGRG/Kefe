@@ -13,6 +13,8 @@ import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.QuantityUnit
+import com.kefe.app.domain.model.TradeSide
+import com.kefe.app.domain.model.Transaction
 import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -163,6 +165,81 @@ class GoalAssignmentSurvivalTest {
             mapOf("pos_gold_quarter" to GoalAssignment("goal-1", 4.0)),
             repo.observeGoalAssets().first(),
         )
+    }
+
+    /**
+     * Hedef silinince ATAMALARI da mezar taslanmali.
+     *
+     * Silme yumusak oldugu icin (deletedAt) CASCADE calismiyordu ve atama satiri
+     * diri kaliyordu: yedege giriyor ama hedefi girmiyordu (selectGoals silinmisi
+     * filtreliyor), geri yuklemede FOREIGN KEY hatasi atiyor ve TUM geri yukleme
+     * geri aliniyordu - tek artik satir yedegin tamamini kullanilamaz kiliyordu.
+     */
+    @Test
+    fun hedefSilininceATAMASIDaDuser() = runTest {
+        val repo = newRepository()
+        repo.upsertPosition(quarter())
+        repo.upsertGoal(goal())
+        repo.assignPositionToGoal("pos_gold_quarter", "goal-1")
+
+        repo.deleteGoal("goal-1")
+
+        assertTrue(
+            repo.observeGoalAssets().first().isEmpty(),
+            "silinen hedefin atamasi diri kaldi - yedegi bozar",
+        )
+    }
+
+    /** Varlik silinince de ayni kural gecerli. */
+    @Test
+    fun varlikSilininceATAMASIDaDuser() = runTest {
+        val repo = newRepository()
+        repo.upsertPosition(quarter())
+        repo.upsertGoal(goal())
+        repo.assignPositionToGoal("pos_gold_quarter", "goal-1")
+
+        repo.deletePosition("pos_gold_quarter")
+
+        assertTrue(
+            repo.observeGoalAssets().first().isEmpty(),
+            "silinen varligin atamasi diri kaldi - yedegi bozar",
+        )
+    }
+
+    /**
+     * Silme sonrasi alinan yedek GERI YUKLENEBILMELI.
+     *
+     * Tetikleyici tamamen siradan: hedefe varlik ata, hedefi sil, yedek al.
+     */
+    @Test
+    fun silmeSonrasiYedekGERIYUKLENIR() = runTest {
+        val repo = newRepository()
+        repo.upsertPosition(quarter())
+        // Miktar DEFTERDEN turer: geri yukleme recomputePosition calistirdigi
+        // icin islemsiz bir pozisyon sifirlanip listeden duserdi.
+        repo.addTransaction(
+            Transaction(
+                id = "tx-1",
+                positionId = "pos_gold_quarter",
+                date = KefeDate(2026, 7, 28),
+                side = TradeSide.Buy,
+                quantity = 10.0,
+                unitPrice = 10_000.0,
+                addedByMemberId = "member_owner",
+            ),
+        )
+        repo.upsertGoal(goal())
+        repo.assignPositionToGoal("pos_gold_quarter", "goal-1")
+        repo.deleteGoal("goal-1")
+
+        val backup = repo.exportBackup("2026-08-09")
+        // Atlanmasi gereken satir yedege hic girmemeli.
+        assertTrue(backup.goalAssets.none { it.goalId == "goal-1" }, "oksuz atama yedege girdi")
+
+        // Asil olcu: geri yukleme dusmemeli ve veri yerine oturmali.
+        repo.restoreBackup(backup)
+        assertEquals(1, repo.observePositions().first().size)
+        assertTrue(repo.observeGoals().first().isEmpty())
     }
 
     /** Yeni hedef yine de yazilabilmeli - iki adima bolmek eklemeyi bozmamali. */

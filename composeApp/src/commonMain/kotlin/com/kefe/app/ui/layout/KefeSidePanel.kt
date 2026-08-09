@@ -42,13 +42,15 @@ import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
 import com.kefe.app.ui.theme.Space
 import com.kefe.app.ui.theme.tabular
+import com.kefe.app.ui.format.changeText
 
 /** Sag paneldeki tek fiyat satiri. Bicimlenmis metin disaridan gelir. */
 @Immutable
 data class KefeMarketRow(
     val name: String,
     val priceText: String,
-    val changePercent: Double,
+    /** null = bilinmiyor; satir "—" yazar. */
+    val changePercent: Double?,
     val assetClass: AssetClassColor,
 )
 
@@ -170,9 +172,9 @@ private fun MarketPanelRow(row: KefeMarketRow, onClick: (() -> Unit)?) {
             softWrap = false,
         )
         Text(
-            text = Money.delta(row.changePercent),
+            text = changeText(row.changePercent),
             style = t.captionSmall.copy(fontWeight = FontWeight.SemiBold).tabular(),
-            color = c.delta(row.changePercent),
+            color = row.changePercent?.let { c.delta(it) } ?: c.onSurfaceMuted,
             textAlign = TextAlign.End,
             maxLines = 1,
             modifier = Modifier.width(ChangeWidth),

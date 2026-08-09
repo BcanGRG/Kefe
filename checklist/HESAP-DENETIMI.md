@@ -98,7 +98,7 @@ olarak ikiye bölündü ve tek transaction içine alındı; `goals` üzerinde hi
 sürücüsü gibi **açık** kuruyor ve ona güvenmeden önce açık olduğunu ayrıca
 sınıyor. Eski SQL geri konduğunda dört test düşüyor, doğrulandı.
 
-### P0.3 · Gram altında ayar pozisyon kimliğinde taşınmıyor: 22 ile 24 ayar birleşiyor
+### P0.3 · Gram altında ayar pozisyon kimliğinde taşınmıyor: 22 ile 24 ayar birleşiyor — ✅ ÇÖZÜLDÜ
 
 `ui/screens/transaction/AddTransactionViewModel.kt:948`
 
@@ -126,11 +126,13 @@ var.
 ölçüyor, pozisyon kimliğini ölçmediği için bu hatayı yakalamıyor — test **yanlış
 güven veriyor**.
 
-**Düzeltme:** `assetKeyOf` içinde `usesKarat()` doğru olan formlarda kimlik de
-`karat.priceKey()`'den türesin (Jewelry'nin mevcut biçimi korunarak); Bullion'a
-Gram'dan ayrı anahtar. Test `newPositionId()` üzerinden yazılmalı.
+**Yapıldı** (`Give each gold karat its own position`): kimlik kuralı test
+edilebilir bir `goldAssetKey(subtype, karat)` fonksiyonuna çıkarıldı; ayar
+sorulan formlarda kimlik `karat.priceKey()`'den türüyor, Has/Külçe kendi
+anahtarını aldı. 24 ayar gramın kimliği değişmedi, mevcut pozisyonlar
+etkilenmiyor. `GoldAssetKeyTest` (6 test) eklendi — eski mantıkta üçü düşüyor.
 
-### P0.4 · Hedef tutarı bilimsel gösterime düşüp yok oluyor
+### P0.4 · Hedef tutarı bilimsel gösterime düşüp yok oluyor — ✅ ÇÖZÜLDÜ
 
 `ui/format/Money.kt:233-237` · `ui/screens/goals/GoalsUiState.kt:68-69` ·
 `GoalsViewModel.kt:182`
@@ -155,11 +157,15 @@ Kaydet → 2,04 × 6242,71 = ₺12.735
 hedefinde de mümkün ("12500000,5" → 1,25 TL). `BackupCodec.kt:65` aynı sorunu
 CSV yedeğinde taşıyor ("1,5E7").
 
-**Düzeltme:** `rawAmount` sabit ondalıklı, bilimsel gösterimsiz biçimlendirme
-yapsın; `parseAmount` tanımadığı karakter görünce 0 dönmek yerine reddetsin;
-`goal.amount` editöre konurken kuruşa yuvarlansın.
+**Yapıldı** (`Stop a goal amount from vanishing into scientific notation`):
+`rawAmount` artık `Money.plain` ile, değerin gerçekten taşıdığı hane sayısı
+kadar ve bilimsel gösterimsiz yazıyor — bu aynı zamanda `0,30000000000000004`
+gibi kayan nokta kuyruğunu da alandan çıkarıyor. `parseAmount` ortak
+ayrıştırıcıya bağlandı: okunamayan metin artık başka bir sayıya dönüşmüyor,
+sıfıra düşüp mevcut `amount <= 0` kontrolüne yakalanıyor. `RawAmountTest`
+(9 test) eklendi — eski kodda üçü düşüyor.
 
-### P0.5 · Kur gelmeden hedef kaydedilince tutar 5.000 kat sapıyor
+### P0.5 · Kur gelmeden hedef kaydedilince tutar 5.000 kat sapıyor — ✅ ÇÖZÜLDÜ
 
 `ui/screens/goals/GoalsUiState.kt:72-79` · `GoalsViewModel.kt:145-154, 206-233`
 
@@ -179,11 +185,12 @@ olabileceğini kodun kendisi kabul ediyor (`GoalsViewModel.kt:43-45` yorumu ve
 `save()`'in tek doğrulaması `amount <= 0.0`; kur geçerliliği hiç sorgulanmıyor.
 Telafi eden kod yok — birim segmentleri kur 0 iken de aktif.
 
-**Düzeltme:** `rateOf` null dönsün; kur bilinmiyorken TL dışı birim seçimi ve
-kayıt engellensin; editör açıkken kur gelirse `amountText` o an yeniden
-çevrilsin.
+**Yapıldı** (`Refuse to price a goal before the rate is known`): `rateOrNull`
+null dönüyor, kur bilinmiyorken kayıt engelleniyor, altın/dolar çipleri kilitli
+ve soluk çiziliyor, çevrilemeyen birim `pendingUnit` ile ertelenip kur gelince
+tamamlanıyor. `GoalRateTest` (8 test) eklendi — eski kodda beşi düşüyor.
 
-### P0.6 · Öksüz atama yedeği geri yüklemeyi tümden çökertiyor
+### P0.6 · Öksüz atama yedeği geri yüklemeyi tümden çökertiyor — ✅ ÇÖZÜLDÜ
 
 `data/repository/SqlDelightPortfolioRepository.kt:499` (+ `:366`, `:741-814`)
 
@@ -206,9 +213,144 @@ varlığı) sil, sonra yedek al.
 `observeGoalAssets` onları filtrelemiyor; pozisyon var olmayan bir hedefe atanmış
 kalıyor ve sonraki alımları da yutuyor.
 
-**Düzeltme:** `deleteGoal`/`deletePosition` ilgili `goal_assets` satırlarını da
-mezar taşlasın; `exportBackup` atamaları canlı kimliklerle filtrelesin;
-`restoreBackup` yazmadan önce hedef/pozisyon varlığını doğrulasın.
+**Yapıldı** (`Keep a deleted goal from breaking the backup`): iki silme yolu da
+atamaları mezar taşlıyor (`clearGoalAssignments` / `clearPositionAssignment`);
+`restoreBackup` hedefi ya da varlığı dosyada olmayan atamayı atlıyor — böylece
+öksüz satır taşıyan **mevcut** yedekler de yüklenebiliyor. Üç test eklendi,
+eskisinde üçü de düşüyor.
+
+---
+
+## Değişim hesapları — ayrı inceleme (9 Ağu 2026, Pazar)
+
+Kullanıcı pazar günü değişimlerin %0 olması gerektiğini, bir şeyin tutmadığını
+bildirdi. **Sezgi doğru çıktı: iki kesin hata** bulundu ve düzeltildi, biri de
+kullanıcının tarif ettiği rakamın ta kendisiydi. **İki konu karar bekliyor.**
+
+### Bulunan ve düzeltilen: aynı pencere, üç ekranda iki farklı cevap
+
+`Price.changeIn(Day)` ham `changePercent` okuyordu; `Position.changeIn(Day)`
+ise `valuedAt` içinden `todayChangePercent(today)` kapısından geçiyordu. Borsa
+kapalıyken aynı veriden iki cevap çıkıyordu — cuma kapanışından kalma bir
+kotasyonla, pazar günü:
+
+| Ekran | Gösterdiği | Doğrusu |
+|---|---|---|
+| Piyasa | **+1,50%** (cumanın hareketi) | 0,00% |
+| Özet · piyasa kartı | **+1,50%** | 0,00% |
+| Varlıklar | 0,00% | ✓ |
+| Özet · "bugün" | ₺0 | ✓ |
+
+Özet ekranında çelişki **tek bakışta** görünüyordu: piyasa kartı dolu, hemen
+üstündeki "bugün" satırı boş. Kapı artık `Price.changeIn`'in içinde;
+`DailyChangeAcrossScreensTest` üç ekranın aynı sayıyı verdiğini sabitliyor.
+
+### Sonradan ölçüldü ve düzeltildi: donmuş kotasyon "bugün" sayılıyordu
+
+Kaynak 9 Ağustos 2026'da yeniden ölçüldü. **Yedek yolun dayandığı varsayım artık
+geçerli değil:** `today.json` bütün altın türlerine `Change` gönderiyor —
+CEYREKALTIN 2.09, YARIMALTIN 2.09, TAMALTIN 2.09, ATAALTIN 2.09, YIA 2.09,
+18AYARALTIN 2.09, 14AYARALTIN 2.09, GRA 2.59, HAS 2.59, GUMUS 3.57. 86 sembolden
+yalnızca biri sıfır.
+
+Aynı ölçüm **asıl hatayı** ortaya çıkardı ve telefonda görünen buydu. Uç, piyasa
+kapalıyken de `Update_Date`'i her dakika ilerletiyor — pazar günü on iki dakika
+boyunca yirmiden fazla kez örneklendi, damga `10:04:01 → 10:16:01` ilerlerken
+bütün altın fiyatları ve `Change` alanları **tek bir kez bile** değişmedi. `quoteDate` o damgadan okunduğu için
+bugüne eşitleniyor ve **cumanın +%2,09'u pazarın getirisi olarak sayılıyordu**.
+
+Cihazın veritabanı bunu açıkça gösterdi:
+
+| gold_quarter | fiyat |
+|---|---|
+| 7 Ağu (Cuma) | 10.887,46 |
+| 8 Ağu (Cmt) | 10.887,46 |
+| 9 Ağu (Paz) | 10.887,46 |
+
+…ve `cached_prices`: `ask=10887.46, changePercent=2.09, quoteDateKey=20260809`.
+
+Damganın yanıtlayamadığı soruyu **fiyatın kendisi** yanıtlıyor: değer önceki
+günün kaydıyla aynıysa piyasa o gün oynamamıştır, katkı sıfırdır — kaynak ne
+derse desin. Fiyat gerçekten oynadıysa kaynağın rakamı tercih edilmeye devam
+ediyor (gerçek önceki kapanışa göre ölçülmüş, daha kesin).
+
+Cihazda doğrulandı: özet, piyasa kartı ve piyasa tablosu bugün altında 0,00%;
+hafta penceresi çeyrekte +8,58% (10.027,02 → 10.887,46, elle doğrulandı).
+
+### Yolda görülüp düzeltildi: Has/Külçe gram fiyatıyla değerleniyordu — ✅ ÇÖZÜLDÜ
+
+`GoldSubtype.Bullion.priceKey()` `"gold_gram"` dönüyordu, oysa tahtada ayrı bir
+`gold_bullion` (Has Altın) kotasyonu var ve iki fiyat farklı: Has ₺6.627,24,
+Gram ₺6.660,55 (9 Ağustos 2026). Has/Külçe tutan bir pozisyon bu yüzden ~%0,5
+fazla değerleniyordu.
+
+**Yapıldı** (`Value Has/Külçe from its own quote`): anahtar `"gold_bullion"`
+oldu. Kaynak satırı zaten çekiyordu (`LivePriceRemoteDataSource`: `HAS →
+gold_bullion`), eksik olan yalnızca anahtardı. Bu, fiyat anahtarını aynı dalda
+gram altından ayrılan pozisyon kimliğiyle de hizalıyor. İki test eklendi; eski
+anahtarla `expected:<gold_bullion> but was:<gold_gram>` düşüyor.
+
+### Çözüldü: §35 seçildi, günlük yalnız dünden hesaplanıyor — ✅
+
+`PriceChange.kt` günlük pencereyi `[bugün−4, bugün−1]` kuruyordu
+(`DayDaysBack=1`, `DayTolerance=3`), yani uygulama bir süre açılmamışsa
+**birikmiş** hareket tek bir "bugünkü getiri" olarak yazılıyordu. Bu, §35
+("günlük değişim yalnız o gün olduysa sayılır") ile §40 ("en son baktığımızdan
+bu yana") arasında doğrudan bir çatışmaydı.
+
+**Karar: §35.** Tolerans sıfırlandı — karşılaştırma noktası yalnızca dün. Dünün
+kaydı yoksa günlük değişim **hesaplanamaz** ve null döner; uydurulmuş bir rakam
+yerine susulur.
+
+Bayatlık kontrolü (`previousDayPrice`) bilerek daha geniş bakmaya devam ediyor
+ve bu §35'i **güçlendiriyor**: cumartesi uygulamayı açmayan biri pazar günü
+baktığında dünün kaydı yoktur, ama cumanın kaydı durur — fiyat ona eşitse
+"bugün oynamadı" diyebiliyoruz. Orayı da daraltmak, kaynağın cumadan donmuş
+rakamının yeniden "bugün" sayılmasına yol açardı. İki soru ayrı: *"bugün ne
+kadar oynadı"* yalnız dünle, *"bugün hiç oynadı mı"* en son kaydettiğimizle
+yanıtlanır.
+
+Hafta ve ay toleransı yerinde kaldı; onlar zaten "yaklaşık şu kadar önce"
+sorusunu yanıtlıyor ve kapalı günlere dayanıklı olmaları gerekiyor.
+
+Eski davranışı sabitleyen bir test vardı (`dunYoksaOncekiKayitliGuneBakilir`);
+yeni kurala göre yazıldı. Üç yeni test eklendi — eski toleransla ikisi düşüyor.
+
+### Çözüldü: günlük değişim artık "bilinmiyor" diyebiliyor — ✅
+
+`weekChangePercent` ve `monthChangePercent` her zaman nullable'dı, çünkü
+"değişmedi" ile "bilmiyoruz" ayrı cevaplar. `dailyChangePercent` değildi ve veri
+yokluğu sıfır okunuyordu. İki zararı vardı: "Gün" penceresi hiçbir zaman "—"
+olamıyordu, ve o sahte sıfır grup toplamlarına **paya ve paydaya** girip gerçek
+oranı sulandırıyordu.
+
+**Yapıldı** (`Let the daily change say "unknown"`): `Price.changePercent` ve
+`Position.dailyChangePercent` nullable oldu; depo son dalı artık sıfıra
+düşürmüyor — kaynak sustuysa ve dünün kaydı da yoksa cevap null. Önceki güne ait
+kotasyon hâlâ sıfır veriyor; onu **biliyoruz**, piyasa bugün oynamadı.
+
+`List<Position>.todayChange` artık hedef kartının zaten kullandığı
+`weightedPeriodTotal`'dan geçiyor. Elle yazılmış bir kopyaydı ve iki farkı
+vardı: bilinmeyeni sıfır sayıyordu, ve kardeşindeki "dönem başı değeri pozitif
+olmalı" koruması yoktu. `PortfolioTotals` bilinmeyeni taşıyor, üç özet düzeni de
+"—" çiziyor.
+
+Önbellek kolonu NOT NULL kaldı — orada kaynağın ham rakamı duruyor, etkin değer
+zaten okuma anında yeniden hesaplanıyor.
+
+Beş yeni test eklendi; ikisi bilinmeyenin grup yüzdesini sulandırmadığını
+doğruluyor. Eski sıfırı sabitleyen iki test yeni kurala göre yazıldı.
+
+### İncelenip sorun bulunmayanlar
+
+- `todayChange()` ağırlıklandırması: her pozisyon dönem başı değerine geri
+  çözülüp TL farklar toplanıyor — yüzde ortalaması alınmıyor, doğru.
+- `portfolioTotals`: `todayChangePercent` paydası dönem başı toplam
+  (`total − dayChange`), kâr/zarar paydası maliyet — ikisi doğru ayrılmış.
+- `weightedPeriodTotal`: yüzdesi bilinmeyen pozisyon paya da paydaya da
+  girmiyor, doğru.
+- Hafta/ay pencereleri: tolerans kapalı günler için zaten tasarlanmış, kotasyon
+  günü kuralından etkilenmemeleri doğru.
 
 ---
 
@@ -368,11 +510,11 @@ Aynı işlem iki ekranda iki farklı tutarla görünüyor; "Toplam" kutusunun yo
 
 | # | Dosya | Kusur |
 |---|---|---|
-| 79 | `ChangePeriod.kt:26` | Piyasa ekranı "Gün"de ham `changePercent` okuyor, Varlıklar/Özet ise kotasyon-günü kuralından geçiriyor. Hafta sonu iki ekran farklı |
+| ~~79~~ | `ChangePeriod.kt:26` | ✅ **ÇÖZÜLDÜ** — Piyasa ekranı "Gün"de ham `changePercent` okuyor, Varlıklar/Özet ise kotasyon-günü kuralından geçiriyor. Hafta sonu iki ekran farklı |
 | 62 | `SqlDelightPriceRepository.kt:140` | "Sıfırı verilmedi saymak yanlış tetiklenemez" iddiası doğru değil: `price_history` günün kapanışını değil uygulamanın açıldığı andaki fiyatı tutuyor, kaynağın geçerli sıfırı eziliyor |
-| 63 | `PriceChange.kt:48` | Türetilen "günlük" pencere `[bugün-4, bugün-1]`; 4 güne kadar hareket tek "günlük" değişim olarak bugüne yazılıyor — §35 ile çelişiyor |
+| ~~63~~ | `PriceChange.kt:48` | ✅ **ÇÖZÜLDÜ** — Türetilen "günlük" pencere `[bugün-4, bugün-1]`; 4 güne kadar hareket tek "günlük" değişim olarak bugüne yazılıyor — §35 ile çelişiyor |
 | 65 | `SqlDelightPriceRepository.kt:153` | Tazelik en yeni satırdan hesaplanıyor: kısmi çekimde tek taze satır bütün bayat satırları maskeliyor, "Fresh" kalıyor |
-| 81 | `Position.kt:19` | `dailyChangePercent` non-null olduğu için "Gün" penceresi hiç "—" olamıyor; bilinmeyen sıfır sayılıp grup yüzdesini sulandırıyor (§25 "Veri yoksa —, sıfır değil" yalnız hafta/ay için uygulanmış) |
+| ~~81~~ | `Position.kt:19` | ✅ **ÇÖZÜLDÜ** — `dailyChangePercent` non-null olduğu için "Gün" penceresi hiç "—" olamıyor; bilinmeyen sıfır sayılıp grup yüzdesini sulandırıyor |
 | 67 | `SqlDelightPriceRepository.kt:252` | Geçmiş satırı kotasyonun işlem günüyle değil çekim günüyle yazılıyor |
 | 68 | `SqlDelightPriceRepository.kt:209` | Saat geriye giderse yenileme kilitleniyor, anlamsız bekleme süresi yazılıyor |
 
@@ -480,12 +622,12 @@ Sıra bilinçli: her aşama bir öncekinin açtığı zemini kullanıyor.
    birleştir; Piyasa alanını ham metinle tohumla · testleri yaz
 2. ✅ `upsertGoal`'ü iki adıma böl; `goals` üzerindeki tüm `INSERT OR REPLACE`'i
    temizle; yanlış yorumu düzelt; test veritabanını FK açık kur
-3. `assetKeyOf`'u ayar duyarlı yap; Bullion'a ayrı anahtar; testi
+3. ✅ `assetKeyOf`'u ayar duyarlı yap; Bullion'a ayrı anahtar; testi
    `newPositionId()` üzerinden yaz
-4. `rawAmount`/`parseAmount` çiftini bilimsel gösterime karşı kapat (BackupCodec
-   dahil)
-5. `rateOf`'u null'lanabilir yap; kur yokken TL dışı birim kilitli
-6. Yumuşak silmede `goal_assets` mezar taşlama + yedek filtresi
+4. ✅ `rawAmount`/`parseAmount` çiftini bilimsel gösterime karşı kapat
+   (BackupCodec hâlâ açık — P3'teki `BackupCodec.kt:65` ayrıca kapatılmalı)
+5. ✅ `rateOf`'u null'lanabilir yap; kur yokken TL dışı birim kilitli
+6. ✅ Yumuşak silmede `goal_assets` mezar taşlama + yedek filtresi
 
 **Aşama 2 — Tek doğruluk kaynağı (P1)**
 7. Aynı gün sırası için kalıcı `sequence`/`createdAt` kolonu + göç; dört akışı

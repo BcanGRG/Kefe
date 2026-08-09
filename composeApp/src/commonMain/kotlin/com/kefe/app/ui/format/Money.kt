@@ -253,8 +253,20 @@ object Money {
 fun rawAmount(value: Double): String = when {
     value <= 0.0 -> ""
     value % 1.0 == 0.0 -> value.toLong().toString()
-    else -> value.toString().replace('.', ',')
+    // BILIMSEL GOSTERIM URETILMEZ. Once `value.toString()` kullaniliyordu ve
+    // Double.toString mutlak deger 10^7'yi asinca ya da 10^-3'un altina inince
+    // "1.2485419999999998E7" gibi bir metin doner. Alanlarin ayristiricisi bunu
+    // sayi olarak okuyamadigi icin hedef tutari sessizce cokuyordu: 2.000 gram
+    // altin hedefi (₺12.485.420) duzenlemeye acilip HIC DOKUNULMADAN
+    // kaydedildiginde ₺12.735'e iniyordu.
+    //
+    // Hane sayisi degerin GERCEKTEN tasidigi kadardir: boylece cevrimden kalan
+    // kayan nokta kuyrugu ("0,30000000000000004") da alana tasinmaz.
+    else -> Money.plain(value, Money.decimals(value, max = RawAmountMaxDecimals))
 }
+
+/** Fon payi alti haneye kadar iner; bir tutar alaninda daha fazlasi gurultudur. */
+private const val RawAmountMaxDecimals = 6
 
 /**
  * tr-TR tutar girisini sayiya cevirir: ondalik VIRGUL, binlik NOKTA.
