@@ -731,7 +731,8 @@ class SqlDelightPortfolioRepository(
                     unit = position.unit,
                     unitPrice = position.unitPrice,
                     manualPrice = position.manualPrice,
-                    dailyChangePercent = position.dailyChangePercent,
+                    // Kolon NOT NULL; deger okuma aninda bindiriliyor (observePositions).
+                    dailyChangePercent = position.dailyChangePercent ?: 0.0,
                     updatedAt = clock.nowEpochMillis(),
                 )
                 positionQueries.updatePositionMeta(
@@ -742,7 +743,8 @@ class SqlDelightPortfolioRepository(
                     unit = position.unit,
                     unitPrice = position.unitPrice,
                     manualPrice = position.manualPrice,
-                    dailyChangePercent = position.dailyChangePercent,
+                    // Kolon NOT NULL; deger okuma aninda bindiriliyor (observePositions).
+                    dailyChangePercent = position.dailyChangePercent ?: 0.0,
                     id = position.id,
                     updatedAt = clock.nowEpochMillis(),
                 )

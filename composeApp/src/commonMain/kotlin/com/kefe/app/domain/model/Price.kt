@@ -6,8 +6,15 @@ data class Price(
     val label: String,
     val bid: Double?,
     val ask: Double,
-    /** GUNLUK degisim - kaynagin kendi verdigi rakam. */
-    val changePercent: Double,
+    /**
+     * GUNLUK degisim. null = BILMIYORUZ.
+     *
+     * Cekim aninda kaynagin kendi verdigi rakamdir. Okuma aninda depo bunun
+     * uzerine yaziyor (bkz. SqlDelightPriceRepository.observePrices): fiyat
+     * bugun oynamadiysa sifir, kaynak sustu ve dunun kaydi da yoksa NULL.
+     * Sifira dusurmek "bugun degismedi" demek olurdu, oysa dogrusu "bilmiyoruz".
+     */
+    val changePercent: Double?,
     val timestamp: String,
     val source: PriceSource,
     val isManual: Boolean = false,

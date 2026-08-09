@@ -53,7 +53,8 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 manualPrice = position.manualPrice,
                 // Ornek veri: zaman damgasi 0, esitlemede en eski sayilir.
                 updatedAt = 0L,
-                dailyChangePercent = position.dailyChangePercent,
+                // Kolon NOT NULL; deger okuma aninda fiyat tahtasindan bindiriliyor.
+                dailyChangePercent = position.dailyChangePercent ?: 0.0,
             )
             // Ornek pozisyonlarin cogunda defter yok; miktar/maliyet defterden
             // hesaplansaydi hepsi sifirlanip listeden duserdi. Bu yuzden ornek

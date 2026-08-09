@@ -16,11 +16,18 @@ data class Position(
     val value: Double,
     val cost: Double,
     val manualPrice: Boolean = false,
-    val dailyChangePercent: Double = 0.0,
     /**
-     * Haftalik/aylik fiyat degisimi. null = bilmiyoruz (bkz. [PeriodChanges]);
-     * gunlukten farkli olarak sifira dusurulmez - "degismedi" ile "veri yok"
-     * ayri seylerdir.
+     * Gunluk fiyat degisimi. null = BILMIYORUZ.
+     *
+     * Once non-null'di ve veri yoklugu sifir okunuyordu: "bugun degismedi" ile
+     * "bugun ne oldugunu bilmiyoruz" ayni sey sayiliyor, ekranda hicbir zaman
+     * "—" gorunemiyordu. Daha kotusu, o sahte sifir grup toplamlarina paya ve
+     * PAYDAYA giriyor ve grubun gercek yuzdesini sulandiriyordu - haftalik ve
+     * aylikta bilerek kacinilan seyin ta kendisi.
+     */
+    val dailyChangePercent: Double? = null,
+    /**
+     * Haftalik/aylik fiyat degisimi. null = bilmiyoruz (bkz. [PeriodChanges]).
      */
     val weekChangePercent: Double? = null,
     val monthChangePercent: Double? = null,
