@@ -944,12 +944,35 @@ private fun Position.matches(s: AddTransactionUiState): Boolean = when (s.assetC
     else -> assetClass == s.assetClass
 }
 
+/**
+ * Altin varliginin KIMLIK anahtari - [com.kefe.app.domain.model.priceKey] ile
+ * ayni sey degildir. Fiyat anahtari "bu neyle fiyatlanir", kimlik anahtari "bu
+ * hangi satir" sorusunu yanitlar; Bilezik ikisinin ayrildigi eski ornektir.
+ *
+ * KIMLIK ETKIN AYARI TASIMAK ZORUNDA. Once butun gram formlari `gold_gram`a
+ * dusuyordu ve [Position.matches] ayari kiyasladigi icin 22 ayar gram secimi
+ * mevcut 24 ayar pozisyonuna ESLESMIYOR, ama [newPositionId] tam da ONUN
+ * kimligini uretiyordu. upsertPosition mevcut satirin adini, alt turunu ve
+ * ayarini eziyor, islem ayni positionId'ye yaziliyordu: iki ayri varligin
+ * defteri tek pozisyonda birlesiyor ve ESKI miktar da yeni ayarin kotasyonuyla
+ * degerleniyordu. 100 gr 24 ayarin yanina 10 gr 22 ayar eklemek ekranda ~52 bin
+ * TL'lik sahte bir kayip yaziyordu.
+ *
+ * [Karat.K24] zaten `gold_gram` donuyor - mevcut 24 ayar pozisyonlarinin
+ * kimligi bu degisiklikle DEGISMEZ.
+ */
+internal fun goldAssetKey(subtype: GoldSubtype, karat: Karat): String = when {
+    subtype == GoldSubtype.Jewelry -> "gold_jewelry_${karat.milyem}"
+    subtype.usesKarat() -> karat.priceKey()
+    // Has/Kulce gram altinla AYNI kotasyondan fiyatlanir ama ayri bir varliktir.
+    // Fiyat anahtari `gold_gram` kalir, kimligi ayrilir - yoksa 24 ayar gramla
+    // ayni satira duserdi.
+    subtype == GoldSubtype.Bullion -> "gold_bullion"
+    else -> subtype.priceKey().orEmpty()
+}
+
 private fun assetKeyOf(s: AddTransactionUiState): String = when (s.assetClass) {
-    AssetClass.Gold -> if (s.selectedSubtype == GoldSubtype.Jewelry) {
-        "gold_jewelry_${s.karat.milyem}"
-    } else {
-        s.selectedSubtype.priceKey().orEmpty()
-    }
+    AssetClass.Gold -> goldAssetKey(s.selectedSubtype, s.karat)
 
     AssetClass.Fund -> s.selectedFundKey.orEmpty()
     AssetClass.Stock -> s.selectedStockKey.orEmpty()
