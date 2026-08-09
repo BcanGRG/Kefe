@@ -277,13 +277,18 @@ ediyor (gerçek önceki kapanışa göre ölçülmüş, daha kesin).
 Cihazda doğrulandı: özet, piyasa kartı ve piyasa tablosu bugün altında 0,00%;
 hafta penceresi çeyrekte +8,58% (10.027,02 → 10.887,46, elle doğrulandı).
 
-### Yolda görülen, ayrıca ele alınmalı: Has/Külçe gram fiyatıyla değerleniyor
+### Yolda görülüp düzeltildi: Has/Külçe gram fiyatıyla değerleniyordu — ✅ ÇÖZÜLDÜ
 
-`GoldSubtype.Bullion.priceKey()` `"gold_gram"` dönüyor, oysa tahtada ayrı bir
+`GoldSubtype.Bullion.priceKey()` `"gold_gram"` dönüyordu, oysa tahtada ayrı bir
 `gold_bullion` (Has Altın) kotasyonu var ve iki fiyat farklı: Has ₺6.627,24,
-Gram ₺6.660,55. Has/Külçe tutan bir pozisyon bu yüzden ~%0,5 fazla değerleniyor.
-Düzeltmek `Bullion.priceKey()`'i `"gold_bullion"` yapmak kadar basit ama mevcut
-Has pozisyonlarının değerini değiştireceği için onayınıza bırakıldı.
+Gram ₺6.660,55 (9 Ağustos 2026). Has/Külçe tutan bir pozisyon bu yüzden ~%0,5
+fazla değerleniyordu.
+
+**Yapıldı** (`Value Has/Külçe from its own quote`): anahtar `"gold_bullion"`
+oldu. Kaynak satırı zaten çekiyordu (`LivePriceRemoteDataSource`: `HAS →
+gold_bullion`), eksik olan yalnızca anahtardı. Bu, fiyat anahtarını aynı dalda
+gram altından ayrılan pozisyon kimliğiyle de hizalıyor. İki test eklendi; eski
+anahtarla `expected:<gold_bullion> but was:<gold_gram>` düşüyor.
 
 ### Karar bekleyen 1: türetilen "günlük" 4 güne kadar hareketi kapsıyor
 
