@@ -30,7 +30,7 @@ import kotlin.test.assertEquals
  * semboldan yalnizca biri sifir. Yedek yol duruyor ama artik nadiren tetikleniyor.
  *
  * AYNI OLCUMDE ASIL SORUN CIKTI: uc, piyasa KAPALIYKEN de Update_Date'i her
- * dakika ilerletiyor (10:04:01 -> 10:05:01) ve Change'i cumadan donmus halde
+ * dakika ilerletiyor (10:04:01 -> 10:16:01) ve Change'i cumadan donmus halde
  * tutuyor. Damga "bugun kotasyon var" gibi gorundugu icin cumanin hareketi
  * pazar gununun "bugunku getiri"sine giriyordu.
  */
@@ -139,8 +139,9 @@ class DailyChangeFallbackTest {
      * PIYASA KAPALIYKEN kaynagin BAYAT rakami "bugun" sayilmaz.
      *
      * 9 Agustos 2026 Pazar gunu olculdu: uc, Update_Date'i her dakika
-     * ilerletiyor (10:04:01 -> 10:05:01) ama butun altin fiyatlari ve Change
-     * alanlari cumadan donmus halde duruyor. Damga "bugun kotasyon var" gibi
+     * ilerletiyor (10:04:01 -> 10:16:01, yirmiden fazla ornek) ama butun altin
+     * fiyatlari ve Change alanlari cumadan donmus halde duruyor - orneklerin
+     * hepsi bayt bayt ayni. Damga "bugun kotasyon var" gibi
      * gorundugu icin cumanin +%2,09'u "bugunku getiri"ye giriyordu; oysa o gun
      * hicbir sey islem gormemisti.
      *

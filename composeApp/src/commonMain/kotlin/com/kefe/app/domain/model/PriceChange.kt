@@ -99,8 +99,9 @@ fun periodChangePercent(
  * kendi damgasi bu soruyu yanitlamiyor: serbest piyasa ucu hafta sonu da
  * Update_Date'i her dakika ilerletiyor ama fiyatlari cumadan donmus halde
  * biraktigi icin damga "bugun kotasyon var" gibi gorunuyor (9 Agustos 2026
- * Pazar gunu olculdu: damga 10:04 -> 10:05 ilerledi, butun altin fiyatlari ve
- * Change alanlari zerre degismedi).
+ * Pazar gunu on iki dakika boyunca yirmiden fazla kez orneklendi: damga
+ * 10:04:01'den 10:16:01'e ilerlerken butun altin fiyatlari ve Change alanlari
+ * TEK BIR kez bile degismedi).
  *
  * Fiyatin kendisi bu soruyu yanitliyor: deger onceki gunun kaydiyla AYNI ise
  * piyasa o gun oynamamistir.

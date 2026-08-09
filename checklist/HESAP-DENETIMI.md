@@ -254,9 +254,9 @@ CEYREKALTIN 2.09, YARIMALTIN 2.09, TAMALTIN 2.09, ATAALTIN 2.09, YIA 2.09,
 yalnızca biri sıfır.
 
 Aynı ölçüm **asıl hatayı** ortaya çıkardı ve telefonda görünen buydu. Uç, piyasa
-kapalıyken de `Update_Date`'i her dakika ilerletiyor — pazar günü altı dakika
-örneklendi, damga `10:04:01 → 10:10:01` ilerlerken bütün altın fiyatları ve
-`Change` alanları bayt bayt aynı kaldı. `quoteDate` o damgadan okunduğu için
+kapalıyken de `Update_Date`'i her dakika ilerletiyor — pazar günü on iki dakika
+boyunca yirmiden fazla kez örneklendi, damga `10:04:01 → 10:16:01` ilerlerken
+bütün altın fiyatları ve `Change` alanları **tek bir kez bile** değişmedi. `quoteDate` o damgadan okunduğu için
 bugüne eşitleniyor ve **cumanın +%2,09'u pazarın getirisi olarak sayılıyordu**.
 
 Cihazın veritabanı bunu açıkça gösterdi:
