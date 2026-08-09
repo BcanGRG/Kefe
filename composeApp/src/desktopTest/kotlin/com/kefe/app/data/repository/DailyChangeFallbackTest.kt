@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /**
  * Gunluk degisimin hangi kaynaktan geldigi.
@@ -49,7 +50,7 @@ private class StubClock : KefeClock {
 private fun price(
     assetKey: String,
     ask: Double,
-    changePercent: Double,
+    changePercent: Double?,
 ) = Price(
     assetKey = assetKey,
     label = assetKey,
@@ -91,7 +92,7 @@ class DailyChangeFallbackTest {
 
         val board = repo.observePrices().first()
         val quarter = board.prices.single { it.assetKey == "gold_quarter" }
-        assertEquals(2.0, quarter.changePercent, 1e-9)
+        assertEquals(2.0, quarter.changePercent!!, 1e-9)
     }
 
     /**
@@ -107,21 +108,23 @@ class DailyChangeFallbackTest {
 
         val board = repo.observePrices().first()
         val gram = board.prices.single { it.assetKey == "gold_gram" }
-        assertEquals(2.14, gram.changePercent, 1e-9)
+        assertEquals(2.14, gram.changePercent!!, 1e-9)
     }
 
     /**
-     * Gecmis de yoksa sifir kalir. Uydurulacak bir rakam yok; gunluk degisim
-     * haftalik/aylik gibi null olamiyor (Position.dailyChangePercent non-null),
-     * ama sifir katki vermek dogru cevap.
+     * Gecmis de yoksa cevap BILINMIYOR - sifir degil.
+     *
+     * Once sifira dusuyordu ve o sahte sifir grup toplamlarina paya ve PAYDAYA
+     * girip grubun gercek yuzdesini sulandiriyordu; ekranda da hicbir zaman
+     * "—" gorunemiyordu.
      */
     @Test
-    fun gecmisYoksaSifirKALIR() = runTest {
+    fun gecmisYoksaBILINMIYOR() = runTest {
         val (repo, _) = harness(listOf(price("gold_full", 40_000.0, 0.0)))
         repo.refresh()
 
         val board = repo.observePrices().first()
-        assertEquals(0.0, board.prices.single { it.assetKey == "gold_full" }.changePercent, 1e-9)
+        assertNull(board.prices.single { it.assetKey == "gold_full" }.changePercent)
     }
 
     /** Gercekten oynamayan varlikta yedek yol da sifir verir - bozmuyor. */
@@ -132,7 +135,7 @@ class DailyChangeFallbackTest {
         repo.refresh()
 
         val board = repo.observePrices().first()
-        assertEquals(0.0, board.prices.single { it.assetKey == "gold_half" }.changePercent, 1e-9)
+        assertEquals(0.0, board.prices.single { it.assetKey == "gold_half" }.changePercent!!, 1e-9)
     }
 
     /**
@@ -157,7 +160,7 @@ class DailyChangeFallbackTest {
         val board = repo.observePrices().first()
         assertEquals(
             0.0,
-            board.prices.single { it.assetKey == "gold_quarter" }.changePercent,
+            board.prices.single { it.assetKey == "gold_quarter" }.changePercent!!,
             1e-9,
         )
     }
@@ -172,7 +175,7 @@ class DailyChangeFallbackTest {
         val board = repo.observePrices().first()
         assertEquals(
             2.09,
-            board.prices.single { it.assetKey == "gold_quarter" }.changePercent,
+            board.prices.single { it.assetKey == "gold_quarter" }.changePercent!!,
             1e-9,
         )
     }
@@ -192,11 +195,8 @@ class DailyChangeFallbackTest {
         repo.refresh()
 
         val board = repo.observePrices().first()
-        assertEquals(
-            0.0,
-            board.prices.single { it.assetKey == "gold_quarter" }.changePercent,
-            1e-9,
-        )
+        // Fiyat oynamis ama dunle kiyaslanamiyor: cevap BILINMIYOR.
+        assertNull(board.prices.single { it.assetKey == "gold_quarter" }.changePercent)
     }
 
     /**
@@ -214,7 +214,7 @@ class DailyChangeFallbackTest {
         // Dunden: (10.500 - 10.000) / 10.000 = %5. Onceki gunler karismaz.
         assertEquals(
             5.0,
-            board.prices.single { it.assetKey == "gold_quarter" }.changePercent,
+            board.prices.single { it.assetKey == "gold_quarter" }.changePercent!!,
             1e-9,
         )
     }
@@ -236,7 +236,7 @@ class DailyChangeFallbackTest {
         val board = repo.observePrices().first()
         assertEquals(
             0.0,
-            board.prices.single { it.assetKey == "gold_quarter" }.changePercent,
+            board.prices.single { it.assetKey == "gold_quarter" }.changePercent!!,
             1e-9,
         )
     }
@@ -254,7 +254,7 @@ class DailyChangeFallbackTest {
 
         val board = repo.observePrices().first()
         val quarter = board.prices.single { it.assetKey == "gold_quarter" }
-        assertEquals(0.0, quarter.changePercent, 1e-9)
+        assertEquals(0.0, quarter.changePercent!!, 1e-9)
         assertEquals(8.8746, quarter.weekChangePercent ?: 0.0, 1e-4)
     }
 }

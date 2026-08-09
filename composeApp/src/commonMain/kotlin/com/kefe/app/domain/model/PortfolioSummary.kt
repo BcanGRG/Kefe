@@ -13,8 +13,9 @@ data class AllocationSlice(
  */
 data class PortfolioTotals(
     val totalValue: Double,
-    val todayChange: Double,
-    val todayChangePercent: Double,
+    /** Bugunku degisim; null = hicbir pozisyonun rakami bilinmiyor, ekran "—" yazar. */
+    val todayChange: Double?,
+    val todayChangePercent: Double?,
     val profit: Double,
     val profitPercent: Double,
     /** Yatirilan anapara - pozisyonlarin maliyet toplami. */
@@ -75,16 +76,21 @@ fun List<Position>.allocation(): List<AllocationSlice> {
 }
 
 /**
- * Bugunku degisimin TL karsiligi.
+ * Bugunku degisimin TL karsiligi ve yuzdesi; hicbir pozisyonun rakami
+ * bilinmiyorsa null.
  *
  * Her pozisyonun gunluk yuzdesi kendi degerine uygulanir; toplam portfoyun
  * gunluk yuzdesi bunlarin agirlikli birlesimidir. Tek bir "portfoy yuzdesi"
  * varsaymak buyuk pozisyonlarin etkisini yok sayardi.
+ *
+ * Hesap [weightedPeriodTotal] ile ORTAKTIR - hedef karti da (GoalAssets) ayni
+ * yardimciyi kullaniyor. Burada elle yazilmis bir kopya duruyordu ve iki fark
+ * uretiyordu: yuzdesi BILINMEYEN pozisyon sifir sayilip paya ve paydaya
+ * giriyor, grubun gercek yuzdesini sulandiriyordu; ayrica kardesindeki
+ * "donem basi degeri pozitif olmali" korumasi burada yoktu.
  */
-fun List<Position>.todayChange(): Double = sumOf { position ->
-    val previous = position.value / (1.0 + position.dailyChangePercent / 100.0)
-    position.value - previous
-}
+fun List<Position>.todayChange(): PeriodTotal? =
+    weightedPeriodTotal(map { it.value to it.dailyChangePercent })
 
 /**
  * Bu ay eklenen net para: alimlar eksi satislar.
@@ -117,12 +123,11 @@ fun portfolioTotals(
     val principal = positions.totalCost()
     val profit = total - principal
     val dayChange = positions.todayChange()
-    val previousTotal = total - dayChange
 
     return PortfolioTotals(
         totalValue = total,
-        todayChange = dayChange,
-        todayChangePercent = if (previousTotal <= 0.0) 0.0 else dayChange / previousTotal * 100.0,
+        todayChange = dayChange?.amount,
+        todayChangePercent = dayChange?.percent,
         profit = profit,
         profitPercent = if (principal <= 0.0) 0.0 else profit / principal * 100.0,
         principal = principal,

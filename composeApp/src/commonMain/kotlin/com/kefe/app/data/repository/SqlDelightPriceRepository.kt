@@ -150,10 +150,15 @@ class SqlDelightPriceRepository(
                     // +%2,09 gorunuyordu - oysa o gun hicbir sey islem
                     // gormemisti. Fiyat onceki gunun kaydiyla ayniysa o gun
                     // oynamamistir; dogru katki sifirdir.
+                    //
+                    // Ucuncu dal artik SIFIRA DUSMUYOR: kaynak sustu ve dunun
+                    // kaydi da yoksa cevap "bilmiyoruz"dur. Sifir yazmak o
+                    // pozisyonu grup toplamlarina paya ve PAYDAYA sokuyor,
+                    // grubun gercek yuzdesini sulandiriyordu.
                     changePercent = when {
                         !moved -> 0.0
-                        price.changePercent != 0.0 -> price.changePercent
-                        else -> changes.day ?: 0.0
+                        price.changePercent.let { it != null && it != 0.0 } -> price.changePercent
+                        else -> changes.day
                     },
                     weekChangePercent = changes.week,
                     monthChangePercent = changes.month,
@@ -245,7 +250,9 @@ class SqlDelightPriceRepository(
                         label = price.label,
                         bid = price.bid,
                         ask = price.ask,
-                        changePercent = price.changePercent,
+                        // Kolon NOT NULL. Onbellege kaynagin HAM rakami yazilir;
+                        // etkin gunluk degisim okuma aninda yeniden hesaplaniyor.
+                        changePercent = price.changePercent ?: 0.0,
                         timestamp = price.timestamp,
                         source = price.source,
                         assetClass = price.assetClass,

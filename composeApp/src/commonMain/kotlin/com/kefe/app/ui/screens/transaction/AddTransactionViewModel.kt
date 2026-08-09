@@ -865,7 +865,7 @@ private fun heldFundResults(positions: List<Position>, board: PriceBoard): List<
                 name = pos.name.substringAfter(" · ", pos.name),
                 issuer = "",
                 price = onBoard?.ask ?: pos.unitPrice,
-                changePercent = onBoard?.changePercent ?: pos.dailyChangePercent,
+                changePercent = onBoard?.changePercent ?: pos.dailyChangePercent ?: 0.0,
             )
         }
 
@@ -885,7 +885,7 @@ private fun heldStockResults(positions: List<Position>, board: PriceBoard): List
                 name = pos.name.substringAfter(" · ", pos.name),
                 exchange = "",
                 price = onBoard?.ask ?: pos.unitPrice,
-                changePercent = onBoard?.changePercent ?: pos.dailyChangePercent,
+                changePercent = onBoard?.changePercent ?: pos.dailyChangePercent ?: 0.0,
                 nativePrice = onBoard?.nativePrice,
                 currencyCode = onBoard?.nativeCurrency,
             )

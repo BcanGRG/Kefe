@@ -70,6 +70,7 @@ import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
 import com.kefe.app.ui.theme.Space
 import com.kefe.app.ui.theme.tabular
+import com.kefe.app.ui.format.UnknownChangeText
 
 /**
  * Ozet - masaustu yerlesimi (1440x900 cercevesi).
@@ -304,8 +305,8 @@ private fun HeroRow(
 
 @Composable
 private fun DesktopDeltaRow(
-    amount: Double,
-    percent: Double,
+    amount: Double?,
+    percent: Double?,
     caption: String,
     masked: Boolean,
     // Tasarim gunluk degisimi iki, toplam getiriyi tek ondalikla yazar.
@@ -313,6 +314,17 @@ private fun DesktopDeltaRow(
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
+    // Bilinmeyen degisim "—" yazilir (bkz. SummaryScreen.DeltaRow).
+    if (amount == null || percent == null) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(UnknownChangeText, style = t.bodyStrong.tabular(), color = c.onSurfaceMuted)
+            Text(caption, style = t.caption, color = c.onSurfaceMuted, maxLines = 1)
+        }
+        return
+    }
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),

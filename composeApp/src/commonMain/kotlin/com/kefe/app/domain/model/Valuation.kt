@@ -123,6 +123,11 @@ fun Position.valuedAt(price: Price?, today: KefeDate): Position {
  *
  * Haftalik/aylik degisim BU KURALDAN ETKILENMEZ: onlar gecmis serisinden ve
  * bir tolerans penceresiyle hesaplaniyor, yani zaten kapali gunlere dayanikli.
+ *
+ * SIFIR ile NULL ayri seylerdir. Kotasyon bugunden degilse cevap SIFIRDIR -
+ * bunu biliyoruz, piyasa bugun oynamadi. Kotasyon bugundense ama degisim
+ * bilinmiyorsa (kaynak sustu ve dunun kaydi da yok) cevap NULL'dur: ekran "—"
+ * yazar ve o pozisyon grup toplamlarina hic girmez.
  */
-fun Price.todayChangePercent(today: KefeDate): Double =
+fun Price.todayChangePercent(today: KefeDate): Double? =
     if (quoteDate == today) changePercent else 0.0

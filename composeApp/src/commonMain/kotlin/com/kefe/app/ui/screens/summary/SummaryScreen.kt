@@ -88,6 +88,8 @@ import com.kefe.app.ui.theme.Radius
 import com.kefe.app.ui.theme.Sizes
 import com.kefe.app.ui.theme.Space
 import com.kefe.app.ui.theme.tabular
+import com.kefe.app.ui.format.UnknownChangeText
+import com.kefe.app.ui.format.changeText
 
 /**
  * Ozet - en kritik ekran. "Toplam ne kadar var, hedefe ne kaldi" sorusunu bir
@@ -533,14 +535,25 @@ private fun HeroSection(
 /** Degisim satiri: [ok] [tutar] [yuzde] [aciklama], aralar 6dp. */
 @Composable
 private fun DeltaRow(
-    amount: Double,
-    percent: Double,
+    amount: Double?,
+    percent: Double?,
     caption: String,
     masked: Boolean,
     decimals: Int,
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
+    // Bilinmeyen degisim "—" yazilir; sifir gostermek "degismedi" demek olurdu.
+    if (amount == null || percent == null) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(DeltaGap),
+        ) {
+            Text(UnknownChangeText, style = t.bodyStrong.tabular(), color = c.onSurfaceMuted)
+            Text(caption, style = t.caption, color = c.onSurfaceMuted)
+        }
+        return
+    }
     val positive = amount >= 0
 
     Row(
@@ -938,9 +951,9 @@ private fun MarketCard(
                 Spacer(Modifier.width(Space.x10))
                 // Isaret her zaman yazilir; yon bilgisi renge birakilmaz.
                 Text(
-                    text = Money.delta(row.changePercent),
+                    text = changeText(row.changePercent),
                     style = t.caption.tabular(),
-                    color = c.delta(row.changePercent),
+                    color = row.changePercent?.let { c.delta(it) } ?: c.onSurfaceMuted,
                     maxLines = 1,
                 )
             }
