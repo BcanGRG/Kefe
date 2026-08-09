@@ -39,7 +39,11 @@ fun GoldSubtype.priceKey(): String? = when (this) {
     GoldSubtype.Half -> "gold_half"
     GoldSubtype.Full -> "gold_full"
     GoldSubtype.Ata -> "gold_ata"
-    GoldSubtype.Bullion -> "gold_gram"
+    // Has/Kulcenin KENDI kotasyonu var ve gram altindan farkli: tahtada Has
+    // ₺6.627,24 iken gram ₺6.660,55 (9 Agustos 2026). Once gram anahtarina
+    // dusuluyordu ve Has tutan bir pozisyon yaklasik %0,5 fazla degerleniyordu.
+    // Kaynak bu satiri zaten cekiyor (LivePriceRemoteDataSource: HAS).
+    GoldSubtype.Bullion -> "gold_bullion"
     GoldSubtype.Jewelry -> null
 }
 

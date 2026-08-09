@@ -271,6 +271,31 @@ class ValuationTest {
         assertTrue(k22 != k24, "22 ve 24 ayar ayni anahtara dusuyor: $k22")
     }
 
+    /**
+     * Has/Kulce KENDI kotasyonundan degerlenir.
+     *
+     * Once gram anahtarina dusuyordu; tahtada iki fiyat farkli (9 Agustos 2026:
+     * Has ₺6.627,24, gram ₺6.660,55) ve Has tutan bir pozisyon yaklasik %0,5
+     * fazla degerleniyordu. Kaynak Has satirini zaten cekiyor.
+     */
+    @Test
+    fun hasKulceKendiKotasyonundanDEGERLENIR() {
+        val bullion = position(subtype = GoldSubtype.Bullion).priceKey()
+        val gram = position(subtype = GoldSubtype.Gram, karat = Karat.K24).priceKey()
+        assertEquals("gold_bullion", bullion)
+        assertTrue(bullion != gram, "Has/Kulce gram anahtarina dusuyor: $bullion")
+    }
+
+    /** Has/Kulce fiyati tahtadan gercekten okunabilmeli - anahtar kaynakla eslesir. */
+    @Test
+    fun hasKulceFiyatiTAHTADANOkunur() {
+        val has = price(assetKey = "gold_bullion", bid = 6_626.39, ask = 6_627.24)
+        val valued = position(subtype = GoldSubtype.Bullion, quantity = 10.0)
+            .valuedAt(has, Today)
+        // Satis tarafindan: 10 gr x 6.626,39
+        assertEquals(66_263.9, valued.value, 1e-6)
+    }
+
     @Test
     fun fonAnahtariKimlikten() {
         // Fon kodu baska hicbir alanda tasinmiyor.
