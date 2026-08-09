@@ -2,7 +2,9 @@ package com.kefe.app.ui.screens.market
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.label
 import com.kefe.app.domain.repository.PriceRepository
@@ -24,6 +26,9 @@ import kotlinx.coroutines.launch
  */
 class MarketViewModel(
     private val priceRepository: PriceRepository,
+    // Gunluk degisim kotasyon gunune baglidir; "bugun"un ne oldugunu bilmeden
+    // Varliklar ve Ozet ile ayni cevabi veremeyiz (bkz. Price.changeIn).
+    private val clock: KefeClock,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MarketUiState())
@@ -47,7 +52,7 @@ class MarketViewModel(
             // cikilmaz - hafta ve ay zaten elde olan veriden hesaplaniyor.
             is MarketIntent.SelectPeriod -> _state.value = _state.value.copy(
                 period = intent.period,
-                sections = lastPrices.toSections(intent.period),
+                sections = lastPrices.toSections(intent.period, clock.today()),
             )
 
             is MarketIntent.OpenManualPrice -> openEdit(intent.assetKey)
@@ -74,7 +79,7 @@ class MarketViewModel(
             priceRepository.observePrices().collect { board ->
                 lastPrices = board.prices
                 _state.value = _state.value.copy(
-                    sections = board.prices.toSections(_state.value.period),
+                    sections = board.prices.toSections(_state.value.period, clock.today()),
                     updatedAtLabel = board.updatedAtLabel,
                     freshness = board.freshness,
                 )
@@ -177,11 +182,11 @@ private fun displayName(assetKey: String, fallback: String): String =
 private fun orderIndex(assetKey: String): Int =
     RowOrder.indexOf(assetKey).let { if (it < 0) Int.MAX_VALUE else it }
 
-private fun List<Price>.toSections(period: ChangePeriod): List<MarketSection> =
+private fun List<Price>.toSections(period: ChangePeriod, today: KefeDate): List<MarketSection> =
     AssetClass.entries.mapNotNull { assetClass ->
         val rows = filter { it.assetClass == assetClass }
             .sortedBy { orderIndex(it.assetKey) }
-            .map { it.toRow(period) }
+            .map { it.toRow(period, today) }
         if (rows.isEmpty()) {
             null
         } else {
@@ -211,8 +216,8 @@ private fun Price.nativeText(): String? {
     return Money.foreign(value, code)
 }
 
-private fun Price.toRow(period: ChangePeriod): MarketRow {
-    val change = changeIn(period)
+private fun Price.toRow(period: ChangePeriod, today: KefeDate): MarketRow {
+    val change = changeIn(period, today)
     return MarketRow(
         assetKey = assetKey,
         name = displayName(assetKey, label),
