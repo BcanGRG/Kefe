@@ -165,7 +165,7 @@ ayrıştırıcıya bağlandı: okunamayan metin artık başka bir sayıya dönü
 sıfıra düşüp mevcut `amount <= 0` kontrolüne yakalanıyor. `RawAmountTest`
 (9 test) eklendi — eski kodda üçü düşüyor.
 
-### P0.5 · Kur gelmeden hedef kaydedilince tutar 5.000 kat sapıyor
+### P0.5 · Kur gelmeden hedef kaydedilince tutar 5.000 kat sapıyor — ✅ ÇÖZÜLDÜ
 
 `ui/screens/goals/GoalsUiState.kt:72-79` · `GoalsViewModel.kt:145-154, 206-233`
 
@@ -185,11 +185,12 @@ olabileceğini kodun kendisi kabul ediyor (`GoalsViewModel.kt:43-45` yorumu ve
 `save()`'in tek doğrulaması `amount <= 0.0`; kur geçerliliği hiç sorgulanmıyor.
 Telafi eden kod yok — birim segmentleri kur 0 iken de aktif.
 
-**Düzeltme:** `rateOf` null dönsün; kur bilinmiyorken TL dışı birim seçimi ve
-kayıt engellensin; editör açıkken kur gelirse `amountText` o an yeniden
-çevrilsin.
+**Yapıldı** (`Refuse to price a goal before the rate is known`): `rateOrNull`
+null dönüyor, kur bilinmiyorken kayıt engelleniyor, altın/dolar çipleri kilitli
+ve soluk çiziliyor, çevrilemeyen birim `pendingUnit` ile ertelenip kur gelince
+tamamlanıyor. `GoalRateTest` (8 test) eklendi — eski kodda beşi düşüyor.
 
-### P0.6 · Öksüz atama yedeği geri yüklemeyi tümden çökertiyor
+### P0.6 · Öksüz atama yedeği geri yüklemeyi tümden çökertiyor — ✅ ÇÖZÜLDÜ
 
 `data/repository/SqlDelightPortfolioRepository.kt:499` (+ `:366`, `:741-814`)
 
@@ -212,9 +213,76 @@ varlığı) sil, sonra yedek al.
 `observeGoalAssets` onları filtrelemiyor; pozisyon var olmayan bir hedefe atanmış
 kalıyor ve sonraki alımları da yutuyor.
 
-**Düzeltme:** `deleteGoal`/`deletePosition` ilgili `goal_assets` satırlarını da
-mezar taşlasın; `exportBackup` atamaları canlı kimliklerle filtrelesin;
-`restoreBackup` yazmadan önce hedef/pozisyon varlığını doğrulasın.
+**Yapıldı** (`Keep a deleted goal from breaking the backup`): iki silme yolu da
+atamaları mezar taşlıyor (`clearGoalAssignments` / `clearPositionAssignment`);
+`restoreBackup` hedefi ya da varlığı dosyada olmayan atamayı atlıyor — böylece
+öksüz satır taşıyan **mevcut** yedekler de yüklenebiliyor. Üç test eklendi,
+eskisinde üçü de düşüyor.
+
+---
+
+## Değişim hesapları — ayrı inceleme (9 Ağu 2026, Pazar)
+
+Kullanıcı pazar günü değişimlerin %0 olması gerektiğini, bir şeyin tutmadığını
+bildirdi. İnceleme sonunda **bir kesin hata** bulundu ve düzeltildi; **iki konu
+karar bekliyor**.
+
+### Bulunan ve düzeltilen: aynı pencere, üç ekranda iki farklı cevap
+
+`Price.changeIn(Day)` ham `changePercent` okuyordu; `Position.changeIn(Day)`
+ise `valuedAt` içinden `todayChangePercent(today)` kapısından geçiyordu. Borsa
+kapalıyken aynı veriden iki cevap çıkıyordu — cuma kapanışından kalma bir
+kotasyonla, pazar günü:
+
+| Ekran | Gösterdiği | Doğrusu |
+|---|---|---|
+| Piyasa | **+1,50%** (cumanın hareketi) | 0,00% |
+| Özet · piyasa kartı | **+1,50%** | 0,00% |
+| Varlıklar | 0,00% | ✓ |
+| Özet · "bugün" | ₺0 | ✓ |
+
+Özet ekranında çelişki **tek bakışta** görünüyordu: piyasa kartı dolu, hemen
+üstündeki "bugün" satırı boş. Kapı artık `Price.changeIn`'in içinde;
+`DailyChangeAcrossScreensTest` üç ekranın aynı sayıyı verdiğini sabitliyor.
+
+### Karar bekleyen 1: türetilen "günlük" 4 güne kadar hareketi kapsıyor
+
+`PriceChange.kt` günlük pencereyi `[bugün−4, bugün−1]` kuruyor
+(`DayDaysBack=1`, `DayTolerance=3`). Kaynak kendi `Change` alanını sıfır
+gönderdiğinde (serbest piyasa ucu çeyrek/yarım/tam/ata ve bütün ayar
+kalemlerinde hep sıfır gönderiyor) bu pencereden türetilen değer "bugünün
+değişimi" olarak yazılıyor.
+
+Pazar günü somut sonuç: uygulama son cuma açıldıysa geçmişte cuma satırı var ve
+türetilen değer **cuma → pazar** hareketini kapsıyor. Kotasyonun `quoteDate`'i
+pazar ise (serbest piyasa hafta sonu da güncelliyor) bu değer yeni kapıdan da
+geçer ve "bugünkü getiri"ye girer.
+
+Bu, iki belgelenmiş kuralın çatışması: §35 "günlük değişim yalnız o gün olduysa
+sayılır" ile §40 "en son baktığımızdan bu yana". İkisi aynı anda doğru olamaz.
+Toleransı 0-1 güne indirmek §35'i korur ama uygulamayı pazartesi açan birinin
+cuma→pazartesi hareketini kaybettirir. **Bilinçli bir tasarım kararı olduğu için
+dokunmadım** — hangisini istediğinizi söylerseniz uygularım.
+
+### Karar bekleyen 2: günlük değişimde "bilinmiyor" durumu yok
+
+`weekChangePercent` ve `monthChangePercent` nullable, `dailyChangePercent`
+değil. Bu yüzden "Gün" penceresi hiçbir zaman "—" olamıyor; veri yokken sıfır
+sayılıyor ve `weightedPeriodTotal` bu sıfırı hesaba katarak grup yüzdesini
+sulandırıyor. §25 "Veri yoksa —, sıfır değil" kuralı yalnız hafta/ay için
+uygulanmış. Alanı nullable yapmak `todayChange()`, `portfolioTotals` ve üç
+ekrana yayılan bir değişiklik; ayrı bir adım olarak planlanmalı.
+
+### İncelenip sorun bulunmayanlar
+
+- `todayChange()` ağırlıklandırması: her pozisyon dönem başı değerine geri
+  çözülüp TL farklar toplanıyor — yüzde ortalaması alınmıyor, doğru.
+- `portfolioTotals`: `todayChangePercent` paydası dönem başı toplam
+  (`total − dayChange`), kâr/zarar paydası maliyet — ikisi doğru ayrılmış.
+- `weightedPeriodTotal`: yüzdesi bilinmeyen pozisyon paya da paydaya da
+  girmiyor, doğru.
+- Hafta/ay pencereleri: tolerans kapalı günler için zaten tasarlanmış, kotasyon
+  günü kuralından etkilenmemeleri doğru.
 
 ---
 
@@ -374,7 +442,7 @@ Aynı işlem iki ekranda iki farklı tutarla görünüyor; "Toplam" kutusunun yo
 
 | # | Dosya | Kusur |
 |---|---|---|
-| 79 | `ChangePeriod.kt:26` | Piyasa ekranı "Gün"de ham `changePercent` okuyor, Varlıklar/Özet ise kotasyon-günü kuralından geçiriyor. Hafta sonu iki ekran farklı |
+| ~~79~~ | `ChangePeriod.kt:26` | ✅ **ÇÖZÜLDÜ** — Piyasa ekranı "Gün"de ham `changePercent` okuyor, Varlıklar/Özet ise kotasyon-günü kuralından geçiriyor. Hafta sonu iki ekran farklı |
 | 62 | `SqlDelightPriceRepository.kt:140` | "Sıfırı verilmedi saymak yanlış tetiklenemez" iddiası doğru değil: `price_history` günün kapanışını değil uygulamanın açıldığı andaki fiyatı tutuyor, kaynağın geçerli sıfırı eziliyor |
 | 63 | `PriceChange.kt:48` | Türetilen "günlük" pencere `[bugün-4, bugün-1]`; 4 güne kadar hareket tek "günlük" değişim olarak bugüne yazılıyor — §35 ile çelişiyor |
 | 65 | `SqlDelightPriceRepository.kt:153` | Tazelik en yeni satırdan hesaplanıyor: kısmi çekimde tek taze satır bütün bayat satırları maskeliyor, "Fresh" kalıyor |
@@ -490,8 +558,8 @@ Sıra bilinçli: her aşama bir öncekinin açtığı zemini kullanıyor.
    `newPositionId()` üzerinden yaz
 4. ✅ `rawAmount`/`parseAmount` çiftini bilimsel gösterime karşı kapat
    (BackupCodec hâlâ açık — P3'teki `BackupCodec.kt:65` ayrıca kapatılmalı)
-5. `rateOf`'u null'lanabilir yap; kur yokken TL dışı birim kilitli
-6. Yumuşak silmede `goal_assets` mezar taşlama + yedek filtresi
+5. ✅ `rateOf`'u null'lanabilir yap; kur yokken TL dışı birim kilitli
+6. ✅ Yumuşak silmede `goal_assets` mezar taşlama + yedek filtresi
 
 **Aşama 2 — Tek doğruluk kaynağı (P1)**
 7. Aynı gün sırası için kalıcı `sequence`/`createdAt` kolonu + göç; dört akışı
