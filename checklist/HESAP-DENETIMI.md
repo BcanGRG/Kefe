@@ -98,7 +98,7 @@ olarak ikiye bölündü ve tek transaction içine alındı; `goals` üzerinde hi
 sürücüsü gibi **açık** kuruyor ve ona güvenmeden önce açık olduğunu ayrıca
 sınıyor. Eski SQL geri konduğunda dört test düşüyor, doğrulandı.
 
-### P0.3 · Gram altında ayar pozisyon kimliğinde taşınmıyor: 22 ile 24 ayar birleşiyor
+### P0.3 · Gram altında ayar pozisyon kimliğinde taşınmıyor: 22 ile 24 ayar birleşiyor — ✅ ÇÖZÜLDÜ
 
 `ui/screens/transaction/AddTransactionViewModel.kt:948`
 
@@ -126,11 +126,13 @@ var.
 ölçüyor, pozisyon kimliğini ölçmediği için bu hatayı yakalamıyor — test **yanlış
 güven veriyor**.
 
-**Düzeltme:** `assetKeyOf` içinde `usesKarat()` doğru olan formlarda kimlik de
-`karat.priceKey()`'den türesin (Jewelry'nin mevcut biçimi korunarak); Bullion'a
-Gram'dan ayrı anahtar. Test `newPositionId()` üzerinden yazılmalı.
+**Yapıldı** (`Give each gold karat its own position`): kimlik kuralı test
+edilebilir bir `goldAssetKey(subtype, karat)` fonksiyonuna çıkarıldı; ayar
+sorulan formlarda kimlik `karat.priceKey()`'den türüyor, Has/Külçe kendi
+anahtarını aldı. 24 ayar gramın kimliği değişmedi, mevcut pozisyonlar
+etkilenmiyor. `GoldAssetKeyTest` (6 test) eklendi — eski mantıkta üçü düşüyor.
 
-### P0.4 · Hedef tutarı bilimsel gösterime düşüp yok oluyor
+### P0.4 · Hedef tutarı bilimsel gösterime düşüp yok oluyor — ✅ ÇÖZÜLDÜ
 
 `ui/format/Money.kt:233-237` · `ui/screens/goals/GoalsUiState.kt:68-69` ·
 `GoalsViewModel.kt:182`
@@ -155,9 +157,13 @@ Kaydet → 2,04 × 6242,71 = ₺12.735
 hedefinde de mümkün ("12500000,5" → 1,25 TL). `BackupCodec.kt:65` aynı sorunu
 CSV yedeğinde taşıyor ("1,5E7").
 
-**Düzeltme:** `rawAmount` sabit ondalıklı, bilimsel gösterimsiz biçimlendirme
-yapsın; `parseAmount` tanımadığı karakter görünce 0 dönmek yerine reddetsin;
-`goal.amount` editöre konurken kuruşa yuvarlansın.
+**Yapıldı** (`Stop a goal amount from vanishing into scientific notation`):
+`rawAmount` artık `Money.plain` ile, değerin gerçekten taşıdığı hane sayısı
+kadar ve bilimsel gösterimsiz yazıyor — bu aynı zamanda `0,30000000000000004`
+gibi kayan nokta kuyruğunu da alandan çıkarıyor. `parseAmount` ortak
+ayrıştırıcıya bağlandı: okunamayan metin artık başka bir sayıya dönüşmüyor,
+sıfıra düşüp mevcut `amount <= 0` kontrolüne yakalanıyor. `RawAmountTest`
+(9 test) eklendi — eski kodda üçü düşüyor.
 
 ### P0.5 · Kur gelmeden hedef kaydedilince tutar 5.000 kat sapıyor
 
@@ -480,10 +486,10 @@ Sıra bilinçli: her aşama bir öncekinin açtığı zemini kullanıyor.
    birleştir; Piyasa alanını ham metinle tohumla · testleri yaz
 2. ✅ `upsertGoal`'ü iki adıma böl; `goals` üzerindeki tüm `INSERT OR REPLACE`'i
    temizle; yanlış yorumu düzelt; test veritabanını FK açık kur
-3. `assetKeyOf`'u ayar duyarlı yap; Bullion'a ayrı anahtar; testi
+3. ✅ `assetKeyOf`'u ayar duyarlı yap; Bullion'a ayrı anahtar; testi
    `newPositionId()` üzerinden yaz
-4. `rawAmount`/`parseAmount` çiftini bilimsel gösterime karşı kapat (BackupCodec
-   dahil)
+4. ✅ `rawAmount`/`parseAmount` çiftini bilimsel gösterime karşı kapat
+   (BackupCodec hâlâ açık — P3'teki `BackupCodec.kt:65` ayrıca kapatılmalı)
 5. `rateOf`'u null'lanabilir yap; kur yokken TL dışı birim kilitli
 6. Yumuşak silmede `goal_assets` mezar taşlama + yedek filtresi
 
