@@ -92,6 +92,29 @@ fun periodChangePercent(
     return (latest - reference.price) / reference.price * 100.0
 }
 
+/**
+ * Bugunden ONCEKI en yeni kayitli fiyat - "en son kapanista neredeydi".
+ *
+ * Fiyatin bugun GERCEKTEN oynayip oynamadigini anlamak icin gerekiyor. Kaynagin
+ * kendi damgasi bu soruyu yanitlamiyor: serbest piyasa ucu hafta sonu da
+ * Update_Date'i her dakika ilerletiyor ama fiyatlari cumadan donmus halde
+ * biraktigi icin damga "bugun kotasyon var" gibi gorunuyor (9 Agustos 2026
+ * Pazar gunu olculdu: damga 10:04 -> 10:05 ilerledi, butun altin fiyatlari ve
+ * Change alanlari zerre degismedi).
+ *
+ * Fiyatin kendisi bu soruyu yanitliyor: deger onceki gunun kaydiyla AYNI ise
+ * piyasa o gun oynamamistir.
+ */
+fun previousDayPrice(history: List<PricePoint>, today: KefeDate): Double? {
+    val newest = today.toEpochDay() - DayDaysBack
+    val oldest = newest - DayTolerance
+    return history
+        .filter { it.date.toEpochDay() in oldest..newest }
+        .maxByOrNull { it.date.toEpochDay() }
+        ?.price
+        ?.takeIf { it > 0.0 }
+}
+
 /** Gun, hafta ve ay degisimini tek cagriyla verir. */
 fun periodChangesOf(
     history: List<PricePoint>,

@@ -12,6 +12,7 @@ import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.PricePoint
 import com.kefe.app.domain.model.PriceSource
 import com.kefe.app.domain.model.periodChangesOf
+import com.kefe.app.domain.model.previousDayPrice
 import com.kefe.app.domain.model.plusMonths
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
@@ -123,24 +124,36 @@ class SqlDelightPriceRepository(
                     monthChangePercent = null,
                 )
             } else {
-                val changes = historyByKey[price.assetKey]
+                val history = historyByKey[price.assetKey]
+                val changes = history
                     ?.let { periodChangesOf(it, price.ask, today) }
                     ?: PeriodChanges.Unknown
+                // Fiyat bugun GERCEKTEN oynadi mi. Kaynagin damgasi bunu
+                // soylemiyor (bkz. [previousDayPrice]); fiyatin kendisi
+                // soyluyor. Gecmis yoksa bilemeyiz - o zaman kaynaga guveniriz.
+                val previous = history?.let { previousDayPrice(it, today) }
+                val moved = previous == null || price.ask != previous
                 price.copy(
-                    // KAYNAK ONCE, gecmis YEDEK. Serbest piyasa ucu yalnizca
-                    // gram/has altin ve gumus icin Change dolduruyor; ceyrek,
-                    // yarim, tam, ata ve ayar kalemlerine duz sifir yaziyor -
-                    // fiyatlari oynadigi halde. Portfoyun %95'i altin olan bir
-                    // kullanicinin "bugunku getiri" satiri bu yuzden bostu.
+                    // ONCE "OYNADI MI", sonra KAYNAK, en son gecmis.
                     //
-                    // Sifir "degismedi" ile "kaynak soylemedi" arasini ayirt
-                    // etmiyor; ama ayirt etmesi de gerekmiyor: gercekten
-                    // oynamadiysa gecmisten hesaplanan da sifir cikar. Kaynagin
-                    // rakami varsa ona dokunulmaz - o gun ici ve daha kesin.
-                    changePercent = if (price.changePercent != 0.0) {
-                        price.changePercent
-                    } else {
-                        changes.day ?: 0.0
+                    // Kaynak degisim vermiyor diye gecmisten turetme buraya
+                    // konmustu: serbest piyasa ucu ceyrek/yarim/tam/ata ve ayar
+                    // kalemlerine duz sifir yaziyordu. 9 Agustos 2026'da uc
+                    // yeniden olculdu ve ARTIK HEPSINE Change gonderiyor
+                    // (CEYREKALTIN 2.09, YIA 2.09, GRA 2.59, GUMUS 3.57);
+                    // 86 sembolden yalnizca biri sifir. Yedek yol duruyor ama
+                    // artik nadiren devreye giriyor.
+                    //
+                    // Asil sorun baska yerde cikti: uc, piyasa KAPALIYKEN de
+                    // Update_Date'i her dakika ilerletiyor ve Change'i cumadan
+                    // donmus halde tutuyor. Pazar gunu "bugunku getiri"
+                    // +%2,09 gorunuyordu - oysa o gun hicbir sey islem
+                    // gormemisti. Fiyat onceki gunun kaydiyla ayniysa o gun
+                    // oynamamistir; dogru katki sifirdir.
+                    changePercent = when {
+                        !moved -> 0.0
+                        price.changePercent != 0.0 -> price.changePercent
+                        else -> changes.day ?: 0.0
                     },
                     weekChangePercent = changes.week,
                     monthChangePercent = changes.month,

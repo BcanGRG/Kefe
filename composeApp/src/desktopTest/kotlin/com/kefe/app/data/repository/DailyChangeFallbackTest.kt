@@ -15,16 +15,24 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Kaynak gunluk degisimi vermezse gecmisten hesaplanir.
+ * Gunluk degisimin hangi kaynaktan geldigi.
  *
- * SEBEP OLCULDU, tahmin edilmedi. Serbest piyasa ucu (`today.json`) yalnizca
- * gram altin, has altin ve gumus icin `Change` dolduruyor; ceyrek, yarim, tam,
- * ata ve butun ayar kalemlerine duz SIFIR yaziyor - fiyatlari gun icinde
- * oynadigi halde. Portfoyunun %95'i altin olan bir kullanicinin "bugunku
- * getiri" satiri bu yuzden neredeyse bostu ve Piyasa tablosunda o satirlar
- * %0,00 goruyordu.
+ * Kural: ONCE "OYNADI MI", sonra KAYNAK, en son GECMIS.
  *
- * Kural: KAYNAK ONCE, gecmis YEDEK.
+ * Yedek yol su sebeple konmustu: serbest piyasa ucu (`today.json`) yalnizca
+ * gram/has altin ve gumus icin `Change` dolduruyor, ceyrek/yarim/tam/ata ve
+ * butun ayar kalemlerine duz SIFIR yaziyordu - portfoyunun %95'i altin olan bir
+ * kullanicinin "bugunku getiri" satiri bu yuzden neredeyse bostu.
+ *
+ * 9 AGUSTOS 2026'DA UC YENIDEN OLCULDU ve o varsayim artik gecerli degil:
+ * CEYREKALTIN 2.09, YARIMALTIN 2.09, TAMALTIN 2.09, ATAALTIN 2.09, YIA 2.09,
+ * 18AYARALTIN 2.09, 14AYARALTIN 2.09, GRA 2.59, HAS 2.59, GUMUS 3.57 - 86
+ * semboldan yalnizca biri sifir. Yedek yol duruyor ama artik nadiren tetikleniyor.
+ *
+ * AYNI OLCUMDE ASIL SORUN CIKTI: uc, piyasa KAPALIYKEN de Update_Date'i her
+ * dakika ilerletiyor (10:04:01 -> 10:05:01) ve Change'i cumadan donmus halde
+ * tutuyor. Damga "bugun kotasyon var" gibi gorundugu icin cumanin hareketi
+ * pazar gununun "bugunku getiri"sine giriyordu.
  */
 private class StubRemote(private val prices: List<Price>) : PriceRemoteDataSource {
     override suspend fun fetchPrices(): List<Price> = prices
@@ -125,5 +133,63 @@ class DailyChangeFallbackTest {
 
         val board = repo.observePrices().first()
         assertEquals(0.0, board.prices.single { it.assetKey == "gold_half" }.changePercent, 1e-9)
+    }
+
+    /**
+     * PIYASA KAPALIYKEN kaynagin BAYAT rakami "bugun" sayilmaz.
+     *
+     * 9 Agustos 2026 Pazar gunu olculdu: uc, Update_Date'i her dakika
+     * ilerletiyor (10:04:01 -> 10:05:01) ama butun altin fiyatlari ve Change
+     * alanlari cumadan donmus halde duruyor. Damga "bugun kotasyon var" gibi
+     * gorundugu icin cumanin +%2,09'u "bugunku getiri"ye giriyordu; oysa o gun
+     * hicbir sey islem gormemisti.
+     *
+     * Fiyatin kendisi dogruyu soyluyor: deger onceki gunun kaydiyla AYNI.
+     */
+    @Test
+    fun piyasaKapaliykenKaynaginBAYATRakamiSayilmaz() = runTest {
+        // Cuma kapanisindan donmus ceyrek: fiyat ayni, Change hala +%2,09.
+        val (repo, db) = harness(listOf(price("gold_quarter", 10_887.46, 2.09)))
+        db.history("gold_quarter", Dun, 10_887.46)
+        repo.refresh()
+
+        val board = repo.observePrices().first()
+        assertEquals(
+            0.0,
+            board.prices.single { it.assetKey == "gold_quarter" }.changePercent,
+            1e-9,
+        )
+    }
+
+    /** Fiyat oynadiysa kaynagin rakami AYNEN gecer - kural yalniz bayati susturur. */
+    @Test
+    fun fiyatOynadiysaKaynakAYNENGecer() = runTest {
+        val (repo, db) = harness(listOf(price("gold_quarter", 10_900.0, 2.09)))
+        db.history("gold_quarter", Dun, 10_887.46)
+        repo.refresh()
+
+        val board = repo.observePrices().first()
+        assertEquals(
+            2.09,
+            board.prices.single { it.assetKey == "gold_quarter" }.changePercent,
+            1e-9,
+        )
+    }
+
+    /**
+     * Haftalik ve aylik BU KURALDAN ETKILENMEZ: onlar zaten gecmis serisinden
+     * ve tolerans penceresiyle hesaplaniyor, kapali gunlere dayanikli.
+     */
+    @Test
+    fun haftalikKapaliGundenETKILENMEZ() = runTest {
+        val (repo, db) = harness(listOf(price("gold_quarter", 10_887.46, 2.09)))
+        db.history("gold_quarter", Dun, 10_887.46)
+        db.history("gold_quarter", KefeDate(2026, 7, 27), 10_000.0)
+        repo.refresh()
+
+        val board = repo.observePrices().first()
+        val quarter = board.prices.single { it.assetKey == "gold_quarter" }
+        assertEquals(0.0, quarter.changePercent, 1e-9)
+        assertEquals(8.8746, quarter.weekChangePercent ?: 0.0, 1e-4)
     }
 }
