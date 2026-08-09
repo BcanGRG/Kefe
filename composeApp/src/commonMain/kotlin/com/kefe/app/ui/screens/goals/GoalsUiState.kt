@@ -58,6 +58,16 @@ data class GoalEditorState(
     val datePickerOpen: Boolean = false,
     val goldGramPrice: Double = 0.0,
     val usdPrice: Double = 0.0,
+
+    /**
+     * Kur beklendigi icin HENUZ gecilemeyen birim.
+     *
+     * Gram/dolar cinsine sabitlenmis bir hedef, kur gelmeden acilirsa tutar TL
+     * olarak gosterilir ve gecis buraya yazilir; kur gelince cevrim yapilip
+     * alan bosaltilir. Once cevrim 1.0 kuruyla yapiliyordu ve alanda
+     * "2.000.000 gr altin" beliriyordu.
+     */
+    val pendingUnit: GoalUnit? = null,
     val openGoalCount: Int = 0,
 ) {
     val isNew: Boolean get() = goalId == null
@@ -76,15 +86,34 @@ data class GoalEditorState(
  */
 fun String.parseAmount(): Double = parseTrAmountOrNull() ?: 0.0
 
-/** Secili birimin TL karsiligi. Fiyat yoksa 1.0 - bolme hatasi olmasin. */
-fun GoalEditorState.rateOf(target: GoalUnit): Double = when (target) {
+/**
+ * Secili birimin TL karsiligi; kur HENUZ BILINMIYORSA null.
+ *
+ * Once bilinmeyen kur icin 1.0 donuyordu ("bolme hatasi olmasin"). Bu, 1 gram
+ * altini 1 TL'ye esitliyor ve tutari sessizce bozuyordu: cevrimdisi ilk
+ * acilista "400 gram" yazan biri ₺2.000.000 degil ₺400 kaydediyordu. Ters
+ * yonde daha da agiri: kur 0 iken acilan bir gram hedefi alanda "2.000.000 gr"
+ * olarak gorunuyor, kur sonradan gelince ayni sayi gercek kurla carpiliyordu.
+ *
+ * Kurun gelmeyebilecegini kodun kendisi zaten kabul ediyor (bkz.
+ * GoalsViewModel.observePrices'taki `takeIf { it > 0.0 }`).
+ */
+fun GoalEditorState.rateOrNull(target: GoalUnit): Double? = when (target) {
     GoalUnit.Try -> 1.0
-    GoalUnit.GoldGram -> goldGramPrice.takeIf { it > 0.0 } ?: 1.0
-    GoalUnit.Usd -> usdPrice.takeIf { it > 0.0 } ?: 1.0
+    GoalUnit.GoldGram -> goldGramPrice.takeIf { it > 0.0 }
+    GoalUnit.Usd -> usdPrice.takeIf { it > 0.0 }
 }
 
-/** Girilen tutarin TL karsiligi - ilerleme hep TL uzerinden olculur. */
-fun GoalEditorState.amountInTry(): Double = amountText.parseAmount() * rateOf(unit)
+/** Secili birimin kuru elde mi - ekran birim cipini buna gore kilitler. */
+fun GoalEditorState.rateKnown(target: GoalUnit): Boolean = rateOrNull(target) != null
+
+/**
+ * Girilen tutarin TL karsiligi - ilerleme hep TL uzerinden olculur.
+ *
+ * Kur bilinmiyorsa null: "hesaplayamiyorum" ile "sifir yazdi" ayni sey degil.
+ */
+fun GoalEditorState.amountInTryOrNull(): Double? =
+    rateOrNull(unit)?.let { amountText.parseAmount() * it }
 
 data class GoalsUiState(
     val stage: GoalsStage = GoalsStage.Loading,

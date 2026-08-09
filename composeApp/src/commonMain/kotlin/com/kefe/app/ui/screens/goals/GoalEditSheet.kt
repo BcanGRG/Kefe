@@ -246,9 +246,14 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(Space.x4),
     ) {
         GoalUnit.entries.forEach { unit ->
+            // Kuru gelmemis birim SECILEMEZ. Once secilebiliyordu ve cevrim
+            // 1.0 kuruyla yapiliyordu: "400 gram" hedefi ₺400 olarak
+            // kaydediliyordu.
+            val enabled = state.rateKnown(unit)
             UnitSegment(
                 text = unit.label(),
                 selected = unit == state.unit,
+                enabled = enabled,
                 onClick = { onIntent(GoalsIntent.EditorUnit(unit)) },
             )
         }
@@ -664,7 +669,12 @@ private fun RowScope.IconCell(key: String, selected: Boolean, onClick: () -> Uni
 }
 
 @Composable
-private fun RowScope.UnitSegment(text: String, selected: Boolean, onClick: () -> Unit) {
+private fun RowScope.UnitSegment(
+    text: String,
+    selected: Boolean,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     val c = KefeTheme.colors
     Box(
         modifier = Modifier
@@ -672,13 +682,18 @@ private fun RowScope.UnitSegment(text: String, selected: Boolean, onClick: () ->
             .height(Sizes.segment)
             .clip(KefeShapes.pill)
             .background(if (selected) c.accent else Color.Transparent)
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
             style = KefeTheme.type.caption.copy(fontWeight = FontWeight.SemiBold),
-            color = if (selected) c.onAccent else c.onSurfaceMuted,
+            // Kuru gelmemis birim SOLUK cizilir: dokunulamadigi gorunsun.
+            color = when {
+                selected -> c.onAccent
+                !enabled -> c.onSurfaceMuted.copy(alpha = 0.4f)
+                else -> c.onSurfaceMuted
+            },
             maxLines = 1,
         )
     }
