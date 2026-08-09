@@ -290,26 +290,33 @@ gold_bullion`), eksik olan yalnızca anahtardı. Bu, fiyat anahtarını aynı da
 gram altından ayrılan pozisyon kimliğiyle de hizalıyor. İki test eklendi; eski
 anahtarla `expected:<gold_bullion> but was:<gold_gram>` düşüyor.
 
-### Karar bekleyen 1: türetilen "günlük" 4 güne kadar hareketi kapsıyor
+### Çözüldü: §35 seçildi, günlük yalnız dünden hesaplanıyor — ✅
 
-`PriceChange.kt` günlük pencereyi `[bugün−4, bugün−1]` kuruyor
-(`DayDaysBack=1`, `DayTolerance=3`). Kaynak kendi `Change` alanını sıfır
-gönderdiğinde (serbest piyasa ucu çeyrek/yarım/tam/ata ve bütün ayar
-kalemlerinde hep sıfır gönderiyor) bu pencereden türetilen değer "bugünün
-değişimi" olarak yazılıyor.
+`PriceChange.kt` günlük pencereyi `[bugün−4, bugün−1]` kuruyordu
+(`DayDaysBack=1`, `DayTolerance=3`), yani uygulama bir süre açılmamışsa
+**birikmiş** hareket tek bir "bugünkü getiri" olarak yazılıyordu. Bu, §35
+("günlük değişim yalnız o gün olduysa sayılır") ile §40 ("en son baktığımızdan
+bu yana") arasında doğrudan bir çatışmaydı.
 
-Pazar günü somut sonuç: uygulama son cuma açıldıysa geçmişte cuma satırı var ve
-türetilen değer **cuma → pazar** hareketini kapsıyor. Kotasyonun `quoteDate`'i
-pazar ise (serbest piyasa hafta sonu da güncelliyor) bu değer yeni kapıdan da
-geçer ve "bugünkü getiri"ye girer.
+**Karar: §35.** Tolerans sıfırlandı — karşılaştırma noktası yalnızca dün. Dünün
+kaydı yoksa günlük değişim **hesaplanamaz** ve null döner; uydurulmuş bir rakam
+yerine susulur.
 
-Bu, iki belgelenmiş kuralın çatışması: §35 "günlük değişim yalnız o gün olduysa
-sayılır" ile §40 "en son baktığımızdan bu yana". İkisi aynı anda doğru olamaz.
-Toleransı 0-1 güne indirmek §35'i korur ama uygulamayı pazartesi açan birinin
-cuma→pazartesi hareketini kaybettirir. **Bilinçli bir tasarım kararı olduğu için
-dokunmadım** — hangisini istediğinizi söylerseniz uygularım.
+Bayatlık kontrolü (`previousDayPrice`) bilerek daha geniş bakmaya devam ediyor
+ve bu §35'i **güçlendiriyor**: cumartesi uygulamayı açmayan biri pazar günü
+baktığında dünün kaydı yoktur, ama cumanın kaydı durur — fiyat ona eşitse
+"bugün oynamadı" diyebiliyoruz. Orayı da daraltmak, kaynağın cumadan donmuş
+rakamının yeniden "bugün" sayılmasına yol açardı. İki soru ayrı: *"bugün ne
+kadar oynadı"* yalnız dünle, *"bugün hiç oynadı mı"* en son kaydettiğimizle
+yanıtlanır.
 
-### Karar bekleyen 2: günlük değişimde "bilinmiyor" durumu yok
+Hafta ve ay toleransı yerinde kaldı; onlar zaten "yaklaşık şu kadar önce"
+sorusunu yanıtlıyor ve kapalı günlere dayanıklı olmaları gerekiyor.
+
+Eski davranışı sabitleyen bir test vardı (`dunYoksaOncekiKayitliGuneBakilir`);
+yeni kurala göre yazıldı. Üç yeni test eklendi — eski toleransla ikisi düşüyor.
+
+### Karar bekleyen: günlük değişimde "bilinmiyor" durumu yok
 
 `weekChangePercent` ve `monthChangePercent` nullable, `dailyChangePercent`
 değil. Bu yüzden "Gün" penceresi hiçbir zaman "—" olamıyor; veri yokken sıfır
@@ -489,7 +496,7 @@ Aynı işlem iki ekranda iki farklı tutarla görünüyor; "Toplam" kutusunun yo
 |---|---|---|
 | ~~79~~ | `ChangePeriod.kt:26` | ✅ **ÇÖZÜLDÜ** — Piyasa ekranı "Gün"de ham `changePercent` okuyor, Varlıklar/Özet ise kotasyon-günü kuralından geçiriyor. Hafta sonu iki ekran farklı |
 | 62 | `SqlDelightPriceRepository.kt:140` | "Sıfırı verilmedi saymak yanlış tetiklenemez" iddiası doğru değil: `price_history` günün kapanışını değil uygulamanın açıldığı andaki fiyatı tutuyor, kaynağın geçerli sıfırı eziliyor |
-| 63 | `PriceChange.kt:48` | Türetilen "günlük" pencere `[bugün-4, bugün-1]`; 4 güne kadar hareket tek "günlük" değişim olarak bugüne yazılıyor — §35 ile çelişiyor |
+| ~~63~~ | `PriceChange.kt:48` | ✅ **ÇÖZÜLDÜ** — Türetilen "günlük" pencere `[bugün-4, bugün-1]`; 4 güne kadar hareket tek "günlük" değişim olarak bugüne yazılıyor — §35 ile çelişiyor |
 | 65 | `SqlDelightPriceRepository.kt:153` | Tazelik en yeni satırdan hesaplanıyor: kısmi çekimde tek taze satır bütün bayat satırları maskeliyor, "Fresh" kalıyor |
 | 81 | `Position.kt:19` | `dailyChangePercent` non-null olduğu için "Gün" penceresi hiç "—" olamıyor; bilinmeyen sıfır sayılıp grup yüzdesini sulandırıyor (§25 "Veri yoksa —, sıfır değil" yalnız hafta/ay için uygulanmış) |
 | 67 | `SqlDelightPriceRepository.kt:252` | Geçmiş satırı kotasyonun işlem günüyle değil çekim günüyle yazılıyor |
