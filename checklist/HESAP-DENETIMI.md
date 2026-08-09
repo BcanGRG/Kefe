@@ -224,8 +224,8 @@ eskisinde üçü de düşüyor.
 ## Değişim hesapları — ayrı inceleme (9 Ağu 2026, Pazar)
 
 Kullanıcı pazar günü değişimlerin %0 olması gerektiğini, bir şeyin tutmadığını
-bildirdi. İnceleme sonunda **bir kesin hata** bulundu ve düzeltildi; **iki konu
-karar bekliyor**.
+bildirdi. **Sezgi doğru çıktı: iki kesin hata** bulundu ve düzeltildi, biri de
+kullanıcının tarif ettiği rakamın ta kendisiydi. **İki konu karar bekliyor.**
 
 ### Bulunan ve düzeltilen: aynı pencere, üç ekranda iki farklı cevap
 
@@ -244,6 +244,46 @@ kotasyonla, pazar günü:
 Özet ekranında çelişki **tek bakışta** görünüyordu: piyasa kartı dolu, hemen
 üstündeki "bugün" satırı boş. Kapı artık `Price.changeIn`'in içinde;
 `DailyChangeAcrossScreensTest` üç ekranın aynı sayıyı verdiğini sabitliyor.
+
+### Sonradan ölçüldü ve düzeltildi: donmuş kotasyon "bugün" sayılıyordu
+
+Kaynak 9 Ağustos 2026'da yeniden ölçüldü. **Yedek yolun dayandığı varsayım artık
+geçerli değil:** `today.json` bütün altın türlerine `Change` gönderiyor —
+CEYREKALTIN 2.09, YARIMALTIN 2.09, TAMALTIN 2.09, ATAALTIN 2.09, YIA 2.09,
+18AYARALTIN 2.09, 14AYARALTIN 2.09, GRA 2.59, HAS 2.59, GUMUS 3.57. 86 sembolden
+yalnızca biri sıfır.
+
+Aynı ölçüm **asıl hatayı** ortaya çıkardı ve telefonda görünen buydu. Uç, piyasa
+kapalıyken de `Update_Date`'i her dakika ilerletiyor — pazar günü altı dakika
+örneklendi, damga `10:04:01 → 10:10:01` ilerlerken bütün altın fiyatları ve
+`Change` alanları bayt bayt aynı kaldı. `quoteDate` o damgadan okunduğu için
+bugüne eşitleniyor ve **cumanın +%2,09'u pazarın getirisi olarak sayılıyordu**.
+
+Cihazın veritabanı bunu açıkça gösterdi:
+
+| gold_quarter | fiyat |
+|---|---|
+| 7 Ağu (Cuma) | 10.887,46 |
+| 8 Ağu (Cmt) | 10.887,46 |
+| 9 Ağu (Paz) | 10.887,46 |
+
+…ve `cached_prices`: `ask=10887.46, changePercent=2.09, quoteDateKey=20260809`.
+
+Damganın yanıtlayamadığı soruyu **fiyatın kendisi** yanıtlıyor: değer önceki
+günün kaydıyla aynıysa piyasa o gün oynamamıştır, katkı sıfırdır — kaynak ne
+derse desin. Fiyat gerçekten oynadıysa kaynağın rakamı tercih edilmeye devam
+ediyor (gerçek önceki kapanışa göre ölçülmüş, daha kesin).
+
+Cihazda doğrulandı: özet, piyasa kartı ve piyasa tablosu bugün altında 0,00%;
+hafta penceresi çeyrekte +8,58% (10.027,02 → 10.887,46, elle doğrulandı).
+
+### Yolda görülen, ayrıca ele alınmalı: Has/Külçe gram fiyatıyla değerleniyor
+
+`GoldSubtype.Bullion.priceKey()` `"gold_gram"` dönüyor, oysa tahtada ayrı bir
+`gold_bullion` (Has Altın) kotasyonu var ve iki fiyat farklı: Has ₺6.627,24,
+Gram ₺6.660,55. Has/Külçe tutan bir pozisyon bu yüzden ~%0,5 fazla değerleniyor.
+Düzeltmek `Bullion.priceKey()`'i `"gold_bullion"` yapmak kadar basit ama mevcut
+Has pozisyonlarının değerini değiştireceği için onayınıza bırakıldı.
 
 ### Karar bekleyen 1: türetilen "günlük" 4 güne kadar hareketi kapsıyor
 
