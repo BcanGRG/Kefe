@@ -266,7 +266,7 @@ class SyncLocalSink(
         val ids = database.positionQueries.selectPositionsChangedSince(0).executeAsList().map { it.id }
         for (id in ids) {
             val existing = database.positionQueries.selectPositionById(id).executeAsOneOrNull() ?: continue
-            val basis = database.transactionQueries.selectTransactionsForCompute(id).executeAsList()
+            val basis = database.transactionQueries.selectTransactionsByPosition(id).executeAsList()
                 .map { it.toDomain() }
                 .costBasis()
             database.positionQueries.updatePositionComputed(

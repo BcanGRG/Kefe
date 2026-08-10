@@ -594,7 +594,7 @@ class SqlDelightPortfolioRepository(
         // Ekran sorgusu DEGIL: costBasis() kararli siraladigi icin defter
         // kronolojik gelmeli, yoksa ayni gun yapilan satis alistan once islenip
         // hesaptan dusuyor.
-        val basis = transactionQueries.selectTransactionsForCompute(positionId)
+        val basis = transactionQueries.selectTransactionsByPosition(positionId)
             .executeAsList()
             .map { it.toDomain() }
             .costBasis()

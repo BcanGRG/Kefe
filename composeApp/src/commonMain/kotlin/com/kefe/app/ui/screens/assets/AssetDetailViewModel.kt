@@ -149,7 +149,10 @@ class AssetDetailViewModel(
             observeHistory(assetKey)
         }
 
-        // Yeniden eskiye: tasarimda islem gecmisi en son islemle baslar.
+        // GELEN SIRA KRONOLOJIKTIR (bkz. PortfolioRepository.observeTransactions)
+        // ve hesaplar onu oyle bekler. Gorunum icin ayri bir liste kurulur:
+        // tasarimda islem gecmisi en son islemle baslar. Siralama KARARLI, yani
+        // ayni gunun kayitlari kendi aralarinda kronolojik kalir.
         val ordered = transactions.sortedWith(
             compareByDescending<Transaction> { it.date.year }
                 .thenByDescending { it.date.month }
@@ -157,8 +160,15 @@ class AssetDetailViewModel(
         )
         val oldest = ordered.lastOrNull()
 
-        // Defterden turetilen maliyet. Islem yoksa pozisyondaki hazir degerlere
-        // duseriz - ornek veride her pozisyonun gecmisi henuz yok.
+        // Defterden turetilen maliyet - KRONOLOJIK liste uzerinden.
+        //
+        // Burada bir zamanlar ekran sirasi kullaniliyordu ve ayni gun once alip
+        // sonra satan kullanicida satis tumden atlanabiliyordu: detay ekrani ile
+        // varlik listesi ayni defterden farkli rakam gosteriyordu. Artik depo tek
+        // ve dogru sirali defteri veriyor.
+        //
+        // Islem yoksa pozisyondaki hazir degerlere duseriz - ornek veride her
+        // pozisyonun gecmisi henuz yok.
         val basis = transactions.costBasis()
         val hasLedger = transactions.isNotEmpty()
         val today = clock.today()

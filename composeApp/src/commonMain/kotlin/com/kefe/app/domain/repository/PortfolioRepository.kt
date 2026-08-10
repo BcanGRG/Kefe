@@ -43,6 +43,16 @@ interface PortfolioRepository {
     /** Gunluk anlik goruntuler - net deger ve projeksiyon grafiklerinin kaynagi. */
     fun observeSnapshots(): Flow<List<DailySnapshot>>
 
+    /**
+     * Bir varligin defteri - KRONOLOJIK, eskiden yeniye.
+     *
+     * Sira SOZLESMENIN PARCASI: [com.kefe.app.domain.model.costBasis] defteri
+     * kararli siralar, yani ayni tarihli kayitlar geldikleri sirada islenir.
+     * Ters sirada verilirse ayni gun yapilan satis alistan once islenir,
+     * costBasis elde miktar bulamayip kaydi atlar ve satis hesaptan duser.
+     *
+     * Gorunum sirasini (en yeni ustte) ekran kendi kurar.
+     */
     fun observeTransactions(positionId: String): Flow<List<Transaction>>
 
     /** Tum islem defteri - portfoy geneli hesaplar (ornegin "bu ay eklenen") icin. */

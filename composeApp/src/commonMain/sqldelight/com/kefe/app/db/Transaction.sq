@@ -50,24 +50,24 @@ FROM transactions
 WHERE deletedAt IS NULL
 ORDER BY dateYear DESC, dateMonth DESC, dateDay DESC, id;
 
-selectTransactionsByPosition:
-SELECT *
-FROM transactions
-WHERE positionId = :positionId
-AND deletedAt IS NULL
-ORDER BY dateYear DESC, dateMonth DESC, dateDay DESC, id;
-
--- Maliyet hesabi icin AYRI sorgu: sira ekrandakinin tersi olmali.
+-- Bir varligin defteri - KRONOLOJIK, eskiden yeniye.
 --
--- costBasis() defteri kararli siralar, yani AYNI TARIHLI kayitlar geldikleri
--- sirada islenir. Ekran sorgusu id'ye gore siraladigindan ayni gun once alip
--- sonra satan kullanicinin SATISI alistan once gelebiliyor; costBasis satis
--- dalinda elde miktar bulamayip kaydi tumden atliyor ve satis hesaptan
--- dusuyordu. Islemler ayni gune dusmek zorunda degil ama siklikla duser.
+-- TEK SORGU. Once ikisi vardi: biri ekran icin (tarih DESC, id), biri hesap
+-- icin. costBasis() defteri kararli siralar, yani AYNI TARIHLI kayitlar
+-- geldikleri sirada islenir; ekran sorgusunda o sira UUID sirasidir ve ayni gun
+-- once alip sonra satan kullanicinin SATISI alistan once gelebiliyordu.
+-- costBasis satis dalinda elde miktar bulamayip kaydi tumden atliyor, satis
+-- hesaptan dusuyordu.
+--
+-- Kural depo tarafinda dogru uygulanmisti ama varlik detayi ekrani yanlis
+-- sorguyu cagirmaya devam ediyordu: liste ekrani ile detay ekrani ayni defterden
+-- FARKLI rakam gosteriyordu. Iki sorgudan biri tuzak oldugu surece bu yeniden
+-- olur - o yuzden ekran sorgusu KALDIRILDI. Gorunum sirasini ekran kendi
+-- siralayarak kurar (bkz. AssetDetailViewModel).
 --
 -- rowid SQLite'in ortuk ekleme sayacidir: ayni tarihli kayitlar arasinda
 -- kronolojik sirayi verir ve fazladan kolon istemez.
-selectTransactionsForCompute:
+selectTransactionsByPosition:
 SELECT *
 FROM transactions
 WHERE positionId = :positionId
