@@ -358,7 +358,7 @@ doğruluyor. Eski sıfırı sabitleyen iki test yeni kurala göre yazıldı.
 
 Veri sağlam ama kullanıcının gördüğü sayı yanlış.
 
-### P1.1 · Varlık detayı maliyet hesabını yanlış sorguyla yapıyor
+### P1.1 · Varlık detayı maliyet hesabını yanlış sorguyla yapıyor — ✅ ÇÖZÜLDÜ
 
 `ui/screens/assets/AssetDetailViewModel.kt:162`
 
@@ -372,6 +372,16 @@ kullanmıyor**.
 Aynı gün önce alıp sonra satan kullanıcıda, satışın UUID'si alımdan küçükse
 (~%50 olasılık) `costBasis` satışı "elde miktar yok" diye tümden atlıyor. Detay
 ekranı ile varlık listesi birbiriyle çelişiyor.
+
+**Yapıldı** (`Read a position's ledger in one order only`): yalnız çağıranı
+düzeltmek tuzağı yerinde bırakırdı, o yüzden **ekran sorgusu kaldırıldı**. Artık
+tek sorgu var (tarih + `rowid`, kronolojik); detay ekranı "en yeni üstte"
+görünümünü o listeyi kendi sıralayarak kuruyor — kararlı sıralama olduğu için
+aynı günün kayıtları kendi aralarında kronolojik kalıyor. Sıra artık depo
+sözleşmesinin yazılı parçası. `LedgerOrderTest` (3 test) eklendi ve **somut
+rakamları** doğruluyor: tek ortak sorguda bozuk sıra iki tarafı birden bozacağı
+için "iki yol aynı sonucu veriyor" kontrolü tek başına yetmezdi. Eski sırada
+miktar `1.0` yerine `2.0` çıkıyor.
 
 ### P1.2 · Aynı gün kronolojik sırası üç ayrı yerde bozuluyor
 
