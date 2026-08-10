@@ -383,7 +383,7 @@ rakamları** doğruluyor: tek ortak sorguda bozuk sıra iki tarafı birden bozac
 için "iki yol aynı sonucu veriyor" kontrolü tek başına yetmezdi. Eski sırada
 miktar `1.0` yerine `2.0` çıkıyor.
 
-### P1.2 · Aynı gün kronolojik sırası üç ayrı yerde bozuluyor
+### P1.2 · Aynı gün kronolojik sırası üç ayrı yerde bozuluyor — ✅ ÇÖZÜLDÜ
 
 Aynı kök: sıra `rowid`'e dayanıyor ve rowid üç akışta yeniden atanıyor.
 
@@ -393,8 +393,28 @@ Aynı kök: sıra `rowid`'e dayanıyor ve rowid üç akışta yeniden atanıyor.
 | `Transaction.sq:99` | Senkron pull `INSERT OR REPLACE` satırı silip yeniden ekliyor → yeni rowid. İki cihaz aynı defterden farklı miktar/maliyet hesaplayabiliyor |
 | `SqlDelightPortfolioRepository.kt:453` | Yedekten geri yükleme dosya sırasıyla INSERT ediyor; orijinal kronoloji kayboluyor |
 
-**Düzeltme:** aynı gün içi sıra kalıcı bir kolona bağlanmalı (`createdAt` /
-`sequence`); rowid varsayımı senkron ve yedekle bağdaşmıyor.
+**Yapıldı** (`Carry a transaction's place in the day on the record itself`):
+sıra artık kaydın kendi `createdAt` alanında taşınıyor — yedeğe giriyor,
+senkronda korunuyor, düzenlemede yeni satıra devrediliyor. Pull `INSERT OR
+REPLACE` yerine iki adım (ilk görüşte `createdAt = updatedAt`, sonrasında
+dokunulmuyor), geri yükleme damgayı dosyadan alıyor.
+
+Damga **kesin artan**: düz saat okuması yetmiyordu, aynı milisaniyede yazılan
+iki kayıt eşitlenip sıra `id` bağına yani UUID'ye düşüyordu — düzeltilmeye
+çalışılan hatanın ta kendisi. Bunu testler yakaladı (sabit test saati her kaydı
+eşitliyor).
+
+Göç (`8.sqm`) mevcut satırları `updatedAt` varsa ondan (eş cihazlar aynı sırayı
+türetsin), yoksa `rowid`'den dolduruyor. **Cihazın kendi veritabanında
+doğrulandı:** sürüm 8 → 9, 54 işlemin tamamı gerçek zaman damgalarıyla doldu,
+sıfır kalan yok.
+
+`LedgerOrderTest` 6 teste çıktı; eski sıralamada düzenleme ve geri yükleme
+testleri miktarı `1.0` yerine `2.0` veriyor.
+
+**Kalan sınır:** tam cihazlar-arası kesinlik `created_at`'in **sunucuda** da
+taşınmasını ister. Bir kayıt, eş cihaz onu hiç görmeden düzenlenirse iki cihazın
+türettiği damga ayrışabilir. Kolon sunucuya eklenene kadar bu dar durum açık.
 
 ### P1.3 · Masaüstü ve tablette ana hedef ilerlemesi tüm portföyü sayıyor
 
