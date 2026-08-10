@@ -412,9 +412,12 @@ sıfır kalan yok.
 `LedgerOrderTest` 6 teste çıktı; eski sıralamada düzenleme ve geri yükleme
 testleri miktarı `1.0` yerine `2.0` veriyor.
 
-**Kalan sınır:** tam cihazlar-arası kesinlik `created_at`'in **sunucuda** da
-taşınmasını ister. Bir kayıt, eş cihaz onu hiç görmeden düzenlenirse iki cihazın
-türettiği damga ayrışabilir. Kolon sunucuya eklenene kadar bu dar durum açık.
+**Sunucu tarafı da kapatıldı** (`Carry the creation stamp over sync too`):
+Supabase'deki `transactions` tablosuna `created_at bigint NOT NULL DEFAULT 0`
+eklendi (göç: `add_created_at_to_transactions`), damga her işlemle push ediliyor
+ve pull'da geri okunuyor. Kolon eklenmeden önce yazılmış satırlar 0 dönüyor ve
+istemci `updated_at`'e düşüyor — o değer bütün cihazlarda aynı olduğu için sıra
+yine uyuşuyor. P1.2'nin kalan dar durumu böylece kapandı.
 
 ### P1.3 · Masaüstü ve tablette ana hedef ilerlemesi tüm portföyü sayıyor
 
