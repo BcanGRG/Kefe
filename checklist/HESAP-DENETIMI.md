@@ -414,10 +414,23 @@ testleri miktarı `1.0` yerine `2.0` veriyor.
 
 **Sunucu tarafı da kapatıldı** (`Carry the creation stamp over sync too`):
 Supabase'deki `transactions` tablosuna `created_at bigint NOT NULL DEFAULT 0`
-eklendi (göç: `add_created_at_to_transactions`), damga her işlemle push ediliyor
-ve pull'da geri okunuyor. Kolon eklenmeden önce yazılmış satırlar 0 dönüyor ve
-istemci `updated_at`'e düşüyor — o değer bütün cihazlarda aynı olduğu için sıra
-yine uyuşuyor. P1.2'nin kalan dar durumu böylece kapandı.
+eklendi, damga her işlemle push ediliyor ve pull'da geri okunuyor.
+
+Mevcut satırların doldurulması ilk denemede **sessizce yutuldu**: `transactions`
+tablosundaki `transactions_lww` tetikleyicisi `kefe_lww_guard`'ı `BEFORE UPDATE`
+çalıştırıyor ve `NEW.updated_at <= OLD.updated_at` ise `OLD` dönüp yazmayı geri
+çeviriyor. Bakım amaçlı doldurma `updated_at`'e dokunmadığı için koşul her
+satırda sağlanıyordu; sorgu yine de `success` dönüyordu. `updated_at`'i artırmak
+çözüm değil — satır eş cihazlarda "daha yeni" görünüp gereksiz çekme tetiklerdi.
+Tetikleyici yalnızca doldurma işlemi boyunca kapatılıp yeniden açıldı.
+
+**Uçtan uca doğrulandı** (cihazda giriş yapıldıktan sonra): sunucuda ve cihazda
+16 canlı işlem, kimlik farkı 0, `created_at` ayrışması 0, ve iki tarafın
+türettiği **sıralama birebir aynı**. P1.2'nin kalan dar durumu kapandı.
+
+Ayrıca güvenlik danışmanının işaretlediği `kefe_lww_guard` `search_path` uyarısı
+giderildi (`harden_kefe_lww_guard_search_path`). Açık kalan tek uyarı, panodan
+açılması gereken "Leaked Password Protection" ayarı.
 
 ### P1.3 · Masaüstü ve tablette ana hedef ilerlemesi tüm portföyü sayıyor
 
