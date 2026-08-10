@@ -219,6 +219,15 @@ class SqlDelightPortfolioRepository(
                 // ekleyerek ayiriyorduk - iki cihazda o cozum bozuluyor, cunku
                 // her cihaz kendi numarasini bagimsiz veriyor.
                 val stored = transaction
+                val now = clock.nowEpochMillis()
+                // Damga KESIN ARTAR. Duz saat yetmiyor: ayni milisaniyede
+                // yazilan iki kayit esitlenir, sira `id` bagina yani UUID'ye
+                // duser ve ayni gun al-sat hatasi geri gelir.
+                val nextCreatedAt = maxOf(
+                    now,
+                    (transactionQueries.selectMaxTransactionCreatedAt()
+                        .executeAsOneOrNull()?.MAX ?: 0L) + 1L,
+                )
 
                 transactionQueries.insertTransaction(
                     id = stored.id,
@@ -234,7 +243,14 @@ class SqlDelightPortfolioRepository(
                     storage = stored.storage,
                     addedByMemberId = stored.addedByMemberId,
                     syncState = stored.syncState,
-                    updatedAt = clock.nowEpochMillis(),
+                    updatedAt = now,
+                    // Ayni gun ici sira. Cagiran bir damga tasiyorsa (duzenleme
+                    // eskisini devrediyor) o korunur; yoksa simdi damgalanir.
+                    //
+                    // Yeni kayitta updatedAt ile AYNI deger yaziliyor: es cihaz
+                    // bu satiri ilk cektiginde createdAt'i updatedAt'ten
+                    // turetiyor, yani iki cihaz ayni siraya variyor (bkz. 8.sqm).
+                    createdAt = stored.createdAt.takeIf { it > 0L } ?: nextCreatedAt,
                 )
                 recomputePosition(stored.positionId)
                 // Satis miktari sifirlamis olabilir; oyleyse kotasyon duser.
@@ -344,6 +360,7 @@ class SqlDelightPortfolioRepository(
                         note = it.note,
                         storage = it.storage,
                         addedByMemberId = it.addedByMemberId,
+                        createdAt = it.createdAt,
                     )
                 },
                 goals = goalQueries.selectGoals().executeAsList().map {
@@ -450,7 +467,10 @@ class SqlDelightPortfolioRepository(
                     )
                 }
 
-                file.transactions.forEach { tx ->
+                // Ayni gun ici sira DOSYADAN gelir; eski yedeklerde alan yok ve
+                // 0 kalir - o zaman dosya sirasina duseriz, zaten tasidigi tek
+                // bilgi oydu.
+                file.transactions.forEachIndexed { index, tx ->
                     transactionQueries.insertTransaction(
                         id = tx.id,
                         positionId = tx.positionId,
@@ -466,6 +486,7 @@ class SqlDelightPortfolioRepository(
                         addedByMemberId = tx.addedByMemberId,
                         syncState = SyncState.Synced,
                         updatedAt = clock.nowEpochMillis(),
+                        createdAt = tx.createdAt.takeIf { it > 0L } ?: (index.toLong() + 1L),
                     )
                 }
 

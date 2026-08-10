@@ -576,6 +576,8 @@ class AddTransactionViewModel(
                 s.copy(
                     step = AddTransactionStep.Amount,
                     editingTransactionId = transaction.id,
+                    // Ayni gun ici sira korunsun diye tasinir.
+                    editingCreatedAt = transaction.createdAt,
                     assetClass = position.assetClass,
                     selectedSubtype = position.subtype ?: s.selectedSubtype,
                     // Ayari bos eski kayitta formun varsayilani (bkz. forPosition).
@@ -715,6 +717,10 @@ class AddTransactionViewModel(
                         // yapilinca ilk push'la gidecek.
                         CloudState.Off, CloudState.Unreachable -> SyncState.Pending
                     },
+                    // Duzenlemede eski kaydin damgasi DEVREDILIR: yeni satir
+                    // ayni gunun sonuna dusmesin. Yeni kayitta 0 kalir ve depo
+                    // simdiyi damgalar.
+                    createdAt = s.editingCreatedAt,
                 )
             )
 

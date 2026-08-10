@@ -129,7 +129,25 @@ class SyncLocalSink(
         var n = 0
         for (r in rows) {
             if (!isNewer(r.updatedAt, local[r.id])) continue
-            database.transactionQueries.applyTransactionPull(
+            // IKI ADIM: ilk goruste createdAt = updatedAt yazilir, sonraki
+            // guncellemeler ona dokunmaz - olusturulma sirasi degismemeli.
+            database.transactionQueries.insertOrIgnoreTransactionPull(
+                id = r.id,
+                positionId = r.positionId,
+                dateYear = r.dateYear,
+                dateMonth = r.dateMonth,
+                dateDay = r.dateDay,
+                side = r.side.toTradeSide(),
+                quantity = r.quantity,
+                unitPrice = r.unitPrice,
+                fee = r.fee,
+                note = r.note,
+                storage = r.storage,
+                addedByMemberId = r.addedByMemberId,
+                updatedAt = r.updatedAt,
+                deletedAt = r.deletedAt,
+            )
+            database.transactionQueries.applyTransactionMetaPull(
                 id = r.id,
                 positionId = r.positionId,
                 dateYear = r.dateYear,

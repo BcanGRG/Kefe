@@ -67,6 +67,12 @@ data class BackupTransaction(
     val note: String? = null,
     val storage: String? = null,
     val addedByMemberId: String,
+    /**
+     * Ayni gun ici sira (bkz. 8.sqm). Eski yedeklerde YOK: alan varsayilanla
+     * 0 gelir ve geri yukleme dosya sirasina duser - o yedegin tasidigi tek
+     * bilgi zaten oydu.
+     */
+    val createdAt: Long = 0L,
 )
 
 @Serializable

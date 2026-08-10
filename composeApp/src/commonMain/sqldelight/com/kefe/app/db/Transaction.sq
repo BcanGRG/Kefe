@@ -33,6 +33,9 @@ CREATE TABLE transactions (
     -- Esitleme alanlari; bkz. 2.sqm.
     updatedAt INTEGER NOT NULL DEFAULT 0,
     deletedAt INTEGER,
+    -- AYNI GUN ICI SIRA; bkz. 8.sqm. rowid'e dayaniyordu ve duzenleme,
+    -- esitleme ve geri yukleme satiri yerinden oynatinca sira bozuluyordu.
+    createdAt INTEGER NOT NULL DEFAULT 0,
     -- Pozisyon silinince defteri de gitmeli. DIKKAT: SQLite'ta yabanci anahtar
     -- zorlamasi varsayilan olarak KAPALIDIR; surucu her baglantida
     -- "PRAGMA foreign_keys = ON" calistirmazsa bu satir hicbir sey yapmaz.
@@ -65,14 +68,25 @@ ORDER BY dateYear DESC, dateMonth DESC, dateDay DESC, id;
 -- olur - o yuzden ekran sorgusu KALDIRILDI. Gorunum sirasini ekran kendi
 -- siralayarak kurar (bkz. AssetDetailViewModel).
 --
--- rowid SQLite'in ortuk ekleme sayacidir: ayni tarihli kayitlar arasinda
--- kronolojik sirayi verir ve fazladan kolon istemez.
+-- Ayni gun ici sira `createdAt`ten gelir, rowid'den DEGIL: rowid duzenlemede,
+-- esitlemede ve geri yuklemede yeniden atanıyor ve sirayi bozuyordu (bkz.
+-- 8.sqm). `id` son bag cozucu - iki kaydin damgasi esitse bile butun cihazlar
+-- ayni siralamayi uretsin.
 selectTransactionsByPosition:
 SELECT *
 FROM transactions
 WHERE positionId = :positionId
 AND deletedAt IS NULL
-ORDER BY dateYear ASC, dateMonth ASC, dateDay ASC, rowid ASC;
+ORDER BY dateYear ASC, dateMonth ASC, dateDay ASC, createdAt ASC, id ASC;
+
+-- En buyuk olusturulma damgasi - yeni kayit bunun BIR USTUNU alir.
+--
+-- Damga duz `nowEpochMillis()` olamaz: ayni milisaniyede yazilan iki kayit
+-- esitlenir, sira `id` bagina yani UUID'ye duser ve tam kacinmaya calistigimiz
+-- hata geri gelir. Ustelik duzenlemede eski damgayi devretmek de ise yaramaz -
+-- devredilen deger baska bir kayitla esitse sira yine belirsizdir.
+selectMaxTransactionCreatedAt:
+SELECT MAX(createdAt) FROM transactions;
 
 selectTransactionById:
 SELECT *
@@ -92,19 +106,44 @@ FROM transactions
 WHERE updatedAt >= :since
 ORDER BY updatedAt;
 
--- Pull: sunucudan gelen satiri uygular. transactions bir YAPRAK (cocugu yok),
--- OR REPLACE guvenli. syncState 'Synced': cekilen satir zaten sunucuda, yerelde
--- "gonderilecek" degil. LWW karari (yeni mi) cagiran tarafta yapilir.
-applyTransactionPull:
-INSERT OR REPLACE INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState, updatedAt, deletedAt)
-VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, 'Synced', :updatedAt, :deletedAt);
+-- Pull IKI ADIM. OR REPLACE satiri silip yeniden ekliyordu; satir yeni bir
+-- rowid aliyor ve `createdAt` de ustune yaziliyordu, yani cekilen her guncelleme
+-- kaydin ayni gun icindeki yerini degistiriyordu (bkz. 8.sqm).
+--
+-- Ilk gorulusunde `createdAt = updatedAt` yazilir: sunucudan gelen bu damga
+-- butun cihazlarda AYNI oldugu icin siralama da ayni cikar. Sonraki
+-- guncellemeler ona DOKUNMAZ - olusturulma sirasi bir daha degismemeli.
+--
+-- syncState 'Synced': cekilen satir zaten sunucuda, yerelde "gonderilecek"
+-- degil. LWW karari (yeni mi) cagiran tarafta yapilir.
+insertOrIgnoreTransactionPull:
+INSERT OR IGNORE INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState, updatedAt, deletedAt, createdAt)
+VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, 'Synced', :updatedAt, :deletedAt, :updatedAt);
+
+applyTransactionMetaPull:
+UPDATE transactions
+SET positionId = :positionId,
+    dateYear = :dateYear,
+    dateMonth = :dateMonth,
+    dateDay = :dateDay,
+    side = :side,
+    quantity = :quantity,
+    unitPrice = :unitPrice,
+    fee = :fee,
+    note = :note,
+    storage = :storage,
+    addedByMemberId = :addedByMemberId,
+    syncState = 'Synced',
+    updatedAt = :updatedAt,
+    deletedAt = :deletedAt
+WHERE id = :id;
 
 -- Kimlik artik UUID (bkz. 7.1): iceriginden turetilmiyor, dolayisiyla ayni gun
 -- ayni miktarda ikinci alim kendi satirini alir. Duz INSERT bilerek: "OR REPLACE"
 -- bir cakismada kullanicinin islemini sessizce ezerdi.
 insertTransaction:
-INSERT INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState, updatedAt)
-VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, :syncState, :updatedAt);
+INSERT INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState, updatedAt, createdAt)
+VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, :syncState, :updatedAt, :createdAt);
 
 updateTransaction:
 UPDATE transactions

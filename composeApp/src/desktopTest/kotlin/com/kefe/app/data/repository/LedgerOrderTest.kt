@@ -109,6 +109,80 @@ class LedgerOrderTest {
     }
 
     /**
+     * DAMGA KESIN ARTAR.
+     *
+     * Duz `nowEpochMillis()` yetmiyordu: ayni milisaniyede yazilan iki kayit
+     * esitlenir, sira `id` bagina yani UUID'ye duser ve tam kacinilan hata geri
+     * gelir. Buradaki saat SABIT - iki kayit ayni ani gorur.
+     */
+    @Test
+    fun ayniAndaYazilanKayitlarinDamgasiAYRISIR() = runTest {
+        val repo = newRepository()
+        repo.seedSameDayBuyThenSell()
+
+        val ledger = repo.observeTransactions("pos_gold_quarter").first()
+        val stamps = ledger.map { it.createdAt }
+        assertEquals(stamps.sorted(), stamps, "damga sirasi defter sirasiyla uyusmuyor")
+        assertEquals(stamps.toSet().size, stamps.size, "iki kayit ayni damgayi aldi")
+    }
+
+    /**
+     * ISLEM DUZENLEME ayni gun sirasini bozmamali.
+     *
+     * Duzenleme "once yaz, sonra sil" seklinde calisiyor ve yeni satir yeni bir
+     * kimlik aliyor. Damga devredilmezse kayit ayni gunun SONUNA dusuyor,
+     * costBasis satisi alimdan once isliyor ve satilan varlik deftere geri
+     * "donuyordu" - bozulma garantiydi, rastgele degil.
+     */
+    @Test
+    fun islemDuzenlemeAyniGUNSirasiniBozmaz() = runTest {
+        val repo = newRepository()
+        repo.seedSameDayBuyThenSell()
+
+        val alis = repo.observeTransactions("pos_gold_quarter").first()
+            .single { it.side == TradeSide.Buy }
+
+        // Kullanici alimin yalnizca NOTUNU duzeltiyor: uygulama yeni kimlikli
+        // bir satir yazip eskisini siliyor, damgayi devrediyor.
+        repo.addTransaction(
+            alis.copy(id = "duzeltilmis-alis", note = "kasa"),
+        )
+        repo.deleteTransaction(alis.id)
+
+        val basis = repo.observeTransactions("pos_gold_quarter").first().costBasis()
+        val position = repo.observePositions().first().single()
+
+        assertEquals(1.0, basis.quantity, 1e-9, "duzenleme sonrasi satis atlandi")
+        assertEquals(5_000.0, basis.realizedProfit, 1e-9)
+        assertEquals(position.quantity, basis.quantity, 1e-9)
+    }
+
+    /**
+     * YEDEKTEN GERI YUKLEME ayni gun sirasini tasimali.
+     *
+     * Satirlar dosya sirasiyla eklenip rowid'ler yeniden atanıyordu; orijinal
+     * kronoloji kayboluyor ve geri yuklenen defter FARKLI bir pozisyon
+     * uretiyordu. Yedegin temel sozu tam da bunun tersi.
+     */
+    @Test
+    fun yedektenGeriYuklemeSIRAYITasir() = runTest {
+        val repo = newRepository()
+        repo.seedSameDayBuyThenSell()
+
+        val oncesi = repo.observePositions().first().single()
+        val backup = repo.exportBackup("2026-08-09")
+        repo.restoreBackup(backup)
+
+        val sonrasi = repo.observePositions().first().single()
+        val basis = repo.observeTransactions("pos_gold_quarter").first().costBasis()
+
+        assertEquals(oncesi.quantity, sonrasi.quantity, 1e-9, "geri yukleme miktari degistirdi")
+        assertEquals(oncesi.cost, sonrasi.cost, 1e-9)
+        assertEquals(1.0, basis.quantity, 1e-9)
+        assertEquals(5_000.0, basis.realizedProfit, 1e-9)
+    }
+
+    /**
      * Ekran sirasi (en yeni ustte) hala kurulabiliyor - kaldirilan sorgu
      * gorunumu bozmadi. Ayni gunun kayitlari kendi aralarinda kronolojik kalir.
      */

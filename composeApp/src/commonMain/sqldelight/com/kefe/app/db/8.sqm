@@ -1,0 +1,43 @@
+-- Surum 8 -> 9: islemin OLUSTURULMA SIRASI kalici bir kolonda.
+--
+-- NEYDI. Ayni gune dusen iki islem arasindaki kronolojik sira `rowid`'e
+-- dayaniyordu: "SQLite'in ortuk ekleme sayaci, ayni tarihli kayitlar arasinda
+-- kronolojik sirayi verir". Bu, satir hic yerinden oynamadigi surece dogru - ve
+-- uc ayri akista oynuyordu:
+--
+--   1. ISLEM DUZENLEME. Duzenleme "once yaz, sonra sil" seklinde calisiyor:
+--      yeni UUID'li yepyeni bir satir eklenip eskisi mezar taslaniyor. Yeni
+--      satir tablonun SONUNA dustugu icin ayni gunun sirasi bozuluyordu. Ayni
+--      gun alim(rowid 5) + satis(rowid 6) olan bir defterde alimin yalniz
+--      NOTUNU duzeltmek alimi rowid 7 yapiyor; recomputePosition artik satisi
+--      once goruyor, elde miktar bulamayip satisi tumden atliyor ve satilan
+--      varlik deftere geri "donuyordu". Bozulma garantiydi, rastgele degil.
+--
+--   2. ESITLEME PULL. INSERT OR REPLACE satiri silip yeniden ekler, yani satir
+--      YENI bir rowid alir. Sunucudan guncellenmis olarak cekilen kayit ayni
+--      gunun digerlerinin arkasina duser; sifirdan kurulan cihazda ise sira
+--      tamamen sunucunun dondurdugu satir sirasina baglidir. Iki cihaz ayni
+--      defterden farkli miktar/maliyet hesaplayabiliyordu.
+--
+--   3. YEDEKTEN GERI YUKLEME. Satirlar dosya sirasiyla ekleniyor ve yeni
+--      rowid'ler o siraya gore atanıyor; orijinal ekleme kronolojisi kayboluyor.
+--
+-- COZUM. Sira artik kaydin KENDI alaninda tasiniyor: yedege giriyor, esitlemede
+-- korunuyor, duzenlemede yeni satira devrediliyor.
+--
+-- GERI DOLDURMA iki kaynakli. `updatedAt` gercek bir zaman damgasiysa o
+-- kullanilir - esitlenmis satirlarda bu deger butun cihazlarda AYNI oldugu icin
+-- siralama da ayni cikar. Damgasi olmayan eski/tohum satirlarda rowid'e
+-- dusuluyor: o cihazdaki mevcut (dogru) sirayi aynen korur. rowid'ler kucuk
+-- tamsayi, epoch damgalari ise cok buyuk oldugu icin eski satirlar ayni tarih
+-- icinde yeni eklenenlerin onunde kalir - ekleme zamanina gore dogru sira budur.
+--
+-- KALAN SINIR: tam cihazlar-arasi kesinlik `created_at`'in SUNUCUDA da
+-- tasinmasini ister. Bir kayit, es cihaz onu hic gormeden duzenlenirse iki
+-- cihazin turettigi createdAt ayrisabilir. Kolon sunucuya eklenene kadar bu dar
+-- durum aciktir; ondan onceki uc akis artik saglam.
+
+ALTER TABLE transactions ADD COLUMN createdAt INTEGER NOT NULL DEFAULT 0;
+
+UPDATE transactions
+SET createdAt = CASE WHEN updatedAt > 0 THEN updatedAt ELSE rowid END;
