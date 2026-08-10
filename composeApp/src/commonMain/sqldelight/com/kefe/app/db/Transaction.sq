@@ -110,15 +110,17 @@ ORDER BY updatedAt;
 -- rowid aliyor ve `createdAt` de ustune yaziliyordu, yani cekilen her guncelleme
 -- kaydin ayni gun icindeki yerini degistiriyordu (bkz. 8.sqm).
 --
--- Ilk gorulusunde `createdAt = updatedAt` yazilir: sunucudan gelen bu damga
--- butun cihazlarda AYNI oldugu icin siralama da ayni cikar. Sonraki
+-- `createdAt` sunucudan GELIR ve yalniz ilk goruste yazilir; sonraki
 -- guncellemeler ona DOKUNMAZ - olusturulma sirasi bir daha degismemeli.
+-- Sunucu 0 dondururse (kolon eklenmeden once yazilmis satir) cagiran
+-- updatedAt'e duser: butun cihazlarda ayni deger oldugu icin siralama yine
+-- ayni cikar.
 --
 -- syncState 'Synced': cekilen satir zaten sunucuda, yerelde "gonderilecek"
 -- degil. LWW karari (yeni mi) cagiran tarafta yapilir.
 insertOrIgnoreTransactionPull:
 INSERT OR IGNORE INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState, updatedAt, deletedAt, createdAt)
-VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, 'Synced', :updatedAt, :deletedAt, :updatedAt);
+VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, 'Synced', :updatedAt, :deletedAt, :createdAt);
 
 applyTransactionMetaPull:
 UPDATE transactions

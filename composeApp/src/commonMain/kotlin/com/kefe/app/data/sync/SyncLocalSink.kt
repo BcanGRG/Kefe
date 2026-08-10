@@ -129,8 +129,10 @@ class SyncLocalSink(
         var n = 0
         for (r in rows) {
             if (!isNewer(r.updatedAt, local[r.id])) continue
-            // IKI ADIM: ilk goruste createdAt = updatedAt yazilir, sonraki
+            // IKI ADIM: createdAt yalniz ilk goruste yazilir, sonraki
             // guncellemeler ona dokunmaz - olusturulma sirasi degismemeli.
+            // Sunucu damgasi yoksa (kolon eklenmeden once yazilmis satir)
+            // updatedAt'e duseriz; o deger de butun cihazlarda ayni.
             database.transactionQueries.insertOrIgnoreTransactionPull(
                 id = r.id,
                 positionId = r.positionId,
@@ -146,6 +148,7 @@ class SyncLocalSink(
                 addedByMemberId = r.addedByMemberId,
                 updatedAt = r.updatedAt,
                 deletedAt = r.deletedAt,
+                createdAt = r.createdAt.takeIf { it > 0L } ?: r.updatedAt,
             )
             database.transactionQueries.applyTransactionMetaPull(
                 id = r.id,

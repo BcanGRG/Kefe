@@ -89,6 +89,7 @@ class SyncLocalSource(
                             addedByMemberId = r.addedByMemberId,
                             updatedAt = r.updatedAt,
                             deletedAt = r.deletedAt,
+                            createdAt = r.createdAt,
                         )
                     }
                     .let { batch("transactions", it) }
