@@ -38,6 +38,13 @@ data class TransactionDto(
     @SerialName("added_by_member_id") val addedByMemberId: String,
     @SerialName("updated_at") val updatedAt: Long,
     @SerialName("deleted_at") val deletedAt: Long?,
+    /**
+     * Ayni gune dusen islemler arasindaki sira.
+     *
+     * Varsayilan 0: kolonu tasimayan bir yanit gelirse cozme patlamasin -
+     * cagiran o durumda [updatedAt]'e duser.
+     */
+    @SerialName("created_at") val createdAt: Long = 0L,
 )
 
 @Serializable

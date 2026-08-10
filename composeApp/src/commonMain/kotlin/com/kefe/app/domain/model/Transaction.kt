@@ -12,6 +12,16 @@ data class Transaction(
     val storage: String? = null,
     val addedByMemberId: String,
     val syncState: SyncState = SyncState.Synced,
+    /**
+     * Kaydin OLUSTURULMA damgasi - ayni gune dusen islemler arasindaki sirayi
+     * bu belirler (bkz. 8.sqm).
+     *
+     * Once bu is SQLite'in rowid'ine birakilmisti; duzenleme, esitleme ve
+     * yedekten geri yukleme satiri yerinden oynatinca sira bozuluyor ve
+     * costBasis ayni gun yapilan satisi atlayabiliyordu. Deger kaydin kendi
+     * alani oldugu icin artik yedege giriyor ve esitlemede korunuyor.
+     */
+    val createdAt: Long = 0L,
 ) {
     val total: Double get() = quantity * unitPrice + fee
 }

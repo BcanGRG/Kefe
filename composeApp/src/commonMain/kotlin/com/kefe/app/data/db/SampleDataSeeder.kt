@@ -68,7 +68,9 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
             )
         }
 
-        SampleData.transactions.forEach { entry ->
+        // Ayni gun ici sira tohumlama sirasindan gelir (bkz. 8.sqm); ornek
+        // defterde ayni tarihli kayitlar bu yuzden karismaz.
+        SampleData.transactions.forEachIndexed { index, entry ->
             transactionQueries.insertTransaction(
                 id = entry.id,
                 positionId = entry.positionId,
@@ -85,6 +87,7 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 // Ornek veri: zaman damgasi 0, esitlemede en eski sayilir.
                 updatedAt = 0L,
                 syncState = entry.syncState,
+                createdAt = index.toLong() + 1L,
             )
         }
 

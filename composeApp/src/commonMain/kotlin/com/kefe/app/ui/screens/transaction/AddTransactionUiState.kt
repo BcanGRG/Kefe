@@ -144,6 +144,15 @@ data class AddTransactionUiState(
      * satirdaki kalem ikonu hicbir sey yapmiyordu.
      */
     val editingTransactionId: String? = null,
+    /**
+     * Duzenlenen kaydin OLUSTURULMA damgasi - yeni satira devredilir.
+     *
+     * Duzenleme "once yaz, sonra sil" seklinde calisiyor ve yeni satir yeni bir
+     * kimlik aliyor. Damga tasinmazsa kayit ayni gunun SONUNA dusuyor,
+     * costBasis satisi alimdan once isliyor ve satis hesaptan dusuyordu
+     * (bkz. 8.sqm).
+     */
+    val editingCreatedAt: Long = 0L,
     val lastAdded: LastAdded? = null,
     /**
      * FIYAT cevrimdisi: guncel kotasyon alinamadi, son bilinen fiyat kullaniliyor.

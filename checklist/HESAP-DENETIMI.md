@@ -358,7 +358,7 @@ doğruluyor. Eski sıfırı sabitleyen iki test yeni kurala göre yazıldı.
 
 Veri sağlam ama kullanıcının gördüğü sayı yanlış.
 
-### P1.1 · Varlık detayı maliyet hesabını yanlış sorguyla yapıyor
+### P1.1 · Varlık detayı maliyet hesabını yanlış sorguyla yapıyor — ✅ ÇÖZÜLDÜ
 
 `ui/screens/assets/AssetDetailViewModel.kt:162`
 
@@ -373,7 +373,17 @@ Aynı gün önce alıp sonra satan kullanıcıda, satışın UUID'si alımdan k�
 (~%50 olasılık) `costBasis` satışı "elde miktar yok" diye tümden atlıyor. Detay
 ekranı ile varlık listesi birbiriyle çelişiyor.
 
-### P1.2 · Aynı gün kronolojik sırası üç ayrı yerde bozuluyor
+**Yapıldı** (`Read a position's ledger in one order only`): yalnız çağıranı
+düzeltmek tuzağı yerinde bırakırdı, o yüzden **ekran sorgusu kaldırıldı**. Artık
+tek sorgu var (tarih + `rowid`, kronolojik); detay ekranı "en yeni üstte"
+görünümünü o listeyi kendi sıralayarak kuruyor — kararlı sıralama olduğu için
+aynı günün kayıtları kendi aralarında kronolojik kalıyor. Sıra artık depo
+sözleşmesinin yazılı parçası. `LedgerOrderTest` (3 test) eklendi ve **somut
+rakamları** doğruluyor: tek ortak sorguda bozuk sıra iki tarafı birden bozacağı
+için "iki yol aynı sonucu veriyor" kontrolü tek başına yetmezdi. Eski sırada
+miktar `1.0` yerine `2.0` çıkıyor.
+
+### P1.2 · Aynı gün kronolojik sırası üç ayrı yerde bozuluyor — ✅ ÇÖZÜLDÜ
 
 Aynı kök: sıra `rowid`'e dayanıyor ve rowid üç akışta yeniden atanıyor.
 
@@ -383,8 +393,44 @@ Aynı kök: sıra `rowid`'e dayanıyor ve rowid üç akışta yeniden atanıyor.
 | `Transaction.sq:99` | Senkron pull `INSERT OR REPLACE` satırı silip yeniden ekliyor → yeni rowid. İki cihaz aynı defterden farklı miktar/maliyet hesaplayabiliyor |
 | `SqlDelightPortfolioRepository.kt:453` | Yedekten geri yükleme dosya sırasıyla INSERT ediyor; orijinal kronoloji kayboluyor |
 
-**Düzeltme:** aynı gün içi sıra kalıcı bir kolona bağlanmalı (`createdAt` /
-`sequence`); rowid varsayımı senkron ve yedekle bağdaşmıyor.
+**Yapıldı** (`Carry a transaction's place in the day on the record itself`):
+sıra artık kaydın kendi `createdAt` alanında taşınıyor — yedeğe giriyor,
+senkronda korunuyor, düzenlemede yeni satıra devrediliyor. Pull `INSERT OR
+REPLACE` yerine iki adım (ilk görüşte `createdAt = updatedAt`, sonrasında
+dokunulmuyor), geri yükleme damgayı dosyadan alıyor.
+
+Damga **kesin artan**: düz saat okuması yetmiyordu, aynı milisaniyede yazılan
+iki kayıt eşitlenip sıra `id` bağına yani UUID'ye düşüyordu — düzeltilmeye
+çalışılan hatanın ta kendisi. Bunu testler yakaladı (sabit test saati her kaydı
+eşitliyor).
+
+Göç (`8.sqm`) mevcut satırları `updatedAt` varsa ondan (eş cihazlar aynı sırayı
+türetsin), yoksa `rowid`'den dolduruyor. **Cihazın kendi veritabanında
+doğrulandı:** sürüm 8 → 9, 54 işlemin tamamı gerçek zaman damgalarıyla doldu,
+sıfır kalan yok.
+
+`LedgerOrderTest` 6 teste çıktı; eski sıralamada düzenleme ve geri yükleme
+testleri miktarı `1.0` yerine `2.0` veriyor.
+
+**Sunucu tarafı da kapatıldı** (`Carry the creation stamp over sync too`):
+Supabase'deki `transactions` tablosuna `created_at bigint NOT NULL DEFAULT 0`
+eklendi, damga her işlemle push ediliyor ve pull'da geri okunuyor.
+
+Mevcut satırların doldurulması ilk denemede **sessizce yutuldu**: `transactions`
+tablosundaki `transactions_lww` tetikleyicisi `kefe_lww_guard`'ı `BEFORE UPDATE`
+çalıştırıyor ve `NEW.updated_at <= OLD.updated_at` ise `OLD` dönüp yazmayı geri
+çeviriyor. Bakım amaçlı doldurma `updated_at`'e dokunmadığı için koşul her
+satırda sağlanıyordu; sorgu yine de `success` dönüyordu. `updated_at`'i artırmak
+çözüm değil — satır eş cihazlarda "daha yeni" görünüp gereksiz çekme tetiklerdi.
+Tetikleyici yalnızca doldurma işlemi boyunca kapatılıp yeniden açıldı.
+
+**Uçtan uca doğrulandı** (cihazda giriş yapıldıktan sonra): sunucuda ve cihazda
+16 canlı işlem, kimlik farkı 0, `created_at` ayrışması 0, ve iki tarafın
+türettiği **sıralama birebir aynı**. P1.2'nin kalan dar durumu kapandı.
+
+Ayrıca güvenlik danışmanının işaretlediği `kefe_lww_guard` `search_path` uyarısı
+giderildi (`harden_kefe_lww_guard_search_path`). Açık kalan tek uyarı, panodan
+açılması gereken "Leaked Password Protection" ayarı.
 
 ### P1.3 · Masaüstü ve tablette ana hedef ilerlemesi tüm portföyü sayıyor
 
