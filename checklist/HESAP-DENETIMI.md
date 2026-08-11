@@ -461,7 +461,7 @@ kilide düşürüyor ve o ekran görüntü almayı engelliyor. Telefon yatay çe
 868dp ile tablet düzenine geçtiği için kontrol mümkün — dikey ve yatayda hedef
 kartındaki tutar/yüzde artık aynı olmalı.
 
-### P1.4 · Hedef detayı grafiği ve katkı tablosu hedefe değil tüm portföye ait
+### P1.4 · Hedef detayı grafiği ve katkı tablosu hedefe değil tüm portföye ait — ✅ ÇÖZÜLDÜ
 
 `GoalDetailViewModel.kt:182-183` · `Projection.kt:57`
 
@@ -475,6 +475,26 @@ gösteriyor.
 
 Ek olarak `GoalDetailScreen.kt:913`: gerçekleşen seri günlük, tahmin serisi
 aylık, ikisi eşit genişlikte yuvalarda çiziliyor — zaman ekseni birimi karışık.
+
+**Yapıldı** (`Keep the goal screen to the goal's own numbers`):
+
+- **Gerçekleşen eğri kaldırıldı.** Çizilecek bir hedef geçmişi yok: fotoğraflar
+  portföy geneli ve hedefin geçmişi onlardan türetilemiyor. Portföy eğrisini
+  hedef başlığı altında çizmek doğru olmayan bir şey söylemek — varlık
+  detayındaki eksen etiketlerinde de aynı karar verilmişti. `GoalProjection`
+  artık fotoğraf **almıyor**, yani yanlış seriyi geri geçmek derlenmiyor. Günlük
+  seri gidince karışık zaman ekseni de gitti; kalan her şey aylık.
+- **Katkı sütunu korundu ve doğrulandı:** artık yalnız hedefin kendi
+  varlıklarını sayıyor (`monthlyContributions` verilmeyen pozisyonun işlemlerini
+  zaten eliyor — `ContributionsTest.bilinmeyenPozisyonunIslemiAtlanir`).
+- **Ay sonu ve getiri sütunları "bilinmiyor"** olarak dönüyor. İkisi de nullable
+  ve ekran zaten "—" çiziyordu; tasarım bu durumu öngörmüş. Portföyün ay sonu
+  değerini hedefin rakamı gibi okutmak, hiç rakam vermemekten kötü.
+- Hedef ekranı artık fotoğrafları dinlemiyor (kullanan kalmadı).
+
+**Sonraki iş:** gerçek bir hedef geçmişi defterden ve `price_history`'den
+yeniden kurulabilir (atanan varlıkların o gündeki miktarı × o günkü fiyat) ve
+hem eğriyi hem ay sonu sütununu geri getirir. Ayrı bir iş olarak duruyor.
 
 ### P1.5 · Kur yokken TL toplamı dolar/euro/gram diye gösteriliyor
 
