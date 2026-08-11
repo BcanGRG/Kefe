@@ -432,7 +432,7 @@ Ayrıca güvenlik danışmanının işaretlediği `kefe_lww_guard` `search_path`
 giderildi (`harden_kefe_lww_guard_search_path`). Açık kalan tek uyarı, panodan
 açılması gereken "Leaked Password Protection" ayarı.
 
-### P1.3 · Masaüstü ve tablette ana hedef ilerlemesi tüm portföyü sayıyor
+### P1.3 · Masaüstü ve tablette ana hedef ilerlemesi tüm portföyü sayıyor — ✅ ÇÖZÜLDÜ
 
 `SummaryScreenDesktop.kt:214` · `SummaryScreenTablet.kt:250`
 
@@ -446,6 +446,20 @@ Aynı veriyle aynı kart üç düzende iki farklı yüzde gösteriyor. Atama hi�
 yapılmamışsa telefon %0 derken masaüstü portföyün tamamını hedefe sayıyor — bu,
 bilerek kaldırıldığı belgelenen "atama yoksa tüm birikim sayılır" davranışının
 geri gelmesi demek.
+
+**Yapıldı** (`Let only one value reach the main goal card`): iki çağrı yerini
+düzeltmek hatayı mümkün kılan şekli yerinde bırakırdı, o yüzden **parametre
+kaldırıldı**. Üç kart da artık durumu alıp `mainGoalWealth`'i kendi içinde
+okuyor; yanlış değer geçmek derlenmiyor.
+
+Alttaki kural `GoalAssetsTest`'te zaten sabitli (atama yoksa 0, yalnız atanan
+kısım sayılır). Eksik olan bağlantıydı ve bu projede Compose düzenleri testle
+kapsanmıyor — bu yüzden düzeltme iddia edilen değil **yapısal**.
+
+Cihazda görsel doğrulama yapılamadı: yeniden kurulum uygulamayı biyometrik
+kilide düşürüyor ve o ekran görüntü almayı engelliyor. Telefon yatay çevrildiğinde
+868dp ile tablet düzenine geçtiği için kontrol mümkün — dikey ve yatayda hedef
+kartındaki tutar/yüzde artık aynı olmalı.
 
 ### P1.4 · Hedef detayı grafiği ve katkı tablosu hedefe değil tüm portföye ait
 
