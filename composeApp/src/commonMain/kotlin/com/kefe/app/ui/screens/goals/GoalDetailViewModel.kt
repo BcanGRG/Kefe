@@ -3,7 +3,6 @@ package com.kefe.app.ui.screens.goals
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.domain.KefeClock
-import com.kefe.app.domain.model.DailySnapshot
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.GoalStatus
@@ -142,20 +141,21 @@ class GoalDetailViewModel(
 
     private fun observeData() {
         viewModelScope.launch {
+            // Fotograflar ARTIK DINLENMIYOR: portfoy geneli olduklari icin hedef
+            // ekraninda kullanilabilecek bir sey vermiyorlardi (bkz. buildRows).
             combine(
                 portfolioRepository.observeGoals(),
                 portfolioRepository.observePositions(),
-                portfolioRepository.observeSnapshots(),
                 portfolioRepository.observeAllTransactions(),
                 portfolioRepository.observeGoalAssets(),
-            ) { goals, positions, snapshots, transactions, assignments ->
+            ) { goals, positions, transactions, assignments ->
                 val goal = goals.firstOrNull { it.id == goalId }
                 // Secicideki "Araba'da" uyarisi icin: kimlikten ada.
                 goalNames = goals.associate { it.id to it.name }
                 if (goal == null) {
                     _state.value.copy(stage = GoalDetailStage.Missing, goal = null)
                 } else {
-                    build(goal, positions, snapshots, transactions, assignments)
+                    build(goal, positions, transactions, assignments)
                 }
             }.collect { _state.value = it }
         }
@@ -164,12 +164,11 @@ class GoalDetailViewModel(
     private fun build(
         goal: Goal,
         positions: List<Position>,
-        snapshots: List<DailySnapshot>,
         transactions: List<Transaction>,
         assignments: Map<String, GoalAssignment>,
     ): GoalDetailUiState {
         val previous = _state.value
-        // Hedefe varlik atanmissa yalniz onlar sayilir; atanmamissa tum birikim.
+        // KATI ATAMA: yalniz hedefe atanan varliklar sayilir; atama yoksa 0.
         val wealth = goalWealth(goal, positions, assignments)
         val today = clock.today()
         // Hedefi karsilayan kalemler TEK KEZ cozulur: liste, getiri rakamlari
@@ -179,9 +178,18 @@ class GoalDetailViewModel(
         // Katki gecmisi DEFTERDEN, projeksiyon FOTOGRAFLARDAN. Ikisi de once
         // ornek seriden okunuyordu: kullanicinin kendi rakami tepede dururken
         // altinda baskasinin gecmisi ve baskasinin egrisi duruyordu.
-        val months = monthlyContributions(transactions, positions, ContributionMonths, today)
-        val projection = goalProjection(snapshots, goal, wealth, today)
-        val rows = buildRows(months, snapshots)
+        // Katki gecmisi HEDEFIN varliklarindan turer, portfoyun tamamindan
+        // degil: monthlyContributions verilmeyen pozisyonun islemlerini zaten
+        // eliyor. Once butun pozisyonlar geciliyordu ve tablo hedefle ilgisi
+        // olmayan alimlari da "bu hedefe katki" diye yaziyordu.
+        val months = monthlyContributions(
+            transactions,
+            composing.map { it.position },
+            ContributionMonths,
+            today,
+        )
+        val projection = goalProjection(goal, wealth, today)
+        val rows = buildRows(months)
 
         val base = previous.copy(
             stage = GoalDetailStage.Ready,
@@ -193,7 +201,6 @@ class GoalDetailViewModel(
                 .coerceAtLeast(0),
             delayMonths = (projection.arrival ?: goal.targetDate).monthIndex() -
                 goal.targetDate.monthIndex(),
-            projectionActual = projection.actual,
             projectionForecast = projection.forecast,
             projectedArrival = projection.arrival,
             milestones = goalMilestones(goal, wealth, projection.forecast, today),
@@ -244,27 +251,28 @@ class GoalDetailViewModel(
      * kullanicida cogu ay boyledir - ay sonu ve getiri bos birakilir; bilinmeyen
      * yerine sifir yazmak "o ay hicbir sey kazanmadin" demek olurdu.
      */
-    private fun buildRows(
-        months: List<MonthlyContribution>,
-        snapshots: List<DailySnapshot>,
-    ): List<ContributionRow> {
-        val lastOfMonth = snapshots.groupBy { it.date.monthOrdinal() }
-            .mapValues { (_, list) -> list.maxByOrNull { it.date.day }?.totalValue }
-
-        return months.map { month ->
-            val ordinal = month.date.monthOrdinal()
-            val end = lastOfMonth[ordinal]
-            val start = lastOfMonth[ordinal - 1]
+    /**
+     * AY SONU ve GETIRI sutunlari BILINMIYOR.
+     *
+     * Ikisi de gunluk net deger fotograflarindan hesaplaniyordu, ama o
+     * fotograflar PORTFOY GENELIDIR: hedefin yalnizca kendine atanan
+     * varliklardan olustugu bir tabloda portfoyun ay sonu degerini yazmak,
+     * hedefin rakami gibi okunan yanlis bir sayidir. Fotograf tablosu hedef
+     * bazinda tutulmadigi icin dogrusu turetilemiyor.
+     *
+     * Alanlar zaten nullable ve ekran bilinmeyende "—" ciziyor - tasarim bu
+     * durumu ongormus. Katki sutunu dogru kalir: o defterden geliyor ve artik
+     * yalnizca hedefin varliklarini sayiyor.
+     */
+    private fun buildRows(months: List<MonthlyContribution>): List<ContributionRow> =
+        months.map { month ->
             ContributionRow(
                 monthLabel = "${month.date.monthLabel()} ${month.date.year}",
                 contribution = month.total,
-                monthEnd = end,
-                // Getiri = ay sonu - ay basi - o ay eklenen para. Iki ucundan
-                // biri bilinmiyorsa hesaplanamaz.
-                gain = if (end != null && start != null) end - start - month.total else null,
+                monthEnd = null,
+                gain = null,
             )
         }.reversed()
-    }
 
     /**
      * Grafigin altindaki "Kasım'da katkı yok" notunun konusu: katki YAPILAN iki

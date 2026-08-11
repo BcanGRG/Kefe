@@ -331,7 +331,7 @@ private fun SummaryContent(
             item {
                 MainGoalCard(
                     goal = goal,
-                    currentWealth = state.mainGoalWealth,
+                    state = state,
                     masked = state.masked,
                     otherGoalCount = state.otherGoalCount,
                     onClick = { onOpenGoal(goal.id) },
@@ -586,13 +586,22 @@ private fun maskedSigned(positive: Boolean): String =
 @Composable
 private fun MainGoalCard(
     goal: Goal,
-    currentWealth: Double,
+    state: SummaryUiState,
     masked: Boolean,
     otherGoalCount: Int,
     onClick: () -> Unit,
     onSeeAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Ana hedefin karsiligi DURUMDAN okunur, disaridan gecilmez.
+    //
+    // Once `currentWealth: Double` parametresiydi ve her duzen kendi degerini
+    // seciyordu: telefon dogru alani (mainGoalWealth) veriyor, masaustu ve
+    // tablet ise totals.totalValue geciyordu. Ayni hedef karti ayni veriyle
+    // farkli yuzde gosteriyor, atama yokken telefon %0 derken genis ekranlar
+    // portfoyun tamamini hedefe sayiyordu - bilerek kaldirilmis bir davranisin
+    // geri donmesi. Parametre kaldirilinca yanlis deger gecmek MUMKUN DEGIL.
+    val currentWealth = state.mainGoalWealth
     val c = KefeTheme.colors
     val t = KefeTheme.type
     val progress = goal.progress(currentWealth)

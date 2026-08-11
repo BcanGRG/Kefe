@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -910,7 +909,9 @@ private fun ProjectionCard(goal: Goal, state: GoalDetailUiState) {
 
         Spacer(Modifier.height(Space.x10))
         KefeProjectionChart(
-            actual = state.projectionActual.toPoints(),
+            // Gerceklesen seri YOK: hedefin gecmisi tutulmuyor, portfoyunki de
+            // onun yerine gecemez (bkz. GoalProjection).
+            actual = emptyList(),
             forecast = state.projectionForecast.toPoints(),
             goal = goal.amount,
             goalLabel = "₺${Money.compact(goal.amount)} hedef",
@@ -922,15 +923,6 @@ private fun ProjectionCard(goal: Goal, state: GoalDetailUiState) {
             horizontalArrangement = Arrangement.spacedBy(Space.x12),
             verticalArrangement = Arrangement.spacedBy(Space.x12),
         ) {
-            LegendItem("Gerçekleşen") {
-                Box(
-                    Modifier
-                        .width(14.dp)
-                        .height(2.4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(c.accent),
-                )
-            }
             LegendItem("Tahmin") {
                 Box(
                     Modifier

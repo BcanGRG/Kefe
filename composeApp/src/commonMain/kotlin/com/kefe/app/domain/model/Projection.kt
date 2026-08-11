@@ -3,10 +3,19 @@ package com.kefe.app.domain.model
 /**
  * Hedef projeksiyonu.
  *
- * [actual] GERCEKLESEN: gunluk net deger fotograflarindan gelir, tahmin degil.
- * [forecast] ise bir MODELDIR ve modeli tek cumleyle soylenebilir: "bu tempoyla
- * devam edersen". Ilk noktasi bugunku birikimdir, boylece iki egri kesintisiz
- * birlesir.
+ * GERCEKLESEN SERI YOK. Once gunluk net deger fotograflarindan geliyordu, ama
+ * o fotograflar PORTFOY GENELIDIR; hedefin karsiligi ise yalnizca ona atanan
+ * varliklardir. Iki egri farkli tabandaydi: "bugun"de birlesmeleri gerekirken
+ * gerceklesen portfoyun toplamini, tahmin hedefin birikimini gosteriyordu -
+ * asagidaki sozlesmenin kendisi ihlal ediliyordu.
+ *
+ * Hedefin GECMISI elimizde yok: fotograf tablosu hedef bazinda tutulmuyor.
+ * Portfoy egrisini hedefin gecmisi diye cizmektense hic cizmemek dogru - ayni
+ * karar varlik detayindaki eksen etiketlerinde de verildi. Gercek bir hedef
+ * gecmisi defterden ve fiyat gecmisinden yeniden kurulabilir; ayri bir is.
+ *
+ * [forecast] bir MODELDIR ve modeli tek cumleyle soylenebilir: "bu tempoyla
+ * devam edersen". Ilk noktasi BUGUNKU birikimdir.
  *
  * Piyasa getirisi VARSAYILMAZ. Altin ya da dolar ne yapacak bilinmiyor; bir
  * buyume orani uydurmak, tahmini kullanicinin katkisindan cok o varsayima
@@ -15,7 +24,6 @@ package com.kefe.app.domain.model
  * Belirsizlik bandi da YOK. Bant, varyansi modelledigimizi soyler; modellemiyoruz.
  */
 data class GoalProjection(
-    val actual: List<Double>,
     val forecast: List<Double>,
     /** Tahmine gore hedefe varis. Katki sifirsa ve hedef uzaktaysa null. */
     val arrival: KefeDate?,
@@ -49,23 +57,20 @@ fun monthsToReach(currentWealth: Double, target: Double, monthlyContribution: Do
 }
 
 fun goalProjection(
-    snapshots: List<DailySnapshot>,
     goal: Goal,
     currentWealth: Double,
     today: KefeDate,
 ): GoalProjection {
-    val actual = snapshots.map { it.totalValue }
-
     // Hedef zaten karsilandiysa tahmin edilecek bir sey yok.
     if (currentWealth >= goal.amount) {
-        return GoalProjection(actual = actual, forecast = emptyList(), arrival = today)
+        return GoalProjection(forecast = emptyList(), arrival = today)
     }
 
     val monthly = goal.monthlyContribution
     if (monthly <= 0.0) {
         // Katki yoksa birikim kendiliginden buyumez - duz bir cizgi cizmek
         // "hicbir sey yapmasan da varirsin" demek olurdu.
-        return GoalProjection(actual = actual, forecast = emptyList(), arrival = null)
+        return GoalProjection(forecast = emptyList(), arrival = null)
     }
 
     val forecast = mutableListOf(currentWealth)
@@ -78,7 +83,6 @@ fun goalProjection(
     }
 
     return GoalProjection(
-        actual = actual,
         forecast = forecast,
         arrival = if (value >= goal.amount) today.plusMonths(months) else null,
     )

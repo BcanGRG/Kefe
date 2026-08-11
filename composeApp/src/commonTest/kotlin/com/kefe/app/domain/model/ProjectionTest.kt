@@ -24,27 +24,30 @@ private fun goal(
     monthlyContribution = monthlyContribution,
 )
 
-private fun snapshot(date: KefeDate, total: Double): DailySnapshot =
-    DailySnapshot(date = date, totalValue = total, principal = total)
-
 class ProjectionTest {
 
+    /**
+     * Projeksiyon YALNIZ hedefin kendi rakamlarindan turer.
+     *
+     * Once gerceklesen seri olarak portfoy geneli fotograflar veriliyordu ve
+     * tahmin hedefin birikiminden basliyordu: iki egri farkli tabandaydi ve
+     * "bugun"de birlesmeleri gerekirken birlesmiyordu. Hedefin gecmisi
+     * tutulmadigi icin dogrusu turetilemiyor; portfoy egrisini hedefin gecmisi
+     * diye cizmektense hic cizmemek dogru. Tip artik fotograf ALMIYOR - yanlis
+     * seriyi gecmek derlenmiyor.
+     */
     @Test
-    fun gerceklesenSeriFotograflardanGelir() {
-        val snapshots = listOf(
-            snapshot(KefeDate(2026, 7, 26), 100.0),
-            snapshot(KefeDate(2026, 7, 27), 120.0),
-        )
+    fun projeksiyonYALNIZHedefinRakamlarindanTurer() {
+        val result = goalProjection(goal(1_000.0, 100.0), 120.0, bugun)
 
-        val result = goalProjection(snapshots, goal(1_000.0, 100.0), 120.0, bugun)
-
-        assertEquals(listOf(100.0, 120.0), result.actual)
+        // Tek zaman serisi tahmindir ve bugunku HEDEF birikiminden baslar.
+        assertEquals(120.0, result.forecast.first(), EPS)
     }
 
     @Test
     fun tahminBugunkuBirikimdenBaslar() {
         // Iki egri kesintisiz birlesmeli: tahminin ilk noktasi bugunku deger.
-        val result = goalProjection(emptyList(), goal(1_000.0, 250.0), 500.0, bugun)
+        val result = goalProjection(goal(1_000.0, 250.0), 500.0, bugun)
 
         assertEquals(500.0, result.forecast.first(), EPS)
         assertEquals(listOf(500.0, 750.0, 1_000.0), result.forecast)
@@ -53,7 +56,7 @@ class ProjectionTest {
     @Test
     fun varisAyiKatkiyaGoreHesaplanir() {
         // 500 birikim, hedef 1.000, ayda 250 -> 2 ay.
-        val result = goalProjection(emptyList(), goal(1_000.0, 250.0), 500.0, bugun)
+        val result = goalProjection(goal(1_000.0, 250.0), 500.0, bugun)
 
         assertEquals(bugun.plusMonths(2), result.arrival)
     }
@@ -61,7 +64,7 @@ class ProjectionTest {
     @Test
     fun getiriVarsayilmaz() {
         // Tahmin dogrusal: her adim tam olarak aylik katki kadar artar.
-        val result = goalProjection(emptyList(), goal(10_000.0, 1_000.0), 0.0, bugun)
+        val result = goalProjection(goal(10_000.0, 1_000.0), 0.0, bugun)
 
         result.forecast.zipWithNext { a, b -> assertEquals(1_000.0, b - a, EPS) }
     }
@@ -69,7 +72,7 @@ class ProjectionTest {
     @Test
     fun katkiYoksaTahminUretilmez() {
         // Duz bir cizgi cizmek "hicbir sey yapmasan da varirsin" demek olurdu.
-        val result = goalProjection(emptyList(), goal(1_000.0, 0.0), 100.0, bugun)
+        val result = goalProjection(goal(1_000.0, 0.0), 100.0, bugun)
 
         assertTrue(result.forecast.isEmpty())
         assertNull(result.arrival)
@@ -77,7 +80,7 @@ class ProjectionTest {
 
     @Test
     fun hedefKarsilandiysaTahminYok() {
-        val result = goalProjection(emptyList(), goal(1_000.0, 250.0), 1_200.0, bugun)
+        val result = goalProjection(goal(1_000.0, 250.0), 1_200.0, bugun)
 
         assertTrue(result.forecast.isEmpty())
         assertEquals(bugun, result.arrival)
@@ -86,7 +89,7 @@ class ProjectionTest {
     @Test
     fun cokUzakHedefteVarisNull() {
         // Ayda 1 TL ile 1 milyara varmak 40 yili asar; sinira takilir.
-        val result = goalProjection(emptyList(), goal(1_000_000_000.0, 1.0), 0.0, bugun)
+        val result = goalProjection(goal(1_000_000_000.0, 1.0), 0.0, bugun)
 
         assertNull(result.arrival)
     }
@@ -112,7 +115,7 @@ class ProjectionTest {
     @Test
     fun gelecekDurakTarihiTahmindenOkunur() {
         // 0 birikim, ayda 250, hedef 1.000 -> %50 (500 TL) ikinci ayda.
-        val projection = goalProjection(emptyList(), goal(1_000.0, 250.0), 0.0, bugun)
+        val projection = goalProjection(goal(1_000.0, 250.0), 0.0, bugun)
         val milestones = goalMilestones(goal(1_000.0, 250.0), 0.0, projection.forecast, bugun)
 
         val half = milestones.single { it.percent == 50 }

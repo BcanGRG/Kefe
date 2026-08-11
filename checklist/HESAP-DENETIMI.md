@@ -432,7 +432,7 @@ Ayrıca güvenlik danışmanının işaretlediği `kefe_lww_guard` `search_path`
 giderildi (`harden_kefe_lww_guard_search_path`). Açık kalan tek uyarı, panodan
 açılması gereken "Leaked Password Protection" ayarı.
 
-### P1.3 · Masaüstü ve tablette ana hedef ilerlemesi tüm portföyü sayıyor
+### P1.3 · Masaüstü ve tablette ana hedef ilerlemesi tüm portföyü sayıyor — ✅ ÇÖZÜLDÜ
 
 `SummaryScreenDesktop.kt:214` · `SummaryScreenTablet.kt:250`
 
@@ -447,7 +447,21 @@ yapılmamışsa telefon %0 derken masaüstü portföyün tamamını hedefe sayı
 bilerek kaldırıldığı belgelenen "atama yoksa tüm birikim sayılır" davranışının
 geri gelmesi demek.
 
-### P1.4 · Hedef detayı grafiği ve katkı tablosu hedefe değil tüm portföye ait
+**Yapıldı** (`Let only one value reach the main goal card`): iki çağrı yerini
+düzeltmek hatayı mümkün kılan şekli yerinde bırakırdı, o yüzden **parametre
+kaldırıldı**. Üç kart da artık durumu alıp `mainGoalWealth`'i kendi içinde
+okuyor; yanlış değer geçmek derlenmiyor.
+
+Alttaki kural `GoalAssetsTest`'te zaten sabitli (atama yoksa 0, yalnız atanan
+kısım sayılır). Eksik olan bağlantıydı ve bu projede Compose düzenleri testle
+kapsanmıyor — bu yüzden düzeltme iddia edilen değil **yapısal**.
+
+Cihazda görsel doğrulama yapılamadı: yeniden kurulum uygulamayı biyometrik
+kilide düşürüyor ve o ekran görüntü almayı engelliyor. Telefon yatay çevrildiğinde
+868dp ile tablet düzenine geçtiği için kontrol mümkün — dikey ve yatayda hedef
+kartındaki tutar/yüzde artık aynı olmalı.
+
+### P1.4 · Hedef detayı grafiği ve katkı tablosu hedefe değil tüm portföye ait — ✅ ÇÖZÜLDÜ
 
 `GoalDetailViewModel.kt:182-183` · `Projection.kt:57`
 
@@ -461,6 +475,26 @@ gösteriyor.
 
 Ek olarak `GoalDetailScreen.kt:913`: gerçekleşen seri günlük, tahmin serisi
 aylık, ikisi eşit genişlikte yuvalarda çiziliyor — zaman ekseni birimi karışık.
+
+**Yapıldı** (`Keep the goal screen to the goal's own numbers`):
+
+- **Gerçekleşen eğri kaldırıldı.** Çizilecek bir hedef geçmişi yok: fotoğraflar
+  portföy geneli ve hedefin geçmişi onlardan türetilemiyor. Portföy eğrisini
+  hedef başlığı altında çizmek doğru olmayan bir şey söylemek — varlık
+  detayındaki eksen etiketlerinde de aynı karar verilmişti. `GoalProjection`
+  artık fotoğraf **almıyor**, yani yanlış seriyi geri geçmek derlenmiyor. Günlük
+  seri gidince karışık zaman ekseni de gitti; kalan her şey aylık.
+- **Katkı sütunu korundu ve doğrulandı:** artık yalnız hedefin kendi
+  varlıklarını sayıyor (`monthlyContributions` verilmeyen pozisyonun işlemlerini
+  zaten eliyor — `ContributionsTest.bilinmeyenPozisyonunIslemiAtlanir`).
+- **Ay sonu ve getiri sütunları "bilinmiyor"** olarak dönüyor. İkisi de nullable
+  ve ekran zaten "—" çiziyordu; tasarım bu durumu öngörmüş. Portföyün ay sonu
+  değerini hedefin rakamı gibi okutmak, hiç rakam vermemekten kötü.
+- Hedef ekranı artık fotoğrafları dinlemiyor (kullanan kalmadı).
+
+**Sonraki iş:** gerçek bir hedef geçmişi defterden ve `price_history`'den
+yeniden kurulabilir (atanan varlıkların o gündeki miktarı × o günkü fiyat) ve
+hem eğriyi hem ay sonu sütununu geri getirir. Ayrı bir iş olarak duruyor.
 
 ### P1.5 · Kur yokken TL toplamı dolar/euro/gram diye gösteriliyor
 
