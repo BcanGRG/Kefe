@@ -79,7 +79,6 @@ data class GoalDetailUiState(
     val delayMonths: Int = 0,
 
     /** Gerceklesen: gunluk net deger fotograflari. */
-    val projectionActual: List<Double> = emptyList(),
     /** Tahmin: bugunku birikim + her ay eklenecek katki. Belirsizlik bandi yok. */
     val projectionForecast: List<Double> = emptyList(),
     /** Tahmine gore hedefe varis. Aylik katki 0 ise null - tahmin edilemez. */
