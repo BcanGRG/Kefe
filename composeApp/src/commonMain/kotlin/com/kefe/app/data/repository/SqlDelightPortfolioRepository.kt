@@ -29,6 +29,7 @@ import com.kefe.app.domain.model.ActivityKind
 import com.kefe.app.domain.model.DailySnapshot
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAssignment
+import com.kefe.app.domain.model.revertedAssignmentQuantity
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.Portfolio
 import com.kefe.app.domain.model.Position
@@ -251,6 +252,10 @@ class SqlDelightPortfolioRepository(
                     // bu satiri ilk cektiginde createdAt'i updatedAt'ten
                     // turetiyor, yani iki cihaz ayni siraya variyor (bkz. 8.sqm).
                     createdAt = stored.createdAt.takeIf { it > 0L } ?: nextCreatedAt,
+                    // Atamaya yapilan katki kaydin UZERINDE durur; silme aninda
+                    // baska hicbir yerden turetilemez (bkz. 9.sqm).
+                    goalId = stored.goalId,
+                    goalDelta = stored.goalDelta,
                 )
                 recomputePosition(stored.positionId)
                 // Satis miktari sifirlamis olabilir; oyleyse kotasyon duser.
@@ -288,11 +293,40 @@ class SqlDelightPortfolioRepository(
                     },
                     amount = removed.quantity * removed.unitPrice + removed.fee,
                 )
+                // Kaydin hedef atamasina katkisi de GERI ALINIR. Yoksa 4
+                // ceyreklik bir alimi silmek pozisyonu 6'ya dusuruyor ama atama
+                // 10 kaliyordu; duzenleme de (once yaz, sonra sil) katkiyi
+                // ikinci kez uyguluyordu.
+                revertGoalAssignment(removed.positionId, removed.goalId, removed.goalDelta, now)
                 recomputePosition(removed.positionId)
                 // Son alim silindiyse varlik artik tutulmuyor demektir.
                 dropUnheldInstrumentPrices()
             }
         }
+    }
+
+    /**
+     * Silinen kaydin atamaya yaptigi degisikligi geri alir.
+     *
+     * Kural saf fonksiyonda ([revertedAssignmentQuantity]); burasi yalniz okuyup
+     * yaziyor. `database.transaction` icinden cagrilir - atamayla defter ayni
+     * yazmada tutarli kalmali.
+     */
+    private fun revertGoalAssignment(
+        positionId: String,
+        goalId: String?,
+        goalDelta: Double,
+        now: Long,
+    ) {
+        val current = goalAssetQueries.selectGoalAssetByPosition(positionId).executeAsOneOrNull()
+            ?.let { GoalAssignment(it.goalId, it.quantity) } ?: return
+        val quantity = revertedAssignmentQuantity(current, goalId, goalDelta) ?: return
+        goalAssetQueries.assignPositionToGoal(
+            positionId = positionId,
+            goalId = current.goalId,
+            quantity = quantity,
+            updatedAt = now,
+        )
     }
 
     override fun observeOnboarded(): Flow<Boolean> =
@@ -361,6 +395,8 @@ class SqlDelightPortfolioRepository(
                         storage = it.storage,
                         addedByMemberId = it.addedByMemberId,
                         createdAt = it.createdAt,
+                        goalId = it.goalId,
+                        goalDelta = it.goalDelta,
                     )
                 },
                 goals = goalQueries.selectGoals().executeAsList().map {
@@ -487,6 +523,8 @@ class SqlDelightPortfolioRepository(
                         syncState = SyncState.Synced,
                         updatedAt = clock.nowEpochMillis(),
                         createdAt = tx.createdAt.takeIf { it > 0L } ?: (index.toLong() + 1L),
+                        goalId = tx.goalId,
+                        goalDelta = tx.goalDelta,
                     )
                 }
 

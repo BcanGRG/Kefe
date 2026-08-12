@@ -88,6 +88,10 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 updatedAt = 0L,
                 syncState = entry.syncState,
                 createdAt = index.toLong() + 1L,
+                // Ornek defterde atama katkisi yok: atamalar dogrudan
+                // yaziliyor, islemlerden turemiyor.
+                goalId = null,
+                goalDelta = 0.0,
             )
         }
 

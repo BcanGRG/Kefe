@@ -45,6 +45,15 @@ data class TransactionDto(
      * cagiran o durumda [updatedAt]'e duser.
      */
     @SerialName("created_at") val createdAt: Long = 0L,
+    /**
+     * Kaydin hedef atamasina katkisi - silmenin geri alabilmesi icin (9.sqm).
+     *
+     * Varsayilanlar var: kolonu tasimayan bir yanit cozme hatasi vermesin.
+     * O durumda es cihazda silme atamaya dokunmaz, yani eski davranisa duser -
+     * yanlis bir rakam uretmez.
+     */
+    @SerialName("goal_id") val goalId: String? = null,
+    @SerialName("goal_delta") val goalDelta: Double = 0.0,
 )
 
 @Serializable

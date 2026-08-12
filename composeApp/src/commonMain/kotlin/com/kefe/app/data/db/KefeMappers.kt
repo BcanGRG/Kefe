@@ -59,6 +59,8 @@ internal fun Transactions.toDomain(): Transaction = Transaction(
     addedByMemberId = addedByMemberId,
     syncState = syncState,
     createdAt = createdAt,
+    goalId = goalId,
+    goalDelta = goalDelta,
 )
 
 internal fun Goals.toDomain(): Goal = Goal(

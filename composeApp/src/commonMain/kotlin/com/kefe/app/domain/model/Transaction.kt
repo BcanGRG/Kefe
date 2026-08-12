@@ -22,6 +22,14 @@ data class Transaction(
      * alani oldugu icin artik yedege giriyor ve esitlemede korunuyor.
      */
     val createdAt: Long = 0L,
+    /**
+     * Bu kaydin hedef atamasina yaptigi degisiklik - silinince geri alinabilsin
+     * diye (bkz. [GoalAssignmentChange], 9.sqm).
+     *
+     * [goalId] null ya da [goalDelta] sifirsa kayit atamayi oynatmamistir.
+     */
+    val goalId: String? = null,
+    val goalDelta: Double = 0.0,
 ) {
     val total: Double get() = quantity * unitPrice + fee
 }

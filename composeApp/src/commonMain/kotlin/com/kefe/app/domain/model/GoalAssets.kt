@@ -24,9 +24,18 @@ data class GoalAssignment(
 /**
  * Bu atamanin BUGUN kac birime karsilik geldigi.
  *
- * POZISYONUN MIKTARIYLA SINIRLIDIR: 10 ceyrek atanmisken 6 tanesi satilirsa
- * hedef 6 sayar. Kirpmayi okuma aninda yapmak, satisin hangi hedeften
- * dusuruleceGine dair ikinci bir hesap defteri tutmaktan kurtarir.
+ * POZISYONUN MIKTARIYLA SINIRLIDIR - ama bu artik yalniz bir EMNIYET KEMERI.
+ *
+ * Kirpma once tek mekanizmaydi: satista atamaya dokunulmuyor, okurken
+ * `min(atanan, pozisyon)` aliniyordu. O kirpma MONOTON DEGIL. 10 ceyrek Ev'e
+ * atanmisken 6 tanesi satilirsa hedef 6 sayar; sonra 4 ceyrek daha alinirsa
+ * pozisyon 10'a doner ve hedef yeniden 10 saymaya baslar - satilan ceyrekler
+ * hedefe geri gelir. Ustelik bu, kodun kendi yazili kuraliyla da celisiyordu:
+ * "miktari belli atamalarda yeni alim nasilsa sayilmiyor".
+ *
+ * Artik SATIS ATAMAYI KALICI OLARAK DUSURUYOR (bkz. [goalAssignmentChange]) ve
+ * burasi yalniz baska yollardan (geri yukleme, esitleme, pozisyonun elle
+ * duzeltilmesi) gelen tutarsizliklara karsi duruyor.
  */
 fun GoalAssignment.effectiveQuantity(position: Position): Double =
     if (isWhole) position.quantity else min(quantity, position.quantity).coerceAtLeast(0.0)
@@ -120,17 +129,53 @@ fun assetsOf(
 }
 
 /**
+ * Bir islemin atamaya YAPTIGI degisiklik.
+ *
+ * [delta] islemin GERI ALINABILIR katkisidir: kayit silinince ya da
+ * duzenlenince atamaya `-delta` uygulanir. Islemin uzerinde saklanir
+ * ([Transaction.goalId] / [Transaction.goalDelta]) cunku silme aninda o rakam
+ * baska hicbir yerden turetilemez.
+ *
+ * Delta TOPLANABILIR olsun diye secildi, "onceki degeri geri yaz" degil: mutlak
+ * geri yazma yalniz son islem geri alinirsa dogru olur, arasina baska kayit
+ * girerse eski bir degeri diriltir. Duzenleme de zaten "once yeni kaydi yaz,
+ * sonra eskisini sil" sirasiyla calisiyor (bkz. AddTransactionViewModel) - delta
+ * bu sirada da dogru sonuc verir.
+ *
+ * [delta] SIFIR ise degisiklik geri alinamaz; iki durumda boyle olur ve ikisi de
+ * aritmetik bir katki degil, kullanicinin ACIK bir kararidir:
+ *   - "Tum varlik" atamasini miktara dondurmak (asagida),
+ *   - "Tum varlik" atamasini oldugu gibi korumak.
+ */
+data class GoalAssignmentChange(
+    val goalId: String,
+    /** Atamaya yazilacak yeni miktar; -1 ise "tum varlik". */
+    val quantity: Double,
+    val delta: Double,
+)
+
+/**
  * Islem kaydedilirken atamanin ALACAGI yeni miktar; `null` ise atamaya
  * DOKUNULMAZ.
  *
  * Hedef secicisi YALNIZ BU ISLEMIN nereye sayilacagini soyler.
  *
- * [selectedGoalId] doluyken:
- *   - Ayni hedef  -> miktar bu islem kadar artar (satista azalir).
+ * ALIMDA [selectedGoalId] doluyken:
+ *   - Ayni hedef  -> miktar bu islem kadar artar.
  *   - "Tum varlik" atamasi ayni hedefte KORUNUR: kullanici bir kez "tamami bu
  *     hedefe" demisse sonraki alimlar da oraya sayilmali.
  *   - Baska hedef (ya da ilk atama) -> miktar bu islemin miktari olur; varlik
- *     o hedefe TASINIR.
+ *     o hedefe TASINIR. Bu tasima GERI ALINDIGINDA varlik eski hedefine
+ *     donmez, atamasiz kalir (miktar 0): eski hedefin adi hicbir yerde
+ *     saklanmiyor ve onu saklamak butun bir geri-alma gunlugu demek olurdu.
+ *
+ * SATIS SECICIYE BAKMAZ. Satis ancak varligin ICINDE BULUNDUGU hedeften
+ * dusebilir; baska bir hedef secmek o hedefe altin EKLEMEZ. Once bakmiyordu ve
+ * "baska hedef" dali `isSell`'i hic okumadigi icin bir SATIS kaydinda baska
+ * hedef secmek o hedefin ilerlemesini satilan miktar kadar ARTIRIYORDU.
+ *
+ * Satis, secicide "Hedefsiz" secili olsa bile atamayi dusurur. Boylece kirpma
+ * kalicilasir ve monoton olur (bkz. [effectiveQuantity]).
  *
  * "HEDEFSIZ" (null) VE "TUM VARLIK" ATAMASI. Burasi ilk surumde eksikti ve
  * duzeltme sahada tutmadi: eski atamalarin hepsi -1 (tum varlik) oldugu icin
@@ -144,31 +189,77 @@ fun assetsOf(
  * dondurulur. Miktari zaten belli olan atamalara dokunulmaz - onlarda yeni alim
  * nasilsa sayilmiyor.
  */
-fun nextAssignedQuantity(
+fun goalAssignmentChange(
     current: GoalAssignment?,
     selectedGoalId: String?,
     transactionQuantity: Double,
     isSell: Boolean,
     /** Pozisyonun BU ISLEMDEN ONCEKI miktari. */
     quantityBefore: Double,
-): Double? = when {
-    // Hedefsiz: yalniz "tum varlik" atamasini dondurmak icin mudahale edilir.
-    selectedGoalId == null ->
-        if (current != null && current.isWhole && !isSell) {
-            quantityBefore.coerceAtLeast(0.0)
-        } else {
-            null
-        }
+): GoalAssignmentChange? {
+    val quantity = transactionQuantity.coerceAtLeast(0.0)
 
-    current == null || current.goalId != selectedGoalId ->
-        transactionQuantity.coerceAtLeast(0.0)
-
-    current.isWhole -> GoalAssignment.WholePosition
-
-    else -> {
-        val delta = if (isSell) -transactionQuantity else transactionQuantity
-        (current.quantity + delta).coerceAtLeast(0.0)
+    if (isSell) {
+        // Satis yalniz varligin bulundugu hedeften duser; secici okunmaz.
+        if (current == null || current.isWhole) return null
+        // "Tum varlik" atamasinda dusulecek bir miktar yok: pozisyonun kendisi
+        // kuculuyor ve atama onu zaten takip ediyor.
+        val taken = min(quantity, current.quantity)
+        if (taken <= 0.0) return null
+        return GoalAssignmentChange(
+            goalId = current.goalId,
+            quantity = current.quantity - taken,
+            // Atanandan fazlasi satildiysa geri alinacak olan da o kadardir;
+            // `quantity` yazmak geri almada atamayi oldugundan buyuk diriltirdi.
+            delta = -taken,
+        )
     }
+
+    return when {
+        // Hedefsiz: yalniz "tum varlik" atamasini dondurmak icin mudahale edilir.
+        selectedGoalId == null ->
+            if (current != null && current.isWhole) {
+                GoalAssignmentChange(current.goalId, quantityBefore.coerceAtLeast(0.0), delta = 0.0)
+            } else {
+                null
+            }
+
+        current == null || current.goalId != selectedGoalId ->
+            GoalAssignmentChange(selectedGoalId, quantity, delta = quantity)
+
+        current.isWhole ->
+            GoalAssignmentChange(selectedGoalId, GoalAssignment.WholePosition, delta = 0.0)
+
+        else ->
+            GoalAssignmentChange(selectedGoalId, current.quantity + quantity, delta = quantity)
+    }
+}
+
+/**
+ * Silinen bir islemin atamaya yaptigi degisikligin GERI ALINMIS hali; `null`
+ * ise atamaya dokunulmaz.
+ *
+ * NEYDI. Islem silmek atamaya hic dokunmuyordu ve duzenleme, silmeden once yeni
+ * kaydi yazdigi icin katkiyi IKINCI KEZ uyguluyordu. Iki sonucu vardi:
+ *   - 4 ceyreklik bir alimi silmek pozisyonu 6'ya dusuruyor ama atama 10
+ *     kaliyordu; okuma aninda kirpildigi icin bugun goze batmiyor, sonraki alim
+ *     hedefi yeniden 10'a cikariyordu.
+ *   - 4 ceyreklik bir SATISI 3'e cekmek atamayi 10 -> 6 -> 3 yapiyordu; hedef
+ *     kalici olarak eksik sayiyordu ve geri getirmenin yolu yoktu.
+ *
+ * Geri alma yalniz atama HALA O HEDEFTEYSE yapilir: varlik arada baska bir
+ * hedefe tasinmissa eski hedefin rakamini kurcalamak yeni bir yalan olurdu.
+ * "Tum varlik" atamasi da dokunulmaz - onun sayisal bir katkisi yok.
+ */
+fun revertedAssignmentQuantity(
+    current: GoalAssignment?,
+    /** Islemin atamayi oynattigi hedef; null ise oynatmamis. */
+    goalId: String?,
+    delta: Double,
+): Double? {
+    if (goalId == null || delta == 0.0) return null
+    if (current == null || current.isWhole || current.goalId != goalId) return null
+    return (current.quantity - delta).coerceAtLeast(0.0)
 }
 
 /**

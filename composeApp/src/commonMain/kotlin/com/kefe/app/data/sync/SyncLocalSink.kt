@@ -149,6 +149,8 @@ class SyncLocalSink(
                 updatedAt = r.updatedAt,
                 deletedAt = r.deletedAt,
                 createdAt = r.createdAt.takeIf { it > 0L } ?: r.updatedAt,
+                goalId = r.goalId,
+                goalDelta = r.goalDelta,
             )
             database.transactionQueries.applyTransactionMetaPull(
                 id = r.id,
@@ -165,6 +167,8 @@ class SyncLocalSink(
                 addedByMemberId = r.addedByMemberId,
                 updatedAt = r.updatedAt,
                 deletedAt = r.deletedAt,
+                goalId = r.goalId,
+                goalDelta = r.goalDelta,
             )
             n++
         }
