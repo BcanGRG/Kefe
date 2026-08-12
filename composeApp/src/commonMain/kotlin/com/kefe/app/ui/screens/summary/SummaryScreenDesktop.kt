@@ -46,6 +46,7 @@ import com.kefe.app.domain.model.label
 import com.kefe.app.domain.model.progress
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.ui.charts.DonutSlice
+import com.kefe.app.ui.charts.collapseDonutSlices
 import com.kefe.app.ui.charts.KefeDonutChart
 import com.kefe.app.ui.charts.KefeNetWorthChart
 import com.kefe.app.ui.charts.Point
@@ -484,6 +485,11 @@ private fun DesktopAllocationCard(
         DonutSlice(it.assetClass.label(), it.value, c.assetClass(it.assetClass.color()))
     }
     val largest = allocation.maxByOrNull { it.value }
+    // Legend HALKANIN cizdigi listeyi gosterir. `slices` ham listeydi: halka en
+    // fazla bes dilim cizip kalanlari "Diğer"de topluyor, legend ise hepsini tek
+    // tek sayiyordu - alti varlik sinifi olan bir portfoyde iki taraf
+    // birbirini tutmuyordu.
+    val rows = collapseDonutSlices(slices, c.onSurfaceMuted)
 
     KefeCard(modifier = modifier, contentPadding = PaddingValues(CardPad)) {
         Row(
@@ -501,7 +507,7 @@ private fun DesktopAllocationCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                slices.forEach { slice ->
+                rows.forEach { slice ->
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(Space.x8),
                         verticalAlignment = Alignment.CenterVertically,

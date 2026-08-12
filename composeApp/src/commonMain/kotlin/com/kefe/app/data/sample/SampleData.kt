@@ -13,6 +13,7 @@ import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.Portfolio
 import com.kefe.app.domain.model.PortfolioTotals
+import com.kefe.app.domain.model.todayChange
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.PriceSource
@@ -55,7 +56,7 @@ object SampleData {
             quantity = 62.4,
             unit = QuantityUnit.Gram,
             unitPrice = 15308.0,
-            value = 955200.0,
+            value = 955219.2,
             cost = 806000.0,
             dailyChangePercent = 0.41,
         ),
@@ -105,7 +106,7 @@ object SampleData {
             quantity = 48.0,
             unit = QuantityUnit.Gram,
             unitPrice = 6667.0,
-            value = 320000.0,
+            value = 320016.0,
             cost = 240000.0,
             manualPrice = true,
             dailyChangePercent = -0.80,
@@ -117,7 +118,7 @@ object SampleData {
             quantity = 12400.0,
             unit = QuantityUnit.Share,
             unitPrice = 24.60,
-            value = 305000.0,
+            value = 305040.0,
             cost = 268000.0,
             dailyChangePercent = 0.52,
         ),
@@ -128,7 +129,7 @@ object SampleData {
             quantity = 8900.0,
             unit = QuantityUnit.Share,
             unitPrice = 21.40,
-            value = 190500.0,
+            value = 190460.0,
             cost = 214000.0,
             manualPrice = true,
             dailyChangePercent = -2.40,
@@ -140,7 +141,7 @@ object SampleData {
             quantity = 5100.0,
             unit = QuantityUnit.Share,
             unitPrice = 24.41,
-            value = 124500.0,
+            value = 124491.0,
             cost = 112000.0,
             dailyChangePercent = 0.18,
         ),
@@ -184,7 +185,7 @@ object SampleData {
             quantity = 1500.0,
             unit = QuantityUnit.Currency,
             unitPrice = 82.67,
-            value = 124000.0,
+            value = 124005.0,
             cost = 112400.0,
             dailyChangePercent = -0.15,
         ),
@@ -195,22 +196,42 @@ object SampleData {
             quantity = 120.0,
             unit = QuantityUnit.Gram,
             unitPrice = 483.0,
-            value = 58000.0,
+            value = 57960.0,
             cost = 62000.0,
             dailyChangePercent = -1.20,
         ),
     )
 
-    val totals: PortfolioTotals = PortfolioTotals(
-        totalValue = 3180400.0,
-        todayChange = 12400.0,
-        todayChangePercent = 0.29,
-        profit = 412000.0,
-        profitPercent = 14.9,
-        principal = 2768400.0,
-        monthAdded = 45000.0,
-        monthTarget = 50000.0,
-    )
+    /**
+     * Toplamlar POZISYONLARDAN TURER, elle yazilmaz.
+     *
+     * Yazilmisti ve tutmuyordu: gunluk degisim "+₺12.400 · %0,29" diyordu ama
+     * pozisyonlarin kendi yuzdeleri toplandiginda bambaska bir rakam cikiyor,
+     * ustelik 12.400 ile %0,29 birbirini de tutmuyordu (12.400 / 3.168.000 =
+     * %0,39). Ornek portfoy uygulamanin kendi hesaplariyla celisen bir tablo
+     * gosteremez - katalog neyi dogruladigini soyleyemez hale gelir.
+     *
+     * Daha canli bir gun isteniyorsa dogru yer pozisyonlarin
+     * `dailyChangePercent` degerleridir; artik gercekten toplami belirliyorlar.
+     *
+     * `monthAdded` ve `monthTarget` turetilemez - defter ve hedef ister,
+     * ornekte ikisi de yok; tasarimin rakamlari kaliyor.
+     */
+    val totals: PortfolioTotals = run {
+        val totalValue = positions.sumOf { it.value }
+        val principal = positions.sumOf { it.cost }
+        val today = positions.todayChange()
+        PortfolioTotals(
+            totalValue = totalValue,
+            todayChange = today?.amount,
+            todayChangePercent = today?.percent,
+            profit = totalValue - principal,
+            profitPercent = (totalValue - principal) / principal * 100.0,
+            principal = principal,
+            monthAdded = 45000.0,
+            monthTarget = 50000.0,
+        )
+    }
 
     /** Buyukten kucuge - tasarimda dagilim bu sirayla gosteriliyor. */
     val allocation: List<AllocationSlice> = listOf(

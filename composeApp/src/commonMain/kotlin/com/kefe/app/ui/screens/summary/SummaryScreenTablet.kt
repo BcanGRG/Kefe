@@ -56,6 +56,7 @@ import com.kefe.app.domain.model.label
 import com.kefe.app.domain.model.progress
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.ui.charts.DonutSlice
+import com.kefe.app.ui.charts.collapseDonutSlices
 import com.kefe.app.ui.charts.KefeDonutChart
 import com.kefe.app.ui.charts.KefeNetWorthChart
 import com.kefe.app.ui.charts.Point
@@ -519,7 +520,8 @@ private fun AllocationCard(allocation: List<AllocationSlice>, total: Double, mas
                 size = 148.dp,
             )
             Column(Modifier.weight(1f)) {
-                slices.forEachIndexed { index, slice ->
+                // Legend HALKANIN cizdigi listeyi gosterir; bkz. masaustu.
+                collapseDonutSlices(slices, c.onSurfaceMuted).forEachIndexed { index, slice ->
                     if (index > 0) KefeHairline()
                     val percent = if (total > 0.0) slice.value / total * 100.0 else 0.0
                     Row(

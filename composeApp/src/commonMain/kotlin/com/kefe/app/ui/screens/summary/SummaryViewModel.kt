@@ -26,9 +26,16 @@ import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.domain.repository.RefreshOutcome
+import com.kefe.app.domain.model.sellPrice
+import com.kefe.app.ui.screens.market.priceDecimals
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.layout.KefeMarketRow
+import com.kefe.app.domain.model.KefeDate
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -134,6 +141,26 @@ class SummaryViewModel(
         }
     }
 
+    /**
+     * GUN DONUNCE ekran kendiliginden tazelensin.
+     *
+     * `clock.today()` yalniz akis emisyonunda okunuyordu: uygulama gece
+     * boyunca acik kalirsa ve arada yeni bir emisyon olmazsa (ag yok, kayit
+     * girilmedi) "Bu ay eklenen" dunun ayina gore hesaplanmis halde asili
+     * kaliyor, kotasyon-gunu kapisi da dunku gune bakiyordu.
+     *
+     * Dakikada bir bakilir ama YALNIZ GUN DEGISTIGINDE emisyon olur
+     * ([distinctUntilChanged]); yani saatte altmis uyanma, sifir gereksiz
+     * yeniden hesap. Piyasa gunu sorulur, cihazin gunu degil - kotasyon
+     * gunleriyle kiyaslanan tarih o (bkz. KefeClock.marketToday).
+     */
+    private fun dayTicker(): Flow<KefeDate> = flow {
+        while (true) {
+            emit(clock.marketToday())
+            delay(DayCheckMillis)
+        }
+    }.distinctUntilChanged()
+
     private fun observeData() {
         viewModelScope.launch {
             combine(
@@ -147,7 +174,9 @@ class SummaryViewModel(
             }.combine(portfolioRepository.observeAllTransactions()) { snapshot, transactions ->
                 snapshot to transactions
             }.combine(portfolioRepository.observeGoalAssets()) { pair, assignments ->
-                val (snapshot, transactions) = pair
+                Triple(pair.first, pair.second, assignments)
+            }.combine(dayTicker()) { triple, today ->
+                val (snapshot, transactions, assignments) = triple
                 val (portfolio, members, positions, goals, activity) = snapshot
                 val main = goals.firstOrNull { it.isMain }
                 _state.value.copy(
@@ -157,7 +186,7 @@ class SummaryViewModel(
                     totals = portfolioTotals(
                         positions = positions,
                         transactions = transactions,
-                        today = clock.today(),
+                        today = today,
                         // Aylik katki hedefi ana hedeften gelir; turetilebilir bir sey degil.
                         monthTarget = main?.monthlyContribution ?: 0.0,
                     ),
@@ -169,7 +198,7 @@ class SummaryViewModel(
                         ?.let { goalWealth(it, positions, assignments) }
                         ?: 0.0,
                     mainGoalArrival = main?.let {
-                        goalProjection(it, goalWealth(it, positions, assignments), clock.today())
+                        goalProjection(it, goalWealth(it, positions, assignments), today)
                             .arrival
                     },
                     // Vadesi gecmis hedef de sayilir: tasarimda o hal "Hedef duruyor"
@@ -284,27 +313,46 @@ class SummaryViewModel(
                     //
                     // Eksik kur NULL kalir, 1.0'a DUSMEZ: 1.0 TL tutarini oldugu
                     // gibi dolar diye yazdiriyordu (bkz. DisplayUnit.rateFor).
+                    //
+                    // TARAF, PORTFOY DEGERLEMESIYLE AYNI. Kur `ask`ten
+                    // (odeyecegimiz fiyat) aliniyordu ama pay zaten `sellPrice`
+                    // ile, yani makasin alt ucundan hesaplanmis bir TL toplami:
+                    // bolen makasin ust ucundan gelince makas IKI KEZ dusuluyor
+                    // ve dolar karsiligi oldugundan kucuk cikiyordu. Ayni
+                    // varligin iki farkli fiyatini tek bolmede kullanmak, hangi
+                    // sayinin ne demek oldugunu belirsizlestirir.
                     rates = UnitRates(
-                        usdTry = board.byKey("usd_try")?.ask?.takeIf { it > 0.0 },
-                        eurTry = board.byKey("eur_try")?.ask?.takeIf { it > 0.0 },
-                        goldGramTry = board.byKey("gold_gram")?.ask?.takeIf { it > 0.0 },
+                        usdTry = board.byKey("usd_try")?.sellPrice()?.takeIf { it > 0.0 },
+                        eurTry = board.byKey("eur_try")?.sellPrice()?.takeIf { it > 0.0 },
+                        goldGramTry = board.byKey("gold_gram")?.sellPrice()?.takeIf { it > 0.0 },
                     ),
                     // Ozet'teki piyasa karti ve masaustu sag paneli.
                     //
-                    // Fiyatlar IKI ONDALIKLA yazilir - portfoy tutarlari gibi tam
+                    // Fiyatlar kurusla yazilir - portfoy tutarlari gibi tam
                     // liraya yuvarlanmaz. Gram altin dakikalar icinde kurus
                     // mertebesinde oynuyor; yuvarlaninca tablo "hic degismiyor"
                     // gibi gorunuyordu, oysa deger her yenilemede tazeleniyordu.
+                    //
+                    // HANE SAYISI PIYASA EKRANIYLA AYNI KURALDAN gelir. Burasi
+                    // sabit iki haneydi ve ayni kotasyon iki ekranda farkli
+                    // yaziliyordu: Ata altini Ozet'te "₺45.375,74", Piyasa'da
+                    // "₺45.376". Kural degerden turer (bkz. priceDecimals) -
+                    // buyuk rakamda kurus zaten sutuna sigmiyor.
                     marketRows = board.prices.map { price ->
                         KefeMarketRow(
                             name = price.label,
-                            priceText = Money.tl(price.ask, decimals = 2),
+                            priceText = Money.tl(
+                                price.ask,
+                                decimals = price.assetClass.priceDecimals(price.ask),
+                            ),
                             // Kotasyon gunu kapisindan GECER - hemen ustundeki
                             // "bugün" satiri da oradan geciyor. Once ham
                             // changePercent okunuyordu ve pazar gunu ayni
                             // ekranda kart cumanin hareketini yazarken "bugün"
                             // satiri dogru sekilde ₺0 gosteriyordu.
-                            changePercent = price.todayChangePercent(clock.today()),
+                            // PIYASA gunu: kotasyon gunleri kaynagin
+                            // takviminden geliyor (bkz. KefeClock.marketToday).
+                            changePercent = price.todayChangePercent(clock.marketToday()),
                             assetClass = price.assetClass.color(),
                         )
                     },
@@ -362,6 +410,9 @@ private data class Snapshot(
     val goals: List<Goal>,
     val activity: List<ActivityEvent>,
 )
+
+/** Gun degisimini yakalamak icin yeterli siklik - dakikada bir. */
+private const val DayCheckMillis = 60_000L
 
 /**
  * Hatanin kisa sebebi.
