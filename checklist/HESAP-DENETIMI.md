@@ -496,7 +496,7 @@ aylık, ikisi eşit genişlikte yuvalarda çiziliyor — zaman ekseni birimi kar
 yeniden kurulabilir (atanan varlıkların o gündeki miktarı × o günkü fiyat) ve
 hem eğriyi hem ay sonu sütununu geri getirir. Ayrı bir iş olarak duruyor.
 
-### P1.5 · Kur yokken TL toplamı dolar/euro/gram diye gösteriliyor
+### P1.5 · Kur yokken TL toplamı dolar/euro/gram diye gösteriliyor — ✅ ÇÖZÜLDÜ
 
 `ui/screens/summary/SummaryViewModel.kt:275-277` · `SummaryUiState.kt:36-43, 95`
 
@@ -509,6 +509,13 @@ Fiyat tahtası yüklenmeden "$" çipine dokunulursa ₺3.180.400 → **"$ 3.180.
 yazıyor (doğrusu ~$51.297). Ekran `Ready` durumuna pozisyonlarla geçtiği, fiyat
 beklenmediği için bu pencere gerçekten yaşanıyor. `safeDiv`'in varlığı eksik
 kurda "—" gösterme niyetini kanıtlıyor; 1.0 yedeği bu niyeti boşa çıkarıyor.
+
+**Yapıldı** (`Say "—" when a rate has not arrived yet`): `UnitRates` alanları
+nullable oldu — hedef editöründe (P0.5) uygulanan kalıbın aynısı. Bilinmeyen kur
+"—" yazıyor ve çipi kilitli çiziliyor, yani hesaplanamayacak bir çevrim
+seçilemiyor. TL hiç beklemiyor: kuru her zaman belli. İşe yaramayan `safeDiv`
+kaldırıldı. `UnitRatesTest` (8 test) eklendi — eski 1.0 yedeğiyle
+`TL tutari dolar diye yazildi: $ 3.180.400` diye düşüyor.
 
 ### P1.6 · Elle girilen fiyat kaynağın günlük değişimini taşımaya devam ediyor
 
