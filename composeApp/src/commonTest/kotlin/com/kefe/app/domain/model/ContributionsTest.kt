@@ -87,8 +87,8 @@ class ContributionsTest {
 
     @Test
     fun netCikislaKapananSinifKatkiSayilmaz() {
-        // Altin net eksi, fon arti: yalniz fon dilimi kalir. Eksi bir dilim
-        // "bu kadar biriktirdim" tablosunda yer alamaz.
+        // Altin net eksi, fon arti: CUBUKTA yalniz fon dilimi kalir - eksi bir
+        // dilim cizilemez. Ama TOPLAM ikisini de sayar.
         val months = monthlyContributions(
             transactions = listOf(
                 tx("1", "p1", KefeDate(2026, 7, 5), TradeSide.Sell, 2.0, 10_000.0),
@@ -102,7 +102,11 @@ class ContributionsTest {
         val last = months.last()
         assertEquals(1, last.slices.size)
         assertEquals(AssetClass.Fund, last.slices.single().assetClass)
-        assertEquals(5_000.0, last.total, EPS)
+        // 20.000 altin satildi, 5.000 fon alindi: o ay portfoyden NET 15.000
+        // CIKTI. Toplam once dilimlerden turetiliyordu ve "+5.000 biriktirdin"
+        // diyordu - dosyanin kendi tanimiyla ("portfoye giren net para")
+        // celisen, dogrudan bir para rakami olarak kullanilan bir sayi.
+        assertEquals(-15_000.0, last.total, EPS)
     }
 
     @Test

@@ -145,7 +145,19 @@ class AddTransactionViewModel(
 
             is AddTransactionIntent.SelectCurrency -> update(s.copy(currency = intent.currency))
 
-            is AddTransactionIntent.ChangeGram -> update(s.copy(gramText = intent.text))
+            // Gramla olculen varlikta 1. adimdaki gram ile 2. adimdaki miktar
+            // AYNI SAYIDIR; ikisi ayri alanlarda tutuldugu icin ayrisabiliyordu.
+            // 2. adima bir kez gecildikten sonra geri donup grami duzeltmek ise
+            // yaramiyordu: gecis `quantityText` doluysa onu koruyor, yani eski
+            // deger kaliyordu. Gram degisince miktar da tazelenir; kullanici
+            // 2. adimda miktari elle degistirirse orasi kendi basina kalir.
+            is AddTransactionIntent.ChangeGram -> update(
+                if (s.quantityUnit == QuantityUnit.Gram) {
+                    s.copy(gramText = intent.text, quantityText = intent.text)
+                } else {
+                    s.copy(gramText = intent.text)
+                }
+            )
 
             // Yazmaya baslayinca onceki "bulunamadi" uyarisi silinir.
             is AddTransactionIntent.ChangeFundQuery ->
