@@ -247,11 +247,23 @@ kotasyonla, pazar günü:
 
 ### Sonradan ölçüldü ve düzeltildi: donmuş kotasyon "bugün" sayılıyordu
 
-Kaynak 9 Ağustos 2026'da yeniden ölçüldü. **Yedek yolun dayandığı varsayım artık
-geçerli değil:** `today.json` bütün altın türlerine `Change` gönderiyor —
-CEYREKALTIN 2.09, YARIMALTIN 2.09, TAMALTIN 2.09, ATAALTIN 2.09, YIA 2.09,
-18AYARALTIN 2.09, 14AYARALTIN 2.09, GRA 2.59, HAS 2.59, GUMUS 3.57. 86 sembolden
-yalnızca biri sıfır.
+Kaynak 9 Ağustos 2026'da ölçüldüğünde `today.json` bütün altın türlerine
+`Change` gönderiyordu — CEYREKALTIN 2.09, YARIMALTIN 2.09, TAMALTIN 2.09,
+ATAALTIN 2.09, YIA 2.09, 18AYARALTIN 2.09, 14AYARALTIN 2.09, GRA 2.59, HAS 2.59,
+GUMUS 3.57; 86 sembolden yalnızca biri sıfırdı. Buradan "yedek yolun dayandığı
+varsayım artık geçerli değil" sonucu çıkarılmıştı.
+
+**Bu sonuç yanlıştı ve 12 Ağustos'ta ölçümle düzeltildi.** 9 Ağustos bir
+pazardı; o gördüğümüz 2.09'lar cumadan kalma, hafta sonu boyunca taşınan
+değerlerdi. Aynı uç bir iş günü sabahı (12 Ağustos 10:16) sorulduğunda 86
+sembolden **16'sı** sıfır dönüyor ve **11'i sikke altın**: CEYREKALTIN,
+YARIMALTIN, TAMALTIN, ATAALTIN, RESATALTIN, HAMITALTIN, BESLIALTIN,
+IKIBUCUKALTIN, GREMSEALTIN, 14AYARALTIN, 18AYARALTIN. Sıfır olmayanlar GRA
+(0.82) ve CUMHURIYETALTINI (1.29).
+
+Yani **yedek yol hâlâ gerekli** — sikke altınların günlük değişimi bu uçtan
+düzenli olarak gelmiyor. Yedek yol yerinde bırakıldı; bu ölçüm onu kaldırmayı
+düşünen bir sonraki kişi için buraya yazıldı.
 
 Aynı ölçüm **asıl hatayı** ortaya çıkardı ve telefonda görünen buydu. Uç, piyasa
 kapalıyken de `Update_Date`'i her dakika ilerletiyor — pazar günü on iki dakika
