@@ -293,6 +293,7 @@ private fun HeroRow(
                     text = unit.chipLabel,
                     selected = state.unit == unit,
                     onClick = { onIntent(SummaryIntent.SelectUnit(unit)) },
+                    enabled = unit.rateKnown(state.rates),
                     height = Sizes.chipLarge,
                     horizontalPadding = Space.x14,
                     textStyle = chipText,

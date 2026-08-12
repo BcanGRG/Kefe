@@ -10,6 +10,7 @@ import com.kefe.app.domain.model.TopMover
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.layout.KefeMarketRow
+import com.kefe.app.ui.format.UnknownChangeText
 
 /**
  * Hero rakaminin gosterim birimi. Turkiye'de "kac gram altin ediyor" sorusu
@@ -28,19 +29,48 @@ enum class DisplayUnit(val chipLabel: String) {
  * tutarli kalir.
  */
 data class UnitRates(
-    val usdTry: Double,
-    val eurTry: Double,
-    val goldGramTry: Double,
+    /** null = kur HENUZ BILINMIYOR (bkz. [rateFor]). */
+    val usdTry: Double? = null,
+    val eurTry: Double? = null,
+    val goldGramTry: Double? = null,
 )
 
-fun DisplayUnit.formatTotal(tryValue: Double, rates: UnitRates): String = when (this) {
-    DisplayUnit.Try -> Money.tl(tryValue, spaced = true)
-    DisplayUnit.Usd -> "$ " + Money.number(safeDiv(tryValue, rates.usdTry))
-    DisplayUnit.Eur -> "€ " + Money.number(safeDiv(tryValue, rates.eurTry))
-    DisplayUnit.GoldGram -> Money.quantity(safeDiv(tryValue, rates.goldGramTry), "gr", decimals = 1)
+/**
+ * Bu birimin TL kuru; bilinmiyorsa null.
+ *
+ * Once eksik kur icin 1.0'a dusuluyordu ve bu, TL tutarini oldugu gibi dolar
+ * diye yaziyordu: fiyat tahtasi yuklenmeden "$" cipine dokunan biri
+ * ₺3.180.400 yerine "$ 3.180.400" goruyor, servetini ~62 kat buyuk saniyordu.
+ * Ekran Ready durumuna pozisyonlarla geciyor, fiyat beklenmiyor - o pencere
+ * gercekten yasaniyor.
+ *
+ * `safeDiv` diye bir koruma vardi ama yalniz kur <= 0 iken devreye giriyordu;
+ * eksik kur 1.0'a dustugu icin HIC calismiyordu. Korumanin varligi eksik kurda
+ * bos gosterme niyetini zaten kanitliyor.
+ */
+fun DisplayUnit.rateFor(rates: UnitRates): Double? = when (this) {
+    // TL'nin kuru her zaman bellidir.
+    DisplayUnit.Try -> 1.0
+    DisplayUnit.Usd -> rates.usdTry
+    DisplayUnit.Eur -> rates.eurTry
+    DisplayUnit.GoldGram -> rates.goldGramTry
 }
 
-private fun safeDiv(value: Double, rate: Double): Double = if (rate <= 0.0) 0.0 else value / rate
+/** Kuru gelmemis birim SECILEMEZ - ekran cipi buna gore kilitler. */
+fun DisplayUnit.rateKnown(rates: UnitRates): Boolean = rateFor(rates) != null
+
+/** Toplamin bu birimdeki karsiligi; kur bilinmiyorsa "—". */
+fun DisplayUnit.formatTotal(tryValue: Double, rates: UnitRates): String {
+    if (this == DisplayUnit.Try) return Money.tl(tryValue, spaced = true)
+    val rate = rateFor(rates) ?: return UnknownChangeText
+    val converted = tryValue / rate
+    return when (this) {
+        DisplayUnit.Usd -> "$ " + Money.number(converted)
+        DisplayUnit.Eur -> "€ " + Money.number(converted)
+        DisplayUnit.GoldGram -> Money.quantity(converted, "gr", decimals = 1)
+        DisplayUnit.Try -> Money.tl(tryValue, spaced = true)
+    }
+}
 
 /** Ekranin yuklenme/veri durumu. Tasarimda her biri ayri cerceve olarak var. */
 enum class SummaryStage { Loading, Empty, Ready }
@@ -92,7 +122,7 @@ data class SummaryUiState(
     val topLoser: TopMover? = null,
 
     val unit: DisplayUnit = DisplayUnit.Try,
-    val rates: UnitRates = UnitRates(1.0, 1.0, 1.0),
+    val rates: UnitRates = UnitRates(),
     val masked: Boolean = false,
     val range: NetWorthRange = NetWorthRange.Year1,
     /** FIYAT tazeligi - "son bilinen fiyatlar" seridini bu surer. */
