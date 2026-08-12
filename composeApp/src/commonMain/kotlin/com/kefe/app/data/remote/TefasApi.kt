@@ -60,6 +60,11 @@ class TefasApi(private val client: HttpClient) {
         // Yanit tarihe gore ARTAN sirali gelir; son iki fiyat gunluk degisimi verir.
         val series = response.resultList.orEmpty()
         val latest = series.lastOrNull() ?: return null
+        // SIFIR FIYAT KOTASYON DEGILDIR. Ayni fonksiyon `history` uretirken
+        // sifir satirlari zaten eliyor, diger uc kaynakta da bu koruma var -
+        // burada yoktu. Sifir gelirse saglam onbellek fiyatinin uzerine 0
+        // yaziliyor, fon pozisyonu sifirlaniyor ve ekran %-100 gosteriyordu.
+        if (latest.fiyat <= 0.0) return null
         val previous = series.getOrNull(series.lastIndex - 1)
 
         val change = if (previous != null && previous.fiyat > 0.0) {

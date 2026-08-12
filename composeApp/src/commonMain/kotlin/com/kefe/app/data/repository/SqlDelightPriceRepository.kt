@@ -180,8 +180,19 @@ class SqlDelightPriceRepository(
                     // kaydi da yoksa cevap "bilmiyoruz"dur. Sifir yazmak o
                     // pozisyonu grup toplamlarina paya ve PAYDAYA sokuyor,
                     // grubun gercek yuzdesini sulandiriyordu.
+                    //
+                    // TL DISINDA FIYATLANAN VARLIKTA SIRA DEGISIR. Kaynagin
+                    // yuzdesi hissenin kendi para biriminde: New York'ta %2
+                    // yukselen bir hisse, dolar %1 dustuyse TL'de %1 yukselmis
+                    // olur. `todayChange()` o yuzdeyle TL degerini geriye cozup
+                    // TL farklari topladigi icin kur hareketi sessizce kayboluyordu.
+                    // Gecmis tablosu TL fiyat tuttugundan `changes.day` zaten
+                    // DOGRU TL degisimidir; onu tercih ediyoruz. Gecmis yoksa
+                    // (varligin ilk gunu) kaynagin rakamina duseriz - kur
+                    // hareketini saymaz ama hicbir seyden iyidir.
                     changePercent = when {
                         !moved -> 0.0
+                        price.isForeignPriced && changes.day != null -> changes.day
                         price.changePercent.let { it != null && it != 0.0 } -> price.changePercent
                         else -> changes.day
                     },
