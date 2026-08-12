@@ -517,7 +517,7 @@ seçilemiyor. TL hiç beklemiyor: kuru her zaman belli. İşe yaramayan `safeDiv
 kaldırıldı. `UnitRatesTest` (8 test) eklendi — eski 1.0 yedeğiyle
 `TL tutari dolar diye yazildi: $ 3.180.400` diye düşüyor.
 
-### P1.6 · Elle girilen fiyat kaynağın günlük değişimini taşımaya devam ediyor
+### P1.6 · Elle girilen fiyat kaynağın günlük değişimini taşımaya devam ediyor — ✅ ÇÖZÜLDÜ
 
 `data/repository/SqlDelightPriceRepository.kt:117-124`
 
@@ -533,7 +533,13 @@ doğru katkısı sıfır."* 100 gr altın manuel ₺6.500 girildiğinde
 gizliyor (`MarketViewModel:202`) ama portföy toplamı gizlemiyor — ekran ile
 toplam da çelişiyor.
 
-### P1.7 · Gram/dolar cinsinden hedef piyasayla güncellenmiyor
+**Yapıldı** (`Stop a manually entered price from carrying the source's daily
+move`): bindirme artık `changePercent` ve `quoteDate`'i de temizliyor.
+`quoteDate = null` kodun bu iş için zaten belgelediği mekanizma — "günü
+bilinmeyen kotasyon bugün sayılmaz". `ManualPriceChangeTest` (3 test) eklendi;
+eski kodda günlük katkı %2,14 çıkıyor.
+
+### P1.7 · Gram/dolar cinsinden hedef piyasayla güncellenmiyor — ✅ ÇÖZÜLDÜ (vaat düzeltildi)
 
 `domain/model/Goal.kt:42` · `GoalsViewModel.kt:208, 233`
 
@@ -551,8 +557,20 @@ Bu, `GoalEditSheet.kt:259`'da kullanıcıya verilen sözle doğrudan çelişiyor
 *"Hedefi altın veya dolar cinsinden sabitlerseniz hedef de piyasayla birlikte
 güncellenir."*
 
-**Düzeltme:** ya hedefi birim cinsinden sakla (`amountInUnit` + `unit`) ve payda
-okuma anında güncel kurla çevrilsin, ya da bilgi kutusundaki vaat kaldırılsın.
+**Yapıldı** (`Say what the goal unit actually does`) — **iki seçenekten ikincisi
+uygulandı.** Bilgi kutusu artık ne olduğunu yazıyor: tutarı gram/dolar cinsinden
+girebilirsiniz, bugünkü kurla TL'ye çevrilip kaydedilir ve TL tutarı sonradan
+piyasayla değişmez. `Goal.amount` ve `Goal.unit` modelde aynı şekilde
+belgelendi. `GoalUnitTest` (3 test) kararı **yazılı** hale getiriyor: birim
+ilerlemeyi, kilometre taşlarını ve projeksiyonu etkilemiyor.
+
+**Neden bu seçenek:** hedefi gerçekten altına/dolara çapalamak bir hata
+düzeltmesi değil, bir **özellik**. Tutarın birim cinsinden saklanmasını ve
+paydanın okuma anında güncel kurla çevrilmesini ister; bu da kalıcılığa,
+senkrona, yedeğe ve hedef çizen her ekrana (~20 çağrı yeri) dokunur. Ayrıca
+mevcut TL-dışı hedefler için geçmiş kur bilinmediğinden göç doğru yapılamaz.
+Denetim kapsamında doğru olan, uygulamanın **tutmadığı bir sözü vermemesi**.
+Çapa istenirse `GoalUnitTest` düşerek yapılacak işi işaret edecek.
 
 ---
 
