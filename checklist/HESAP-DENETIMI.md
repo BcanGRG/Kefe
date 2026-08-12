@@ -771,30 +771,75 @@ elle değiştirirse orası kendi başına kalıyor.
 
 ---
 
-## P3 — Kozmetik ve savunma amaçlı sertleştirme
+## P3 — Kozmetik ve savunma amaçlı sertleştirme — ✅ TAMAMI ÇÖZÜLDÜ
 
-| Dosya | Kusur |
-|---|---|
-| `Money.kt:188` | Yuvarlama half-up değil **half-even** (banker's): `Money.tl(0.125)` → `₺0,12`. Uygulama içi tutarlı ama TR finans geleneği half-up ve hiçbir yerde belgelenmemiş |
-| `Money.kt:163` | Bağıl tolerans (`1e-9 × a`) 10 milyon TL üstünde gerçek kuruşu yutuyor — `ILERLEME §24` "kuruş hep görünür" der |
-| `Money.kt:93` | `tlSigned`'da 1 TL altı gerçek değişim `+₺0` yazılıyor |
-| `Money.kt:132` | `compact` sınırı: `999.950` → `"1.000B"`; M dalında `,0` bastırılmıyor |
-| `SummaryScreen.kt:781` | Gerçek hedef tutarı `compact`'in eksen varsayılanıyla (0 ondalık) yazılıyor |
-| `GoalsScreen.kt:298` | İlerleme yüzdesi 0 ondalıkla yuvarlanınca hedefe ulaşılmadan **%100** yazıyor |
-| `GoalEditSheet.kt:277` | Gram önizlemesi 0 ondalık: "Hedef 0 gr altın · Bugünkü kurla ₺2.000" |
-| `AddTransactionViewModel.kt:793` | `stepQuantity` kayan nokta artığını alana yazıyor: `0,30000000000000004` |
-| `AssetDetailUiState.kt:77` | `holdingLabel` 30 günlük ay varsayımıyla 360-364 günü "1 yıl" diye etiketliyor |
-| `Returns.kt:100` | Kısa elde tutmada sınırsız yıllıklandırma — `ILERLEME.md` sonunda `+14.213.458.746.011.397,12%` örneğiyle zaten kayıtlı |
-| `PriceChange.kt:139` | `percent = -100` girdisinde payda sıfır (girdi bugün üretilemiyor; savunma amaçlı) |
-| `SqlDelightPortfolioRepository.kt:429` | Geri yüklemede üye **adları** alınmıyor (`INSERT OR IGNORE`), profil isimleri sessizce kayboluyor |
-| `SqlDelightPortfolioRepository.kt:748` | Pozisyon silme kaydındaki tutar bayat birim fiyatla hesaplanıyor |
-| `SqlDelightPriceRepository.kt:300` | `setManualPrice` `updatedAtEpochSeconds = 0` yazıyor |
-| `Price.sq:40` | `manual_prices` şeması ile `2.sqm` göçü ayrışıyor: göçten geçen cihazda fazladan kolonlar |
-| `SampleData.kt:59, 208` | Örnek portföyde `value ≠ quantity × unitPrice`; `todayChange` ile `todayChangePercent` birbirini tutmuyor |
-| `SummaryViewModel.kt:288` | Aynı kotasyon Özet'te kuruşlu, Piyasa'da kuruşsuz |
-| `SummaryUiState.kt:36` | Hero çevrimi satış (ask) kuruyla, portföy değeri alış (bid) fiyatıyla — makas iki kez düşülüyor |
-| `SummaryScreenDesktop.kt:482` | Masaüstü/tablet dağılım legendi `collapseDonutSlices`'ı uygulamıyor: halka ile legend ayrışıyor |
-| `SummaryViewModel.kt:158` | `clock.today()` yalnız veri emisyonunda okunuyor; ay/gün dönümünde "Bu ay eklenen" bayatlıyor |
+Yirmi kusurun hepsi kapatıldı, artı planın 1. aşamasında açık bırakılan
+`BackupCodec` maddesi.
+
+### Money — sayı biçimlendirmenin sözleşmesi
+
+| Dosya | Kusur | Yapıldı |
+|---|---|---|
+| ~~`Money.kt:188`~~ | Yuvarlama half-up değil **half-even** (banker's) | Yarım **yukarı** yuvarlanıyor — TR finans geleneği. `kotlin.math.round` çifte yuvarlıyordu (`round(12,5) = 12`), yani ₺0,125 "₺0,12" çıkıyordu. Uygulama içinde tutarlıydı ama hiçbir yerde yazmıyordu |
+| ~~`Money.kt:163`~~ | Bağıl tolerans 10 milyon TL üstünde gerçek kuruşu yutuyor | Tolerans artık gösterilebilecek en küçük birimin altında tavanlı. `1e-9 × değer` 10 milyonda tam bir kuruşa ulaşıyordu; o büyüklükte bir double'ın gerçek hatası ~2e-9, yani tolerans zaten fazlasıyla cömertti |
+| ~~`Money.kt:93`~~ | `tlSigned`'da 1 TL altı gerçek değişim `+₺0` yazılıyor | `tl`'deki kural buraya da geldi. İşaret yazıldığı için sonuç daha kötüydü: "bir değişim oldu" deyip büyüklüğünü sıfır gösteren bir satır |
+| ~~`Money.kt:132`~~ | `compact` sınırı: `999.950` → `"1.000B"`; M dalında `,0` bastırılmıyor | Kademe **yuvarlamadan sonra** seçiliyor. "1.000B" var olmayan bir birimdi |
+
+**İkili tabanın kendi sınırı duruyor ve testte yazılı:** 1,005 bellekte
+1,00499… olduğu için hangi kural uygulanırsa uygulansın aşağı yuvarlanır. Test
+yalnız ikili tabanda **tam yarım** olan ve iki kuralın ayrıştığı değerleri
+kullanıyor.
+
+### Ekranda yuvarlanıp kaybolan haneler
+
+| Dosya | Kusur | Yapıldı |
+|---|---|---|
+| ~~`SummaryScreen.kt:781`~~ | Gerçek hedef tutarı `compact`'in eksen varsayılanıyla yazılıyor | Bin aralığında bir ondalık. ₺19.587'lik hedef "20B" oluyordu — kullanıcının kendi yazdığı rakamda yarım yüzde sapma |
+| ~~`GoalsScreen.kt:298`~~ | İlerleme yüzdesi yuvarlanınca hedefe ulaşılmadan **%100** yazıyor | Yuvarlama kalıyor, üstüne 99 tavanı. Aşağı kırpmak da denendi ve **sıradan değerleri bozuyor**: `progress` bir Float, 0,35 bellekte 0,34999999, yani %35 "%34" görünürdü |
+| ~~`GoalEditSheet.kt:277`~~ | Gram önizlemesi 0 ondalık | Dört haneye kadar. "Hedef 0 gr altın · Bugünkü kurla ₺2.000" iki rakam aynı anda doğru olamaz |
+| ~~`AddTransactionViewModel.kt:793`~~ | `stepQuantity` kayan nokta artığını alana yazıyor | Sonuç kademeye hizalanıyor. 0,1 ikili tabanda tam durmadığı için üç dokunuş `0,30000000000000004` veriyor, kullanıcı kendi yazmadığı bir kuyruğu siliyordu |
+
+### Etiketler ve sınırsız yıllıklandırma
+
+| Dosya | Kusur | Yapıldı |
+|---|---|---|
+| ~~`AssetDetailUiState.kt:77`~~ | 30 günlük ay varsayımı 360-364 günü "1 yıl" diye etiketliyor | Yıl önce 365'ten alınıyor, ay kalan günden. Otuz günlük ay her yıl beş gün hata biriktiriyordu |
+| ~~`Returns.kt:100`~~ | Kısa elde tutmada sınırsız yıllıklandırma | Bir aydan kısa tutuşta cevap **yok**. Yıllıklandırmak üsse çıkarmaktır: üç günlük %2, 121'inci kuvvete çıkıyor ve `+14.213.458.746.011.397,12%` gibi rakamlar düşüyordu. Yanlış değil — **anlamsız** |
+| ~~`PriceChange.kt:139`~~ | `percent = -100` girdisinde payda sıfır | Payda önce kontrol ediliyor. `previous <= 0` sonsuzu yakalamıyordu; toplam sessizce sonsuz/NaN oluyordu. Girdi bugün üretilemiyor — bu, o kapının kapalı kalması için |
+
+### Depo ve şema
+
+| Dosya | Kusur | Yapıldı |
+|---|---|---|
+| ~~`SqlDelightPortfolioRepository.kt:429`~~ | Geri yüklemede üye **adları** alınmıyor | İki adım: ekleme satırın **varlığını**, güncelleme **içeriğini** garanti eder. Kurulum iki üyeyi aynı kimliklerle tohumluyor, `INSERT OR IGNORE` çakışınca sessizce atlıyordu |
+| ~~`SqlDelightPortfolioRepository.kt:748`~~ | Pozisyon silme kaydındaki tutar bayat birim fiyatla | Güncel fiyatla — elle girilen önce. `positions.unitPrice` pozisyon kurulduğunda yazılıp bir daha güncellenmiyor |
+| ~~`SqlDelightPriceRepository.kt:300`~~ | `setManualPrice` `updatedAtEpochSeconds = 0` yazıyor | Gerçek damga. Sıfır, "hiç girilmedi" demekti — elle girilen bir fiyatın yaşını sorabilmek için gereken tek şey |
+| ~~`Price.sq:40`~~ | `manual_prices` şeması ile `2.sqm` göçü ayrışıyor | Tablo kanonik üç kolona yeniden kuruldu (11.sqm). Göçten geçen cihazda beş, temiz kurulumda üç kolon vardı; bugün kimse dokunmadığı için görünmüyordu — **ilk dokunan sorgu cihazların yarısında patlardı** |
+
+**İlk yazdığım geri yükleme testi hatalı kodda da geçiyordu**: `renameMember`
+bir UPDATE, çakışması gereken satırı hiç yaratmıyor. Test satırı gerçekten
+tohumlayacak şekilde düzeltildi ve düzeltme olmadan **düşüyor**.
+
+Her iki göç de gerçek veriyle denendi: cihazdan alınan veritabanı kopyası ve
+beş kolonlu bir taklit üzerinde; elle girilen fiyatlar taşınıyor.
+
+### Özet ekranının kendi içindeki çelişkiler
+
+| Dosya | Kusur | Yapıldı |
+|---|---|---|
+| ~~`SummaryUiState.kt:36`~~ | Hero çevrimi `ask`, portföy değeri `bid` — makas iki kez düşülüyor | İki taraf da aynı kotasyon tarafını kullanıyor. Aynı varlığın iki farklı fiyatını tek bölmede kullanmak, hangi sayının ne demek olduğunu belirsizleştirir |
+| ~~`SummaryViewModel.kt:288`~~ | Aynı kotasyon Özet'te kuruşlu, Piyasa'da kuruşsuz | Hane sayısı Piyasa'nın kuralından geliyor. Ata altını Özet'te "₺45.375,74", Piyasa'da "₺45.376" yazıyordu |
+| ~~`SummaryScreenDesktop.kt:482`~~ | Masaüstü/tablet legendi `collapseDonutSlices`'ı uygulamıyor | Legend halkanın çizdiği listeyi gösteriyor. Altı varlık sınıfında aynı kartın iki yarısı birbirini tutmuyordu |
+| ~~`SampleData.kt:59, 208`~~ | `value ≠ quantity × unitPrice`; `todayChange` ile `todayChangePercent` tutmuyor | Değerler tam, toplamlar **pozisyonlardan türüyor**. "+₺12.400 · %0,29" ne pozisyonlarla ne kendisiyle tutuyordu (12.400 / 3.168.000 = %0,39). Daha canlı bir gün isteniyorsa doğru yer pozisyonların kendi yüzdeleri — artık gerçekten toplamı belirliyorlar |
+| ~~`SummaryViewModel.kt:158`~~ | `clock.today()` yalnız veri emisyonunda okunuyor | Dakikada bir bakan, **yalnız gün değişince** emisyon veren bir sayaç. Gece boyunca açık kalan uygulama dünün ayına göre hesaplamaya devam ediyordu |
+
+### Plandan devreden madde
+
+`BackupCodec` CSV sayıları `toString()` ile yazıyordu ve büyük/çok küçük
+değerlerde üsse geçiyordu: 12.500.000'lik bir işlem "1,25E7" olarak çıkıyor ve
+tr-TR Excel'de sayı değil **metin** olarak açılıyordu. Aynı kusur hedef
+tutarında veri kaybına yol açmıştı (P0.4); burada dosya dışarıya gittiği için
+sonuç sessiz ama kalıcı. Altı hane, sondaki sıfırlar yazılmıyor.
 
 ---
 
@@ -859,11 +904,12 @@ Sıra bilinçli: her aşama bir öncekinin açtığı zemini kullanıyor.
 19. ✅ `plusMonths` ay sonu kıskacı; `parseIsoDate` ay uzunluğu; piyasa günü
 20. ✅ `Contributions.total`'ı filtreden önce hesapla
 
-**Aşama 4 — Cila (P3)**
-21. `Money` yuvarlama sözleşmesini netleştir ve belgele; tolerans tabanını
-    mutlak sınırla; ondalık/sınır davranışlarını düzelt
-22. Örnek veriyi kendi içinde tutarlı hale getir; `manual_prices` şema
-    ayrışmasını kapat
+**Aşama 4 — Cila (P3)** — ✅ tamamı
+21. ✅ `Money` yuvarlama sözleşmesi yarım-yukarı olarak netleşti ve belgelendi;
+    tolerans tavanlandı; ondalık/sınır davranışları düzeltildi
+22. ✅ Örnek veri kendi içinde tutarlı (toplamlar pozisyonlardan türüyor);
+    `manual_prices` şema ayrışması 11.sqm ile kapatıldı
+23. ✅ `BackupCodec` CSV'si bilimsel gösterime düşmüyor (1. aşamadan devreden)
 
 **Her aşamada:** düzeltilen her kusur için önce başarısız olan bir test yaz.
 Denetimde ortaya çıkan üç test, kod yanlışken de geçiyordu

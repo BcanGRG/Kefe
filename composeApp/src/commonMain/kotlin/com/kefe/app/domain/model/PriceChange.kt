@@ -182,8 +182,15 @@ fun weightedPeriodTotal(values: List<Pair<Double, Double?>>): PeriodTotal? {
 
     for ((value, percent) in values) {
         if (percent == null) continue
-        val previous = value / (1.0 + percent / 100.0)
-        if (previous <= 0.0) continue
+        // PAYDA once kontrol edilir. -100 girdisinde carpan tam SIFIR olur ve
+        // bolum sonsuza gider; `previous <= 0` sonsuzu yakalamiyor, toplam
+        // sessizce sonsuz/NaN oluyordu. Bugun -100 uretilemiyor (turetilen
+        // yuzde kesin > -100, kaynak yollarinda da sifir fiyat eleniyor) -
+        // bu, o kapinin kapali kalmasi icin.
+        val factor = 1.0 + percent / 100.0
+        if (factor <= 0.0) continue
+        val previous = value / factor
+        if (previous <= 0.0 || !previous.isFinite()) continue
         previousTotal += previous
         currentTotal += value
         known = true
@@ -197,7 +204,10 @@ fun weightedPeriodTotal(values: List<Pair<Double, Double?>>): PeriodTotal? {
 /** Tek pozisyonun donem degisimi - yuzde biliniyorsa TL karsiligiyla. */
 fun periodTotalOf(value: Double, percent: Double?): PeriodTotal? {
     if (percent == null) return null
-    val previous = value / (1.0 + percent / 100.0)
-    if (previous <= 0.0) return null
+    // Bkz. [weightedPeriodTotal]: -100'de payda sifirdir.
+    val factor = 1.0 + percent / 100.0
+    if (factor <= 0.0) return null
+    val previous = value / factor
+    if (previous <= 0.0 || !previous.isFinite()) return null
     return PeriodTotal(amount = value - previous, percent = percent)
 }

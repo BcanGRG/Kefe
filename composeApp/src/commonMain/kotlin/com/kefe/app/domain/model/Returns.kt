@@ -96,6 +96,13 @@ fun xirr(flows: List<CashFlow>, guess: Double = 0.1): Double? {
  * PIYASA DEGERI pozitif hareket olarak eklenir - yani "bugun satsaydim" varsayimi.
  * Sonuc null ise (tek islem, ayni gun, kok bulunamadi) arayuz yillik getiri
  * satirini GOSTERMEZ; uydurma sayi uretmez.
+ *
+ * COK KISA SUREDE HIC HESAPLANMAZ. Yillıklandirmak, donem getirisini yila
+ * tasimak icin usse cikarmaktir: uc gunluk %2, 121'inci kuvvete cikar. Sinir
+ * yoktu ve ekrana `+14.213.458.746.011.397,12%` gibi rakamlar dusuyordu
+ * (ILERLEME.md sonunda kayitli). O sayi yanlis degil - anlamsiz; bir gunluk
+ * dalgalanmayi yillik bir beklentiymis gibi sunuyor. [MinAnnualizeDays]
+ * gununden kisa tutuslarda cevap YOKTUR.
  */
 fun annualizedReturnPercent(
     transactions: List<Transaction>,
@@ -103,6 +110,9 @@ fun annualizedReturnPercent(
     today: KefeDate,
 ): Double? {
     if (transactions.isEmpty()) return null
+
+    val firstDay = transactions.minOf { it.date.toEpochDay() }
+    if (today.toEpochDay() - firstDay < MinAnnualizeDays) return null
 
     val flows = buildList {
         for (tx in transactions) {
@@ -124,3 +134,11 @@ fun annualizedReturnPercent(
  */
 fun holdingDays(firstBuy: KefeDate?, today: KefeDate): Long? =
     firstBuy?.let { today.daysSince(it).coerceAtLeast(0) }
+
+/**
+ * Yillıklandirmanin anlamli olmasi icin gereken en kisa tutus.
+ *
+ * Bir ay: daha kisasinda us alma tek gunluk gurultuyu yillik bir rakama
+ * cevirir. Rakam yerine "—" gostermek, uydurma bir sayi gostermekten iyidir.
+ */
+private const val MinAnnualizeDays = 30L

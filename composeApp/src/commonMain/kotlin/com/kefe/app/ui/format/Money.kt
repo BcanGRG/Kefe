@@ -1,6 +1,7 @@
 package com.kefe.app.ui.format
 
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.round
 
 /**
@@ -104,14 +105,24 @@ object Money {
     fun tlSignedExact(value: Double, spaced: Boolean = false): String =
         tlSigned(value, spaced = spaced, decimals = centDecimals(value))
 
-    /** `+₺12.400` / `−₺8.240` - isaret her zaman yazilir (renk tek sinyal olamaz). */
+/**
+     * `+₺12.400` / `−₺8.240` - isaret her zaman yazilir (renk tek sinyal olamaz).
+     *
+     * [tl] ile AYNI kural: 1 TL altindaki bir tutar tam liraya yuvarlanmaz.
+     * Burada yoktu ve sonuc daha kotuydu - isaret yazildigi icin ekranda
+     * "+₺0" cikiyordu: bir degisim OLDUGUNU soyleyip buyuklugunu sifir
+     * gosteren bir satir.
+     */
     fun tlSigned(value: Double, spaced: Boolean = false, decimals: Int = 0): String {
         val sign = when {
             value > 0 -> "+"
             value < 0 -> MINUS.toString()
             else -> ""
         }
-        return sign + LIRA + (if (spaced) " " else "") + format(abs(value), decimals, forceSign = false)
+        val a = abs(value)
+        val effectiveDecimals = if (decimals == 0 && a > 0.0 && a < 1.0) MaxCents else decimals
+        return sign + LIRA + (if (spaced) " " else "") +
+            format(a, effectiveDecimals, forceSign = false)
     }
 
     /** Pay/ilerleme orani: `%41`, `%58,1`. Girdi yuzde cinsinden (41.0, 58.1). */
@@ -141,11 +152,25 @@ object Money {
     fun compact(value: Double, thousandDecimals: Int = 0): String {
         val a = abs(value)
         val sign = if (value < 0) MINUS.toString() else ""
+        // Kademe YUVARLAMADAN SONRA secilir. Once once seciliyordu: 999.950
+        // bin kademesine giriyor, 999,95 sifir haneye yuvarlanip 1.000 oluyor
+        // ve ekranda "1.000B" yaziyordu - var olmayan bir birim.
+        val thousands = a / 1_000.0
+        val roundsToMillion = a >= 1_000_000 ||
+            (a >= 1_000 && round(thousands * pow10(thousandDecimals)) >= 1_000 * pow10(thousandDecimals))
         return sign + when {
-            a >= 1_000_000 -> format(a / 1_000_000.0, 1, false) + "M"
+            // Tam milyon ise ondalik yazilmaz: "4,0M" degil "4M" - bin
+            // kademesindeki kuralin aynisi, orada vardi burada yoktu.
+            roundsToMillion -> {
+                val millions = a / 1_000_000.0
+                // Tamlik YUVARLANMIS degere bakilarak olculur: 999.950 tek
+                // haneye 1,0 yuvarlanir, yani "1,0M" degil "1M" yazilmali.
+                val rounded = round(millions * 10.0) / 10.0
+                format(millions, if (rounded % 1.0 == 0.0) 0 else 1, false) + "M"
+            }
+
             // Tam bin ise ondalik yazilmaz: "100,0B" degil "100B".
             a >= 1_000 -> {
-                val thousands = a / 1_000.0
                 val decimals = if (thousands % 1.0 == 0.0) 0 else thousandDecimals
                 format(thousands, decimals, false) + "B"
             }
@@ -175,7 +200,14 @@ object Money {
         val a = abs(value)
         // Kayan nokta artigi: 108,39 diskte 108.38999999999999 olabiliyor.
         // Bagil tolerans, buyuk sayilarda da dogru calisir.
-        val tolerance = Epsilon * maxOf(1.0, a)
+        //
+        // AMA SINIRSIZ BUYUYEMEZ. `1e-9 x a` 10 milyon TL'de 0,01'e ulasiyordu:
+        // ₺10.000.000,01 icin sifir hane "yeterince yakin" sayiliyor ve GERCEK
+        // kurus yutuluyordu - ILERLEME §24 "kurus hep gorunur" diyor. Cift
+        // duyarlikli bir sayinin o buyuklukteki gercek hatasi ~2e-9, yani bagil
+        // tolerans zaten fazlasiyla comert; ustune gosterilebilecek en kucuk
+        // birimin binde birinde tavan koyuluyor.
+        val tolerance = minOf(Epsilon * maxOf(1.0, a), 0.001 / pow10(max))
         for (d in min..max) {
             val factor = pow10(d)
             if (abs(round(a * factor) / factor - a) <= tolerance) return d
@@ -205,7 +237,7 @@ object Money {
         val a = abs(value)
 
         val factor = pow10(decimals)
-        val scaled = round(a * factor).toLong()
+        val scaled = roundHalfUp(a * factor)
         val intPart = scaled / factor.toLong()
         val fracPart = scaled % factor.toLong()
 
@@ -218,6 +250,22 @@ object Money {
         }
         return sb.toString()
     }
+
+    /**
+     * YARIM YUKARI yuvarlar - Turkiye'de para bicimlendirmenin geleneksel kurali.
+     *
+     * `kotlin.math.round` YARIM CIFTE yuvarlar (banker's): `round(12.5) = 12`,
+     * yani `Money.tl(0.125)` "₺0,12" yaziyordu. Uygulama icinde tutarliydi ama
+     * hicbir yerde yazmiyordu ve kullanicinin beklentisi 0,13.
+     *
+     * [value] her zaman POZITIFTIR (cagiran mutlak degeri aliyor), yani
+     * "yukari" ile "sifirdan uzaga" burada ayni sey.
+     *
+     * Ikili tabanin kendi siniri duruyor: 1,005 bellekte 1,00499999... oldugu
+     * icin iki haneye 1,00 yuvarlanir. Bu her yuvarlama kuralinda boyle - hangi
+     * kurala gecilirse gecilsin degismez.
+     */
+    private fun roundHalfUp(value: Double): Long = floor(value + 0.5).toLong()
 
     private fun pow10(n: Int): Double {
         var r = 1.0

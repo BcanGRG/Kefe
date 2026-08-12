@@ -1,5 +1,7 @@
 package com.kefe.app.domain.backup
 
+import kotlin.math.abs
+import kotlin.math.round
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.GoalUnit
@@ -60,8 +62,33 @@ private fun String.cleaned(): String = trim().removePrefix("﻿").trim()
 
 private fun Int.pad(): String = if (this < 10) "0$this" else toString()
 
-/** Ondalik ayirici VIRGUL - tr-TR Excel sayiyi ancak boyle taniyor. */
-private fun Double.csv(): String = toString().replace('.', ',')
+/**
+ * Ondalik ayirici VIRGUL - tr-TR Excel sayiyi ancak boyle taniyor.
+ *
+ * BILIMSEL GOSTERIM YOK. `toString()` buyuk ve cok kucuk sayilarda usse
+ * geciyor: 12.500.000 TL'lik bir islem CSV'ye "1,25E7" diye yaziliyor ve
+ * Excel'de sayi degil metin olarak aciliyordu. Ayni kusur hedef tutarinda
+ * (P0.4) veri kaybina yol acmisti; burada dosya disariya gittigi icin sonuc
+ * sessiz ama kalici.
+ *
+ * En cok alti hane: fon payi TEFAS'ta oraya kadar iniyor, otesi kayan nokta
+ * artigi olur. Sondaki sifirlar yazilmaz.
+ */
+private fun Double.csv(): String {
+    if (!isFinite()) return "0"
+    val negative = this < 0.0
+    val a = abs(this)
+    val scaled = round(a * CsvScale)
+    val whole = (scaled / CsvScale).toLong()
+    val frac = (scaled - whole * CsvScale).toLong()
+    val sign = if (negative) "-" else ""
+    if (frac == 0L) return "$sign$whole"
+    val digits = frac.toString().padStart(CsvDecimals, '0').trimEnd('0')
+    return "$sign$whole,$digits"
+}
+
+private const val CsvDecimals = 6
+private const val CsvScale = 1_000_000.0
 
 private fun String.escapeCsv(): String =
     if (contains(';') || contains('"') || contains('\n')) {
