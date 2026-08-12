@@ -115,11 +115,26 @@ class SqlDelightPriceRepository(
                 // fiyatlari, bugunku ise kullanicinin girdigi rakam - ikisini
                 // kiyaslamak "haftalik degisim" degil, iki ayri olcunun farki
                 // olurdu.
+                //
+                // GUNLUK de yok, ve KOTASYON GUNU de. Once yalniz hafta/ay
+                // null'lanip changePercent ile quoteDate onbellekteki KAYNAK
+                // satirindan aynen birakiliyordu. Onbellek o gun tazelendiyse
+                // (uygulama acilinca olagan) quoteDate == bugun oluyor,
+                // Valuation.todayChangePercent kapisi aciliyor ve KAYNAGIN
+                // yuzdesi kullanicinin girdigi degere uygulanip "bugunku
+                // getiri"ye giriyordu: 100 gr altin elle ₺6.500 girildiginde
+                // +₺13.618 sahte gunluk getiri. Kural (ILERLEME §35) acik -
+                // "elle girilen fiyatin gunluk hareketi yoktur".
+                //
+                // quoteDate = null mekanizmanin kendisi: "gunu bilinmeyen
+                // kotasyon bugun sayilmaz", katkisi sifir olur.
                 price.copy(
                     bid = override,
                     ask = override,
                     source = PriceSource.Manual,
                     isManual = true,
+                    changePercent = null,
+                    quoteDate = null,
                     weekChangePercent = null,
                     monthChangePercent = null,
                 )

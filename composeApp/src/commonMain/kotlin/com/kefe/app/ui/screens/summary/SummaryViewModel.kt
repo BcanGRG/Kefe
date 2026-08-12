@@ -272,10 +272,13 @@ class SummaryViewModel(
                     freshness = board.freshness,
                     pricesUpdatedAt = board.updatedAtLabel,
                     // Hero cevrimi piyasa tablosuyla ayni kaynaktan beslenir.
+                    //
+                    // Eksik kur NULL kalir, 1.0'a DUSMEZ: 1.0 TL tutarini oldugu
+                    // gibi dolar diye yazdiriyordu (bkz. DisplayUnit.rateFor).
                     rates = UnitRates(
-                        usdTry = board.byKey("usd_try")?.ask ?: 1.0,
-                        eurTry = board.byKey("eur_try")?.ask ?: 1.0,
-                        goldGramTry = board.byKey("gold_gram")?.ask ?: 1.0,
+                        usdTry = board.byKey("usd_try")?.ask?.takeIf { it > 0.0 },
+                        eurTry = board.byKey("eur_try")?.ask?.takeIf { it > 0.0 },
+                        goldGramTry = board.byKey("gold_gram")?.ask?.takeIf { it > 0.0 },
                     ),
                     // Ozet'teki piyasa karti ve masaustu sag paneli.
                     //

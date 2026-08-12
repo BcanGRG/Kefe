@@ -247,11 +247,23 @@ kotasyonla, pazar günü:
 
 ### Sonradan ölçüldü ve düzeltildi: donmuş kotasyon "bugün" sayılıyordu
 
-Kaynak 9 Ağustos 2026'da yeniden ölçüldü. **Yedek yolun dayandığı varsayım artık
-geçerli değil:** `today.json` bütün altın türlerine `Change` gönderiyor —
-CEYREKALTIN 2.09, YARIMALTIN 2.09, TAMALTIN 2.09, ATAALTIN 2.09, YIA 2.09,
-18AYARALTIN 2.09, 14AYARALTIN 2.09, GRA 2.59, HAS 2.59, GUMUS 3.57. 86 sembolden
-yalnızca biri sıfır.
+Kaynak 9 Ağustos 2026'da ölçüldüğünde `today.json` bütün altın türlerine
+`Change` gönderiyordu — CEYREKALTIN 2.09, YARIMALTIN 2.09, TAMALTIN 2.09,
+ATAALTIN 2.09, YIA 2.09, 18AYARALTIN 2.09, 14AYARALTIN 2.09, GRA 2.59, HAS 2.59,
+GUMUS 3.57; 86 sembolden yalnızca biri sıfırdı. Buradan "yedek yolun dayandığı
+varsayım artık geçerli değil" sonucu çıkarılmıştı.
+
+**Bu sonuç yanlıştı ve 12 Ağustos'ta ölçümle düzeltildi.** 9 Ağustos bir
+pazardı; o gördüğümüz 2.09'lar cumadan kalma, hafta sonu boyunca taşınan
+değerlerdi. Aynı uç bir iş günü sabahı (12 Ağustos 10:16) sorulduğunda 86
+sembolden **16'sı** sıfır dönüyor ve **11'i sikke altın**: CEYREKALTIN,
+YARIMALTIN, TAMALTIN, ATAALTIN, RESATALTIN, HAMITALTIN, BESLIALTIN,
+IKIBUCUKALTIN, GREMSEALTIN, 14AYARALTIN, 18AYARALTIN. Sıfır olmayanlar GRA
+(0.82) ve CUMHURIYETALTINI (1.29).
+
+Yani **yedek yol hâlâ gerekli** — sikke altınların günlük değişimi bu uçtan
+düzenli olarak gelmiyor. Yedek yol yerinde bırakıldı; bu ölçüm onu kaldırmayı
+düşünen bir sonraki kişi için buraya yazıldı.
 
 Aynı ölçüm **asıl hatayı** ortaya çıkardı ve telefonda görünen buydu. Uç, piyasa
 kapalıyken de `Update_Date`'i her dakika ilerletiyor — pazar günü on iki dakika
@@ -496,7 +508,7 @@ aylık, ikisi eşit genişlikte yuvalarda çiziliyor — zaman ekseni birimi kar
 yeniden kurulabilir (atanan varlıkların o gündeki miktarı × o günkü fiyat) ve
 hem eğriyi hem ay sonu sütununu geri getirir. Ayrı bir iş olarak duruyor.
 
-### P1.5 · Kur yokken TL toplamı dolar/euro/gram diye gösteriliyor
+### P1.5 · Kur yokken TL toplamı dolar/euro/gram diye gösteriliyor — ✅ ÇÖZÜLDÜ
 
 `ui/screens/summary/SummaryViewModel.kt:275-277` · `SummaryUiState.kt:36-43, 95`
 
@@ -510,7 +522,14 @@ yazıyor (doğrusu ~$51.297). Ekran `Ready` durumuna pozisyonlarla geçtiği, fi
 beklenmediği için bu pencere gerçekten yaşanıyor. `safeDiv`'in varlığı eksik
 kurda "—" gösterme niyetini kanıtlıyor; 1.0 yedeği bu niyeti boşa çıkarıyor.
 
-### P1.6 · Elle girilen fiyat kaynağın günlük değişimini taşımaya devam ediyor
+**Yapıldı** (`Say "—" when a rate has not arrived yet`): `UnitRates` alanları
+nullable oldu — hedef editöründe (P0.5) uygulanan kalıbın aynısı. Bilinmeyen kur
+"—" yazıyor ve çipi kilitli çiziliyor, yani hesaplanamayacak bir çevrim
+seçilemiyor. TL hiç beklemiyor: kuru her zaman belli. İşe yaramayan `safeDiv`
+kaldırıldı. `UnitRatesTest` (8 test) eklendi — eski 1.0 yedeğiyle
+`TL tutari dolar diye yazildi: $ 3.180.400` diye düşüyor.
+
+### P1.6 · Elle girilen fiyat kaynağın günlük değişimini taşımaya devam ediyor — ✅ ÇÖZÜLDÜ
 
 `data/repository/SqlDelightPriceRepository.kt:117-124`
 
@@ -526,7 +545,13 @@ doğru katkısı sıfır."* 100 gr altın manuel ₺6.500 girildiğinde
 gizliyor (`MarketViewModel:202`) ama portföy toplamı gizlemiyor — ekran ile
 toplam da çelişiyor.
 
-### P1.7 · Gram/dolar cinsinden hedef piyasayla güncellenmiyor
+**Yapıldı** (`Stop a manually entered price from carrying the source's daily
+move`): bindirme artık `changePercent` ve `quoteDate`'i de temizliyor.
+`quoteDate = null` kodun bu iş için zaten belgelediği mekanizma — "günü
+bilinmeyen kotasyon bugün sayılmaz". `ManualPriceChangeTest` (3 test) eklendi;
+eski kodda günlük katkı %2,14 çıkıyor.
+
+### P1.7 · Gram/dolar cinsinden hedef piyasayla güncellenmiyor — ✅ ÇÖZÜLDÜ (vaat düzeltildi)
 
 `domain/model/Goal.kt:42` · `GoalsViewModel.kt:208, 233`
 
@@ -544,8 +569,20 @@ Bu, `GoalEditSheet.kt:259`'da kullanıcıya verilen sözle doğrudan çelişiyor
 *"Hedefi altın veya dolar cinsinden sabitlerseniz hedef de piyasayla birlikte
 güncellenir."*
 
-**Düzeltme:** ya hedefi birim cinsinden sakla (`amountInUnit` + `unit`) ve payda
-okuma anında güncel kurla çevrilsin, ya da bilgi kutusundaki vaat kaldırılsın.
+**Yapıldı** (`Say what the goal unit actually does`) — **iki seçenekten ikincisi
+uygulandı.** Bilgi kutusu artık ne olduğunu yazıyor: tutarı gram/dolar cinsinden
+girebilirsiniz, bugünkü kurla TL'ye çevrilip kaydedilir ve TL tutarı sonradan
+piyasayla değişmez. `Goal.amount` ve `Goal.unit` modelde aynı şekilde
+belgelendi. `GoalUnitTest` (3 test) kararı **yazılı** hale getiriyor: birim
+ilerlemeyi, kilometre taşlarını ve projeksiyonu etkilemiyor.
+
+**Neden bu seçenek:** hedefi gerçekten altına/dolara çapalamak bir hata
+düzeltmesi değil, bir **özellik**. Tutarın birim cinsinden saklanmasını ve
+paydanın okuma anında güncel kurla çevrilmesini ister; bu da kalıcılığa,
+senkrona, yedeğe ve hedef çizen her ekrana (~20 çağrı yeri) dokunur. Ayrıca
+mevcut TL-dışı hedefler için geçmiş kur bilinmediğinden göç doğru yapılamaz.
+Denetim kapsamında doğru olan, uygulamanın **tutmadığı bir sözü vermemesi**.
+Çapa istenirse `GoalUnitTest` düşerek yapılacak işi işaret edecek.
 
 ---
 

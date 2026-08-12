@@ -522,6 +522,7 @@ private fun HeroSection(
                     text = unit.chipLabel,
                     selected = state.unit == unit,
                     onClick = { onIntent(SummaryIntent.SelectUnit(unit)) },
+                    enabled = unit.rateKnown(state.rates),
                     height = Sizes.chipLarge,
                     horizontalPadding = Space.x16,
                     textStyle = chipText,
