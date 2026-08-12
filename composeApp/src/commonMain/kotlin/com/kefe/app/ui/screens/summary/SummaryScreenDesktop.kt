@@ -439,7 +439,7 @@ private fun DesktopGoalCard(
 
         Spacer(Modifier.height(Space.x10))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            goal.estimatedArrival?.let { arrival ->
+            state.mainGoalArrival?.let { arrival ->
                 Text(
                     // Kesikli alt cizgi "tahmin" isareti: kesin tarih vaadi degildir.
                     text = "Tahmini varış ≈ ${arrival.formatMonthYear()}",

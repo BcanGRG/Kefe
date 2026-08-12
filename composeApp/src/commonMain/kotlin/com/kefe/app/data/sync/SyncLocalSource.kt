@@ -110,7 +110,6 @@ class SyncLocalSource(
                             targetDay = r.targetDay,
                             monthlyContribution = r.monthlyContribution,
                             isMain = r.isMain,
-                            allocation = r.allocation.name,
                             status = r.status.name,
                             sortOrder = r.sortOrder,
                             updatedAt = r.updatedAt,

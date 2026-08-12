@@ -4,7 +4,6 @@ import com.kefe.app.data.db.LocalPortfolioId
 import com.kefe.app.data.db.toDomain
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.domain.backup.toAssetClass
-import com.kefe.app.domain.backup.toGoalAllocation
 import com.kefe.app.domain.backup.toGoalStatus
 import com.kefe.app.domain.backup.toGoalUnit
 import com.kefe.app.domain.backup.toGoldSubtype
@@ -193,7 +192,6 @@ class SyncLocalSink(
                 targetDay = r.targetDay,
                 monthlyContribution = r.monthlyContribution,
                 isMain = r.isMain,
-                allocation = r.allocation.toGoalAllocation(),
                 status = r.status.toGoalStatus(),
                 sortOrder = r.sortOrder,
                 updatedAt = r.updatedAt,
@@ -208,7 +206,6 @@ class SyncLocalSink(
                 targetDay = r.targetDay,
                 monthlyContribution = r.monthlyContribution,
                 isMain = r.isMain,
-                allocation = r.allocation.toGoalAllocation(),
                 status = r.status.toGoalStatus(),
                 sortOrder = r.sortOrder,
                 updatedAt = r.updatedAt,

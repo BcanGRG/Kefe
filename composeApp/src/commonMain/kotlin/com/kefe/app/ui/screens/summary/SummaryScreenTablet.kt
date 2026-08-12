@@ -429,7 +429,7 @@ private fun TabletGoalCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            goal.estimatedArrival?.let { arrival ->
+            state.mainGoalArrival?.let { arrival ->
                 Spacer(Modifier.width(Space.x8))
                 Text(
                     // "Tahmini" bilgisi kesikli alt cizgiyle isaretlenir: kesin tarih degildir.

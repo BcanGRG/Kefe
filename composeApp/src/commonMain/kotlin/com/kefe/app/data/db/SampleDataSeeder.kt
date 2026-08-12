@@ -108,14 +108,10 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 targetDay = goal.targetDate.day.toLong(),
                 monthlyContribution = goal.monthlyContribution,
                 isMain = goal.isMain,
-                allocation = goal.allocation,
                 status = goal.status,
                 sortOrder = goal.order.toLong(),
-                estimatedYear = goal.estimatedArrival?.year?.toLong(),
-                estimatedMonth = goal.estimatedArrival?.month?.toLong(),
                 // Ornek veri: zaman damgasi 0, esitlemede en eski sayilir.
                 updatedAt = 0L,
-                estimatedDay = goal.estimatedArrival?.day?.toLong(),
             )
         }
 

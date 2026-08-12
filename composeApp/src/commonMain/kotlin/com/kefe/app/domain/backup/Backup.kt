@@ -93,7 +93,6 @@ data class BackupGoal(
     val day: Int,
     val monthlyContribution: Double,
     val isMain: Boolean,
-    val allocation: String,
     val status: String,
     val order: Int,
 )

@@ -84,7 +84,11 @@ data class GoalDto(
     @SerialName("target_day") val targetDay: Long,
     @SerialName("monthly_contribution") val monthlyContribution: Double,
     @SerialName("is_main") val isMain: Boolean,
-    val allocation: String,
+    /**
+     * ESKI ALAN. Hicbir hesap okumuyor; sunucudaki kolon NOT NULL oldugu icin
+     * gonderilmeye devam ediyor. Gelen deger goz ardi edilir.
+     */
+    val allocation: String = "AllWealth",
     val status: String,
     @SerialName("sort_order") val sortOrder: Long,
     @SerialName("updated_at") val updatedAt: Long,

@@ -686,7 +686,7 @@ private fun MainGoalCard(
                 color = c.onSurfaceMuted,
                 maxLines = 1,
             )
-            goal.estimatedArrival?.let { arrival ->
+            state.mainGoalArrival?.let { arrival ->
                 Spacer(Modifier.weight(1f))
                 Spacer(Modifier.width(Space.x8))
                 Row(

@@ -5,7 +5,6 @@ import com.kefe.app.domain.model.AllocationSlice
 import com.kefe.app.domain.model.ActivityKind
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.Goal
-import com.kefe.app.domain.model.GoalAllocation
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.GoldSubtype
@@ -540,10 +539,8 @@ object SampleData {
             targetDate = KefeDate(2028, 12, 1),
             monthlyContribution = 50000.0,
             isMain = true,
-            allocation = GoalAllocation.AllWealth,
             status = GoalStatus.Active,
             order = 0,
-            estimatedArrival = KefeDate(2029, 3, 1),
         ),
         Goal(
             id = "goal_araba",
@@ -554,10 +551,8 @@ object SampleData {
             targetDate = KefeDate(2027, 6, 1),
             monthlyContribution = 15000.0,
             isMain = false,
-            allocation = GoalAllocation.FixedShare,
             status = GoalStatus.Active,
             order = 1,
-            estimatedArrival = KefeDate(2027, 2, 1),
         ),
         Goal(
             id = "goal_tatil",
@@ -568,11 +563,11 @@ object SampleData {
             targetDate = KefeDate(2026, 7, 1),
             monthlyContribution = 8000.0,
             isMain = false,
-            allocation = GoalAllocation.FixedShare,
-            // Tahmini varis hedef tarihini gectigi icin gecikmis sayilir
-            status = GoalStatus.Overdue,
+            // Hedef tarihi (Tem 2026) gecmiste: ekran bunu GECIKMIS gosterir.
+            // Durum alaninda tutulmuyor, bugunle karsilastirilarak turetiliyor
+            // (bkz. Goal.isOverdue) - saklansaydi gun donunce bayatlardi.
+            status = GoalStatus.Active,
             order = 2,
-            estimatedArrival = KefeDate(2026, 8, 1),
         ),
         Goal(
             id = "goal_buzdolabi",
@@ -583,10 +578,8 @@ object SampleData {
             targetDate = KefeDate(2026, 3, 1),
             monthlyContribution = 0.0,
             isMain = false,
-            allocation = GoalAllocation.FixedShare,
             status = GoalStatus.Completed,
             order = 3,
-            estimatedArrival = null,
         ),
     )
 

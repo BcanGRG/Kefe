@@ -1,7 +1,6 @@
 package com.kefe.app.ui.screens.goals
 
 import com.kefe.app.domain.model.Goal
-import com.kefe.app.domain.model.GoalAllocation
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.ui.format.parseTrAmountOrNull
@@ -43,7 +42,6 @@ data class GoalEditorState(
     val unit: GoalUnit = GoalUnit.Try,
     val targetDate: KefeDate = KefeDate(2028, 12, 1),
     val contributionText: String = "",
-    val allocation: GoalAllocation = GoalAllocation.AllWealth,
     val isMain: Boolean = false,
     val advancedExpanded: Boolean = true,
 
@@ -127,6 +125,17 @@ data class GoalsUiState(
      * sayar; atanmamis hedef tum birikimi sayar (eski davranis).
      */
     val wealthByGoal: Map<String, Double> = emptyMap(),
+    /**
+     * Hedefe TAHMINI VARIS - hedefin kendi birikimi ve aylik katkisindan
+     * hesaplanir (bkz. goalProjection).
+     *
+     * Once `Goal.estimatedArrival` diye KALICI bir alan vardi ama onu hesaplayan
+     * kod yolu yoktu: yalniz okunuyor, yazilirken kendisiyle kopyalaniyor ve
+     * geri yuklemede bosaltiliyordu. Kart bu yuzden herkese "Tahmini varış henüz
+     * hesaplanmadı" diyordu. Saklanmasi zaten yanlisti - birikim her gun
+     * degisiyor, saklanan tahmin ertesi gun bayat.
+     */
+    val arrivalByGoal: Map<String, KefeDate?> = emptyMap(),
     val completedExpanded: Boolean = false,
     val sortMode: Boolean = false,
     val editor: GoalEditorState? = null,
@@ -148,7 +157,6 @@ sealed interface GoalsIntent {
     data class EditorAmount(val value: String) : GoalsIntent
     data class EditorUnit(val unit: GoalUnit) : GoalsIntent
     data class EditorContribution(val value: String) : GoalsIntent
-    data class EditorAllocation(val allocation: GoalAllocation) : GoalsIntent
     data class EditorMain(val value: Boolean) : GoalsIntent
 
     data object ToggleEditorDatePicker : GoalsIntent

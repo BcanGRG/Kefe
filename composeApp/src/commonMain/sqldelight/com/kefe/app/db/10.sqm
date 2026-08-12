@@ -1,0 +1,12 @@
+-- "Vadesi gecti" ARTIK SAKLANMIYOR, TURETILIYOR.
+--
+-- `GoalStatus.Overdue` hicbir kod yolu tarafindan URETILMIYORDU: onu yazacak tek
+-- sorgu (`updateGoalStatus`) hic cagrilmiyor, yalniz ornek veri elle
+-- isaretliyordu. Yani hedef tarihi gecmis gercek bir hedef ekranda hic "gecikti"
+-- gorunmuyordu.
+--
+-- Vadesi gecmislik zaten bugunun tarihiyle hedef tarihinin karsilastirmasi -
+-- saklanacak bir sey degil, saklandigi anda da bayatlar. Enum degeri kaldirildi
+-- (bkz. Goal.isOverdue) ve kalmis satirlar Active'e cekiliyor: kolon adaptoru
+-- tanimadigi bir metinle karsilasirsa hedefler hic okunamazdi.
+UPDATE goals SET status = 'Active' WHERE status = 'Overdue';

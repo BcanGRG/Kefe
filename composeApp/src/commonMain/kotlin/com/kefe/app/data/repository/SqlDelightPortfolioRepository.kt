@@ -17,7 +17,6 @@ import com.kefe.app.domain.backup.BackupPosition
 import com.kefe.app.domain.backup.BackupSnapshot
 import com.kefe.app.domain.backup.BackupTransaction
 import com.kefe.app.domain.backup.toAssetClass
-import com.kefe.app.domain.backup.toGoalAllocation
 import com.kefe.app.domain.backup.toGoalStatus
 import com.kefe.app.domain.backup.toGoalUnit
 import com.kefe.app.domain.backup.toGoldSubtype
@@ -414,7 +413,6 @@ class SqlDelightPortfolioRepository(
                         day = it.targetDay.toInt(),
                         monthlyContribution = it.monthlyContribution,
                         isMain = it.isMain,
-                        allocation = it.allocation.name,
                         status = it.status.name,
                         order = it.sortOrder.toInt(),
                     )
@@ -548,12 +546,8 @@ class SqlDelightPortfolioRepository(
                         targetDay = goal.day.toLong(),
                         monthlyContribution = goal.monthlyContribution,
                         isMain = goal.isMain,
-                        allocation = goal.allocation.toGoalAllocation(),
                         status = goal.status.toGoalStatus(),
                         sortOrder = goal.order.toLong(),
-                        estimatedYear = null,
-                        estimatedMonth = null,
-                        estimatedDay = null,
                         updatedAt = clock.nowEpochMillis(),
                     )
                 }
@@ -877,12 +871,8 @@ class SqlDelightPortfolioRepository(
                     targetDay = goal.targetDate.day.toLong(),
                     monthlyContribution = goal.monthlyContribution,
                     isMain = goal.isMain,
-                    allocation = goal.allocation,
                     status = goal.status,
                     sortOrder = goal.order.toLong(),
-                    estimatedYear = goal.estimatedArrival?.year?.toLong(),
-                    estimatedMonth = goal.estimatedArrival?.month?.toLong(),
-                    estimatedDay = goal.estimatedArrival?.day?.toLong(),
                     updatedAt = now,
                 )
                 goalQueries.applyGoalMeta(
@@ -896,12 +886,8 @@ class SqlDelightPortfolioRepository(
                     targetDay = goal.targetDate.day.toLong(),
                     monthlyContribution = goal.monthlyContribution,
                     isMain = goal.isMain,
-                    allocation = goal.allocation,
                     status = goal.status,
                     sortOrder = goal.order.toLong(),
-                    estimatedYear = goal.estimatedArrival?.year?.toLong(),
-                    estimatedMonth = goal.estimatedArrival?.month?.toLong(),
-                    estimatedDay = goal.estimatedArrival?.day?.toLong(),
                     updatedAt = now,
                 )
             }

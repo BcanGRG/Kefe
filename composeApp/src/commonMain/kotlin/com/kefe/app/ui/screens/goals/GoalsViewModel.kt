@@ -4,9 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.Goal
-import com.kefe.app.domain.model.GoalAllocation
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.GoalUnit
+import com.kefe.app.domain.model.goalProjection
 import com.kefe.app.domain.model.goalWealth
 import com.kefe.app.domain.model.newId
 import com.kefe.app.domain.model.KefeDate
@@ -89,7 +89,6 @@ class GoalsViewModel(
                 it.copy(contributionText = intent.value)
             }
 
-            is GoalsIntent.EditorAllocation -> editor { it.copy(allocation = intent.allocation) }
             is GoalsIntent.EditorMain -> editor { it.copy(isMain = intent.value) }
 
             GoalsIntent.ToggleEditorDatePicker -> editor {
@@ -121,6 +120,9 @@ class GoalsViewModel(
                 portfolioRepository.observePositions(),
                 portfolioRepository.observeGoalAssets(),
             ) { goals, positions, assignments ->
+                // Her hedefin KENDI karsiligi: yalniz kendine atanan varliklar.
+                val wealth = goals.associate { it.id to goalWealth(it, positions, assignments) }
+                val today = clock.today()
                 // Tamamlananlar ayri gruba iner; vadesi gecmis hedef ACIKTIR -
                 // tasarimda "Hedef duruyor" der, kapatilmis degil.
                 _state.value.copy(
@@ -128,10 +130,12 @@ class GoalsViewModel(
                     goals = goals.filter { it.status != GoalStatus.Completed },
                     completed = goals.filter { it.status == GoalStatus.Completed },
                     totalWealth = positions.sumOf { it.value },
-                    // Her hedefin KENDI karsiligi: varlik atanmissa yalniz onlar,
-                    // atanmamissa tum birikim.
-                    wealthByGoal = goals.associate {
-                        it.id to goalWealth(it, positions, assignments)
+                    wealthByGoal = wealth,
+                    // Tahmini varis HESAPLANIR. Once kalici bir alandi ama onu
+                    // uretecek kod yolu yoktu; kart herkese "henüz
+                    // hesaplanmadı" diyordu.
+                    arrivalByGoal = goals.associate {
+                        it.id to goalProjection(it, wealth[it.id] ?: 0.0, today).arrival
                     },
                 )
             }.collect { _state.value = it }
@@ -169,7 +173,6 @@ class GoalsViewModel(
         unit = GoalUnit.Try,
         targetDate = current.goals.firstOrNull()?.targetDate ?: KefeDate(2028, 12, 1),
         contributionText = "",
-        allocation = GoalAllocation.AllWealth,
         isMain = current.goals.none { it.isMain },
         advancedExpanded = true,
         goldGramPrice = latestGoldPrice,
@@ -186,7 +189,6 @@ class GoalsViewModel(
             unit = GoalUnit.Try,
             targetDate = goal.targetDate,
             contributionText = rawAmount(goal.monthlyContribution),
-            allocation = goal.allocation,
             isMain = goal.isMain,
             advancedExpanded = true,
             goldGramPrice = latestGoldPrice,
@@ -252,16 +254,17 @@ class GoalsViewModel(
             targetDate = editor.targetDate,
             monthlyContribution = editor.contributionText.parseAmount(),
             isMain = editor.isMain,
-            allocation = editor.allocation,
             status = existing?.status ?: GoalStatus.Active,
             order = existing?.order ?: _state.value.goals.size,
-            estimatedArrival = existing?.estimatedArrival,
         )
 
         viewModelScope.launch {
-            // Ana hedef tek olabilir: yenisi isaretlendiginde eskisinin isareti kalkar.
+            // Ana hedef tek olabilir: yenisi isaretlendiginde eskisinin isareti
+            // kalkar. TAMAMLANANLAR DA TARANIR - `goals` yalniz aciklari tutuyor
+            // ve tamamlanmis bir hedef ana hedef olarak kalabiliyordu; iki ana
+            // hedef ayni anda isaretli oluyordu.
             if (goal.isMain) {
-                _state.value.goals
+                (_state.value.goals + _state.value.completed)
                     .filter { it.isMain && it.id != goal.id }
                     .forEach { portfolioRepository.upsertGoal(it.copy(isMain = false)) }
             }

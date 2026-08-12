@@ -14,6 +14,7 @@ import com.kefe.app.domain.model.Portfolio
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.allocation
 import com.kefe.app.domain.model.color
+import com.kefe.app.domain.model.goalProjection
 import com.kefe.app.domain.model.goalWealth
 import com.kefe.app.domain.model.toEpochDay
 import com.kefe.app.domain.model.portfolioTotals
@@ -167,9 +168,17 @@ class SummaryViewModel(
                     mainGoalWealth = main
                         ?.let { goalWealth(it, positions, assignments) }
                         ?: 0.0,
+                    mainGoalArrival = main?.let {
+                        goalProjection(it, goalWealth(it, positions, assignments), clock.today())
+                            .arrival
+                    },
                     // Vadesi gecmis hedef de sayilir: tasarimda o hal "Hedef duruyor"
                     // diyor, kapatilmis degil. Yalniz tamamlananlar dislanir.
-                    otherGoalCount = (goals.count { it.isOpen() } - 1).coerceAtLeast(0),
+                    // Ana hedefin KENDISI dislanir - "acik sayidan bir eksik"
+                    // degil. Tamamlanmis bir hedef ana hedef olarak kalabilir ve
+                    // o zaman acik sayida zaten yoktur; eksiltmek sayiyi bir
+                    // dusuruyordu.
+                    otherGoalCount = goals.count { it.isOpen() && it.id != main?.id },
                     activity = activity.take(3),
                     topGainer = positions.topGainer(),
                     topLoser = positions.topLoser(),

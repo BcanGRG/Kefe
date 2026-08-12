@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.formatMonthYear
 import com.kefe.app.domain.model.progress
 import com.kefe.app.ui.components.KefeAccentCard
@@ -175,6 +176,7 @@ private fun GoalsBody(
             GoalCard(
                 goal = goal,
                 totalWealth = state.wealthByGoal[goal.id] ?: state.totalWealth,
+                arrival = state.arrivalByGoal[goal.id],
                 sortMode = state.sortMode,
                 onClick = { onOpenGoal(goal.id) },
                 modifier = Modifier
@@ -243,6 +245,8 @@ private fun List<Goal>.moved(from: Int, to: Int): List<Goal> =
 private fun GoalCard(
     goal: Goal,
     totalWealth: Double,
+    /** Tahmini varis - hesaplanamiyorsa (aylik katki yok) null. */
+    arrival: KefeDate?,
     sortMode: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -335,7 +339,7 @@ private fun GoalCard(
                 KefeIcon(KefeIcons.Clock, null, size = 14.dp, tint = c.onSurfaceMuted)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = goal.arrivalLabel(),
+                    text = goal.arrivalLabel(arrival),
                     style = t.caption,
                     color = c.onSurfaceMuted,
                     // Tasarimda tahmin metninin alti kesikli: kesin bir tarih degil.
@@ -609,8 +613,10 @@ private fun GoalsSkeleton() {
  * "Tahmini varış ≈ Mart 2029 · 3 ay gecikme".
  * Gecikme metni yalniz tahmin hedef tarihini asiyorsa eklenir.
  */
-private fun Goal.arrivalLabel(): String {
-    val arrival = estimatedArrival ?: return "Tahmini varış henüz hesaplanmadı"
+private fun Goal.arrivalLabel(arrival: KefeDate?): String {
+    // Katki sifirsa birikim kendiliginden buyumez: varis tarihi YOKTUR.
+    // Once bu metin HERKESE gorunuyordu, cunku hesaplayan kod yolu hic yoktu.
+    arrival ?: return "Aylık katkı olmadan varış hesaplanamıyor"
     val delay = arrival.monthIndex() - targetDate.monthIndex()
     val base = "Tahmini varış ≈ ${arrival.formatMonthYear()}"
     return if (delay > 0) "$base · $delay ay gecikme" else base
