@@ -26,7 +26,6 @@ fun createKefeDatabase(driver: SqlDriver): KefeDatabase = KefeDatabase(
     ),
     goalsAdapter = Goals.Adapter(
         unitAdapter = EnumColumnAdapter(),
-        allocationAdapter = EnumColumnAdapter(),
         statusAdapter = EnumColumnAdapter(),
     ),
     positionsAdapter = Positions.Adapter(

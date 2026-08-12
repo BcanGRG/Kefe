@@ -586,97 +586,188 @@ Denetim kapsamında doğru olan, uygulamanın **tutmadığı bir sözü vermemes
 
 ---
 
-## P2 — Tutarsızlık ve kenar durumlar
+## P2 — Tutarsızlık ve kenar durumlar — ✅ TAMAMI ÇÖZÜLDÜ
 
-### Hedef atama defteri
+Yirmi iki kusurun hepsi kapatıldı. Her başlığın altında ne yapıldığı ve
+**neden öyle** yapıldığı yazıyor.
 
-| # | Dosya | Kusur |
-|---|---|---|
-| 206 | `GoalAssets.kt:163` | **SATIŞ** işleminde "başka hedef" dalı `isSell`'i hiç dikkate almıyor: satış kaydında başka hedef seçmek o hedefin ilerlemesini **artırıyor** |
-| 200 | `GoalAssets.kt:31` | `effectiveQuantity` kırpması okuma anında yapılıp saklanan miktarı düşürmüyor; kırpma monoton değil, pozisyon miktarı yükselince hedef eski büyük miktarı yeniden saymaya başlıyor |
-| 11 | `AddTransactionViewModel.kt:721` | Düzenleme `applyGoalSelection`'ı ikinci kez uyguluyor, eski kaydın etkisi geri alınmıyor: satış düzenlemede hedef kalıcı olarak eksik sayıyor |
-| 12 | `SqlDelightPortfolioRepository.kt:247` | İşlem silme atama etkisini geri almıyor |
-
-### Hedef durum alanları
-
-- **`GoalStatus.Overdue` hiç üretilmiyor** (`Goal.kt:35`) — yalnız örnek veride
-  var; `updateGoalStatus` sorgusu hiç çağrılmıyor.
-- **`estimatedArrival` hiç hesaplanmıyor** (`GoalsViewModel.kt:241`) — yalnız
-  okunuyor/yazılıyor/kendine kopyalanıyor. Üreten kod yolu yok. Buna karşılık
-  `ILERLEME.md:349-350` iş kuralını "hesaplanır" diye kayda geçirmiş. Geri
-  yükleme alanı boşaltıyor.
-- **`GoalAllocation` (AllWealth/FixedShare) ölü alan** (`Goal.kt:30`) — kalıcı,
-  senkronda, yedekte ve editörde taşınıyor ama hiçbir hesap onu okumuyor; iki
-  seçenek arasında sayısal fark sıfır. Yorumlar hâlâ eski kuralı anlatıyor.
-- **Ana hedef tekliği tamamlanmışları atlıyor** (`GoalsViewModel.kt:246`,
-  `SummaryViewModel.kt:150, 171`) — tamamlanmış bir `isMain` hedef ikinci ana
-  hedef olarak kalabiliyor; `otherGoalCount` off-by-one.
-
-### Ücret (fee) yönü
-
-`Transaction.kt:16` · `AddTransactionUiState.kt:342` ·
-`SqlDelightPortfolioRepository.kt:273, 635`
-
-`total = quantity * unitPrice + fee` işlemin yönüne bakmıyor. Uygulamanın bütün
-defter matematiği satışta ücreti **hasılattan düşüyor** (`CostBasis.kt:86`,
-`Returns.kt:111`). 1 adet @150, fee 10 satış: ekranda **160**, defterde **140**.
-Aynı işlem iki ekranda iki farklı tutarla görünüyor; "Toplam" kutusunun yorumu
-"Bu rakam KAYDEDİLECEK tutar" diyor ama değil.
-
-### Dönemsel değişim ve tazelik
+### Hedef atama defteri — ✅ ÇÖZÜLDÜ
 
 | # | Dosya | Kusur |
 |---|---|---|
-| ~~79~~ | `ChangePeriod.kt:26` | ✅ **ÇÖZÜLDÜ** — Piyasa ekranı "Gün"de ham `changePercent` okuyor, Varlıklar/Özet ise kotasyon-günü kuralından geçiriyor. Hafta sonu iki ekran farklı |
-| 62 | `SqlDelightPriceRepository.kt:140` | "Sıfırı verilmedi saymak yanlış tetiklenemez" iddiası doğru değil: `price_history` günün kapanışını değil uygulamanın açıldığı andaki fiyatı tutuyor, kaynağın geçerli sıfırı eziliyor |
-| ~~63~~ | `PriceChange.kt:48` | ✅ **ÇÖZÜLDÜ** — Türetilen "günlük" pencere `[bugün-4, bugün-1]`; 4 güne kadar hareket tek "günlük" değişim olarak bugüne yazılıyor — §35 ile çelişiyor |
-| 65 | `SqlDelightPriceRepository.kt:153` | Tazelik en yeni satırdan hesaplanıyor: kısmi çekimde tek taze satır bütün bayat satırları maskeliyor, "Fresh" kalıyor |
-| ~~81~~ | `Position.kt:19` | ✅ **ÇÖZÜLDÜ** — `dailyChangePercent` non-null olduğu için "Gün" penceresi hiç "—" olamıyor; bilinmeyen sıfır sayılıp grup yüzdesini sulandırıyor |
-| 67 | `SqlDelightPriceRepository.kt:252` | Geçmiş satırı kotasyonun işlem günüyle değil çekim günüyle yazılıyor |
-| 68 | `SqlDelightPriceRepository.kt:209` | Saat geriye giderse yenileme kilitleniyor, anlamsız bekleme süresi yazılıyor |
+| ~~206~~ | `GoalAssets.kt:163` | **SATIŞ** işleminde "başka hedef" dalı `isSell`'i hiç dikkate almıyor: satış kaydında başka hedef seçmek o hedefin ilerlemesini **artırıyor** |
+| ~~200~~ | `GoalAssets.kt:31` | `effectiveQuantity` kırpması okuma anında yapılıp saklanan miktarı düşürmüyor; kırpma monoton değil, pozisyon miktarı yükselince hedef eski büyük miktarı yeniden saymaya başlıyor |
+| ~~11~~ | `AddTransactionViewModel.kt:721` | Düzenleme `applyGoalSelection`'ı ikinci kez uyguluyor, eski kaydın etkisi geri alınmıyor: satış düzenlemede hedef kalıcı olarak eksik sayıyor |
+| ~~12~~ | `SqlDelightPortfolioRepository.kt:247` | İşlem silme atama etkisini geri almıyor |
 
-### Fiyat kaynakları
+**Yapıldı** (`Give a transaction back what it took from a goal`): dördü tek bir
+kök nedene bağlanıyordu — atama her kayıtta artırılıp azaltılıyor ama hiçbir
+yerde *bu kaydın katkısı neydi* yazmıyordu.
 
-- **TEFAS sıfır fiyat kontrolü yok** (`TefasApi.kt:74`) — aynı fonksiyon `history`
-  üretirken sıfır satırları eliyor, diğer üç API'de de koruma var. Sıfır gelirse
+Katkı artık kaydın kendi alanı: `transactions.goalId` + `goalDelta` (9.sqm,
+Supabase'de de aynı iki kolon). Silme `-goalDelta` uyguluyor. Düzenleme zaten
+"önce yeni kaydı yaz, sonra eskisini sil" sırasıyla çalıştığı için doğru sonuca
+kendiliğinden varıyor.
+
+**Delta neden, "önceki değeri geri yaz" neden değil:** mutlak geri yazma yalnız
+son kayıt geri alınırsa doğrudur; araya başka kayıt girerse eski bir değeri
+diriltir. Delta toplanabilir, sıradan bağımsız.
+
+**Satış artık seçiciye bakmıyor.** Satış ancak varlığın *içinde bulunduğu*
+hedeften düşebilir. Seçici "Hedefsiz" dese bile düşürüyor — kırpma böylece
+kalıcılaşıyor ve #200'ün monotonluk sorunu ortadan kalkıyor: 10'un 6'sı
+satılınca hedef 4 sayıyor ve sonradan 4 tane daha alınsa da 4 kalıyor.
+
+**Kabul edilen sınır:** varlığı başka hedefe taşıyan bir kayıt geri alınırsa
+varlık eski hedefine dönmez, atamasız kalır. Eski hedefin adı hiçbir yerde
+saklanmıyor ve saklamak bütün bir geri-alma günlüğü demek olurdu.
+`GoalAssetsTest` + `GoalAssignmentRevertTest` bu kararı yazılı tutuyor.
+
+### Hedef durum alanları — ✅ ÇÖZÜLDÜ
+
+- ~~**`GoalStatus.Overdue` hiç üretilmiyor**~~ — **turetildi.** Onu yazacak tek
+  sorgu hiç çağrılmıyordu; tarihi geçmiş gerçek bir hedef ekranda hiç "gecikti"
+  görünmüyordu. Artık `Goal.isOverdue(today)`. Saklamak zaten yanlıştı: gün
+  dönünce bayatlar. Enum değeri kaldırıldı, kalmış satırlar 10.sqm ile Active'e
+  çekildi (kolon adaptörü tanımadığı bir metinle karşılaşırsa hedefler hiç
+  okunamazdı).
+- ~~**`estimatedArrival` hiç hesaplanmıyor**~~ — **hesaplandı.** Yalnız okunuyor,
+  kendine kopyalanıyor ve geri yüklemede boşaltılıyordu; kart herkese "Tahmini
+  varış henüz hesaplanmadı" diyordu. `goalProjection` bunu zaten biliyor;
+  ekranlar ona soruyor. Aylık katkı yoksa varış yoktur ve ekran bunu açıkça
+  yazıyor. Kalıcı alan kaldırıldı — birikim her gün değişiyor, saklanan tahmin
+  ertesi gün bayat.
+- ~~**`GoalAllocation` ölü alan**~~ — **kaldırıldı.** Kalıcı, senkronda, yedekte
+  ve editörde taşınıyordu ama hiçbir hesap okumuyordu; iki seçenek arasında
+  sayısal fark sıfırdı. Editördeki toggle daha önce kaldırılmıştı. Sunucudaki
+  kolon NOT NULL olduğu için DTO alanı sabit değerle gönderilmeye devam ediyor.
+- ~~**Ana hedef tekliği tamamlanmışları atlıyor**~~ — **düzeltildi.** Bayrak
+  yalnız açık hedeflerde temizleniyordu; tamamlanmış bir hedef ana hedef olarak
+  kalabiliyordu. `otherGoalCount` de "açık sayıdan bir eksik" diyordu — ana
+  hedef tamamlanmışsa o sayıda zaten yok, eksiltmek sayıyı bir düşürüyordu.
+  Artık ana hedefin kendisi dışlanıyor.
+
+**Not:** üç eski kolon (`allocation`, `estimatedYear/Month/Day`) tabloda
+bırakıldı, hiçbir sorgu yazmıyor. SQLite'ta kolon düşürmek tabloyu yeniden
+kurmak demek — veri taşıyan bir tabloda gereksiz risk.
+
+### Ücret (fee) yönü — ✅ ÇÖZÜLDÜ
+
+`total = quantity * unitPrice + fee` işlemin yönüne bakmıyordu. Uygulamanın
+bütün defter matematiği satışta ücreti **hasılattan düşüyor** (`costBasis`,
+`xirr`). 1 adet @150, fee 10 satış: ekranda **160**, defterde **140**. "Toplam"
+kutusunun yorumu "Bu rakam KAYDEDİLECEK tutar" diyor ama değildi.
+
+**Yapıldı** (`Take the fee off a sale instead of adding it to it`): üç yerde de
+yön okunuyor (`Transaction.total`, `AddTransactionUiState.total`, silme
+aktivitesi). Rakam Aktivite akışına da yazıldığı için sadece bakılan değil,
+saklanan bir sayıydı. `FeeDirectionTest`.
+
+### Dönemsel değişim ve tazelik — ✅ ÇÖZÜLDÜ
+
+| # | Dosya | Kusur |
+|---|---|---|
+| ~~79~~ | `ChangePeriod.kt:26` | ✅ Piyasa ekranı "Gün"de ham `changePercent` okuyor, Varlıklar/Özet ise kotasyon-günü kuralından geçiriyor |
+| ~~62~~ | `SqlDelightPriceRepository.kt:140` | ✅ "Sıfırı verilmedi saymak yanlış tetiklenemez" iddiası doğru değil |
+| ~~63~~ | `PriceChange.kt:48` | ✅ Türetilen "günlük" pencere `[bugün-4, bugün-1]` |
+| ~~65~~ | `SqlDelightPriceRepository.kt:153` | ✅ Tazelik en yeni satırdan: kısmi çekimde tek taze satır bütün bayatları maskeliyor |
+| ~~81~~ | `Position.kt:19` | ✅ `dailyChangePercent` non-null olduğu için "Gün" hiç "—" olamıyor |
+| ~~67~~ | `SqlDelightPriceRepository.kt:252` | ✅ Geçmiş satırı kotasyonun işlem günüyle değil çekim günüyle yazılıyor |
+| ~~68~~ | `SqlDelightPriceRepository.kt:209` | ✅ Saat geriye giderse yenileme kilitleniyor |
+
+**Yapıldı** (`Stop one fresh price from speaking for the whole board`):
+
+- **#65** — tazelik artık **en eski** satıra bakıyor. Etiket bütün tahta için
+  konuşuyor; en eski satır bayatsa tahta bayattır.
+- **#68** — saat geriye gidebilir (saat dilimi, elle düzeltme, ağ senkronu).
+  Geçen süre negatif çıkınca "az önce çekildi" sayılıyor ve ekrana "86.400 sn
+  sonra deneyin" yazılıyordu; yenileme gerçek zaman damgayı yakalayana kadar
+  kilitliydi. Negatif süre artık "az önce" sayılmıyor.
+- **#67** — geçmiş satırı **kotasyonun işlem gününe** yazılıyor. Pazar günü
+  çekilen bir hisse fiyatı cumaya aittir; bugüne yazmak cumartesi ve pazar için
+  uydurma satırlar üretiyor, o satırlar sonra "dünkü fiyat" diye okunup günlük
+  değişimin ölçüsünü kaydırıyordu.
+- **#62** — kod yorumu gerçeğe uyduruldu. Yorum "artık bütün altın türlerine
+  Change geliyor" diyordu; o ölçüm **pazar günü** yapılmıştı ve gördüğümüz
+  değerler cumadan kalmaydı. İş günü ölçümünde 86 sembolden 16'sı sıfır ve 11'i
+  sikke altın — **yedek yol hâlâ gerekli**. Yorum artık "sıfır = verilmedi"
+  saymanın bilinen sınırını da yazıyor: geçmiş tablosu günün kapanışını değil,
+  uygulamanın o gün ilk açıldığı andaki fiyatı tutuyor.
+
+`PriceFreshnessTest`.
+
+### Fiyat kaynakları — ✅ ÇÖZÜLDÜ
+
+**Yapıldı** (`Guard the price feeds against their own bad days`):
+
+- **TEFAS sıfır fiyat** — aynı fonksiyon `history` üretirken sıfır satırları
+  zaten eliyor, diğer üç kaynakta da koruma var, burada yoktu. Sıfır gelirse
   sağlam önbellek fiyatının üzerine 0 yazılıp fon pozisyonu sıfırlanıyor,
-  **%-100** gösteriliyor.
-- **Yabancı hissenin yüzdesi kendi para biriminde ama TL hesabına giriyor**
-  (`LivePriceRemoteDataSource.kt:170`) — yorum "yüzde çevrilmez, gösterilendir"
-  diyor ama `todayChange()` o yüzdeyle TL değerini geriye çözüp TL farkı
-  topluyor.
-- **`StockApi.kt:118`** zaman damgası dizisinde `mapNotNull`, kapanış dizisinde
-  `map` → indeksler kayabiliyor.
-- **`Retry.kt:26`** `retryOnTransient` adının ve kendi belgesinin aksine **tüm**
-  istisnaları tekrarlıyor; 404 gibi kalıcı yanıtlar üç kez deneniyor,
-  `CancellationException` de yutuluyor.
+  **%-100** gösteriliyordu.
+- **`StockApi` indeks kayması** — zaman damgası dizisinde `mapNotNull`, kapanış
+  dizisinde `map` vardı; tek bozuk damga iki diziyi kaydırıyor ve o noktadan
+  sonraki her kapanış bir önceki günün tarihine yazılıyordu. İkisi de artık
+  `map`, eşleşme indeks bazında.
+- **`Retry.kt`** — adına ve kendi belgesine uymuyordu: 404 gibi kalıcı yanıtlar
+  üç kez deneniyor, `CancellationException` de yutuluyordu (ekran kapandığında
+  iptal edilen istek ölmeyi reddedip iki kez daha ağa çıkıyordu).
+- **Yabancı hissenin yüzdesi** — kaynağın rakamı kendi para biriminde. New
+  York'ta %2 yükselen bir hisse, dolar %1 düştüyse TL'de %1 yükselmiştir;
+  `todayChange()` o yüzdeyle TL değerini geriye çözdüğü için kur hareketi
+  sessizce kayboluyordu. Geçmiş tablosu TL fiyat tuttuğundan doğru cevabı zaten
+  biliyor, artık o tercih ediliyor. İlk günde geçmiş yoksa kaynağın rakamına
+  düşülüyor — kur hareketini saymaz ama hiçbir şeyden iyidir.
 
-### Tarih
+`PriceSourceGuardTest`.
 
-- **`KefeDate.plusMonths` ay sonu kıskacı yapmıyor** (`:64`) — `31 Ocak + 1 ay =
-  31 Şubat`. `toEpochDay` bunu `coerceIn` ile kabul edip başka bir güne taşıyor
-  (`:50`), `dateKeyOf` var olmayan bir anahtar yazıyor. `Projection.kt:83`
-  üzerinden geçersiz tarih `goals` tablosuna kalıcı yazılabiliyor.
-- **Saat dilimi** (`Valuation.kt:124`) — `quoteDate` kaynağın takviminden
-  (Türkiye/borsa), `today` cihazın yerel takviminden. Türkiye dışındaki cihazda
-  akşam saatlerinde bütün altın/döviz satırlarının günlük katkısı 0'a düşüyor.
-- **`parseIsoDate`** (`TefasApi.kt:138`) ay uzunluğunu doğrulamıyor
-  (`2026-02-30` kabul).
-- **Hedef tarihi** (`GoalsViewModel.kt:103`) gün bazında kıyaslanıyor ama seçici
-  ay-yıl granülerliğinde: içinde bulunulan ay hiç seçilemiyor.
+### Tarih — ✅ ÇÖZÜLDÜ
 
-### Katkı tablosu
+**Yapıldı** (`Keep the calendar from inventing days`):
 
-`Contributions.kt:62-63` — `slices` filtresi `it.value > 0.0` net çıkışla
-kapanan sınıfları atıyor ama `total` bu **filtrelenmiş** listeden hesaplanıyor.
-`total` artık dosyanın kendi tanımladığı "portföye giren net para" değil; bu
-değer getiri formülünde kullanıldığı için doğrudan bir para rakamına dönüşüyor.
+- **`plusMonths` ay sonu kıskacı** — `31 Ocak + 1 ay = 31 Şubat` üretiyordu.
+  Hiçbir şey patlamıyor: `toEpochDay` günü 1..31'e çekip kabul ediyor ve
+  sessizce başka bir güne taşıyor, `dateKeyOf` var olmayan bir anahtar yazıyor,
+  ve projeksiyon üzerinden bu geçersiz tarih `goals` tablosuna kalıcı
+  yazılabiliyordu. Gün artık ayın uzunluğuna kısılıyor (artık yıl dahil).
+- **`parseIsoDate`** aynı sebeple `2026-02-30` kabul ediyordu.
+- **Hedef tarihi seçici** gün bazında kıyaslıyordu ama yalnız ay-yıl gösteriyor:
+  hedefin günü ayın başındaysa (varsayılan 1) **içinde bulunulan ay hiç
+  seçilemiyordu**. Kıyas ay bazına alındı.
+- **Saat dilimi** — kotasyon günleri kaynağın takviminden geliyor ve kaynakların
+  hepsi Türkiye saatiyle çalışıyor; "bugün" ise cihazın takviminden geliyordu.
+  Türkiye dışındaki bir cihazda akşam saatlerinde ikisi ayrışıyor, kotasyon-günü
+  kapısı kapanıyor ve bütün altın/döviz satırlarının günlük katkısı 0'a
+  düşüyordu. Artık bir **piyasa günü** var: duvar saatinden sabit UTC+3 ile
+  türetiliyor (Türkiye 2016'dan beri yaz saati uygulamıyor). Fiyat ve değerleme
+  yolları onu soruyor; **işlem tarihleri cihazın gününü kullanmaya devam
+  ediyor** — kaydı giren kişinin kastettiği gün odur.
 
-### İşlem ekleme
+Bu, `toEpochDay`'in tersini gerektirdi; kod tabanında yoktu ve yokluğu şemaya
+kadar yansımıştı (tarihler yıl/ay/gün üçlüleri halinde saklanıyor).
+`DateEdgeTest`.
+
+### Katkı tablosu — ✅ ÇÖZÜLDÜ
+
+`Contributions.kt:62-63` — `total` **filtrelenmiş** dilim listesinden
+hesaplanıyordu, oysa o liste net çıkışla kapanan sınıfları zaten atıyor (çubukta
+negatif dilim çizilemez). 20.000 altın satılıp 5.000 fon alınan bir ay
+"+5.000 biriktirdin" diyordu; gerçekte portföyden **net 15.000 çıkmıştı**.
+Dosyanın kendi tanımı "portföye giren net para" ve getiri satırı bu rakamı
+doğrudan bir para tutarı olarak kullanıyor.
+
+**Yapıldı** (`Count what left the portfolio in the monthly total`): toplam
+elenmemiş kovadan geliyor, dilimler yalnız çizilebilecek olanı gösteriyor. Eski
+davranışı sabitleyen test gerekçesiyle birlikte güncellendi.
+
+### İşlem ekleme — ✅ ÇÖZÜLDÜ
 
 `AddTransactionViewModel.kt:784` — 1. adımda girilen gram, `quantityText` doluysa
-sessizce yok sayılıyor. Geri dönüp gramı düzeltmek işe yaramıyor, eski değer
-kalıyor.
+sessizce yok sayılıyordu: 2. adıma bir kez geçildikten sonra geri dönüp gramı
+düzeltmek işe yaramıyor, eski değer kalıyordu.
+
+**Yapıldı**: gramla ölçülen varlıkta 1. adımdaki gram ile 2. adımdaki miktar
+aynı sayıdır; gram değişince miktar da tazeleniyor. Kullanıcı 2. adımda miktarı
+elle değiştirirse orası kendi başına kalıyor.
 
 ---
 
@@ -746,26 +837,27 @@ Sıra bilinçli: her aşama bir öncekinin açtığı zemini kullanıyor.
 5. ✅ `rateOf`'u null'lanabilir yap; kur yokken TL dışı birim kilitli
 6. ✅ Yumuşak silmede `goal_assets` mezar taşlama + yedek filtresi
 
-**Aşama 2 — Tek doğruluk kaynağı (P1)**
-7. Aynı gün sırası için kalıcı `sequence`/`createdAt` kolonu + göç; dört akışı
+**Aşama 2 — Tek doğruluk kaynağı (P1)** — ✅ tamamı
+7. ✅ Aynı gün sırası için kalıcı `createdAt` kolonu + göç; dört akışı
    (ekran, düzenleme, senkron, yedek) ona bağla
-8. `AssetDetailViewModel`'i compute sorgusuna geçir
-9. `mainGoalWealth`'i masaüstü/tablet düzenlerine bağla
-10. Hedef projeksiyonunda gerçekleşen seriyi de hedef bazına indir
-11. `UnitRates` yedeğini 0.0 yap, `formatTotal` "—" göstersin
-12. Manuel bindirmede `quoteDate = null`, `changePercent = 0.0`
-13. Hedef birimini canlı tut (`amountInUnit` + `unit`) ya da vaadi kaldır
+8. ✅ `AssetDetailViewModel`'i compute sorgusuna geçir
+9. ✅ `mainGoalWealth`'i masaüstü/tablet düzenlerine bağla
+10. ✅ Hedef projeksiyonunda gerçekleşen seriyi de hedef bazına indir
+11. ✅ `UnitRates` null'lanabilir, `formatTotal` "—" gösteriyor
+12. ✅ Manuel bindirmede `quoteDate = null` ve `changePercent = null`
+13. ✅ Vaat kaldırıldı (canlı çapa bir ÖZELLİK, hata değil — gerekçe P1.7'de)
 
-**Aşama 3 — Tutarsızlıkları kapat (P2)**
-14. `Transaction.total`'ı yön duyarlı yap
-15. Hedef atama defterini yeniden kur (satış dalı, kırpma monotonluğu, düzenleme
-    ve silmede geri alma)
-16. `Overdue` / `estimatedArrival` / `GoalAllocation` — ya hesapla ya kaldır
-17. Piyasa ekranını kotasyon-günü kuralına bağla; "bilinmiyor" durumunu
-    `dailyChangePercent` için de nullable yap
-18. TEFAS sıfır fiyat koruması; `retryOnTransient`'i gerçekten transient yap
-19. `plusMonths` ay sonu kıskacı; `toEpochDay` geçersiz günü reddetsin
-20. `Contributions.total`'ı filtreden önce hesapla
+**Aşama 3 — Tutarsızlıkları kapat (P2)** — ✅ tamamı
+14. ✅ `Transaction.total`'ı yön duyarlı yap
+15. ✅ Hedef atama defterini yeniden kur (satış dalı, kırpma monotonluğu,
+    düzenleme ve silmede geri alma) — katkı kaydın kendi alanında (9.sqm)
+16. ✅ `Overdue` ve `estimatedArrival` hesaplandı, `GoalAllocation` kaldırıldı
+17. ✅ Piyasa ekranı kotasyon-günü kuralına bağlandı; `dailyChangePercent`
+    nullable
+18. ✅ TEFAS sıfır fiyat koruması; `retryOnTransient` gerçekten transient;
+    `StockApi` indeks kayması; yabancı hissenin TL değişimi
+19. ✅ `plusMonths` ay sonu kıskacı; `parseIsoDate` ay uzunluğu; piyasa günü
+20. ✅ `Contributions.total`'ı filtreden önce hesapla
 
 **Aşama 4 — Cila (P3)**
 21. `Money` yuvarlama sözleşmesini netleştir ve belgele; tolerans tabanını

@@ -2,6 +2,7 @@ package com.kefe.app.ui.screens.goals
 
 import com.kefe.app.domain.model.AllocationSlice
 import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.isOverdue
 import com.kefe.app.domain.model.GoalAsset
 import com.kefe.app.domain.model.GoalMilestone
 import com.kefe.app.domain.model.GoalStatus
@@ -119,8 +120,14 @@ data class GoalDetailUiState(
     /** Hedefe ulasildi - fazlasi birikimde kalir. */
     val exceeded: Boolean get() = progress >= 1f
 
-    /** Tarihi gecti ama hedef duruyor. */
-    val overdue: Boolean get() = !exceeded && goal?.status == GoalStatus.Overdue
+    /**
+     * Tarihi gecti ama hedef duruyor - BUGUNLE karsilastirilarak turetilir.
+     *
+     * Once saklanan bir duruma (`GoalStatus.Overdue`) bakiyordu ama o durumu
+     * yazan kod yolu YOKTU: tarihi gecmis gercek bir hedef bu satirda hic
+     * "gecikti" gorunmuyordu.
+     */
+    val overdue: Boolean get() = !exceeded && goal?.isOverdue(today) == true
 
     /** Projeksiyon/senaryo/kilometre taslari yalniz yolundaki hedefte gosterilir. */
     val showAnalysis: Boolean get() = !exceeded && !overdue

@@ -26,7 +26,7 @@ import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.buyPrice
 import com.kefe.app.domain.model.newId
-import com.kefe.app.domain.model.nextAssignedQuantity
+import com.kefe.app.domain.model.goalAssignmentChange
 import com.kefe.app.domain.model.priceKey
 import com.kefe.app.domain.model.sellPrice
 import com.kefe.app.domain.repository.PortfolioRepository
@@ -145,7 +145,19 @@ class AddTransactionViewModel(
 
             is AddTransactionIntent.SelectCurrency -> update(s.copy(currency = intent.currency))
 
-            is AddTransactionIntent.ChangeGram -> update(s.copy(gramText = intent.text))
+            // Gramla olculen varlikta 1. adimdaki gram ile 2. adimdaki miktar
+            // AYNI SAYIDIR; ikisi ayri alanlarda tutuldugu icin ayrisabiliyordu.
+            // 2. adima bir kez gecildikten sonra geri donup grami duzeltmek ise
+            // yaramiyordu: gecis `quantityText` doluysa onu koruyor, yani eski
+            // deger kaliyordu. Gram degisince miktar da tazelenir; kullanici
+            // 2. adimda miktari elle degistirirse orasi kendi basina kalir.
+            is AddTransactionIntent.ChangeGram -> update(
+                if (s.quantityUnit == QuantityUnit.Gram) {
+                    s.copy(gramText = intent.text, quantityText = intent.text)
+                } else {
+                    s.copy(gramText = intent.text)
+                }
+            )
 
             // Yazmaya baslayinca onceki "bulunamadi" uyarisi silinir.
             is AddTransactionIntent.ChangeFundQuery ->
@@ -643,6 +655,11 @@ class AddTransactionViewModel(
     /**
      * Duzenleme once YAZAR, sonra siler.
      *
+     * Hedef atamasi da bu sirayla dogru sonuca variyor: yeni kayit katkisini
+     * uygular, eski kaydin silinmesi kendi katkisini geri alir. Katkilar
+     * toplanabilir deltalar oldugu icin sira onemli degil (bkz. 9.sqm). Once
+     * silen bir surumde de dogru olurdu ama pozisyon bir an bosalirdi.
+     *
      * Ters sirada, tek islemi olan bir varlikta pozisyon bir an icin bosalir:
      * defter bosalinca pozisyon dusuyor ve Varlik Detayi kendini listeye atiyor.
      * Kullanici kaydini duzeltirken ekrandan atilmis olurdu.
@@ -663,6 +680,16 @@ class AddTransactionViewModel(
             // yazildiktan sonra pozisyon zaten yeni adedi tasiyor.
             val assignmentBefore = portfolioRepository.goalAssignmentOf(positionId)
             val quantityBefore = position?.quantity ?: 0.0
+
+            // Atama degisikligi KAYITTAN ONCE hesaplanir: katkisi kaydin
+            // uzerine yazilacak ki silme ve duzenleme onu geri alabilsin.
+            val goalChange = goalAssignmentChange(
+                current = assignmentBefore,
+                selectedGoalId = s.selectedGoalId,
+                transactionQuantity = s.quantity,
+                isSell = s.side == TradeSide.Sell,
+                quantityBefore = quantityBefore,
+            )
 
             // Varlik portfoyde yoksa once TANITILIR. Islem tek basina varligin
             // adini, sinifini ve birimini tasimaz; pozisyon olmadan kayit oksuz
@@ -721,58 +748,25 @@ class AddTransactionViewModel(
                     // ayni gunun sonuna dusmesin. Yeni kayitta 0 kalir ve depo
                     // simdiyi damgalar.
                     createdAt = s.editingCreatedAt,
+                    // Atamaya katkisi kaydin kendi alani: silme ve duzenleme
+                    // ancak bu rakamla geri alabilir (bkz. 9.sqm).
+                    goalId = goalChange?.goalId,
+                    goalDelta = goalChange?.delta ?: 0.0,
                 )
             )
 
-            applyGoalSelection(positionId, s, assignmentBefore, quantityBefore)
+            if (goalChange != null) {
+                portfolioRepository.assignPositionToGoal(
+                    positionId = positionId,
+                    goalId = goalChange.goalId,
+                    quantity = goalChange.quantity,
+                )
+            }
         }
 
         if (replaced != null) portfolioRepository.deleteTransaction(replaced)
     }
 
-    /**
-     * Hedef secicisi YALNIZ BU ISLEMIN nereye sayilacagini soyler.
-     *
-     * NEYDI. Secici tum varligin atamasini yazip siliyordu: Ev'de 10 ceyrek
-     * varken 1 tane "Hedefsiz" eklemek atamayi komple siliyor, 11 ceyregin
-     * HEPSI Ev'den cikiyordu. Kullanicinin bekledigi "10'u Ev'de kalsin".
-     *
-     * Kural:
-     *   - Hedefsiz  -> mevcut atamaya DOKUNULMAZ. Eklenen kadari zaten hicbir
-     *     hedefe sayilmaz, cunku atanan miktar oldugu yerde kalir.
-     *   - Ayni hedef -> atanan miktar bu islem kadar ARTAR (satista azalir).
-     *   - Baska hedef -> varlik o hedefe TASINIR; miktar bu islemin miktari
-     *     olur. Tasima zaten yikici bir islem, secici de bunu yaziyor.
-     *   - "Tum varlik" (-1) atamasi ayni hedefte KORUNUR: kullanici bir kez
-     *     "tamami bu hedefe" demisse, sonraki alimlar da oraya sayilmali.
-     *
-     * Atamayi kaldirma buradan YAPILMAZ; hedef detayindaki "Bu hedefi
-     * karsilayanlar" listesinin isi odur.
-     */
-    private suspend fun applyGoalSelection(
-        positionId: String,
-        s: AddTransactionUiState,
-        current: GoalAssignment?,
-        quantityBefore: Double,
-    ) {
-        // Aritmetik saf bir fonksiyonda: kuralin kendisi burada degil, test
-        // edilebildigi yerde dursun. null = atamaya dokunma.
-        val quantity = nextAssignedQuantity(
-            current = current,
-            selectedGoalId = s.selectedGoalId,
-            transactionQuantity = s.quantity,
-            isSell = s.side == TradeSide.Sell,
-            quantityBefore = quantityBefore,
-        ) ?: return
-
-        portfolioRepository.assignPositionToGoal(
-            positionId = positionId,
-            // Hedefsizken de bir hedef yazilir: yapilan sey atamayi kaldirmak
-            // degil, mevcut hedefin payini o ana kadarki miktara dondurmaktir.
-            goalId = s.selectedGoalId ?: current?.goalId ?: return,
-            quantity = quantity,
-        )
-    }
 }
 
 // --- Adim gecisi -------------------------------------------------------------

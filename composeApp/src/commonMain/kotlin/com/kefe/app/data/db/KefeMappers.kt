@@ -59,6 +59,8 @@ internal fun Transactions.toDomain(): Transaction = Transaction(
     addedByMemberId = addedByMemberId,
     syncState = syncState,
     createdAt = createdAt,
+    goalId = goalId,
+    goalDelta = goalDelta,
 )
 
 internal fun Goals.toDomain(): Goal = Goal(
@@ -70,10 +72,8 @@ internal fun Goals.toDomain(): Goal = Goal(
     targetDate = KefeDate(targetYear.toInt(), targetMonth.toInt(), targetDay.toInt()),
     monthlyContribution = monthlyContribution,
     isMain = isMain,
-    allocation = allocation,
     status = status,
     order = sortOrder.toInt(),
-    estimatedArrival = kefeDateOrNull(estimatedYear, estimatedMonth, estimatedDay),
 )
 
 internal fun Members.toDomain(): Member = Member(

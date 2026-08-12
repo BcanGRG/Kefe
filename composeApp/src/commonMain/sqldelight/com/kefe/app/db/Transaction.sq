@@ -36,6 +36,11 @@ CREATE TABLE transactions (
     -- AYNI GUN ICI SIRA; bkz. 8.sqm. rowid'e dayaniyordu ve duzenleme,
     -- esitleme ve geri yukleme satiri yerinden oynatinca sira bozuluyordu.
     createdAt INTEGER NOT NULL DEFAULT 0,
+    -- BU KAYDIN HEDEF ATAMASINA KATKISI; bkz. 9.sqm. Silme ve duzenleme
+    -- atamaya `-goalDelta` uygular. Olmadan silme atamaya hic dokunmuyor,
+    -- duzenleme ise katkiyi ikinci kez uyguluyordu.
+    goalId TEXT,
+    goalDelta REAL NOT NULL DEFAULT 0.0,
     -- Pozisyon silinince defteri de gitmeli. DIKKAT: SQLite'ta yabanci anahtar
     -- zorlamasi varsayilan olarak KAPALIDIR; surucu her baglantida
     -- "PRAGMA foreign_keys = ON" calistirmazsa bu satir hicbir sey yapmaz.
@@ -119,8 +124,8 @@ ORDER BY updatedAt;
 -- syncState 'Synced': cekilen satir zaten sunucuda, yerelde "gonderilecek"
 -- degil. LWW karari (yeni mi) cagiran tarafta yapilir.
 insertOrIgnoreTransactionPull:
-INSERT OR IGNORE INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState, updatedAt, deletedAt, createdAt)
-VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, 'Synced', :updatedAt, :deletedAt, :createdAt);
+INSERT OR IGNORE INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState, updatedAt, deletedAt, createdAt, goalId, goalDelta)
+VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, 'Synced', :updatedAt, :deletedAt, :createdAt, :goalId, :goalDelta);
 
 applyTransactionMetaPull:
 UPDATE transactions
@@ -137,15 +142,17 @@ SET positionId = :positionId,
     addedByMemberId = :addedByMemberId,
     syncState = 'Synced',
     updatedAt = :updatedAt,
-    deletedAt = :deletedAt
+    deletedAt = :deletedAt,
+    goalId = :goalId,
+    goalDelta = :goalDelta
 WHERE id = :id;
 
 -- Kimlik artik UUID (bkz. 7.1): iceriginden turetilmiyor, dolayisiyla ayni gun
 -- ayni miktarda ikinci alim kendi satirini alir. Duz INSERT bilerek: "OR REPLACE"
 -- bir cakismada kullanicinin islemini sessizce ezerdi.
 insertTransaction:
-INSERT INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState, updatedAt, createdAt)
-VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, :syncState, :updatedAt, :createdAt);
+INSERT INTO transactions(id, positionId, dateYear, dateMonth, dateDay, side, quantity, unitPrice, fee, note, storage, addedByMemberId, syncState, updatedAt, createdAt, goalId, goalDelta)
+VALUES (:id, :positionId, :dateYear, :dateMonth, :dateDay, :side, :quantity, :unitPrice, :fee, :note, :storage, :addedByMemberId, :syncState, :updatedAt, :createdAt, :goalId, :goalDelta);
 
 updateTransaction:
 UPDATE transactions

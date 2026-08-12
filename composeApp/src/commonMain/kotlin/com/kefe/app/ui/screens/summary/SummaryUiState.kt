@@ -4,6 +4,7 @@ import com.kefe.app.data.sync.CloudState
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.AllocationSlice
 import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.PortfolioTotals
 import com.kefe.app.domain.model.TopMover
@@ -135,6 +136,14 @@ data class SummaryUiState(
      * o yuzden ayri tutulur.
      */
     val mainGoalWealth: Double = 0.0,
+    /**
+     * Ana hedefe TAHMINI VARIS - hedefin kendi birikimi ve aylik katkisindan
+     * hesaplanir (bkz. goalProjection). Katki yoksa null.
+     *
+     * Once `Goal.estimatedArrival` diye kalici bir alandi ama onu hesaplayan kod
+     * yolu yoktu; kart bu satiri hic cizmiyordu.
+     */
+    val mainGoalArrival: KefeDate? = null,
     val pendingSyncCount: Int = 0,
     val refreshing: Boolean = false,
     /**

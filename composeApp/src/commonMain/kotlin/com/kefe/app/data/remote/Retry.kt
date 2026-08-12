@@ -1,5 +1,7 @@
 package com.kefe.app.data.remote
 
+import io.ktor.client.plugins.ClientRequestException
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.delay
 
 /**
@@ -11,6 +13,12 @@ import kotlinx.coroutines.delay
  *
  * Yalniz GECICI hatalar tekrarlanir. 4xx gibi kalici yanitlarda beklemek
  * kullaniciyi bosuna oyalar - onlar oldugu gibi yukari cikar.
+ *
+ * ADINA VE BU BELGEYE UYMUYORDU: `catch (Exception)` her seyi yakaliyor,
+ * bulunamayan bir fon kodu (404) uc kez deneniyor ve kullanici bosuna
+ * bekletiliyordu. Daha kotusu [CancellationException] de yutuluyordu - ekran
+ * kapandiginda iptal edilen istek iptal olmayi reddedip iki kez daha aga
+ * cikiyordu.
  */
 internal suspend fun <T> retryOnTransient(
     attempts: Int = 3,
@@ -23,6 +31,13 @@ internal suspend fun <T> retryOnTransient(
     repeat(attempts) { index ->
         try {
             return block()
+        } catch (cancelled: CancellationException) {
+            // Iptal bir hata degil, bir karar. Tekrarlamak coroutine iptalini
+            // bozar ve istek olmesi gerekirken yasamaya devam eder.
+            throw cancelled
+        } catch (permanent: ClientRequestException) {
+            // 4xx: istek yanlis, tekrar etmek ayni cevabi getirir.
+            throw permanent
         } catch (error: Exception) {
             last = error
             if (index == attempts - 1) throw error

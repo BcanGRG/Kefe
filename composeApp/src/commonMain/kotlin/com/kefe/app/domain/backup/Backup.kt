@@ -73,6 +73,12 @@ data class BackupTransaction(
      * bilgi zaten oydu.
      */
     val createdAt: Long = 0L,
+    /**
+     * Kaydin hedef atamasina katkisi (bkz. 9.sqm). Eski yedeklerde YOK ve
+     * uydurulamaz: 0 gelir, o kayitlarin silinmesi atamaya dokunmaz.
+     */
+    val goalId: String? = null,
+    val goalDelta: Double = 0.0,
 )
 
 @Serializable
@@ -87,7 +93,6 @@ data class BackupGoal(
     val day: Int,
     val monthlyContribution: Double,
     val isMain: Boolean,
-    val allocation: String,
     val status: String,
     val order: Int,
 )

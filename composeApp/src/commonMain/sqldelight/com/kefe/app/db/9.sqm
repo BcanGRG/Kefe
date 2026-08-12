@@ -1,0 +1,23 @@
+-- ISLEMIN ATAMAYA YAPTIGI DEGISIKLIK.
+--
+-- Hedef atamasi (`goal_assets.quantity`) her kayitta ARTIRILIP azaltiliyordu ama
+-- hicbir yerde "bu kaydin katkisi neydi" yazmiyordu. Sonucu:
+--   - Islem silmek atamaya hic dokunmuyordu.
+--   - Duzenleme once yeni kaydi yazip sonra eskisini sildigi icin katkiyi IKINCI
+--     KEZ uyguluyor, 4'luk bir satisi 3'e cekmek atamayi 10 -> 6 -> 3 yapiyordu.
+--     Hedef kalici olarak eksik sayiyor ve geri getirmenin yolu bulunmuyordu.
+--
+-- goalDelta o kaydin GERI ALINABILIR katkisidir; silmede atamaya `-goalDelta`
+-- uygulanir. Toplanabilir bir delta secildi, "onceki degeri geri yaz" degil:
+-- mutlak geri yazma yalniz son kayit geri alinirsa dogrudur, arasina baska kayit
+-- girerse eski bir degeri diriltir.
+--
+-- goalId, deltanin HANGI hedefe ait oldugunu tutar. Atama arada baska hedefe
+-- tasinmissa geri alma yapilmaz - baska hedefin rakamini kurcalamak yeni bir
+-- yalan olurdu.
+--
+-- Var olan satirlar 0/NULL kalir: gecmis kayitlarin katkisi bilinmiyor ve
+-- uydurulamaz. Onlari silmek bugunku davranisi (geri alma yok) surdurur, yeni
+-- kayitlar dogru calisir.
+ALTER TABLE transactions ADD COLUMN goalId TEXT;
+ALTER TABLE transactions ADD COLUMN goalDelta REAL NOT NULL DEFAULT 0.0;

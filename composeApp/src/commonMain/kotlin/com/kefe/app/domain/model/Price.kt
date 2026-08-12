@@ -69,7 +69,17 @@ data class Price(
      * BUGUNE aitse sayiliyor (bkz. [Position.valuedAt]).
      */
     val quoteDate: KefeDate? = null,
-)
+) {
+    /**
+     * Kaynak bu varligi TL DISINDA bir para biriminde fiyatliyor mu.
+     *
+     * Onemi: [changePercent] o zaman kaynagin KENDI para birimindeki degisimdir.
+     * New York'ta %2 yukselen bir hisse, dolar %1 dustuyse TL'de %1 yukselmis
+     * olur - ve portfoy hesabi TL ile calisir. Gunluk degisim bu durumda
+     * kaynaktan degil, TL fiyat tutan gecmis tablosundan olculur.
+     */
+    val isForeignPriced: Boolean get() = nativeCurrency != null
+}
 
 enum class PriceSource {
     FreeMarket,

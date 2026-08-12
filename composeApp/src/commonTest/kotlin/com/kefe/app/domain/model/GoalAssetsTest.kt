@@ -32,7 +32,7 @@ private fun next(
     quantity: Double,
     isSell: Boolean = false,
     before: Double = 0.0,
-): Double? = nextAssignedQuantity(
+): GoalAssignmentChange? = goalAssignmentChange(
     current = current,
     selectedGoalId = selectedGoalId,
     transactionQuantity = quantity,
@@ -169,8 +169,8 @@ class GoalAssetsTest {
 
     @Test
     fun atananMiktarVarligiAsamaz() {
-        // 10 atanmisken 6 tanesi satildi: hedef 6 sayar. Kirpma okuma aninda -
-        // satisin hangi hedeften dustugune dair ikinci bir defter tutulmuyor.
+        // EMNIYET KEMERI. Satis artik atamayi kalici dusuruyor; burasi geri
+        // yukleme/esitleme gibi baska yollardan gelen tutarsizliga karsi.
         val ceyrek = position("ceyrek", value = 40_000.0, quantity = 4.0)
         val assignments = mapOf("ceyrek".partlyIn("ev", 10.0))
 
@@ -210,27 +210,39 @@ class GoalAssetsTest {
     fun ayniHedefeEklemekMiktariArtirir() {
         // Ev'de 10 ceyrek varken 3 tane daha "Ev" ile eklendi.
         val current = GoalAssignment("ev", 10.0)
+        val change = next(current, "ev", quantity = 3.0)!!
 
-        assertEquals(13.0, next(current, "ev", quantity = 3.0)!!, EPS)
+        assertEquals(13.0, change.quantity, EPS)
+        // Geri alinabilir katki: kayit silinirse 3 geri verilir.
+        assertEquals(3.0, change.delta, EPS)
     }
 
     @Test
     fun ayniHedeftenSatmakMiktariDusurur() {
         val current = GoalAssignment("ev", 10.0)
+        val change = next(current, "ev", quantity = 4.0, isSell = true)!!
 
-        assertEquals(6.0, next(current, "ev", quantity = 4.0, isSell = true)!!, EPS)
+        assertEquals(6.0, change.quantity, EPS)
+        assertEquals(-4.0, change.delta, EPS)
     }
 
     @Test
     fun satisMiktariNegatifeInmez() {
         val current = GoalAssignment("ev", 2.0)
+        val change = next(current, "ev", quantity = 5.0, isSell = true)!!
 
-        assertEquals(0.0, next(current, "ev", quantity = 5.0, isSell = true)!!, EPS)
+        assertEquals(0.0, change.quantity, EPS)
+        // Delta ATANAN kadar, satilan kadar degil: -5 yazilsa geri almada atama
+        // 5'e diriltilirdi - oysa oraya hic 5 girmemisti.
+        assertEquals(-2.0, change.delta, EPS)
     }
 
     @Test
     fun ilkAtamaIslemMiktariKadar() {
-        assertEquals(10.0, next(null, "ev", quantity = 10.0)!!, EPS)
+        val change = next(null, "ev", quantity = 10.0)!!
+
+        assertEquals(10.0, change.quantity, EPS)
+        assertEquals("ev", change.goalId)
     }
 
     @Test
@@ -238,8 +250,10 @@ class GoalAssetsTest {
         // Varlik Araba'daydi, bu kayit Ev'e sayiliyor: tasinir ve yalniz bu
         // islemin miktari Ev'e yazilir - eski hedefin miktari devralinmaz.
         val current = GoalAssignment("araba", 10.0)
+        val change = next(current, "ev", quantity = 3.0)!!
 
-        assertEquals(3.0, next(current, "ev", quantity = 3.0)!!, EPS)
+        assertEquals("ev", change.goalId)
+        assertEquals(3.0, change.quantity, EPS)
     }
 
     @Test
@@ -247,12 +261,50 @@ class GoalAssetsTest {
         // Kullanici bir kez "tamami bu hedefe" demisse, AYNI hedefe eklerken
         // soz korunur; miktara dusurmek onu bozardi.
         val current = GoalAssignment("ev")
+        val change = next(current, "ev", quantity = 3.0, before = 15.0)!!
 
-        assertEquals(
-            GoalAssignment.WholePosition,
-            next(current, "ev", quantity = 3.0, before = 15.0)!!,
-            EPS,
-        )
+        assertEquals(GoalAssignment.WholePosition, change.quantity, EPS)
+        // Sayisal katki yok: geri alinacak bir sey de yok.
+        assertEquals(0.0, change.delta, EPS)
+    }
+
+    // --- SATIS SECICIYE BAKMAZ ----------------------------------------------
+
+    @Test
+    fun satistaBaskaHedefSecmekOHedefiARTIRMAZ() {
+        // ASIL HATA. "Baska hedef" dali `isSell`i hic okumuyordu: bir SATIS
+        // kaydinda Ev secmek Ev'in ilerlemesini satilan miktar kadar
+        // ARTIRIYORDU. Satis ancak varligin icinde bulundugu hedeften duser.
+        val current = GoalAssignment("araba", 10.0)
+        val change = next(current, "ev", quantity = 4.0, isSell = true)!!
+
+        assertEquals("araba", change.goalId, "satis baska hedefe tasindi")
+        assertEquals(6.0, change.quantity, EPS)
+    }
+
+    @Test
+    fun atamasizVarliktaSatisAtamaURETMEZ() {
+        // Hicbir hedefte olmayan varligi satarken hedef secmek atama yaratmaz.
+        assertNull(next(null, "ev", quantity = 4.0, isSell = true))
+    }
+
+    @Test
+    fun tumVarlikAtamasindaSatisAtamayaDokunmaz() {
+        // -1 zaten pozisyonu takip ediyor; dusulecek bir sayi yok.
+        assertNull(next(GoalAssignment("ev"), "ev", quantity = 4.0, isSell = true))
+    }
+
+    @Test
+    fun hedefsizSatisDaAtamayiDUSURUR() {
+        // MONOTONLUK. Once satis atamaya dokunmuyor, kirpma okuma aninda
+        // yapiliyordu: 10 atanmisken 6 satilinca hedef 6 sayiyor, sonra 4 tane
+        // daha alininca yeniden 10 saymaya basliyordu - satilanlar geri
+        // geliyordu. Satis artik secici ne derse desin atamayi duser.
+        val current = GoalAssignment("ev", 10.0)
+        val change = next(current, null, quantity = 6.0, isSell = true)!!
+
+        assertEquals("ev", change.goalId)
+        assertEquals(4.0, change.quantity, EPS)
     }
 
     // --- "Hedefsiz" ---------------------------------------------------------
@@ -265,7 +317,7 @@ class GoalAssetsTest {
         // kadarki miktara sabitlenir.
         val current = GoalAssignment("ev")
 
-        assertEquals(15.0, next(current, null, quantity = 1.0, before = 15.0)!!, EPS)
+        assertEquals(15.0, next(current, null, quantity = 1.0, before = 15.0)!!.quantity, EPS)
     }
 
     @Test
@@ -282,11 +334,79 @@ class GoalAssetsTest {
     }
 
     @Test
-    fun hedefsizSatisAtamayaDokunmaz() {
-        // Satis atamayi dondurmez: kirpma zaten okuma aninda yapiliyor.
+    fun hedefsizSatisTumVarlikAtamasiniDONDURMEZ() {
+        // "Tum varlik" atamasinda satis dondurma yapmaz: pozisyon kuculuyor ve
+        // atama onu zaten takip ediyor.
         val current = GoalAssignment("ev")
 
         assertNull(next(current, null, quantity = 1.0, isSell = true, before = 15.0))
+    }
+
+    // --- Geri alma (silme / duzenleme) --------------------------------------
+
+    @Test
+    fun silinenAlimAtamadanDUSULUR() {
+        // 3'luk alim Ev'e sayilmisti (atama 13); kayit silinince 10'a doner.
+        val current = GoalAssignment("ev", 13.0)
+
+        assertEquals(10.0, revertedAssignmentQuantity(current, "ev", delta = 3.0)!!, EPS)
+    }
+
+    @Test
+    fun silinenSatisAtamayaGERIEklenir() {
+        // ASIL HATA. Duzenleme once yeni kaydi yazip sonra eskisini siliyordu;
+        // eski kaydin katkisi geri alinmadigi icin 4'luk bir satisi 3'e cekmek
+        // atamayi 10 -> 6 -> 3 yapiyor, hedef kalici olarak eksik sayiyordu.
+        val current = GoalAssignment("ev", 3.0)
+
+        assertEquals(7.0, revertedAssignmentQuantity(current, "ev", delta = -4.0)!!, EPS)
+    }
+
+    @Test
+    fun katkisizKayitGeriAlmaYAPMAZ() {
+        val current = GoalAssignment("ev", 10.0)
+
+        assertNull(revertedAssignmentQuantity(current, goalId = null, delta = 0.0))
+        assertNull(revertedAssignmentQuantity(current, "ev", delta = 0.0))
+    }
+
+    @Test
+    fun varlikBaskaHedefeTASINDIYSAGeriAlmaYok() {
+        // Ev'e sayilan kayit siliniyor ama varlik artik Araba'da: Araba'nin
+        // rakamini kurcalamak yeni bir yalan olurdu.
+        val current = GoalAssignment("araba", 10.0)
+
+        assertNull(revertedAssignmentQuantity(current, "ev", delta = 3.0))
+    }
+
+    @Test
+    fun tumVarlikAtamasindaGeriAlmaYok() {
+        assertNull(revertedAssignmentQuantity(GoalAssignment("ev"), "ev", delta = 3.0))
+    }
+
+    @Test
+    fun geriAlmaNegatifeInmez() {
+        val current = GoalAssignment("ev", 2.0)
+
+        assertEquals(0.0, revertedAssignmentQuantity(current, "ev", delta = 5.0)!!, EPS)
+    }
+
+    @Test
+    fun duzenlemeSirasiONEMSIZ() {
+        // Duzenleme: once YENI kayit yazilir (katkisini uygular), sonra eskisi
+        // silinir (katkisini geri alir). Deltalar toplanabilir oldugu icin iki
+        // sira da ayni sonuca varir - "onceki degeri geri yaz" boyle olmazdi.
+        val baslangic = 10.0
+
+        // 4'luk satis 3'e cekiliyor.
+        val yeni = next(GoalAssignment("ev", baslangic - 4.0), "ev", 3.0, isSell = true)!!
+        val once = revertedAssignmentQuantity(GoalAssignment("ev", yeni.quantity), "ev", -4.0)!!
+
+        val geri = revertedAssignmentQuantity(GoalAssignment("ev", baslangic - 4.0), "ev", -4.0)!!
+        val sonra = next(GoalAssignment("ev", geri), "ev", 3.0, isSell = true)!!
+
+        assertEquals(7.0, once, EPS)
+        assertEquals(once, sonra.quantity, EPS)
     }
 
     @Test

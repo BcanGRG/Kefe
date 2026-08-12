@@ -1,7 +1,6 @@
 package com.kefe.app.domain.backup
 
 import com.kefe.app.domain.model.AssetClass
-import com.kefe.app.domain.model.GoalAllocation
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.GoldSubtype
@@ -94,9 +93,6 @@ internal fun String.toTradeSide(): TradeSide =
 
 internal fun String.toGoalUnit(): GoalUnit =
     GoalUnit.entries.firstOrNull { it.name == this } ?: GoalUnit.Try
-
-internal fun String.toGoalAllocation(): GoalAllocation =
-    GoalAllocation.entries.firstOrNull { it.name == this } ?: GoalAllocation.AllWealth
 
 internal fun String.toGoalStatus(): GoalStatus =
     GoalStatus.entries.firstOrNull { it.name == this } ?: GoalStatus.Active

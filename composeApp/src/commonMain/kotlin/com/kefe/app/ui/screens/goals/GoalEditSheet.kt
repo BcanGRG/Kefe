@@ -48,7 +48,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import com.kefe.app.domain.model.GoalAllocation
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.formatMonthYear
@@ -710,10 +709,4 @@ private fun GoalUnit.suffix(): String = when (this) {
     GoalUnit.Try -> "₺"
     GoalUnit.GoldGram -> "gr altın"
     GoalUnit.Usd -> "USD"
-}
-
-/** Gelismis bolumun sag ustundeki ozet etiketi. */
-private fun GoalAllocation.label(): String = when (this) {
-    GoalAllocation.AllWealth -> "Tüm birikim"
-    GoalAllocation.FixedShare -> "Belirli bir pay"
 }

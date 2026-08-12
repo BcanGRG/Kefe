@@ -22,8 +22,24 @@ data class Transaction(
      * alani oldugu icin artik yedege giriyor ve esitlemede korunuyor.
      */
     val createdAt: Long = 0L,
+    /**
+     * Bu kaydin hedef atamasina yaptigi degisiklik - silinince geri alinabilsin
+     * diye (bkz. [GoalAssignmentChange], 9.sqm).
+     *
+     * [goalId] null ya da [goalDelta] sifirsa kayit atamayi oynatmamistir.
+     */
+    val goalId: String? = null,
+    val goalDelta: Double = 0.0,
 ) {
-    val total: Double get() = quantity * unitPrice + fee
+    /**
+     * Islemin el degistiren TUTARI - iscilik YONE gore isliyor.
+     *
+     * Alista iscilik odenir, satista hasilattan kesilir. Once yone bakmadan
+     * her zaman ekleniyordu ve ekran defterle celisiyordu: 1 adet @150, 10
+     * iscilikle SATIS "₺160" yaziyor, defter ise (bkz. costBasis ve xirr) 140
+     * hasilat kaydediyordu. Ayni islem iki ekranda iki farkli tutar.
+     */
+    val total: Double get() = quantity * unitPrice + if (side == TradeSide.Sell) -fee else fee
 }
 
 enum class TradeSide {

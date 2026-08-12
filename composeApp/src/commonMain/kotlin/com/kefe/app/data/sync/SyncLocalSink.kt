@@ -4,7 +4,6 @@ import com.kefe.app.data.db.LocalPortfolioId
 import com.kefe.app.data.db.toDomain
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.domain.backup.toAssetClass
-import com.kefe.app.domain.backup.toGoalAllocation
 import com.kefe.app.domain.backup.toGoalStatus
 import com.kefe.app.domain.backup.toGoalUnit
 import com.kefe.app.domain.backup.toGoldSubtype
@@ -149,6 +148,8 @@ class SyncLocalSink(
                 updatedAt = r.updatedAt,
                 deletedAt = r.deletedAt,
                 createdAt = r.createdAt.takeIf { it > 0L } ?: r.updatedAt,
+                goalId = r.goalId,
+                goalDelta = r.goalDelta,
             )
             database.transactionQueries.applyTransactionMetaPull(
                 id = r.id,
@@ -165,6 +166,8 @@ class SyncLocalSink(
                 addedByMemberId = r.addedByMemberId,
                 updatedAt = r.updatedAt,
                 deletedAt = r.deletedAt,
+                goalId = r.goalId,
+                goalDelta = r.goalDelta,
             )
             n++
         }
@@ -189,7 +192,6 @@ class SyncLocalSink(
                 targetDay = r.targetDay,
                 monthlyContribution = r.monthlyContribution,
                 isMain = r.isMain,
-                allocation = r.allocation.toGoalAllocation(),
                 status = r.status.toGoalStatus(),
                 sortOrder = r.sortOrder,
                 updatedAt = r.updatedAt,
@@ -204,7 +206,6 @@ class SyncLocalSink(
                 targetDay = r.targetDay,
                 monthlyContribution = r.monthlyContribution,
                 isMain = r.isMain,
-                allocation = r.allocation.toGoalAllocation(),
                 status = r.status.toGoalStatus(),
                 sortOrder = r.sortOrder,
                 updatedAt = r.updatedAt,

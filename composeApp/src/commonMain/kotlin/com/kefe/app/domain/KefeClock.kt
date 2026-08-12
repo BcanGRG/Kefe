@@ -1,6 +1,7 @@
 package com.kefe.app.domain
 
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.kefeDateOfEpochDay
 
 /**
  * Uygulamanin "bugun"u.
@@ -12,6 +13,20 @@ import com.kefe.app.domain.model.KefeDate
  */
 interface KefeClock {
     fun today(): KefeDate
+
+    /**
+     * PIYASANIN bugunu - kotasyon gunleriyle kiyaslanacak tarih.
+     *
+     * [today] CIHAZIN takvimidir. Kotasyon gunu ise kaynagin takviminden gelir
+     * ve kaynaklarin hepsi Turkiye saatiyle calisir (serbest piyasa, TCMB,
+     * TEFAS, BIST). Ikisi ayni sanilıyordu: Turkiye disindaki bir cihazda aksam
+     * saatlerinde cihaz yarina gecince "kotasyon bugune ait mi" kapisi
+     * kapaniyor ve butun altin/doviz satirlarinin gunluk katkisi 0'a dusuyordu.
+     *
+     * VARSAYILAN [today]'dir: yalniz gercek saati okuyan saat piyasa gununu
+     * bilebilir, test saatleri sabit bir gune baglidir.
+     */
+    fun marketToday(): KefeDate = today()
 
     /**
      * Duvar saati - 1970'ten beri gecen milisaniye.
@@ -38,6 +53,26 @@ interface KefeClock {
 class SystemKefeClock : KefeClock {
     override fun today(): KefeDate = currentDate()
     override fun nowEpochMillis(): Long = currentEpochMillis()
+
+    /**
+     * Turkiye saatiyle bugun - duvar saatinden turetilir, platform takvim
+     * API'siyle degil.
+     *
+     * Turkiye 2016'dan beri yaz saati uygulamiyor: sabit UTC+3. Sabit ofset,
+     * her platformda ayri bir saat dilimi cagrisi yazmaktan hem daha az kod hem
+     * de test edilebilir - cevrimin kendisi ortak kodda ve saf.
+     */
+    override fun marketToday(): KefeDate =
+        kefeDateOfEpochDay(floorDiv(currentEpochMillis() + IstanbulOffsetMillis, DayMillis))
+}
+
+private const val IstanbulOffsetMillis = 3L * 60L * 60L * 1000L
+private const val DayMillis = 24L * 60L * 60L * 1000L
+
+/** Negatif damgalarda da dogru: -1 ms 1969'un son gunudur, 1970'in ilki degil. */
+private fun floorDiv(a: Long, b: Long): Long {
+    val q = a / b
+    return if (a % b != 0L && (a xor b) < 0L) q - 1L else q
 }
 
 /**

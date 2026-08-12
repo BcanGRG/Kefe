@@ -103,6 +103,8 @@ object SampleSeries {
             slices = slices.map { (assetClass, amount) ->
                 ContributionSlice(assetClass, amount)
             },
+            // Katalogda cikis yok: toplam parcalarin toplami.
+            total = slices.sumOf { it.second },
         )
     }
 }

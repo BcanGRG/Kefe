@@ -9,9 +9,26 @@ data class ContributionSlice(
 /** Tek bir ayin katkisi. Segment yoksa o ay hic para konmamistir. */
 data class MonthlyContribution(
     val date: KefeDate,
+    /**
+     * Ekrandaki cubugun parcalari - YALNIZ PARA KONAN siniflar.
+     *
+     * Net cikisla kapanan sinif burada yer almaz: cubukta negatif bir dilim
+     * cizilemez ve "bu kadar biriktirdim" satirinda o siniftan cikan paranin
+     * yeri yoktur.
+     */
     val slices: List<ContributionSlice>,
+    /**
+     * O ayin NET rakami - dosyanin kendi tanimiyla "portfoye giren net para".
+     *
+     * Parcalardan turetiliyordu ve bu, tanimi bozuyordu: `slices` cikis yapan
+     * siniflari eledigi icin toplam da onlari saymiyor, altin alip fon satan bir
+     * ayda "biriktirilen" rakam gercekte olandan buyuk cikiyordu. Toplam
+     * ELENMEMIS kovadan gelir; getiri satiri bu rakami dogrudan bir para tutari
+     * olarak kullaniyor.
+     */
+    val total: Double,
 ) {
-    val total: Double get() = slices.sumOf { it.amount }
+    /** Ekranda cizilecek bir sey yok - o ay katki yapilmamis sayilir. */
     val isEmpty: Boolean get() = slices.isEmpty()
 }
 
@@ -55,14 +72,18 @@ fun monthlyContributions(
     }
 
     return (firstMonth..today.monthOrdinal()).map { ordinal ->
+        val bucket = buckets[ordinal].orEmpty()
         MonthlyContribution(
             date = monthDateOf(ordinal),
-            // Net cikisla kapanan sinif katki sayilmaz; o ay o siniftan para
-            // CIKMIS demektir, "bu kadar biriktirdim" satirinda yeri yok.
-            slices = buckets[ordinal].orEmpty()
+            // Net cikisla kapanan sinif CUBUKTA yer almaz; o ay o siniftan para
+            // CIKMIS demektir ve negatif bir dilim cizilemez.
+            slices = bucket
                 .filter { it.value > 0.0 }
                 .map { (assetClass, amount) -> ContributionSlice(assetClass, amount) }
                 .sortedByDescending { it.amount },
+            // ...ama TOPLAM onlari da sayar: aksi halde "portfoye giren net
+            // para" tanimi bozulur ve rakam oldugundan buyuk cikar.
+            total = bucket.values.sum(),
         )
     }
 }

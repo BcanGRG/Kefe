@@ -114,17 +114,22 @@ internal fun parseStockQuote(result: JsonObject, fallbackSymbol: String): StockQ
     // Kapanis serisi: gun sayisi kadar zaman damgasi ve kapanis. Tatil
     // gunlerinde kapanis null gelir - o gun atlanir, uydurulmaz.
     val offset = meta["gmtoffset"]?.jsonPrimitive?.longOrNullSafe() ?: 0L
+    // IKI DIZI DE `map`: eleman ATILMAZ, yalniz null olur. Once zaman damgasi
+    // dizisinde `mapNotNull`, kapanis dizisinde `map` vardi; tek bir bozuk
+    // damga listeyi kaydiriyor ve o noktadan sonraki her kapanis BIR GUN
+    // ONCEKININ tarihine yaziliyordu. Iki dizi ayni indekste eslesmeli.
     val stamps = result["timestamp"]?.jsonArray.orEmpty()
-        .mapNotNull { it.jsonPrimitive.longOrNullSafe() }
+        .map { it.jsonPrimitive.longOrNullSafe() }
     val closes = result["indicators"]?.jsonObject
         ?.get("quote")?.jsonArray?.firstOrNull()?.jsonObject
         ?.get("close")?.jsonArray.orEmpty()
         .map { it.jsonPrimitive.doubleOrNullSafe() }
 
     val history = stamps.indices.mapNotNull { i ->
+        val stamp = stamps[i] ?: return@mapNotNull null
         val close = closes.getOrNull(i) ?: return@mapNotNull null
         if (close <= 0.0) return@mapNotNull null
-        PricePoint(dateOfEpochSeconds(stamps[i], offset), close)
+        PricePoint(dateOfEpochSeconds(stamp, offset), close)
     }
 
     // Gunluk degisim seriden: son iki kapanis. Meta'daki previousClose gun ici

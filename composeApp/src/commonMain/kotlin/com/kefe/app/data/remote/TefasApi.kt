@@ -1,6 +1,7 @@
 package com.kefe.app.data.remote
 
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.daysInMonth
 import com.kefe.app.domain.model.PricePoint
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
@@ -60,6 +61,11 @@ class TefasApi(private val client: HttpClient) {
         // Yanit tarihe gore ARTAN sirali gelir; son iki fiyat gunluk degisimi verir.
         val series = response.resultList.orEmpty()
         val latest = series.lastOrNull() ?: return null
+        // SIFIR FIYAT KOTASYON DEGILDIR. Ayni fonksiyon `history` uretirken
+        // sifir satirlari zaten eliyor, diger uc kaynakta da bu koruma var -
+        // burada yoktu. Sifir gelirse saglam onbellek fiyatinin uzerine 0
+        // yaziliyor, fon pozisyonu sifirlaniyor ve ekran %-100 gosteriyordu.
+        if (latest.fiyat <= 0.0) return null
         val previous = series.getOrNull(series.lastIndex - 1)
 
         val change = if (previous != null && previous.fiyat > 0.0) {
@@ -135,6 +141,8 @@ internal fun parseIsoDate(text: String?): KefeDate? {
     val year = parts[0].toIntOrNull() ?: return null
     val month = parts[1].toIntOrNull() ?: return null
     val day = parts[2].toIntOrNull() ?: return null
-    if (month !in 1..12 || day !in 1..31) return null
+    // Ay UZUNLUGU da dogrulanir: "2026-02-30" gecerli bir tarih degil ve
+    // KefeDate onu sessizce baska bir gune tasirdi.
+    if (month !in 1..12 || day !in 1..daysInMonth(year, month)) return null
     return KefeDate(year = year, month = month, day = day)
 }

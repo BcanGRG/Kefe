@@ -28,11 +28,23 @@ data class Goal(
     val targetDate: KefeDate,
     val monthlyContribution: Double,
     val isMain: Boolean = false,
-    val allocation: GoalAllocation = GoalAllocation.AllWealth,
     val status: GoalStatus = GoalStatus.Active,
     val order: Int = 0,
-    val estimatedArrival: KefeDate? = null,
 )
+
+/**
+ * Hedef tarihi gecmis mi - TURETILIR, saklanmaz.
+ *
+ * Once [GoalStatus] icinde `Overdue` diye bir deger vardi ama onu yazacak kod
+ * yolu YOKTU: tek sorgusu (`updateGoalStatus`) hic cagrilmiyor, yalniz ornek
+ * veri elle isaretliyordu. Tarihi gecmis gercek bir hedef ekranda hic "gecikti"
+ * gorunmuyordu.
+ *
+ * Saklanmasi zaten yanlis olurdu: gun donunce bayatlar ve tazelemek icin bir
+ * arka plan isi gerekirdi. Tamamlanmis hedef gecikmis SAYILMAZ.
+ */
+fun Goal.isOverdue(today: KefeDate): Boolean =
+    status != GoalStatus.Completed && targetDate.toEpochDay() < today.toEpochDay()
 
 enum class GoalUnit {
     Try,
@@ -46,15 +58,15 @@ enum class GoalUnit {
     }
 }
 
-enum class GoalAllocation {
-    AllWealth,
-    FixedShare,
-}
-
+/**
+ * `Overdue` KALDIRILDI: uretilmiyordu, artik [isOverdue] ile turetiliyor.
+ * `GoalAllocation` (AllWealth/FixedShare) da kaldirildi - kalici, esitlemede,
+ * yedekte ve editorde tasiniyordu ama hicbir hesap okumuyordu; iki secenek
+ * arasinda sayisal fark sifirdi. Editordeki toggle daha once kaldirilmisti.
+ */
 enum class GoalStatus {
     Active,
     Completed,
-    Overdue,
 }
 
 /** Ilerleme %200'de kirpilir - asilan hedeflerde cubuk tasmasin. */

@@ -77,7 +77,7 @@ class SqlDelightPriceRepository(
         // Haftalik/aylik degisimin kaynagi. Pencere aylik hesabin ihtiyacindan
         // genis tutuldu: sinir yalniz alt sinirdir, fazlasi zarar vermez ama
         // uygulama gece yarisini gecerse pencere daralmasin.
-        priceQueries.selectRecentPriceHistory(dateKeyOf(clock.today().plusMonths(-2)))
+        priceQueries.selectRecentPriceHistory(dateKeyOf(clock.marketToday().plusMonths(-2)))
             .asFlow().mapToList(dispatcher),
     ) { cached, manual, session, failed, history ->
         // Oturumdaki cekim onbellegin UZERINE BINDIRILIR, yerine gecmez.
@@ -101,7 +101,10 @@ class SqlDelightPriceRepository(
             .mapValues { (_, rows) ->
                 rows.map { PricePoint(KefeDate(it.dateYear.toInt(), it.dateMonth.toInt(), it.dateDay.toInt()), it.price) }
             }
-        val today = clock.today()
+        // PIYASA gunu, cihazin gunu degil: kotasyon gunleri kaynagin
+        // takviminden (Turkiye) geliyor ve yurt disindaki bir cihazda aksam
+        // saatlerinde ikisi ayrisiyordu.
+        val today = clock.marketToday()
 
         val overrides = manual.associate { it.assetKey to it.price }
         val merged = base.map { price ->
@@ -153,11 +156,21 @@ class SqlDelightPriceRepository(
                     //
                     // Kaynak degisim vermiyor diye gecmisten turetme buraya
                     // konmustu: serbest piyasa ucu ceyrek/yarim/tam/ata ve ayar
-                    // kalemlerine duz sifir yaziyordu. 9 Agustos 2026'da uc
-                    // yeniden olculdu ve ARTIK HEPSINE Change gonderiyor
-                    // (CEYREKALTIN 2.09, YIA 2.09, GRA 2.59, GUMUS 3.57);
-                    // 86 sembolden yalnizca biri sifir. Yedek yol duruyor ama
-                    // artik nadiren devreye giriyor.
+                    // kalemlerine duz sifir yaziyor. Yedek yol HALA GEREKLI -
+                    // 12 Agustos 2026 sabahi (is gunu) uc yeniden olculdu, 86
+                    // sembolden 16'si sifir donuyor ve 11'i sikke altin. 9
+                    // Agustos'ta "hepsine Change geliyor" diye olculmustu ama o
+                    // gun PAZARDI: gorunen degerler cumadan kalma, hafta sonu
+                    // boyunca tasinan degerlerdi.
+                    //
+                    // "Sifir = verilmedi" saymanin BILINEN SINIRI: gecmis tablosu
+                    // gunun KAPANISINI degil, uygulamanin o gun ilk acildigi
+                    // andaki fiyati tutuyor. Kaynak gercekten "bugun oynamadi"
+                    // dedigi halde dunku satirimiz gun ortasindan geliyorsa fark
+                    // sifirdan buyuk cikar ve kaynagin gecerli sifiri ezilir.
+                    // Ezilen deger uydurma degil - iki GOZLENEN fiyat arasindaki
+                    // gercek fark; ama kaynagin kapanisa gore olcumu daha
+                    // kesindir. Ayirt edecek bir bilgi elimizde yok.
                     //
                     // Asil sorun baska yerde cikti: uc, piyasa KAPALIYKEN de
                     // Update_Date'i her dakika ilerletiyor ve Change'i cumadan
@@ -170,8 +183,19 @@ class SqlDelightPriceRepository(
                     // kaydi da yoksa cevap "bilmiyoruz"dur. Sifir yazmak o
                     // pozisyonu grup toplamlarina paya ve PAYDAYA sokuyor,
                     // grubun gercek yuzdesini sulandiriyordu.
+                    //
+                    // TL DISINDA FIYATLANAN VARLIKTA SIRA DEGISIR. Kaynagin
+                    // yuzdesi hissenin kendi para biriminde: New York'ta %2
+                    // yukselen bir hisse, dolar %1 dustuyse TL'de %1 yukselmis
+                    // olur. `todayChange()` o yuzdeyle TL degerini geriye cozup
+                    // TL farklari topladigi icin kur hareketi sessizce kayboluyordu.
+                    // Gecmis tablosu TL fiyat tuttugundan `changes.day` zaten
+                    // DOGRU TL degisimidir; onu tercih ediyoruz. Gecmis yoksa
+                    // (varligin ilk gunu) kaynagin rakamina duseriz - kur
+                    // hareketini saymaz ama hicbir seyden iyidir.
                     changePercent = when {
                         !moved -> 0.0
+                        price.isForeignPriced && changes.day != null -> changes.day
                         price.changePercent.let { it != null && it != 0.0 } -> price.changePercent
                         else -> changes.day
                     },
@@ -183,26 +207,37 @@ class SqlDelightPriceRepository(
         PriceBoard(
             prices = merged,
             updatedAtLabel = updatedAtLabelOf(merged),
-            freshness = freshnessOf(cached.maxOfOrNull { it.fetchedAtEpochSeconds }, failed),
+            // EN ESKI satir karar verir, en yenisi degil. Kismi cekmede
+            // (bir uc calisti, digeri patladi) tek taze satir butun bayat
+            // satirlari maskeliyor ve tahta "Guncel" kaliyordu.
+            freshness = freshnessOf(cached.map { it.fetchedAtEpochSeconds }, failed),
         )
     }
 
     /**
-     * Onbellegin yasindan tazelik.
+     * Onbellegin yasindan tazelik - EN ESKI satira gore.
+     *
+     * En yeni satira bakiyordu ve bu, kismi cekmeyi gizliyordu: doviz ucu
+     * calisip borsa ucu patladiginda tek taze satir butun bayat satirlarin
+     * uzerini ortuyor, tahta "Guncel" diyordu. Etiket butun tahta icin
+     * konusuyor; en eski satir bayatsa tahta bayattir.
      *
      * Hic fiyat yoksa cevrimdisiyiz - gosterecek bir sey de yok. Son yenileme
      * patladiysa yine cevrimdisi: onbellek taze olsa bile kullanici bagli
      * olmadigimizi bilmeli. Aksi halde yas karar verir; [StaleAfterSeconds]
      * tasarimdaki "2 saatten eski" kurali.
      */
-    private fun freshnessOf(newestFetchSeconds: Long?, failed: Boolean): PriceFreshness {
+    private fun freshnessOf(fetchSeconds: List<Long>, failed: Boolean): PriceFreshness {
+        // Damgasiz satirlar (kolon eklenmeden once yazilmis) hesaba katilmaz:
+        // yaslari bilinmiyor, sifir saymak her seyi "Yukleniyor"a cevirirdi.
+        val oldest = fetchSeconds.filter { it > 0L }.minOrNull()
         // Elde hicbir fiyat yok. Bu tek basina "ag yok" DEMEK DEGILDIR - ilk
         // cekme yolda olabilir. Ancak denenip basarisiz olduysa cevrimdisiyiz.
-        if (newestFetchSeconds == null || newestFetchSeconds <= 0L) {
+        if (oldest == null) {
             return if (failed) PriceFreshness.Offline else PriceFreshness.Loading
         }
         if (failed) return PriceFreshness.Offline
-        val ageSeconds = clock.nowEpochMillis() / 1000L - newestFetchSeconds
+        val ageSeconds = clock.nowEpochMillis() / 1000L - oldest
         return if (ageSeconds > StaleAfterSeconds) PriceFreshness.Stale else PriceFreshness.Fresh
     }
 
@@ -239,13 +274,19 @@ class SqlDelightPriceRepository(
         // anda yenileye basan kullanici otuz saniye boyunca sessizce reddediliyor,
         // ustelik "basarili" cevabi aliyordu: ekran cevrimdisi kalirken hicbir sey
         // olmuyordu ve tek yapabildigi tekrar basmakti.
-        val recentlySucceeded = lastFetchAtSeconds > 0L &&
-            now - lastFetchAtSeconds < MinRefreshSeconds
+        // SAAT GERIYE GIDEBILIR - saat dilimi degisir, kullanici eliyle
+        // duzeltir, cihaz ag saatiyle senkronlanir. Gecen sure o zaman NEGATIF
+        // cikiyordu: "MinRefreshSeconds'tan kucuk" kosulu saglaniyor, kalan sure
+        // de kocaman bir sayi olarak yaziliyordu ("86.400 sn sonra deneyin").
+        // Yenileme, gercek zaman damgayi yakalayana kadar KILITLI kaliyordu.
+        // Negatif gecen sure "az once cekildi" DEMEK DEGIL.
+        val elapsed = now - lastFetchAtSeconds
+        val recentlySucceeded = lastFetchAtSeconds > 0L && elapsed in 0 until MinRefreshSeconds
         if (recentlySucceeded && !lastRefreshFailed.value) {
             // Kalan sure kullaniciya soylenir. En az bir saniye: "0 sn sonra
             // deneyin" demek, hemen denenebilecegini ama denenemedigini soylemek
             // olurdu.
-            val remaining = (MinRefreshSeconds - (now - lastFetchAtSeconds))
+            val remaining = (MinRefreshSeconds - elapsed)
                 .toInt()
                 .coerceAtLeast(1)
             return@withLock Result.success(RefreshOutcome.Throttled(remaining))
@@ -256,7 +297,8 @@ class SqlDelightPriceRepository(
     private suspend fun fetchAndStore(nowSeconds: Long): Result<Unit> = runCatching {
         val prices = remote.fetchPrices()
         fetched.value = prices
-        val today = clock.today()
+        // Gecmis satiri piyasa gunune yazilir; okurken de oyle araniyor.
+        val today = clock.marketToday()
         withContext(dispatcher) {
             database.transaction {
                 prices.forEach { price ->
@@ -284,11 +326,19 @@ class SqlDelightPriceRepository(
                     // Gunun fiyati AYRICA gecmise yazilir: onbellek uzerine
                     // yazildigi icin gecmisi tutamaz, gecmis fiyat da sonradan
                     // ogrenilemez. Bugun yazilmazsa bugun kayiptir.
+                    //
+                    // Satir KOTASYONUN ISLEM GUNUNE yazilir, cekildigi gune
+                    // degil. Pazar gunu cekilen bir hisse fiyati cumaya aittir;
+                    // bugune yazmak cumartesi ve pazar icin UYDURMA satirlar
+                    // uretiyordu. O satirlar sonra "dunku fiyat" diye okunuyor
+                    // (bkz. previousDayPrice) ve gunluk degisimin olcusunu
+                    // kaydiriyordu. Onbellek de ayni gunu tasiyor (quoteDateKey).
+                    val quoteDay = price.quoteDate ?: today
                     priceQueries.upsertPriceHistory(
                         assetKey = price.assetKey,
-                        dateYear = today.year.toLong(),
-                        dateMonth = today.month.toLong(),
-                        dateDay = today.day.toLong(),
+                        dateYear = quoteDay.year.toLong(),
+                        dateMonth = quoteDay.month.toLong(),
+                        dateDay = quoteDay.day.toLong(),
                         price = price.ask,
                     )
                     // Kaynak GECMIS de verdiyse (TEFAS bir aylik seri donuyor)

@@ -1,4 +1,3 @@
-import com.kefe.app.domain.model.GoalAllocation;
 import com.kefe.app.domain.model.GoalStatus;
 import com.kefe.app.domain.model.GoalUnit;
 import kotlin.Boolean;
@@ -8,9 +7,12 @@ import kotlin.Boolean;
 -- Goal.order kolon adi olarak kullanilamaz ("order" ayrilmis kelime) - sortOrder.
 --
 -- Tarihler yil/ay/gun ucluleri: KefeDate'in epochDay'den geri donusumu yok.
--- estimatedArrival NULLABLE oldugu icin uc kolonu da NULL olabilir; okurken
--- ucu de doluysa KefeDate kurulmali. INTEGER kolonlar Kotlin'de Long doner -
--- toInt() gerekir.
+-- INTEGER kolonlar Kotlin'de Long doner - toInt() gerekir.
+--
+-- allocation ve estimated* ESKI KOLONLAR: artik hicbir sorgu yazmiyor, hicbir
+-- kod okumuyor. Tabloda birakildilar cunku SQLite'ta kolon dusurmek tabloyu
+-- yeniden kurmak demek - veri tasiyan bir tabloda gereksiz risk. Varsayilanlari
+-- var, INSERT'ler onlari atlayabiliyor.
 --
 -- GoalMilestone burada YOK: yuzde duraklari hedef tutarindan hesaplanan gorunum
 -- verisi, saklanacak bir sey degil.
@@ -25,7 +27,7 @@ CREATE TABLE goals (
     targetDay INTEGER NOT NULL,
     monthlyContribution REAL NOT NULL,
     isMain INTEGER AS Boolean NOT NULL DEFAULT 0,
-    allocation TEXT AS GoalAllocation NOT NULL DEFAULT 'AllWealth',
+    allocation TEXT NOT NULL DEFAULT 'AllWealth',
     status TEXT AS GoalStatus NOT NULL DEFAULT 'Active',
     sortOrder INTEGER NOT NULL DEFAULT 0,
     estimatedYear INTEGER,
@@ -63,8 +65,8 @@ ORDER BY updatedAt;
 -- Pull: sunucudan gelen hedef. goals'ta OR REPLACE KULLANILMAZ - goal_assets
 -- goalId'ye CASCADE bagli, silinip yeniden yazilinca atamalar ucar. Iki adim.
 insertOrIgnoreGoalPull:
-INSERT OR IGNORE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, allocation, status, sortOrder, updatedAt)
-VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :allocation, :status, :sortOrder, :updatedAt);
+INSERT OR IGNORE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, status, sortOrder, updatedAt)
+VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :status, :sortOrder, :updatedAt);
 
 applyGoalMetaPull:
 UPDATE goals
@@ -77,7 +79,6 @@ SET name = :name,
     targetDay = :targetDay,
     monthlyContribution = :monthlyContribution,
     isMain = :isMain,
-    allocation = :allocation,
     status = :status,
     sortOrder = :sortOrder,
     updatedAt = :updatedAt,
@@ -96,8 +97,8 @@ WHERE id = :id;
 -- Kural yukaridaki pull yolunda zaten dogru yazilmisti; eksik olan onu yerel
 -- yola da uygulamakti.
 insertOrIgnoreGoal:
-INSERT OR IGNORE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, allocation, status, sortOrder, estimatedYear, estimatedMonth, estimatedDay, updatedAt)
-VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :allocation, :status, :sortOrder, :estimatedYear, :estimatedMonth, :estimatedDay, :updatedAt);
+INSERT OR IGNORE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, status, sortOrder, updatedAt)
+VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :status, :sortOrder, :updatedAt);
 
 -- deletedAt NULL'lanir: REPLACE satiri sifirdan yazdigi icin zaten oyle
 -- davraniyordu ve "kullanici bu hedefi kaydediyor" demek onu diri tutmak demek.
@@ -112,12 +113,8 @@ SET name = :name,
     targetDay = :targetDay,
     monthlyContribution = :monthlyContribution,
     isMain = :isMain,
-    allocation = :allocation,
     status = :status,
     sortOrder = :sortOrder,
-    estimatedYear = :estimatedYear,
-    estimatedMonth = :estimatedMonth,
-    estimatedDay = :estimatedDay,
     updatedAt = :updatedAt,
     deletedAt = NULL
 WHERE id = :id;
