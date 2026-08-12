@@ -143,7 +143,11 @@ class SqlDelightPortfolioRepository(
     ) { positions, board ->
         // Bugun HER EMISYONDA yeniden okunur: uygulama gece boyunca acik
         // kalirsa gun donuyor ve dunun degisimi "bugun" olarak asili kalirdi.
-        val today = clock.today()
+        //
+        // PIYASA gunu: burada yapilan is kotasyon gununu bugunle kiyaslamak
+        // (bkz. Price.todayChangePercent) ve kotasyon gunleri kaynagin
+        // takviminden geliyor. Cihazin takvimi Turkiye disinda ayrisiyor.
+        val today = clock.marketToday()
         positions.map { position ->
             position.valuedAt(position.priceKey()?.let { board.byKey(it) }, today)
         }

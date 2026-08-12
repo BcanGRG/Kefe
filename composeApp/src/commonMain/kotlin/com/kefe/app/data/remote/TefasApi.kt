@@ -1,6 +1,7 @@
 package com.kefe.app.data.remote
 
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.daysInMonth
 import com.kefe.app.domain.model.PricePoint
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
@@ -140,6 +141,8 @@ internal fun parseIsoDate(text: String?): KefeDate? {
     val year = parts[0].toIntOrNull() ?: return null
     val month = parts[1].toIntOrNull() ?: return null
     val day = parts[2].toIntOrNull() ?: return null
-    if (month !in 1..12 || day !in 1..31) return null
+    // Ay UZUNLUGU da dogrulanir: "2026-02-30" gecerli bir tarih degil ve
+    // KefeDate onu sessizce baska bir gune tasirdi.
+    if (month !in 1..12 || day !in 1..daysInMonth(year, month)) return null
     return KefeDate(year = year, month = month, day = day)
 }

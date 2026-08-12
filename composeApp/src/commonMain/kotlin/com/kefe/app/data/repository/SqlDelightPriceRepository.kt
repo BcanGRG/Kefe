@@ -77,7 +77,7 @@ class SqlDelightPriceRepository(
         // Haftalik/aylik degisimin kaynagi. Pencere aylik hesabin ihtiyacindan
         // genis tutuldu: sinir yalniz alt sinirdir, fazlasi zarar vermez ama
         // uygulama gece yarisini gecerse pencere daralmasin.
-        priceQueries.selectRecentPriceHistory(dateKeyOf(clock.today().plusMonths(-2)))
+        priceQueries.selectRecentPriceHistory(dateKeyOf(clock.marketToday().plusMonths(-2)))
             .asFlow().mapToList(dispatcher),
     ) { cached, manual, session, failed, history ->
         // Oturumdaki cekim onbellegin UZERINE BINDIRILIR, yerine gecmez.
@@ -101,7 +101,10 @@ class SqlDelightPriceRepository(
             .mapValues { (_, rows) ->
                 rows.map { PricePoint(KefeDate(it.dateYear.toInt(), it.dateMonth.toInt(), it.dateDay.toInt()), it.price) }
             }
-        val today = clock.today()
+        // PIYASA gunu, cihazin gunu degil: kotasyon gunleri kaynagin
+        // takviminden (Turkiye) geliyor ve yurt disindaki bir cihazda aksam
+        // saatlerinde ikisi ayrisiyordu.
+        val today = clock.marketToday()
 
         val overrides = manual.associate { it.assetKey to it.price }
         val merged = base.map { price ->
@@ -294,7 +297,8 @@ class SqlDelightPriceRepository(
     private suspend fun fetchAndStore(nowSeconds: Long): Result<Unit> = runCatching {
         val prices = remote.fetchPrices()
         fetched.value = prices
-        val today = clock.today()
+        // Gecmis satiri piyasa gunune yazilir; okurken de oyle araniyor.
+        val today = clock.marketToday()
         withContext(dispatcher) {
             database.transaction {
                 prices.forEach { price ->

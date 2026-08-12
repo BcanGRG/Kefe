@@ -98,8 +98,13 @@ class GoalsViewModel(
             is GoalsIntent.EditorShiftTargetDate -> editor {
                 // Gecmise cekilemez: gecmis tarihli bir hedef icin "tahmini varis"
                 // ve "gecikme" hesaplari anlamsiz.
+                //
+                // Kiyas AY bazinda. Gun bazindaydi ama secici yalniz ay-yil
+                // gosteriyor: hedefin gunu ayin basindaysa (cogunlukla oyle,
+                // varsayilan 1) icinde bulunulan ay HIC secilemiyordu - 12
+                // Agustos'ta "Agustos 2026" gecmis sayiliyordu.
                 val shifted = it.targetDate.plusMonths(intent.months)
-                if (shifted.toEpochDay() < clock.today().toEpochDay()) it
+                if (shifted.monthIndex() < clock.today().monthIndex()) it
                 else it.copy(targetDate = shifted)
             }
             GoalsIntent.ToggleEditorAdvanced -> editor {
