@@ -801,7 +801,13 @@ private fun NetWorthCard(
                 total = state.netWorthTotal.toPoints(),
                 principal = state.netWorthPrincipal.toPoints(),
                 goalLine = state.mainGoal?.amount,
-                goalLabel = state.mainGoal?.let { "₺${Money.compact(it.amount)} ana hedef" },
+                // GERCEK bir tutar, eksen etiketi degil: bin araligi bir
+                // ondalik tasir. Eksen varsayilani (0 ondalik) burada
+                // ₺850.000'lik bir hedefi "₺850B" yaziyor, ama ₺19.587'lik
+                // hedefi "₺20B" yapiyordu - yuzde yarim kayma.
+                goalLabel = state.mainGoal?.let {
+                    "₺${Money.compact(it.amount, thousandDecimals = 1)} ana hedef"
+                },
                 selectedIndex = state.netWorthTotal.lastIndex,
                 selectedLabel = state.range.label,
                 selectedValue = if (state.masked) {

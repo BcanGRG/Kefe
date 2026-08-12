@@ -54,6 +54,8 @@ import com.kefe.app.ui.components.KefeDashedCard
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeProgressBar
 import com.kefe.app.ui.components.KefeSkeletonBlock
+import kotlin.math.min
+import kotlin.math.round
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
@@ -299,7 +301,21 @@ private fun GoalCard(
             Text(
                 // Ulasilan hedefte %200 gibi bir sayi bilgi vermez, hata gibi
                 // okunur; %100'de durur ve renk ulasildigini soyler.
-                text = Money.ratioOf(if (reached) 1.0 else progress.toDouble()),
+                //
+                // ULASILMADAN %100 YAZILMAZ. Yuzde sifir ondaliga
+                // yuvarlaniyordu: %99,6 ilerleme "%100" gorunuyor ama renk
+                // hala "ulasilmadi" diyordu - ekran kendi kendisiyle
+                // celisiyordu.
+                //
+                // Yuvarlama KALIYOR, ustune 99 tavani konuyor. Asagi kirpmak
+                // da denenebilirdi ama siradan degerleri bozuyor: `progress`
+                // bir Float ve 0,35 bellekte 0,34999999 olarak duruyor, yani
+                // %35'lik ilerleme "%34" gorunurdu.
+                text = if (reached) {
+                    Money.ratio(100.0)
+                } else {
+                    Money.ratio(min(round(progress.toDouble() * 100.0), 99.0))
+                },
                 style = t.h2.tabular(),
                 color = when {
                     reached -> c.positive

@@ -284,7 +284,12 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
                 .padding(horizontal = Space.x14, vertical = Space.x12),
         ) {
             Text(
-                "Hedef ${Money.quantity(grams, "gr altın")}",
+                // Gram ONDALIK tasir. Sifir haneyle 0,3 gramlik bir hedef
+                // "Hedef 0 gr altın · Bugünkü kurla ₺2.000" yaziyordu: iki
+                // rakam birbirini tutmuyor ve tutar sifirdan geliyor gibi
+                // gorunuyordu. Sinir dort hane - editorun cevrim inceligiyle
+                // ayni (bkz. GoalUnit.editDecimals).
+                "Hedef ${Money.quantity(grams, "gr altın", Money.decimals(grams, max = 4))}",
                 style = t.bodyStrong.tabular(),
                 color = c.onSurface,
             )

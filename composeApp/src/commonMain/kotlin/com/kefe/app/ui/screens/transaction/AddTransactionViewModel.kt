@@ -38,6 +38,7 @@ import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.rawAmount
 import com.kefe.app.ui.mvi.MviViewModel
+import kotlin.math.round
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -787,10 +788,20 @@ private fun AddTransactionUiState.toAmountStep(
         },
 )
 
-/** -/+ butonlari: gramda 0,1 kademe, digerlerinde 1 adet. Taban 0. */
+/**
+ * -/+ butonlari: gramda 0,1 kademe, digerlerinde 1 adet. Taban 0.
+ *
+ * SONUC KADEMEYE HIZALANIR. 0,1 ikili tabanda tam duramadigi icin uc kez
+ * eklemek 0,30000000000000004 veriyor ve bu ALANA yaziliyordu - kullanici
+ * kendi girmedigi bir kuyrugu silmek zorunda kaliyordu. Kademe sayisiyla
+ * carpmak artigi her adimda temizler.
+ */
 private fun stepQuantity(s: AddTransactionUiState, up: Boolean): String {
-    val stepSize = if (s.quantityUnit == QuantityUnit.Gram) 0.1 else 1.0
-    val next = (s.quantity + if (up) stepSize else -stepSize).coerceAtLeast(0.0)
+    val gram = s.quantityUnit == QuantityUnit.Gram
+    val stepSize = if (gram) 0.1 else 1.0
+    val raw = (s.quantity + if (up) stepSize else -stepSize).coerceAtLeast(0.0)
+    // Kademenin tam katina yuvarla: 0,1'lik kademede bir ondalik hane.
+    val next = if (gram) round(raw * 10.0) / 10.0 else round(raw)
     return rawAmount(next)
 }
 
