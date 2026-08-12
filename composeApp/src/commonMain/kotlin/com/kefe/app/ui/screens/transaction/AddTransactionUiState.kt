@@ -349,7 +349,16 @@ val AddTransactionUiState.unitPrice: Double get() = unitPriceText.parseTrNumber(
 
 val AddTransactionUiState.fee: Double get() = feeText.parseTrNumber()
 
-val AddTransactionUiState.total: Double get() = quantity * unitPrice + fee
+/**
+ * "Toplam" kutusu - iscilik YONE gore isliyor.
+ *
+ * Kutunun kendi sozu "bu rakam KAYDEDILECEK tutar"di ama degildi: iscilik yone
+ * bakmadan ekleniyordu, oysa uygulamanin butun defter matematigi satista
+ * isciligi hasilattan DUSUYOR ([Transaction.total], costBasis, xirr). 1 adet
+ * @150, 10 iscilikle satista ekran 160 yazip defter 140 kaydediyordu.
+ */
+val AddTransactionUiState.total: Double
+    get() = quantity * unitPrice + if (side == TradeSide.Sell) -fee else fee
 
 /**
  * Bu varlik icin piyasadan bir fiyat gelmis mi.

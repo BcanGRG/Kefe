@@ -291,7 +291,10 @@ class SqlDelightPortfolioRepository(
                         append(positionName(removed.positionId))
                         append(if (removed.side == TradeSide.Sell) " satışını sildi" else " alımını sildi")
                     },
-                    amount = removed.quantity * removed.unitPrice + removed.fee,
+                    // Iscilik YONE gore isler; kayit eklenirken de oyle
+                    // yaziliyor (bkz. Transaction.total).
+                    amount = removed.quantity * removed.unitPrice +
+                        if (removed.side == TradeSide.Sell) -removed.fee else removed.fee,
                 )
                 // Kaydin hedef atamasina katkisi de GERI ALINIR. Yoksa 4
                 // ceyreklik bir alimi silmek pozisyonu 6'ya dusuruyor ama atama
