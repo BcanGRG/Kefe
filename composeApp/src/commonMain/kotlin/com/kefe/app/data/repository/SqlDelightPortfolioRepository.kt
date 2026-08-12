@@ -483,6 +483,13 @@ class SqlDelightPortfolioRepository(
                     id = LocalPortfolioId,
                 )
 
+                // IKI ADIM. `insertOrIgnoreMember` tek basina yetmiyordu:
+                // kurulum iki uyeyi (Ben / Es) zaten tohumluyor, o yuzden ayni
+                // kimlikler cakisiyor ve INSERT sessizce ATLANIYORDU. Yedekte
+                // "Burak" ve "Merve" yazsa bile geri yuklemeden sonra ekranda
+                // tohumun varsayilan adlari duruyordu - profil isimleri
+                // kayboluyordu. Ekleme satirin VARLIGINI garanti eder, guncelleme
+                // ICERIGINI.
                 file.members.forEachIndexed { index, member ->
                     portfolioQueries.insertOrIgnoreMember(
                         id = member.id,
@@ -490,6 +497,13 @@ class SqlDelightPortfolioRepository(
                         name = member.name,
                         initials = member.initials,
                         sortOrder = index.toLong(),
+                    )
+                    portfolioQueries.applyMemberPull(
+                        name = member.name,
+                        initials = member.initials,
+                        sortOrder = index.toLong(),
+                        updatedAt = clock.nowEpochMillis(),
+                        id = member.id,
                     )
                 }
 
@@ -820,8 +834,13 @@ class SqlDelightPortfolioRepository(
                 // Ad silmeden ONCE okunur; sonra satir gitmis olur ve akista
                 // "Varlık sildi" gibi anlamsiz bir cumle kalirdi.
                 val name = positionName(positionId)
-                val value = positionQueries.selectPositionById(positionId)
-                    .executeAsOneOrNull()?.let { it.quantity * it.unitPrice } ?: 0.0
+                // Tutar GUNCEL fiyatla. `positions.unitPrice` pozisyon
+                // kuruldugunda yazilip bir daha guncellenmiyor (ekranlar fiyati
+                // okurken bindiriyor, bkz. observePositions), yani buradaki
+                // rakam varligin ALINDIGI gunun fiyatiydi: aylar once alinmis
+                // bir ceyregin silinme kaydi aylar onceki tutarla yaziliyordu.
+                val row = positionQueries.selectPositionById(positionId).executeAsOneOrNull()
+                val value = row?.let { it.quantity * currentUnitPrice(it.toDomain()) } ?: 0.0
                 // CASCADE zaten silerdi; yabanci anahtar zorlamasi kapali bir
                 // surucuye dusulurse diye defter acikca temizlenir.
                 transactionQueries.deleteTransactionsByPosition(deletedAt = clock.nowEpochMillis(), positionId = positionId)
@@ -849,6 +868,25 @@ class SqlDelightPortfolioRepository(
                 )
             }
         }
+    }
+
+    /**
+     * Bir pozisyonun BUGUNKU birim fiyati - tabloda yazan degil.
+     *
+     * Elle girilen fiyat once gelir (kullanicinin karari kaynagi ezer), sonra
+     * fiyat tahtasi, en son tabloda duran deger. Ayni sira ekranlarin
+     * gordugu sira.
+     */
+    private fun currentUnitPrice(position: Position): Double {
+        val key = position.priceKey() ?: return position.unitPrice
+        priceQueries.selectManualPrice(key).executeAsOneOrNull()
+            ?.price
+            ?.takeIf { it > 0.0 }
+            ?.let { return it }
+        return priceQueries.selectCachedPrice(key).executeAsOneOrNull()
+            ?.ask
+            ?.takeIf { it > 0.0 }
+            ?: position.unitPrice
     }
 
     // --- Hedefler -----------------------------------------------------------
