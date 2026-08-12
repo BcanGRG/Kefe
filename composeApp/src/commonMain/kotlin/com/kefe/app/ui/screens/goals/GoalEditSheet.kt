@@ -260,9 +260,15 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
     }
 
     Spacer(Modifier.height(Space.x10))
+    // Bu kutu once "hedefi altin ya da dolar cinsinden sabitlerseniz hedef de
+    // piyasayla birlikte guncellenir" diyordu. Uygulama bunu YAPMIYOR: birim
+    // yalnizca girise yardim ediyor, tutar bugunku kurla TL'ye cevrilip oyle
+    // kaydediliyor ve sonra piyasadan bagimsiz duruyor (bkz. Goal.amount).
+    // Olmayan bir ozelligi vaat etmektense ne yaptigimizi yazmak dogru.
     SheetInfoBox(
-        text = "Fiyatlar TL'de artıyor. Hedefi altın veya dolar cinsinden " +
-            "sabitlerseniz hedef de piyasayla birlikte güncellenir.",
+        text = "Tutarı gram altın ya da dolar cinsinden girebilirsiniz; hedef " +
+            "bugünkü kurla TL'ye çevrilip kaydedilir. Hedefin TL tutarı " +
+            "sonradan piyasayla değişmez.",
         background = c.surface,
         bordered = true,
     )
