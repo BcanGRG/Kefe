@@ -73,13 +73,30 @@ data class AssetDetailUiState(
     val holdingLabel: String?
         get() {
             val days = holdingDays ?: return null
-            if (days < 45) return "$days gün"
-            val months = days / 30
-            if (months < 12) return "$months ay"
-            val years = months / 12
-            val restMonths = months % 12
-            return if (restMonths == 0L) "$years yıl" else "$years yıl $restMonths ay"
+            if (days < DaysBeforeMonths) return "$days gün"
+            // YIL ONCE hesaplanir, kalan gunden ay turetilir.
+            //
+            // Once ay "gun / 30" idi ve yil da "ay / 12": 360 gun 12 ay, yani
+            // "1 yıl" cikiyordu. 364 gun de oyle. Bir yil 365 gundur ve otuz
+            // gunluk ay varsayimi her yil bes gun hata biriktirir.
+            val years = days / DaysPerYear
+            val restDays = days % DaysPerYear
+            val months = (restDays / DaysPerMonth).toLong()
+            return when {
+                years == 0L -> "$months ay"
+                months == 0L -> "$years yıl"
+                else -> "$years yıl $months ay"
+            }
         }
+
+    private companion object {
+        /** Bu gunden azi gun olarak yazilir - "1 ay" demek icin fazla kisa. */
+        const val DaysBeforeMonths = 45L
+        const val DaysPerYear = 365L
+
+        /** Ortalama ay uzunlugu (365 / 12) - "30 gun" her yil bes gun kaydiriyordu. */
+        const val DaysPerMonth = 30.44
+    }
 
     /** Uye kimliginden bas harf ve renk indeksi - islem satirlarindaki avatar icin. */
     fun memberIndexOf(memberId: String): Int =

@@ -382,7 +382,11 @@ class SqlDelightPriceRepository(
             priceQueries.upsertManualPrice(
                 assetKey = assetKey,
                 price = value,
-                updatedAtEpochSeconds = 0L,
+                // GERCEK damga. Sifir yaziliyordu, yani kolon "hic girilmedi"
+                // diyordu - elle girilen bir fiyatin yasi, tazeligini
+                // sorgulayabilmek icin bilinmesi gereken tek sey. Sifir yazmak
+                // o soruyu sonsuza kadar cevapsiz birakiyordu.
+                updatedAtEpochSeconds = clock.nowEpochMillis() / 1000L,
             )
         }
     }

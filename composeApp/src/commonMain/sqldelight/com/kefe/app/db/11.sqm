@@ -1,0 +1,28 @@
+-- manual_prices SEMA AYRISMASI kapatiliyor.
+--
+-- `2.sqm` bu tabloya `updatedAt` ve `deletedAt` eklemisti (o zaman butun
+-- tablolara esitleme alanlari ekleniyordu) ama `Price.sq`'daki CREATE TABLE
+-- hic guncellenmedi. Sonuc: gocten gecen bir cihazda tablo BES kolonlu, temiz
+-- kurulumda UC kolonlu. Iki farkli semayi ayni sorgularla kullaniyoruz ve
+-- bugun kimse o iki kolona dokunmadigi icin fark gorunmuyor - ilk dokunan
+-- sorgu cihazlarin yarisinda calisip yarisinda patlar.
+--
+-- manual_prices ESITLENMIYOR: elle girilen fiyat cihazin kendi karari, sunucuya
+-- gitmiyor (pozisyondaki `manualPrice` bayragi ayri bir sey). Yani o iki kolonun
+-- bir isi da yok. Dogru sema CREATE TABLE'daki.
+--
+-- SQLite'ta kolon dusurulemedigi icin tablo yeniden kuruluyor. SELECT yalniz
+-- kanonik uc kolonu adlandiriyor, dolayisiyla bu goc her iki sekilde de
+-- calisir; kullanicinin elle girdigi fiyatlar oldugu gibi tasiniyor.
+CREATE TABLE manual_prices_new (
+    assetKey TEXT NOT NULL PRIMARY KEY,
+    price REAL NOT NULL,
+    updatedAtEpochSeconds INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT INTO manual_prices_new(assetKey, price, updatedAtEpochSeconds)
+SELECT assetKey, price, updatedAtEpochSeconds FROM manual_prices;
+
+DROP TABLE manual_prices;
+
+ALTER TABLE manual_prices_new RENAME TO manual_prices;
