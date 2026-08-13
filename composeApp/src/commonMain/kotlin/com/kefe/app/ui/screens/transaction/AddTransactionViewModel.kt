@@ -125,16 +125,9 @@ class AddTransactionViewModel(
             // Form degisince ayar da o formun varsayilanina doner: bilezikten
             // grama gecen biri 22 ayar secili kalirsa, ayar panelini fark
             // etmediginde 24 ayar gramini 22 ayar fiyatiyla kaydeder.
-            is AddTransactionIntent.SelectSubtype -> update(
-                s.copy(
-                    selectedSubtype = intent.subtype,
-                    karat = if (intent.subtype.usesKarat()) {
-                        intent.subtype.defaultKarat()
-                    } else {
-                        s.karat
-                    },
-                )
-            )
+            // Kural saf bir fonksiyonda: birim degisince miktar sifirlanir,
+            // ayar da formun varsayilanina doner (bkz. withSubtype).
+            is AddTransactionIntent.SelectSubtype -> update(s.withSubtype(intent.subtype))
 
             // Ayni hedefe tekrar dokunmak secimi KALDIRIR (hedefsiz'e doner).
             is AddTransactionIntent.SelectGoal -> update(
