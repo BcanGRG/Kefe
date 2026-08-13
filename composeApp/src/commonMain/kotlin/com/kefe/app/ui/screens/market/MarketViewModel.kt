@@ -52,7 +52,7 @@ class MarketViewModel(
             // cikilmaz - hafta ve ay zaten elde olan veriden hesaplaniyor.
             is MarketIntent.SelectPeriod -> _state.value = _state.value.copy(
                 period = intent.period,
-                sections = lastPrices.toSections(intent.period, clock.today()),
+                sections = lastPrices.toSections(intent.period, clock.marketToday()),
             )
 
             is MarketIntent.OpenManualPrice -> openEdit(intent.assetKey)
@@ -79,7 +79,12 @@ class MarketViewModel(
             priceRepository.observePrices().collect { board ->
                 lastPrices = board.prices
                 _state.value = _state.value.copy(
-                    sections = board.prices.toSections(_state.value.period, clock.today()),
+                    // PIYASA gunu, cihazin gunu DEGIL. Kotasyon gunu kaynagin
+                    // takviminden (Turkiye) geliyor ve "Gun" sutunu o gune
+                    // esitse sayiyor. Burasi cihazin takvimini okuyordu; yurt
+                    // disindaki bir cihazda gece penceresinde ayni satir
+                    // Ozet'te gercek hareketi, Piyasa'da %0,00 gosteriyordu.
+                    sections = board.prices.toSections(_state.value.period, clock.marketToday()),
                     updatedAtLabel = board.updatedAtLabel,
                     freshness = board.freshness,
                 )

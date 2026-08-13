@@ -26,7 +26,6 @@ import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.buyPrice
 import com.kefe.app.domain.model.newId
-import com.kefe.app.domain.model.goalAssignmentChange
 import com.kefe.app.domain.model.priceKey
 import com.kefe.app.domain.model.sellPrice
 import com.kefe.app.domain.repository.PortfolioRepository
@@ -126,16 +125,9 @@ class AddTransactionViewModel(
             // Form degisince ayar da o formun varsayilanina doner: bilezikten
             // grama gecen biri 22 ayar secili kalirsa, ayar panelini fark
             // etmediginde 24 ayar gramini 22 ayar fiyatiyla kaydeder.
-            is AddTransactionIntent.SelectSubtype -> update(
-                s.copy(
-                    selectedSubtype = intent.subtype,
-                    karat = if (intent.subtype.usesKarat()) {
-                        intent.subtype.defaultKarat()
-                    } else {
-                        s.karat
-                    },
-                )
-            )
+            // Kural saf bir fonksiyonda: birim degisince miktar sifirlanir,
+            // ayar da formun varsayilanina doner (bkz. withSubtype).
+            is AddTransactionIntent.SelectSubtype -> update(s.withSubtype(intent.subtype))
 
             // Ayni hedefe tekrar dokunmak secimi KALDIRIR (hedefsiz'e doner).
             is AddTransactionIntent.SelectGoal -> update(
@@ -654,16 +646,21 @@ class AddTransactionViewModel(
     }
 
     /**
-     * Duzenleme once YAZAR, sonra siler.
+     * Kaydi yazar; duzenlemede eskisini AYNI YAZMADA geri alir.
      *
-     * Hedef atamasi da bu sirayla dogru sonuca variyor: yeni kayit katkisini
-     * uygular, eski kaydin silinmesi kendi katkisini geri alir. Katkilar
-     * toplanabilir deltalar oldugu icin sira onemli degil (bkz. 9.sqm). Once
-     * silen bir surumde de dogru olurdu ama pozisyon bir an bosalirdi.
+     * Once "yeni kaydi yaz, sonra eskisini sil" siralamasi vardi ve buradaki
+     * yorum "katkilar toplanabilir delta oldugu icin sira onemsiz" diyordu.
+     * DEGILDI: satis dali atamayi elde kalana kirpiyor, yani katki o anki
+     * duruma bagli. 10 atanmisken 8 satip sonra satisi 3'e cekmek atamayi 7
+     * yerine 8 birakiyordu - fazladan bir ceyrek hedefe geri donuyor, yanlis
+     * rakam diske ve ese gidiyordu.
      *
-     * Ters sirada, tek islemi olan bir varlikta pozisyon bir an icin bosalir:
-     * defter bosalinca pozisyon dusuyor ve Varlik Detayi kendini listeye atiyor.
-     * Kullanici kaydini duzeltirken ekrandan atilmis olurdu.
+     * Dogru sira "once geri al, sonra hesapla". Iki ayri cagri olarak yapmak
+     * ise baska bir hataya yol aciyor: tek islemi olan bir varlikta pozisyon
+     * bir an bosalir, defter bosalinca pozisyon duser ve Varlik Detayi kendini
+     * listeye atar - kullanici kaydini duzeltirken ekrandan atilir. Depodaki
+     * [PortfolioRepository.replaceTransaction] ikisini tek transaction'da
+     * yapiyor: ara durum hicbir akisa yansimiyor.
      *
      * Silme yerine ustune yazmak da yetmez: kullanici varlik turunu de
      * degistirebilir (yanlislikla Ceyrek yerine Yarim girmis olabilir) ve kayit
@@ -674,23 +671,6 @@ class AddTransactionViewModel(
         run {
             val position = positions.firstOrNull { it.matches(s) }
             val positionId = position?.id ?: newPositionId(s)
-
-            // Atama ve miktar YAZMADAN ONCE okunur. "Tum varlik" atamasini bu
-            // isleme kadarki miktara sabitlemek gerekiyor (bkz.
-            // nextAssignedQuantity) ve o miktar ancak burada bellidir - kayit
-            // yazildiktan sonra pozisyon zaten yeni adedi tasiyor.
-            val assignmentBefore = portfolioRepository.goalAssignmentOf(positionId)
-            val quantityBefore = position?.quantity ?: 0.0
-
-            // Atama degisikligi KAYITTAN ONCE hesaplanir: katkisi kaydin
-            // uzerine yazilacak ki silme ve duzenleme onu geri alabilsin.
-            val goalChange = goalAssignmentChange(
-                current = assignmentBefore,
-                selectedGoalId = s.selectedGoalId,
-                transactionQuantity = s.quantity,
-                isSell = s.side == TradeSide.Sell,
-                quantityBefore = quantityBefore,
-            )
 
             // Varlik portfoyde yoksa once TANITILIR. Islem tek basina varligin
             // adini, sinifini ve birimini tasimaz; pozisyon olmadan kayit oksuz
@@ -716,8 +696,13 @@ class AddTransactionViewModel(
                 )
             }
 
-            portfolioRepository.addTransaction(
-                Transaction(
+            portfolioRepository.replaceTransaction(
+                replacing = replaced,
+                // Hedef secicisinin degeri OLDUGU GIBI gecer; atamaya ne
+                // yapilacagi depoda hesaplanir. Gereken iki girdi (geri
+                // almadan SONRAKI pozisyon miktari ve atama) ancak orada belli.
+                selectedGoalId = s.selectedGoalId,
+                transaction = Transaction(
                     // UUID. Kimlik once icerikten turetiliyordu ve ayni gun ayni
                     // miktarda ikinci alim ayniyi uretiyordu; depo bunu yerelde
                     // "_2" ekleyerek cozuyordu. Iki cihazda o cozum bozulur:
@@ -749,23 +734,11 @@ class AddTransactionViewModel(
                     // ayni gunun sonuna dusmesin. Yeni kayitta 0 kalir ve depo
                     // simdiyi damgalar.
                     createdAt = s.editingCreatedAt,
-                    // Atamaya katkisi kaydin kendi alani: silme ve duzenleme
-                    // ancak bu rakamla geri alabilir (bkz. 9.sqm).
-                    goalId = goalChange?.goalId,
-                    goalDelta = goalChange?.delta ?: 0.0,
-                )
+                    // goalId/goalDelta DEPODA doldurulur - katki oradaki
+                    // duruma bakilarak hesaplaniyor.
+                ),
             )
-
-            if (goalChange != null) {
-                portfolioRepository.assignPositionToGoal(
-                    positionId = positionId,
-                    goalId = goalChange.goalId,
-                    quantity = goalChange.quantity,
-                )
-            }
         }
-
-        if (replaced != null) portfolioRepository.deleteTransaction(replaced)
     }
 
 }

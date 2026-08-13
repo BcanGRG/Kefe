@@ -440,7 +440,12 @@ private fun DesktopGoalCard(
 
         Spacer(Modifier.height(Space.x10))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            state.mainGoalArrival?.let { arrival ->
+            // Hedefe ULASILMISSA varis tahmini gosterilmez - birikim zaten
+            // yetiyorken gelecege tarih vermek celiskili olurdu.
+            // Hedefler listesi bunu yapiyordu, Ozet duzenleri yapmiyordu:
+            // kart "%100" ve "₺0 kaldı" yazarken yanina bir varis tarihi
+            // koyuyordu. goalProjection ulasilmis hedefte BUGUNU donuyor.
+            state.mainGoalArrival?.takeIf { progress < 1f }?.let { arrival ->
                 Text(
                     // Kesikli alt cizgi "tahmin" isareti: kesin tarih vaadi degildir.
                     text = "Tahmini varış ≈ ${arrival.formatMonthYear()}",
@@ -597,7 +602,8 @@ private fun DesktopNetWorthCard(state: SummaryUiState, onIntent: (SummaryIntent)
                 LegendItem("Getiri") { AreaSwatch(c.accent) }
                 state.mainGoal?.let { goal ->
                     LegendItem(
-                        text = "₺${Money.compact(goal.amount)} ana hedef",
+                        // Bkz. telefon duzeni: gercek tutar bir ondalik tasir.
+                        text = "₺${Money.compact(goal.amount, thousandDecimals = 1)} ana hedef",
                         color = c.accent,
                     ) { DashedSwatch(c.accent) }
                 }

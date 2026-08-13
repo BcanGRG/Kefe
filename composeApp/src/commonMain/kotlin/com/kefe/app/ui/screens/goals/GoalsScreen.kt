@@ -630,9 +630,16 @@ private fun GoalsSkeleton() {
  * Gecikme metni yalniz tahmin hedef tarihini asiyorsa eklenir.
  */
 private fun Goal.arrivalLabel(arrival: KefeDate?): String {
-    // Katki sifirsa birikim kendiliginden buyumez: varis tarihi YOKTUR.
-    // Once bu metin HERKESE gorunuyordu, cunku hesaplayan kod yolu hic yoktu.
-    arrival ?: return "Aylık katkı olmadan varış hesaplanamıyor"
+    // Varis IKI ayri sebeple bilinemez ve ikisi ayni sey degil:
+    //   - aylik katki yok: birikim kendiliginden buyumez, varis TARIHI YOKTUR;
+    //   - katki var ama hedef kirk yillik ufkun disinda kaliyor.
+    // Tek metin ikisini de "aylık katkı olmadan" diye anlatiyordu; aylik 4.000
+    // TL yazan kullaniciya katki girmedigi soyleniyordu.
+    arrival ?: return if (monthlyContribution <= 0.0) {
+        "Aylık katkı olmadan varış hesaplanamıyor"
+    } else {
+        "Bu katkıyla varış çok uzak - hesaplanamıyor"
+    }
     val delay = arrival.monthIndex() - targetDate.monthIndex()
     val base = "Tahmini varış ≈ ${arrival.formatMonthYear()}"
     return if (delay > 0) "$base · $delay ay gecikme" else base

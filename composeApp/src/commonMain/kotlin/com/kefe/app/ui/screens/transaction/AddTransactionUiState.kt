@@ -147,7 +147,7 @@ data class AddTransactionUiState(
     /**
      * Duzenlenen kaydin OLUSTURULMA damgasi - yeni satira devredilir.
      *
-     * Duzenleme "once yaz, sonra sil" seklinde calisiyor ve yeni satir yeni bir
+     * Duzenleme eskisini geri alip yenisini yaziyor ve yeni satir yeni bir
      * kimlik aliyor. Damga tasinmazsa kayit ayni gunun SONUNA dusuyor,
      * costBasis satisi alimdan once isliyor ve satis hesaptan dusuyordu
      * (bkz. 8.sqm).
@@ -320,6 +320,29 @@ val AddTransactionUiState.fundSearchCode: String?
     }
 
 /** Miktarin birimi secime bagli: cil altin adet, bilezik gram, fon pay. */
+/**
+ * Alt tur secimi - BIRIM DEGISIRSE MIKTAR SIFIRLANIR.
+ *
+ * Gram kutusuna yazilan deger miktar alanina da yansiyor (bkz. ChangeGram);
+ * form gramdan adete gecince o sayi ADET olarak kaliyordu. Bilezige 62,4 gram
+ * yazip Ceyrek'e gecen kullanici 2. adimi "62,4 adet ceyrek" ile aciyor ve
+ * Toplam ₺627.931 gosteriyordu.
+ *
+ * Kural burada, ViewModel'de degil: ekranin gorunur davranisi ve testten
+ * surulebilmesi gerekiyor.
+ *
+ * Ayar da formun varsayilanina doner: bilezikten grama gecen biri 22 ayar
+ * secili kalirsa, ayar panelini fark etmediginde 24 ayar gramini 22 ayar
+ * fiyatiyla kaydeder.
+ */
+fun AddTransactionUiState.withSubtype(subtype: GoldSubtype): AddTransactionUiState {
+    val next = copy(
+        selectedSubtype = subtype,
+        karat = if (subtype.usesKarat()) subtype.defaultKarat() else karat,
+    )
+    return if (next.quantityUnit == quantityUnit) next else next.copy(quantityText = "")
+}
+
 val AddTransactionUiState.quantityUnit: QuantityUnit
     get() = when (assetClass) {
         AssetClass.Gold -> when (selectedSubtype) {
@@ -437,7 +460,14 @@ val AddTransactionUiState.footNote: String
         if (offline) return "Son bilinen fiyatla kaydedilir; tutarı elle düzeltebilirsiniz."
         val head = quantityText.ifBlank { "0" } + " × " +
             Money.tl(unitPrice, decimals = priceDecimals)
-        return if (fee > 0.0) head + " + " + Money.tlExact(fee) + " işçilik" else head
+        if (fee <= 0.0) return head
+        // ISARET YONDEN GELIR. Bu satir hemen ustundeki "Toplam" kutusunun
+        // acilimi; kutu satista isciligi hasilattan dusuyor ama burasi her
+        // durumda "+" yaziyordu: 2 x ₺10.063 + ₺500 okunuyor (₺20.626) ama
+        // kutuda ₺19.626 duruyordu - ayni bloktaki iki satir birbirini
+        // tutmuyordu.
+        val sign = if (side == TradeSide.Sell) " − " else " + "
+        return head + sign + Money.tlExact(fee) + " işçilik"
     }
 
 val AddTransactionUiState.canContinue: Boolean

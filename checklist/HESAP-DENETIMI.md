@@ -843,6 +843,92 @@ sonuç sessiz ama kalıcı. Altı hane, sondaki sıfırlar yazılmıyor.
 
 ---
 
+## Düzeltmelerin kendi açtığı kusurlar (12 Ağu 2026) — ✅ ÇÖZÜLDÜ
+
+P0–P3 main'e indikten sonra **birleşmiş sonuç üzerinde ayrı bir tarama** yapıldı:
+sekiz bağımsız okuyucu, yalnız *düzeltmelerin kendilerinin* yol açtığı kusurları
+aradı; eski kod yeniden denetlenmedi. 17 aday çıktı, en ağırları "önce çürüt"
+kuralıyla ayrı ajanlara doğrulatıldı. Aşağıdakilerin hepsi kod okunarak
+doğrulandı ve düzeltildi.
+
+**Bu bölüm bir başarısızlık kaydıdır ve bilerek duruyor:** ~55 kusuru kapatan
+çalışma, 11 yeni kusur üretti. Biri veri kaybıydı.
+
+### Satış, hedefe hiç atanmamış birimleri siliyordu — veri kaybı
+
+`GoalAssets.kt` satış dalı `min(satılan, atanan)` kadar düşürüyordu, yani
+**satışın hiç dokunmadığı birimleri de** hedeften alıyordu. 10 çeyreğin 4'ü
+Ev'e atanmışken atanmamış 6 tanesini satmak atamayı **sıfırlıyordu** — oysa elde
+tam da söz verilen 4 çeyrek duruyor. Üstelik satış artık seçiciyi okumadığı için
+"Hedefsiz" diyerek kaçmak da mümkün değildi.
+
+**Yapıldı:** ölçü artık *satıştan sonra elde kalan*. `min(atanan, kalan)`
+monoton kalmaya devam ediyor, yani kırpmanın kalıcılığı bozulmuyor.
+
+**Neden gözden kaçtı:** birim testlerinin hepsi pozisyon miktarını varsayılan
+0'da bırakıyordu — satışın kıyaslanması gereken alan tam da o.
+
+### Düzenleme atamayı şişiriyordu
+
+Delta'nın toplanabilir olduğu yazılmıştı; kırpma devreye girdiğinde değil.
+Düzenleme "önce yeni kaydı yaz, sonra eskisini sil" sırasıyla çalıştığı için
+yeni katkı, silinmek üzere olan kaydın etkisi hâlâ dururken hesaplanıyordu:
+8 satıp satışı 3'e çekmek atamayı 7 yerine **8** bırakıyor ve bu rakam eşin
+cihazına ve yedeğe gidiyordu.
+
+**Yapıldı:** doğru sıra "önce geri al, sonra hesapla". İki ayrı çağrı olarak
+yapılırsa pozisyon bir an boşalıyor ve Varlık Detayı kullanıcıyı ekrandan
+atıyor; bu yüzden ikisi **tek transaction**'da
+(`PortfolioRepository.replaceTransaction`). Düzenleme artık akışa "sildi" satırı
+da yazmıyor — kullanıcı silmedi, düzeltti.
+
+### Piyasa günü yarım uygulanmıştı
+
+`MarketViewModel` cihazın gününü kullanmaya devam ediyordu: yurt dışındaki bir
+cihazda gece penceresinde aynı satır Özet'te gerçek hareketi, Piyasa'da %0,00
+gösteriyordu — kapatılmak istenen çelişkinin ta kendisi.
+
+Ters yönde de bir hata vardı: Özet'in sayacı piyasa gününü **"Bu ay eklenen"in**
+ay penceresine de veriyordu, ama o pencere *cihazın günüyle* tarihlenen
+işlemleri topluyor. Ay sınırında ikisi farklı ay seçiyor ve temmuzun son
+gecesinde girilen katkı hiçbir ayda sayılmıyordu.
+
+**Yapıldı:** sayaç iki günü birden taşıyor; her çağıran kastettiğini alıyor.
+
+### Kısaltma düzeltmesi yalnız telefona uygulanmıştı
+
+Tablet, masaüstü ve hedef detayı hâlâ 0 ondalıkla yazıyordu: ₺19.587'lik hedef
+orada "20B". Ayrıca `compact`'in "tam milyon mu" testi `round` (yarım-çifte) ile
+yapılıyordu — aynı commit'in yanlış ilan ettiği kural. 1,05M tam yarım olduğu
+için aşağı inip "tam" sayılıyor, sonra yarım-yukarı biçimlendirici "1M"
+yazıyordu: tek ifadede iki kural.
+
+### Gram sayısı adet sayısına dönüşüyordu
+
+Gram kutusunu miktar alanına yansıtmak bir sorunu çözüp başkasını açtı: yansıma
+yalnız varlık gramla ölçülürken doğru. Bileziğe 62,4 gram yazıp Çeyrek'e geçen
+kullanıcı 2. adımı "62,4 adet çeyrek" ile açıyordu — kaydedilmeye hazır
+₺628.000. Birim değişince miktar sıfırlanıyor; kural test edilebilsin diye
+ViewModel'den durum katmanına taşındı.
+
+Aynı ekranda: CTA'nın altındaki açılım satırı satışta işçiliği hâlâ **ekliyordu**
+("Toplam" onu düşürürken). Aynı bloğun iki yarısı ₺1.000 fark gösteriyordu.
+
+### Hedef doğar doğmaz "gecikmiş" oluyordu
+
+Tarih seçici ay inceliğine çekilmişti ama `isOverdue` gün bazında kıyaslıyordu.
+Gün alanı hiç seçilmiyor (varsayılan ayın 1'i), yani 12 Ağustos'ta "Ağustos
+2026" seçmek geçmişte kalıyordu. Kıyas ay bazına alındı — seçicinin, etiketin ve
+gecikme metninin zaten konuştuğu birim.
+
+Yanında üç şey daha: varış tahmini bilinemediğinde tek metin iki ayrı sebebi
+("katkı yok" ve "kırk yıllık ufkun dışında") aynı cümleyle anlatıyordu; Özet
+ulaşılmış bir hedefe varış tarihi yazıyordu (Hedefler listesi yazmıyor); ve net
+çıkışla kapanan bir ay, aynı kartın o ay için çubuk çizdiği yerde "katkı yok"
+diyordu.
+
+---
+
 ## Çürütülenler
 
 Hakem ajanların somut kod kanıtıyla reddettiği 21 iddia. Öne çıkanlar:

@@ -28,6 +28,7 @@ import com.kefe.app.domain.model.ActivityKind
 import com.kefe.app.domain.model.DailySnapshot
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAssignment
+import com.kefe.app.domain.model.goalAssignmentChange
 import com.kefe.app.domain.model.revertedAssignmentQuantity
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.Portfolio
@@ -224,46 +225,71 @@ class SqlDelightPortfolioRepository(
                 // her cihaz kendi numarasini bagimsiz veriyor.
                 val stored = transaction
                 val now = clock.nowEpochMillis()
-                // Damga KESIN ARTAR. Duz saat yetmiyor: ayni milisaniyede
-                // yazilan iki kayit esitlenir, sira `id` bagina yani UUID'ye
-                // duser ve ayni gun al-sat hatasi geri gelir.
-                val nextCreatedAt = maxOf(
-                    now,
-                    (transactionQueries.selectMaxTransactionCreatedAt()
-                        .executeAsOneOrNull()?.MAX ?: 0L) + 1L,
-                )
-
-                transactionQueries.insertTransaction(
-                    id = stored.id,
-                    positionId = stored.positionId,
-                    dateYear = stored.date.year.toLong(),
-                    dateMonth = stored.date.month.toLong(),
-                    dateDay = stored.date.day.toLong(),
-                    side = stored.side,
-                    quantity = stored.quantity,
-                    unitPrice = stored.unitPrice,
-                    fee = stored.fee,
-                    note = stored.note,
-                    storage = stored.storage,
-                    addedByMemberId = stored.addedByMemberId,
-                    syncState = stored.syncState,
-                    updatedAt = now,
-                    // Ayni gun ici sira. Cagiran bir damga tasiyorsa (duzenleme
-                    // eskisini devrediyor) o korunur; yoksa simdi damgalanir.
-                    //
-                    // Yeni kayitta updatedAt ile AYNI deger yaziliyor: es cihaz
-                    // bu satiri ilk cektiginde createdAt'i updatedAt'ten
-                    // turetiyor, yani iki cihaz ayni siraya variyor (bkz. 8.sqm).
-                    createdAt = stored.createdAt.takeIf { it > 0L } ?: nextCreatedAt,
-                    // Atamaya yapilan katki kaydin UZERINDE durur; silme aninda
-                    // baska hicbir yerden turetilemez (bkz. 9.sqm).
-                    goalId = stored.goalId,
-                    goalDelta = stored.goalDelta,
-                )
+                insertTransactionRow(stored, now)
                 recomputePosition(stored.positionId)
                 // Satis miktari sifirlamis olabilir; oyleyse kotasyon duser.
                 dropUnheldInstrumentPrices()
                 appendActivity(stored)
+            }
+        }
+    }
+
+    override suspend fun replaceTransaction(
+        transaction: Transaction,
+        replacing: String?,
+        selectedGoalId: String?,
+    ) {
+        withContext(dispatcher) {
+            database.transaction {
+                val now = clock.nowEpochMillis()
+
+                // 1) ESKI KAYIT ONCE GIDER. Atamaya katkisi geri alinir ve
+                //    satir dusurulur; boylece asagidaki hesap temiz bir durumla
+                //    calisir. Ayri bir cagri olsaydi bu ara durum ekranlara
+                //    yansirdi - tek transaction icinde yansimiyor.
+                val removed = replacing?.let {
+                    transactionQueries.selectTransactionById(it).executeAsOneOrNull()
+                }
+                if (removed != null) {
+                    softDeleteTransactionRow(removed, now, asEdit = true)
+                    recomputePosition(removed.positionId)
+                }
+
+                // 2) Atama degisikligi ARTIK dogru durumla hesaplanir.
+                val assignmentBefore = goalAssetQueries
+                    .selectGoalAssetByPosition(transaction.positionId).executeAsOneOrNull()
+                    ?.let { GoalAssignment(it.goalId, it.quantity) }
+                val quantityBefore = positionQueries
+                    .selectPositionById(transaction.positionId).executeAsOneOrNull()
+                    ?.quantity ?: 0.0
+                val change = goalAssignmentChange(
+                    current = assignmentBefore,
+                    selectedGoalId = selectedGoalId,
+                    transactionQuantity = transaction.quantity,
+                    isSell = transaction.side == TradeSide.Sell,
+                    quantityBefore = quantityBefore,
+                )
+
+                // 3) Kayit, katkisini uzerinde tasiyarak yazilir.
+                insertTransactionRow(
+                    transaction.copy(
+                        goalId = change?.goalId,
+                        goalDelta = change?.delta ?: 0.0,
+                    ),
+                    now,
+                )
+                if (change != null) {
+                    goalAssetQueries.assignPositionToGoal(
+                        positionId = transaction.positionId,
+                        goalId = change.goalId,
+                        quantity = change.quantity,
+                        updatedAt = now,
+                    )
+                }
+
+                recomputePosition(transaction.positionId)
+                dropUnheldInstrumentPrices()
+                appendActivity(transaction)
             }
         }
     }
@@ -274,41 +300,103 @@ class SqlDelightPortfolioRepository(
                 val removed = transactionQueries.selectTransactionById(transactionId)
                     .executeAsOneOrNull() ?: return@transaction
                 val now = clock.nowEpochMillis()
-                transactionQueries.deleteTransactionById(deletedAt = now, id = transactionId)
-                // Aktivite satiri da gider. Kalirsa Aktivite akisi silinmis bir
-                // islemi "ekledi" diye gostermeye devam eder ve Islem Ekle'deki
-                // "son eklediginiz" kisayolu artik var olmayan bir kaydi onerir.
-                // Soft-delete: mezar tasi ese de gider.
-                activityQueries.deleteActivityById(deletedAt = now, id = "act_${removed.id}")
-                // ...ve yerine silmenin KENDISI yazilir. Onceden burasi
-                // sessizdi: kayit akistan tamamen kayboldugu icin gecmise bakan
-                // biri onun hic var olmadigini saniyordu. Iki kisilik bir
-                // defterde "sen mi sildin ben mi" sorusu cevapsiz kaliyordu.
-                appendDeletion(
-                    id = "act_del_${removed.id}",
-                    memberId = removed.addedByMemberId,
-                    kind = ActivityKind.DeleteTransaction,
-                    description = buildString {
-                        append(formatQuantity(removed.quantity))
-                        append(' ')
-                        append(positionName(removed.positionId))
-                        append(if (removed.side == TradeSide.Sell) " satışını sildi" else " alımını sildi")
-                    },
-                    // Iscilik YONE gore isler; kayit eklenirken de oyle
-                    // yaziliyor (bkz. Transaction.total).
-                    amount = removed.quantity * removed.unitPrice +
-                        if (removed.side == TradeSide.Sell) -removed.fee else removed.fee,
-                )
-                // Kaydin hedef atamasina katkisi de GERI ALINIR. Yoksa 4
-                // ceyreklik bir alimi silmek pozisyonu 6'ya dusuruyor ama atama
-                // 10 kaliyordu; duzenleme de (once yaz, sonra sil) katkiyi
-                // ikinci kez uyguluyordu.
-                revertGoalAssignment(removed.positionId, removed.goalId, removed.goalDelta, now)
+                softDeleteTransactionRow(removed, now, asEdit = false)
                 recomputePosition(removed.positionId)
                 // Son alim silindiyse varlik artik tutulmuyor demektir.
                 dropUnheldInstrumentPrices()
             }
         }
+    }
+
+    /**
+     * Islem satirini yazar. `database.transaction` icinden cagrilir.
+     *
+     * Kimlik cagiran taraftan UUID olarak gelir; burada tekillestirme YOK. Once
+     * icerikten turetiliyordu ve carpisanlari burada "_2" ekleyerek
+     * ayiriyorduk - iki cihazda o cozum bozuluyor, cunku her cihaz kendi
+     * numarasini bagimsiz veriyor.
+     */
+    private fun insertTransactionRow(stored: Transaction, now: Long) {
+        // Damga KESIN ARTAR. Duz saat yetmiyor: ayni milisaniyede yazilan iki
+        // kayit esitlenir, sira `id` bagina yani UUID'ye duser ve ayni gun
+        // al-sat hatasi geri gelir.
+        val nextCreatedAt = maxOf(
+            now,
+            (transactionQueries.selectMaxTransactionCreatedAt()
+                .executeAsOneOrNull()?.MAX ?: 0L) + 1L,
+        )
+        transactionQueries.insertTransaction(
+            id = stored.id,
+            positionId = stored.positionId,
+            dateYear = stored.date.year.toLong(),
+            dateMonth = stored.date.month.toLong(),
+            dateDay = stored.date.day.toLong(),
+            side = stored.side,
+            quantity = stored.quantity,
+            unitPrice = stored.unitPrice,
+            fee = stored.fee,
+            note = stored.note,
+            storage = stored.storage,
+            addedByMemberId = stored.addedByMemberId,
+            syncState = stored.syncState,
+            updatedAt = now,
+            // Ayni gun ici sira. Cagiran bir damga tasiyorsa (duzenleme
+            // eskisini devrediyor) o korunur; yoksa simdi damgalanir.
+            //
+            // Yeni kayitta updatedAt ile AYNI deger yaziliyor: es cihaz bu
+            // satiri ilk cektiginde createdAt'i updatedAt'ten turetiyor, yani
+            // iki cihaz ayni siraya variyor (bkz. 8.sqm).
+            createdAt = stored.createdAt.takeIf { it > 0L } ?: nextCreatedAt,
+            // Atamaya yapilan katki kaydin UZERINDE durur; silme aninda baska
+            // hicbir yerden turetilemez (bkz. 9.sqm).
+            goalId = stored.goalId,
+            goalDelta = stored.goalDelta,
+        )
+    }
+
+    /**
+     * Islem satirini mezar taslar ve atamaya katkisini GERI ALIR.
+     *
+     * Katki geri alinmazsa 4 ceyreklik bir alimi silmek pozisyonu 6'ya dusurur
+     * ama atama 10 kalir.
+     *
+     * [asEdit] duzenlemenin ilk yarisi: kayit siliniyor degil, YERINE yenisi
+     * yaziliyor. Akisa "sildi" satiri dusulmez - kullanici silmedi, duzeltti;
+     * hemen ardindan gelen "ekledi" satiri zaten olani anlatiyor.
+     */
+    private fun softDeleteTransactionRow(
+        removed: com.kefe.app.db.Transactions,
+        now: Long,
+        asEdit: Boolean,
+    ) {
+        transactionQueries.deleteTransactionById(deletedAt = now, id = removed.id)
+        // Aktivite satiri da gider. Kalirsa Aktivite akisi silinmis bir islemi
+        // "ekledi" diye gostermeye devam eder ve Islem Ekle'deki "son
+        // eklediginiz" kisayolu artik var olmayan bir kaydi onerir.
+        // Soft-delete: mezar tasi ese de gider.
+        activityQueries.deleteActivityById(deletedAt = now, id = "act_${removed.id}")
+        if (!asEdit) {
+            // Silmenin KENDISI yazilir. Onceden burasi sessizdi: kayit akistan
+            // tamamen kayboldugu icin gecmise bakan biri onun hic var olmadigini
+            // saniyordu. Iki kisilik bir defterde "sen mi sildin ben mi" sorusu
+            // cevapsiz kaliyordu.
+            appendDeletion(
+                id = "act_del_${removed.id}",
+                memberId = removed.addedByMemberId,
+                kind = ActivityKind.DeleteTransaction,
+                description = buildString {
+                    append(formatQuantity(removed.quantity))
+                    append(' ')
+                    append(positionName(removed.positionId))
+                    append(if (removed.side == TradeSide.Sell) " satışını sildi" else " alımını sildi")
+                },
+                // Iscilik YONE gore isler; kayit eklenirken de oyle yaziliyor
+                // (bkz. Transaction.total).
+                amount = removed.quantity * removed.unitPrice +
+                    if (removed.side == TradeSide.Sell) -removed.fee else removed.fee,
+            )
+        }
+        revertGoalAssignment(removed.positionId, removed.goalId, removed.goalDelta, now)
     }
 
     /**

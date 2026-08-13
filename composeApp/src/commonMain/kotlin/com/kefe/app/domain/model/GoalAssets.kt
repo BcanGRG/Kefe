@@ -136,11 +136,16 @@ fun assetsOf(
  * ([Transaction.goalId] / [Transaction.goalDelta]) cunku silme aninda o rakam
  * baska hicbir yerden turetilemez.
  *
- * Delta TOPLANABILIR olsun diye secildi, "onceki degeri geri yaz" degil: mutlak
- * geri yazma yalniz son islem geri alinirsa dogru olur, arasina baska kayit
- * girerse eski bir degeri diriltir. Duzenleme de zaten "once yeni kaydi yaz,
- * sonra eskisini sil" sirasiyla calisiyor (bkz. AddTransactionViewModel) - delta
- * bu sirada da dogru sonuc verir.
+ * Delta secildi, "onceki degeri geri yaz" degil: mutlak geri yazma yalniz son
+ * islem geri alinirsa dogru olur, arasina baska kayit girerse eski bir degeri
+ * diriltir.
+ *
+ * AMA DELTA HER ZAMAN TOPLANABILIR DEGIL. Satis dali sonucu elde kalan miktara
+ * kirpiyor, yani delta o anki duruma bagli. Bir zamanlar burada "sira onemsiz"
+ * yaziyordu ve duzenleme buna guvenip once yeni kaydi yaziyordu; kirpma devreye
+ * girdigi anda yanlis sonuc veriyordu (8 satip 3'e cekmek atamayi 7 yerine 8
+ * birakiyordu). Duzenleme artik ONCE eskisini geri alir, sonra yenisini
+ * hesaplar - hepsi tek yazmada (bkz. PortfolioRepository.replaceTransaction).
  *
  * [delta] SIFIR ise degisiklik geri alinamaz; iki durumda boyle olur ve ikisi de
  * aritmetik bir katki degil, kullanicinin ACIK bir kararidir:
@@ -174,8 +179,9 @@ data class GoalAssignmentChange(
  * "baska hedef" dali `isSell`'i hic okumadigi icin bir SATIS kaydinda baska
  * hedef secmek o hedefin ilerlemesini satilan miktar kadar ARTIRIYORDU.
  *
- * Satis, secicide "Hedefsiz" secili olsa bile atamayi dusurur. Boylece kirpma
- * kalicilasir ve monoton olur (bkz. [effectiveQuantity]).
+ * Satis, secicide "Hedefsiz" secili olsa bile atamayi ELDE KALANA kirpar -
+ * satilan kadar dusurmez. Boylece kirpma kalicilasir ve monoton olur
+ * (bkz. [effectiveQuantity]) ama satisin dokunmadigi birimler hedefte kalir.
  *
  * "HEDEFSIZ" (null) VE "TUM VARLIK" ATAMASI. Burasi ilk surumde eksikti ve
  * duzeltme sahada tutmadi: eski atamalarin hepsi -1 (tum varlik) oldugu icin
@@ -201,18 +207,25 @@ fun goalAssignmentChange(
 
     if (isSell) {
         // Satis yalniz varligin bulundugu hedeften duser; secici okunmaz.
-        if (current == null || current.isWhole) return null
-        // "Tum varlik" atamasinda dusulecek bir miktar yok: pozisyonun kendisi
+        // "Tum varlik" atamasinda dusulecek bir sayi yok: pozisyonun kendisi
         // kuculuyor ve atama onu zaten takip ediyor.
-        val taken = min(quantity, current.quantity)
-        if (taken <= 0.0) return null
-        return GoalAssignmentChange(
-            goalId = current.goalId,
-            quantity = current.quantity - taken,
-            // Atanandan fazlasi satildiysa geri alinacak olan da o kadardir;
-            // `quantity` yazmak geri almada atamayi oldugundan buyuk diriltirdi.
-            delta = -taken,
-        )
+        if (current == null || current.isWhole) return null
+
+        // OLCU, SATISTAN SONRA ELDE KALANDIR - atamanin kendisi degil.
+        //
+        // Once `min(satilan, atanan)` kadar dusuluyordu ve bu, satisin hic
+        // dokunmadigi birimleri hedeften siliyordu: 10 ceyregin 4'u Ev'e
+        // atanmisken atanmamis 6 tanesini satmak `min(6,4)=4` dusurup atamayi
+        // SIFIRLIYORDU. Oysa elde tam da soz verilen 4 ceyrek duruyor.
+        //
+        // Dogru soru "ne kadari satildi" degil, "geriye ne kaldi": atama
+        // kalandan buyuk olamaz, kucukse de dokunulmaz. Sonuc hala monoton -
+        // deger yalniz asagi gidebilir - yani kirpmanin kaliciligi bozulmuyor.
+        val remaining = (quantityBefore - quantity).coerceAtLeast(0.0)
+        val next = min(current.quantity, remaining)
+        val delta = next - current.quantity
+        if (delta == 0.0) return null
+        return GoalAssignmentChange(current.goalId, quantity = next, delta = delta)
     }
 
     return when {

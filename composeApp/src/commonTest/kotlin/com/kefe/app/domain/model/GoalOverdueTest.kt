@@ -49,6 +49,19 @@ class GoalOverdueTest {
         assertFalse(goal(bugun).isOverdue(bugun))
     }
 
+    /**
+     * OLCU AYDIR. Hedef tarihi kullaniciya yalniz ay-yil olarak gosteriliyor ve
+     * secici de o incelikte; gun alanindaki deger (varsayilan: ayin 1'i) hic
+     * secilmiyor. Gun bazinda kiyaslayinca icinde bulunulan aya kurulan bir
+     * hedef DOGAR DOGMAZ gecikmis sayiliyordu.
+     */
+    @Test
+    fun ICINDEBULUNULANAyaKurulanHedefGecikmisDEGILDIR() {
+        // 12 Agustos'ta "Agustos 2026" secmek 1 Agustos yaziyor.
+        assertFalse(goal(KefeDate(2026, 8, 1)).isOverdue(bugun), "hedef dogar dogmaz gecikti")
+        assertFalse(goal(KefeDate(2026, 8, 31)).isOverdue(bugun))
+    }
+
     @Test
     fun tamamlanmisHedefGecikmisSAYILMAZ() {
         val tamamlanan = goal(KefeDate(2026, 7, 1), status = GoalStatus.Completed)
@@ -56,12 +69,15 @@ class GoalOverdueTest {
         assertFalse(tamamlanan.isOverdue(bugun), "tamamlanan hedef gecikmis gosterildi")
     }
 
-    /** Gun donunce cevap KENDILIGINDEN degisir - saklansa bayat kalirdi. */
+    /** Ay donunce cevap KENDILIGINDEN degisir - saklansa bayat kalirdi. */
     @Test
-    fun cevapGUNEGoreDegisir() {
+    fun cevapAYAGoreDegisir() {
         val hedef = goal(KefeDate(2026, 8, 12))
 
-        assertFalse(hedef.isOverdue(KefeDate(2026, 8, 12)))
-        assertTrue(hedef.isOverdue(KefeDate(2026, 8, 13)))
+        // Agustos boyunca hedefin ayi devam ediyor.
+        assertFalse(hedef.isOverdue(KefeDate(2026, 8, 13)))
+        assertFalse(hedef.isOverdue(KefeDate(2026, 8, 31)))
+        // Eylul girince gecikti.
+        assertTrue(hedef.isOverdue(KefeDate(2026, 9, 1)))
     }
 }

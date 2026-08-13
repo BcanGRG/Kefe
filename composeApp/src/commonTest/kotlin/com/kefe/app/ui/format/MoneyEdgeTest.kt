@@ -125,6 +125,21 @@ class MoneyEdgeTest {
         assertEquals("19,6B", Money.compact(19_587.0, thousandDecimals = 1))
     }
 
+    /**
+     * Tamlik testi ile bicimlendirici AYNI kurali kullanir.
+     *
+     * Kullanmiyordu: tamlik `round` ile (yarim-cifte) olculuyor, yazma
+     * yarim-yukari yapiyordu. 1,05M tam yarim oldugu icin asagi inip "tam
+     * milyon" sayiliyor ve "1M" yaziliyordu - tek ifadede iki kural.
+     */
+    @Test
+    fun tamlikTestiBICIMLENDIRICIYLEAyniYuvarlar() {
+        assertEquals("1,1M", Money.compact(1_050_000.0))
+        assertEquals("2,1M", Money.compact(2_050_000.0))
+        // Tam milyon hala ondaliksiz.
+        assertEquals("2M", Money.compact(2_000_000.0))
+    }
+
     @Test
     fun eksiKisaltmaISARETTasir() {
         assertEquals("−4,2M", Money.compact(-4_200_000.0))

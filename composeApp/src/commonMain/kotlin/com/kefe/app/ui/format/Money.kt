@@ -165,7 +165,13 @@ object Money {
                 val millions = a / 1_000_000.0
                 // Tamlik YUVARLANMIS degere bakilarak olculur: 999.950 tek
                 // haneye 1,0 yuvarlanir, yani "1,0M" degil "1M" yazilmali.
-                val rounded = round(millions * 10.0) / 10.0
+                //
+                // Yuvarlama BICIMLENDIRMEYLE AYNI kuralla yapilir. `round`
+                // kullaniliyordu ve o yarim-cifte yuvarliyor: 1,05M tam yarim
+                // oldugu icin asagi inip "tam milyon" sayiliyor, sonra
+                // bicimlendirici yarim-yukari uygulayip "1M" yaziyordu. Tek
+                // ifadede iki farkli yuvarlama kurali.
+                val rounded = roundHalfUp(millions * 10.0) / 10.0
                 format(millions, if (rounded % 1.0 == 0.0) 0 else 1, false) + "M"
             }
 
