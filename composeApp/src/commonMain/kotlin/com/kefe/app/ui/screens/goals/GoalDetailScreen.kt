@@ -1222,7 +1222,12 @@ private fun HistoryCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) -
 
         rows.forEachIndexed { index, row ->
             if (index > 0) KefeHairline()
-            val muted = row.contribution <= 0.0
+            // "katkı yok" YALNIZ hicbir sey olmayan ay icin. Kosul
+            // `contribution <= 0` idi ve net cikisla kapanan ay da oraya
+            // dusuyordu: ayni kartin grafigi o ay icin bir cubuk cizerken
+            // tablo "katkı yok" yaziyordu. Cikis olan ay bos bir ay degil -
+            // rakami neyse o yazilir, eksiyse eksi.
+            val muted = row.contribution == 0.0
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp),
                 horizontalArrangement = Arrangement.spacedBy(Space.x10),
@@ -1234,7 +1239,7 @@ private fun HistoryCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) -
                     color = if (muted) c.onSurfaceMuted else c.onSurface,
                 )
                 BodyCell(
-                    text = if (muted) "katkı yok" else Money.tl(row.contribution),
+                    text = if (muted) "katkı yok" else Money.tlSigned(row.contribution),
                     weight = 1f,
                     align = TextAlign.End,
                     color = if (muted) c.onSurfaceMuted else c.onSurface,

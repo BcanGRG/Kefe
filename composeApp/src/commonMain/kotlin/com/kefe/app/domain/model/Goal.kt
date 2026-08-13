@@ -42,9 +42,17 @@ data class Goal(
  *
  * Saklanmasi zaten yanlis olurdu: gun donunce bayatlar ve tazelemek icin bir
  * arka plan isi gerekirdi. Tamamlanmis hedef gecikmis SAYILMAZ.
+ *
+ * OLCU AYDIR, GUN DEGIL. Hedef tarihi kullaniciya yalniz ay-yil olarak
+ * gosteriliyor ve secici de o incelikte; gun alanindaki deger (varsayilan: ayin
+ * 1'i) kullanicinin sectigi bir sey degil. Gun bazinda kiyaslayinca icinde
+ * bulunulan aya kurulan bir hedef DOGAR DOGMAZ gecikmis sayiliyordu: 12
+ * Agustos'ta "Agustos 2026" secmek 1 Agustos yaziyor ve o da gecmiste kaliyor.
+ * Gecikme metni de ay farkindan uretiliyor (bkz. arrivalLabel) - burasi da
+ * ayni birimden konusmali.
  */
 fun Goal.isOverdue(today: KefeDate): Boolean =
-    status != GoalStatus.Completed && targetDate.toEpochDay() < today.toEpochDay()
+    status != GoalStatus.Completed && targetDate.monthOrdinal() < today.monthOrdinal()
 
 enum class GoalUnit {
     Try,

@@ -430,7 +430,12 @@ private fun TabletGoalCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            state.mainGoalArrival?.let { arrival ->
+            // Hedefe ULASILMISSA varis tahmini gosterilmez - birikim zaten
+            // yetiyorken gelecege tarih vermek celiskili olurdu.
+            // Hedefler listesi bunu yapiyordu, Ozet duzenleri yapmiyordu:
+            // kart "%100" ve "₺0 kaldı" yazarken yanina bir varis tarihi
+            // koyuyordu. goalProjection ulasilmis hedefte BUGUNU donuyor.
+            state.mainGoalArrival?.takeIf { progress < 1f }?.let { arrival ->
                 Spacer(Modifier.width(Space.x8))
                 Text(
                     // "Tahmini" bilgisi kesikli alt cizgiyle isaretlenir: kesin tarih degildir.

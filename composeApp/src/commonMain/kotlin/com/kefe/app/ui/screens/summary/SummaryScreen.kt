@@ -686,7 +686,12 @@ private fun MainGoalCard(
                 color = c.onSurfaceMuted,
                 maxLines = 1,
             )
-            state.mainGoalArrival?.let { arrival ->
+            // Hedefe ULASILMISSA varis tahmini gosterilmez - birikim zaten
+            // yetiyorken gelecege tarih vermek celiskili olurdu.
+            // Hedefler listesi bunu yapiyordu, Ozet duzenleri yapmiyordu:
+            // kart "%100" ve "₺0 kaldı" yazarken yanina bir varis tarihi
+            // koyuyordu. goalProjection ulasilmis hedefte BUGUNU donuyor.
+            state.mainGoalArrival?.takeIf { progress < 1f }?.let { arrival ->
                 Spacer(Modifier.weight(1f))
                 Spacer(Modifier.width(Space.x8))
                 Row(
