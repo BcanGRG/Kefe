@@ -67,6 +67,31 @@ interface PortfolioRepository {
      */
     suspend fun addTransaction(transaction: Transaction)
 
+    /**
+     * Islemi yazar; [replacing] doluysa once o kaydi geri alir - HEPSI TEK
+     * YAZMADA.
+     *
+     * Duzenleme neden ayri bir cagri: hedef atamasina yapilan katki o anki
+     * duruma bagli (satis dali elde kalana kirpiyor), yani "once yenisini yaz,
+     * sonra eskisini sil" yanlis sonuc veriyor - eski kaydin etkisi hala
+     * ortadayken yeni katki hesaplaniyordu. Dogru sira "once geri al, sonra
+     * hesapla", ama iki ayri cagri olarak yapilirsa tek islemi olan bir
+     * varlikta pozisyon bir an bosaliyor ve Varlik Detayi kendini listeden
+     * atiyor. Tek transaction ikisini de cozer: ara durum hicbir akisa
+     * yansimaz.
+     *
+     * Atama degisikligi burada hesaplanir, cagiran tarafta degil: gereken iki
+     * girdi (pozisyonun geri almadan SONRAKI miktari ve atamanin geri almadan
+     * SONRAKI hali) ancak burada bilinir.
+     *
+     * @param selectedGoalId hedef secicisinin degeri; null = "Hedefsiz".
+     */
+    suspend fun replaceTransaction(
+        transaction: Transaction,
+        replacing: String?,
+        selectedGoalId: String?,
+    )
+
     /** Islemi siler ve pozisyonu yeniden hesaplar. Miktar sifirlanirsa pozisyon kalkar. */
     suspend fun deleteTransaction(transactionId: String)
 
