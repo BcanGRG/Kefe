@@ -154,9 +154,9 @@ class SummaryViewModel(
      * yeniden hesap. Piyasa gunu sorulur, cihazin gunu degil - kotasyon
      * gunleriyle kiyaslanan tarih o (bkz. KefeClock.marketToday).
      */
-    private fun dayTicker(): Flow<KefeDate> = flow {
+    private fun dayTicker(): Flow<Days> = flow {
         while (true) {
-            emit(clock.marketToday())
+            emit(Days(device = clock.today(), market = clock.marketToday()))
             delay(DayCheckMillis)
         }
     }.distinctUntilChanged()
@@ -175,7 +175,7 @@ class SummaryViewModel(
                 snapshot to transactions
             }.combine(portfolioRepository.observeGoalAssets()) { pair, assignments ->
                 Triple(pair.first, pair.second, assignments)
-            }.combine(dayTicker()) { triple, today ->
+            }.combine(dayTicker()) { triple, days ->
                 val (snapshot, transactions, assignments) = triple
                 val (portfolio, members, positions, goals, activity) = snapshot
                 val main = goals.firstOrNull { it.isMain }
@@ -186,7 +186,13 @@ class SummaryViewModel(
                     totals = portfolioTotals(
                         positions = positions,
                         transactions = transactions,
-                        today = today,
+                        // CIHAZIN gunu. "Bu ay eklenen" defterdeki islemleri
+                        // aya gore topluyor ve o kayitlar cihazin gunuyle
+                        // tarihleniyor (bkz. AddTransactionViewModel). Bir sure
+                        // burada piyasa gunu duruyordu: ay sinirinda ikisi
+                        // farkli ay seciyor, temmuzun son gecesinde girilen
+                        // katki hicbir ayda sayilmiyordu.
+                        today = days.device,
                         // Aylik katki hedefi ana hedeften gelir; turetilebilir bir sey degil.
                         monthTarget = main?.monthlyContribution ?: 0.0,
                     ),
@@ -198,7 +204,7 @@ class SummaryViewModel(
                         ?.let { goalWealth(it, positions, assignments) }
                         ?: 0.0,
                     mainGoalArrival = main?.let {
-                        goalProjection(it, goalWealth(it, positions, assignments), today)
+                        goalProjection(it, goalWealth(it, positions, assignments), days.device)
                             .arrival
                     },
                     // Vadesi gecmis hedef de sayilir: tasarimda o hal "Hedef duruyor"
@@ -413,6 +419,21 @@ private data class Snapshot(
 
 /** Gun degisimini yakalamak icin yeterli siklik - dakikada bir. */
 private const val DayCheckMillis = 60_000L
+
+/**
+ * Ekranin ihtiyac duydugu IKI GUN.
+ *
+ * [device] cihazin takvimi: islem tarihleri, "bu ay eklenen"in ay penceresi ve
+ * hedef varis tahmini bununla calisir - hepsi kullanicinin kendi gununu
+ * kastediyor.
+ *
+ * [market] Turkiye gunu: kotasyonun bugune ait olup olmadigi ancak bununla
+ * sorulabilir, cunku kotasyon gunleri kaynagin takviminden geliyor.
+ *
+ * Ikisi ayni sanilip tek deger tasiniyordu; yurt disindaki bir cihazda ay ve
+ * gun sinirlarinda ayrisiyorlar.
+ */
+private data class Days(val device: KefeDate, val market: KefeDate)
 
 /**
  * Hatanin kisa sebebi.
