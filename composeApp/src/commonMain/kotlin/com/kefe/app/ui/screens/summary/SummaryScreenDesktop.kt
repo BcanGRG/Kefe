@@ -597,7 +597,8 @@ private fun DesktopNetWorthCard(state: SummaryUiState, onIntent: (SummaryIntent)
                 LegendItem("Getiri") { AreaSwatch(c.accent) }
                 state.mainGoal?.let { goal ->
                     LegendItem(
-                        text = "₺${Money.compact(goal.amount)} ana hedef",
+                        // Bkz. telefon duzeni: gercek tutar bir ondalik tasir.
+                        text = "₺${Money.compact(goal.amount, thousandDecimals = 1)} ana hedef",
                         color = c.accent,
                     ) { DashedSwatch(c.accent) }
                 }

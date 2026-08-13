@@ -594,7 +594,10 @@ private fun NetWorthCard(state: SummaryUiState) {
             total = state.netWorthTotal.toChartPoints(),
             principal = state.netWorthPrincipal.toChartPoints(),
             goalLine = state.mainGoal?.amount,
-            goalLabel = state.mainGoal?.let { "₺${Money.compact(it.amount)} ana hedef" },
+            // Bkz. telefon duzeni: gercek tutar bir ondalik tasir.
+            goalLabel = state.mainGoal?.let {
+                "₺${Money.compact(it.amount, thousandDecimals = 1)} ana hedef"
+            },
             selectedIndex = state.netWorthTotal.lastIndex,
             selectedLabel = NetWorthLastLabel,
             selectedValue = if (state.masked) {

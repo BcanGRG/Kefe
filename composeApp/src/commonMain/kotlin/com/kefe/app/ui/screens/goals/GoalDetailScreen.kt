@@ -914,7 +914,8 @@ private fun ProjectionCard(goal: Goal, state: GoalDetailUiState) {
             actual = emptyList(),
             forecast = state.projectionForecast.toPoints(),
             goal = goal.amount,
-            goalLabel = "₺${Money.compact(goal.amount)} hedef",
+            // Gercek tutar, eksen etiketi degil - bkz. Ozet duzenleri.
+            goalLabel = "₺${Money.compact(goal.amount, thousandDecimals = 1)} hedef",
             modifier = Modifier.fillMaxWidth(),
         )
 
