@@ -94,20 +94,74 @@ class SqlDelightAuthRepository(
         // Tam bitis aninda degil, biraz ONCE yenileriz: istek yolda iken jetonun
         // dolmasi tek basina bir 401 demektir.
         if (now < row.expiresAtEpochSeconds - ExpiryMarginSeconds) {
-            return@withLock secureStore.reveal(row.accessToken)
+            // Cozulemezse firlatmayiz, asagidaki yenileme yoluna duseriz: orada
+            // ya taze bir jeton yazilir ya da oturum kapanir. Buradan atilan bir
+            // istisna senkronu aciklamasiz durdururdu.
+            revealOrNull(row.accessToken)?.let { return@withLock it }
         }
 
-        runCatching { api.refreshSession(secureStore.reveal(row.refreshToken)) }
+        // Yenileme jetonunun sifresi aga CIKMADAN once cozulur. Cozulemiyorsa
+        // Keystore anahtari gitmis demektir (cihaz Android yedeginden geri
+        // yuklendi ya da uygulama verisi silindi) ve o sifreli metin bir daha
+        // acilmaz. Bunu asagidaki "gecici hata" dalina dusurmek kullaniciyi
+        // sonsuza kadar sessizce senkronsuz birakirdi; dogrusu oturumu kapatip
+        // yeniden kod istemek.
+        val refreshToken = revealOrNull(row.refreshToken) ?: run {
+            clearSession()
+            return@withLock null
+        }
+
+        runCatching { api.refreshSession(refreshToken) }
             .onSuccess { store(it, fallbackEmail = row.email, fallbackUserId = row.userId) }
             .map { it.accessToken }
-            // Yenileme jetonu da gecersizse geri donusu yok: oturum kapanir ve
-            // kullanici tekrar kod ister. Sessizce eski jetonu kullanmayi denemek
-            // her istegi 401'e goturur.
-            .getOrElse {
-                clearSession()
-                null
+            .getOrElse { failure ->
+                onRefreshFailed(
+                    failure = failure,
+                    storedAccessToken = row.accessToken,
+                    expiresAtEpochSeconds = row.expiresAtEpochSeconds,
+                    nowEpochSeconds = now,
+                )
             }
     }
+
+    /**
+     * Yenileme patladi. Oturum kapanir MI?
+     *
+     * YALNIZ sunucu jetonu reddettiyse ([AuthException.sessionExpired]). Onceden
+     * her hata ayni kefeye giriyordu: `runCatching` ag hatasini da yakaliyor,
+     * `getOrElse` oturumu siliyordu. Yani bir saat cevrimdisi kalmak, uyuyan bir
+     * Supabase projesi ya da tek bir 500 kullaniciyi hesabindan atmaya
+     * yetiyordu - jeton olmedigi halde. "Giriyorum, az sonra yine kod istiyor"
+     * sikayetinin kaynagi buydu.
+     *
+     * GECICI hatada oturum YERINDE DURUR; yalniz bu tur null doner, yani senkron
+     * bir seferlik atlanir ve bir sonraki tetikte AYNI yenileme jetonuyla
+     * yeniden denenir. Supabase'de yenileme jetonunun kendiliginden bir omru
+     * yoktur; oturumu bitiren yalniz kullanicidir (Cikis) ya da sunucudur
+     * (reddedilen jeton).
+     */
+    private suspend fun onRefreshFailed(
+        failure: Throwable,
+        storedAccessToken: String,
+        expiresAtEpochSeconds: Long,
+        nowEpochSeconds: Long,
+    ): String? {
+        if ((failure as? AuthException)?.sessionExpired == true) {
+            // Geri donusu yok. Eski jetonu sessizce kullanmayi denemek her istegi
+            // 401'e goturur; dogru davranis oturumu kapatip kod istemektir.
+            clearSession()
+            return null
+        }
+        // Marj icindeyiz ama jeton HENUZ olmedi: erken yenileme bir onlemdi,
+        // zorunluluk degil. Sunucuya ulasamadigimiz bu anda kalan saniyeler
+        // pekala calisir - hicbir sey dondurmek senkronu bosuna durdururdu.
+        if (nowEpochSeconds >= expiresAtEpochSeconds) return null
+        return revealOrNull(storedAccessToken)
+    }
+
+    /** Sifresi cozulemeyen kolon null doner; bkz. [validAccessToken]. */
+    private fun revealOrNull(stored: String): String? =
+        runCatching { secureStore.reveal(stored) }.getOrNull()
 
     override suspend fun signOut() {
         val row = withContext(dispatcher) { queries.selectSession().executeAsOneOrNull() }

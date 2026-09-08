@@ -87,7 +87,16 @@ class SupabaseAuthApi(
         return response.readTokens()
     }
 
-    /** Suresi dolan erisim jetonunu yeniler. */
+    /**
+     * Suresi dolan erisim jetonunu yeniler.
+     *
+     * OTURUM MU OLDU, AG MI YOK: firlatilan hata bu ayrimi TASIR - bkz.
+     * [AuthException.sessionExpired]. Cagiran taraf ikisine ayni tepkiyi
+     * veremez: yenileme jetonu reddedildiyse oturumun geri donusu yoktur, ama
+     * sunucuya ulasilamadiysa jeton hala saglamdir ve birazdan calisir. Ayrim
+     * BURADA yapilir, cunku durum kodunu ve sunucunun hata kodunu yalniz
+     * burasi gorur.
+     */
     override suspend fun refreshSession(refreshToken: String): AuthTokens {
         val response = client.post("$baseUrl/auth/v1/token?grant_type=refresh_token") {
             authHeaders()
@@ -95,7 +104,9 @@ class SupabaseAuthApi(
                 buildJsonObject { put("refresh_token", refreshToken) }.toString()
             )
         }
-        if (!response.status.isSuccess()) throw response.toError()
+        if (!response.status.isSuccess()) {
+            throw response.toError(sessionExpired = response.status.value in CredentialRejected)
+        }
         return response.readTokens()
     }
 
@@ -148,14 +159,14 @@ class SupabaseAuthApi(
      * alaninda veriyor; ucunu de deneriz. Hicbiri yoksa durum kodu yazilir -
      * "bir hata olustu" demek kullaniciyi da bizi de bir yere goturmez.
      */
-    private suspend fun HttpResponse.toError(): AuthException {
+    private suspend fun HttpResponse.toError(sessionExpired: Boolean = false): AuthException {
         val body = runCatching { json.parseToJsonElement(bodyAsText()) as JsonObject }.getOrNull()
 
         // Sik gorulen durumlar TURKCE yazilir. Sunucunun kendi metni ingilizce
         // ("Token has expired or is invalid") ve uygulamanin geri kalani turkce;
         // kullanicinin en cok gorecegi hata da bu.
         val code = body?.get("error_code")?.jsonPrimitive?.content
-        translate(code)?.let { return AuthException(it) }
+        translate(code)?.let { return AuthException(it, sessionExpired = sessionExpired) }
 
         val reason = body?.let {
             listOf("error_description", "msg", "message", "error")
@@ -163,7 +174,10 @@ class SupabaseAuthApi(
                     it[key]?.jsonPrimitive?.content?.takeIf(String::isNotBlank)
                 }
         }
-        return AuthException(reason ?: "Sunucu ${status.value} dondu")
+        return AuthException(
+            reason ?: "Sunucu ${status.value} dondu",
+            sessionExpired = sessionExpired,
+        )
     }
 
     private fun translate(errorCode: String?): String? = when (errorCode) {
@@ -184,6 +198,17 @@ class SupabaseAuthApi(
 
         /** Supabase varsayilani bir saat; yanitta gelmezse bunu varsayariz. */
         const val DefaultExpirySeconds = 3600L
+
+        /**
+         * Sunucunun "bu yenileme jetonu ARTIK GECMEZ" dedigi durum kodlari.
+         *
+         * 400 (invalid_grant), 401 ve 403 jetonun kendisiyle ilgilidir; ayni
+         * istegi yarin tekrarlamak da ayni cevabi verir. 429 ve 5xx bu kumede
+         * DEGIL - ikisi de gecicidir, jeton saglamdir, biraz sonra calisir.
+         * Kume dar tutulur: taninmayan her kod "gecici" sayilir, cunku
+         * yanlis tarafta hata yapmak kullaniciyi hesabindan atmak demektir.
+         */
+        val CredentialRejected = setOf(400, 401, 403)
     }
 }
 
@@ -197,4 +222,18 @@ data class AuthTokens(
 )
 
 /** Kimlik dogrulama hatasi. Mesaji kullaniciya gosterilebilir. */
-class AuthException(message: String, cause: Throwable? = null) : Exception(message, cause)
+class AuthException(
+    message: String,
+    cause: Throwable? = null,
+    /**
+     * Sunucu OTURUMUN KENDISINI mi reddetti?
+     *
+     * true ise geri donusu yok: kullanici yeniden kod ister. false ise hata
+     * geciciydi (ag yok, sunucu uyuyor, 5xx) ve oturuma DOKUNULMAZ.
+     *
+     * Varsayilan false, cunku bu bayragi tasimayan her hata - ag katmanindan
+     * gelen bir IOException dahil - emin olamadigimiz hatadir; emin
+     * olmadigimizda kullaniciyi disari atmayiz.
+     */
+    val sessionExpired: Boolean = false,
+) : Exception(message, cause)
