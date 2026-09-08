@@ -45,8 +45,13 @@ interface AuthRepository {
     suspend fun verifyCode(email: String, code: String): Result<Unit>
 
     /**
-     * Gecerli erisim jetonu. Suresi dolduysa yeniler; yenileme de basarisizsa
-     * oturum kapanir ve null doner.
+     * Gecerli erisim jetonu. Suresi dolduysa yeniler.
+     *
+     * YENILEME PATLAYINCA OTURUM KAPANMAZ - sunucu jetonu acikca reddetmedigi
+     * surece. Ag yoksa, proje uyuyorsa ya da sunucu 5xx donuyorsa yalniz null
+     * doner: o turlik senkron atlanir, oturum cihazda KALIR, bir sonraki
+     * tetikte ayni yenileme jetonuyla yeniden denenir. Oturumu bitiren yalniz
+     * kullanicidir (Cikis) ya da sunucudur (reddedilen yenileme jetonu).
      *
      * Senkron isleri (7.4/7.5) her istekte bunu cagirir; jeton tazeligi tek
      * yerden yonetilsin diye.

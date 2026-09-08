@@ -112,8 +112,10 @@ class AuthSessionTest {
     }
 
     @Test
-    fun `yenileme patlarsa oturum kapanir`() = runTest {
-        val api = FakeAuthApi { throw AuthException("Refresh token expired") }
+    fun `sunucu yenileme jetonunu REDDEDERSE oturum kapanir`() = runTest {
+        val api = FakeAuthApi {
+            throw AuthException("Refresh token expired", sessionExpired = true)
+        }
         val (repo, db) = newRepository(nowMillis = 1_000_000L, api = api)
         db.authSessionQueries.upsertSession(
             userId = "user-1",
@@ -127,6 +129,54 @@ class AuthSessionTest {
         // dogru davranis oturumu kapatip kod istemektir.
         assertNull(repo.validAccessToken())
         assertNull(db.authSessionQueries.selectSession().executeAsOneOrNull())
+    }
+
+    @Test
+    fun `AGA CIKILAMAZSA oturum kapanmaz, ag gelince kaldigi yerden devam eder`() = runTest {
+        var offline = true
+        val api = FakeAuthApi {
+            if (offline) throw RuntimeException("Bağlantı kurulamadı") else tokens("renewed")
+        }
+        val (repo, db) = newRepository(nowMillis = 1_000_000L, api = api)
+        db.authSessionQueries.upsertSession(
+            userId = "user-1",
+            email = "test@kefe.app",
+            accessToken = "expired",
+            refreshToken = "r1",
+            expiresAtEpochSeconds = 500L,
+        )
+
+        // Bu turlik senkron yapilamaz - jeton yok.
+        assertNull(repo.validAccessToken())
+
+        // Ama OTURUM YERINDE. Once ag hatasi da oturumu siliyordu: bir saat
+        // cevrimdisi kalmak (ya da uyuyan bir Supabase projesi) kullaniciyi
+        // hesabindan atmaya yetiyor, uygulama yeniden kod istiyordu.
+        val stored = db.authSessionQueries.selectSession().executeAsOne()
+        assertEquals("r1", stored.refreshToken)
+
+        // Ag gelince AYNI yenileme jetonu calisir; kullanici hicbir sey yapmadi.
+        offline = false
+        assertEquals("renewed", repo.validAccessToken())
+    }
+
+    @Test
+    fun `marj icinde aga cikilamazsa jetonun kalan suresi kullanilir`() = runTest {
+        val api = FakeAuthApi { throw RuntimeException("Bağlantı kurulamadı") }
+        val (repo, db) = newRepository(nowMillis = 1_000_000L, api = api)
+        db.authSessionQueries.upsertSession(
+            userId = "user-1",
+            email = "test@kefe.app",
+            accessToken = "hala-gecerli",
+            refreshToken = "r1",
+            // Simdi 1000 sn, jeton 1030'da biter: marjin (60 sn) icinde ama OLMEDI.
+            expiresAtEpochSeconds = 1_030L,
+        )
+
+        // Erken yenileme bir onlemdi, zorunluluk degil. Sunucuya ulasilamiyorsa
+        // kalan 30 saniye pekala calisir; null donmek senkronu bosuna durdururdu.
+        assertEquals("hala-gecerli", repo.validAccessToken())
+        assertEquals(1, api.refreshCount)
     }
 
     @Test
