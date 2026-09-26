@@ -1,0 +1,50 @@
+-- Aylik gelir - KISI bazli (bkz. domain/model/Budget.kt, 12.sqm).
+--
+-- Kimlik icerikten: inc_<yyyy>_<mm>_<memberId>_<kind>. "Burak'in Ekim maasi"
+-- tek satirdir; iki telefon ayni satiri yazar, son yazan kazanir.
+--
+-- Yaprak tablo, FK yok, kind duz metin - gerekce PlanItem.sq'da.
+CREATE TABLE income_entries (
+    id TEXT NOT NULL PRIMARY KEY,
+    periodYear INTEGER NOT NULL,
+    periodMonth INTEGER NOT NULL,
+    memberId TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    amount REAL NOT NULL,
+    updatedAt INTEGER NOT NULL DEFAULT 0,
+    deletedAt INTEGER
+);
+
+CREATE INDEX income_entries_period ON income_entries(periodYear, periodMonth);
+
+selectAllIncome:
+SELECT *
+FROM income_entries
+WHERE deletedAt IS NULL
+ORDER BY periodYear, periodMonth, memberId, kind;
+
+countIncome:
+SELECT count(*)
+FROM income_entries;
+
+selectIncomeChangedSince:
+SELECT *
+FROM income_entries
+WHERE updatedAt >= :since
+ORDER BY updatedAt;
+
+upsertIncome:
+INSERT OR REPLACE INTO income_entries(id, periodYear, periodMonth, memberId, kind, amount, updatedAt, deletedAt)
+VALUES (:id, :periodYear, :periodMonth, :memberId, :kind, :amount, :updatedAt, NULL);
+
+applyIncomePull:
+INSERT OR REPLACE INTO income_entries(id, periodYear, periodMonth, memberId, kind, amount, updatedAt, deletedAt)
+VALUES (:id, :periodYear, :periodMonth, :memberId, :kind, :amount, :updatedAt, :deletedAt);
+
+deleteIncomeById:
+UPDATE income_entries
+SET deletedAt = :deletedAt, updatedAt = :deletedAt
+WHERE id = :id AND deletedAt IS NULL;
+
+deleteAllIncome:
+DELETE FROM income_entries;

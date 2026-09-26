@@ -27,6 +27,15 @@ interface PortfolioRepository {
 
     fun observePositions(): Flow<List<Position>>
 
+    /**
+     * Silinmemis BUTUN pozisyonlar - satilip sifirlananlar DAHIL, guncel fiyatla.
+     *
+     * [observePositions] yalniz eldekileri verir; gecmis bir ayin plani onunla
+     * hesaplanirsa o ay alinip sonra tamamen satilan varligin alimi kaybolur ve
+     * plan "hic alinmadi" der.
+     */
+    fun observeAllPositions(): Flow<List<Position>>
+
     fun observeGoals(): Flow<List<Goal>>
 
     /**

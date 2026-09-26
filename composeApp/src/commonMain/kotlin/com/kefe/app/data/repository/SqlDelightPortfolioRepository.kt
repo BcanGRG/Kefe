@@ -8,12 +8,17 @@ import com.kefe.app.data.db.DefaultPortfolioName
 import com.kefe.app.data.db.LocalPortfolioId
 import com.kefe.app.data.db.toDomain
 import com.kefe.app.db.KefeDatabase
+import com.kefe.app.db.Positions
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.backup.BackupFile
 import com.kefe.app.domain.backup.BackupGoal
 import com.kefe.app.domain.backup.BackupGoalAsset
 import com.kefe.app.domain.backup.BackupMember
 import com.kefe.app.domain.backup.BackupPosition
+import com.kefe.app.domain.backup.BackupBudget
+import com.kefe.app.domain.backup.BackupExpense
+import com.kefe.app.domain.backup.BackupIncome
+import com.kefe.app.domain.backup.BackupPlanItem
 import com.kefe.app.domain.backup.BackupSnapshot
 import com.kefe.app.domain.backup.BackupTransaction
 import com.kefe.app.domain.backup.toAssetClass
@@ -86,6 +91,9 @@ class SqlDelightPortfolioRepository(
     private val snapshotQueries = database.snapshotQueries
     private val settingQueries = database.settingQueries
     private val priceQueries = database.priceQueries
+    private val planQueries = database.planItemQueries
+    private val incomeQueries = database.incomeQueries
+    private val expenseQueries = database.expenseQueries
 
     // --- Okumalar -----------------------------------------------------------
 
@@ -137,9 +145,14 @@ class SqlDelightPortfolioRepository(
      *
      * Miktar ve maliyet bindirilmez: onlar defterden turer, fiyattan degil.
      */
-    override fun observePositions(): Flow<List<Position>> = combine(
-        positionQueries.selectActivePositions().asFlow().mapToList(dispatcher)
-            .map { rows -> rows.map { it.toDomain() } },
+    override fun observePositions(): Flow<List<Position>> =
+        valued(positionQueries.selectActivePositions().asFlow().mapToList(dispatcher))
+
+    override fun observeAllPositions(): Flow<List<Position>> =
+        valued(positionQueries.selectAllPositions().asFlow().mapToList(dispatcher))
+
+    private fun valued(rows: Flow<List<Positions>>): Flow<List<Position>> = combine(
+        rows.map { list -> list.map { it.toDomain() } },
         priceRepository.observePrices(),
     ) { positions, board ->
         // Bugun HER EMISYONDA yeniden okunur: uygulama gece boyunca acik
@@ -527,6 +540,53 @@ class SqlDelightPortfolioRepository(
                 },
                 settings = settingQueries.selectAllSettings().executeAsList()
                     .associate { it.settingKey to it.settingValue },
+                // Satirlar HAM tasinir (metin kolonlar oldugu gibi): bu surumun
+                // tanimadigi bir kategori bile yedekte kaybolmamali.
+                planItems = planQueries.selectPlanItems().executeAsList().map {
+                    BackupPlanItem(
+                        id = it.id,
+                        year = it.periodYear.toInt(),
+                        month = it.periodMonth.toInt(),
+                        assetKey = it.assetKey,
+                        assetName = it.assetName,
+                        mode = it.mode,
+                        target = it.target,
+                        goalId = it.goalId,
+                        unitPriceAtPlan = it.unitPriceAtPlan,
+                    )
+                },
+                incomes = incomeQueries.selectAllIncome().executeAsList().map {
+                    BackupIncome(
+                        id = it.id,
+                        year = it.periodYear.toInt(),
+                        month = it.periodMonth.toInt(),
+                        memberId = it.memberId,
+                        kind = it.kind,
+                        amount = it.amount,
+                    )
+                },
+                expenses = expenseQueries.selectAllExpenses().executeAsList().map {
+                    BackupExpense(
+                        id = it.id,
+                        year = it.dateYear.toInt(),
+                        month = it.dateMonth.toInt(),
+                        day = it.dateDay.toInt(),
+                        category = it.category,
+                        amount = it.amount,
+                        note = it.note,
+                        addedByMemberId = it.addedByMemberId,
+                        createdAt = it.createdAt,
+                    )
+                },
+                budgets = expenseQueries.selectAllBudgets().executeAsList().map {
+                    BackupBudget(
+                        id = it.id,
+                        year = it.periodYear.toInt(),
+                        month = it.periodMonth.toInt(),
+                        category = it.category,
+                        amount = it.amount,
+                    )
+                },
             )
         }
 
@@ -558,6 +618,7 @@ class SqlDelightPortfolioRepository(
                 activityQueries.deleteAllActivity()
                 snapshotQueries.deleteAllSnapshots()
                 settingQueries.deleteAllSettings()
+                deleteAllPlanData()
 
                 preserved.forEach { (key, value) ->
                     if (value != null) {
@@ -700,8 +761,68 @@ class SqlDelightPortfolioRepository(
                         settingQueries.upsertSetting(settingKey = key, settingValue = value)
                     }
                 }
+
+                // Plan/butce tablolari yaprak (FK yok): oksuz satir diye bir
+                // sey yok, sira da onemsiz. Kimlikler korunur.
+                val now = clock.nowEpochMillis()
+                file.planItems.forEach {
+                    planQueries.upsertPlanItem(
+                        id = it.id,
+                        periodYear = it.year.toLong(),
+                        periodMonth = it.month.toLong(),
+                        assetKey = it.assetKey,
+                        assetName = it.assetName,
+                        mode = it.mode,
+                        target = it.target,
+                        goalId = it.goalId,
+                        unitPriceAtPlan = it.unitPriceAtPlan,
+                        updatedAt = now,
+                    )
+                }
+                file.incomes.forEach {
+                    incomeQueries.upsertIncome(
+                        id = it.id,
+                        periodYear = it.year.toLong(),
+                        periodMonth = it.month.toLong(),
+                        memberId = it.memberId,
+                        kind = it.kind,
+                        amount = it.amount,
+                        updatedAt = now,
+                    )
+                }
+                file.expenses.forEachIndexed { index, it ->
+                    expenseQueries.upsertExpense(
+                        id = it.id,
+                        dateYear = it.year.toLong(),
+                        dateMonth = it.month.toLong(),
+                        dateDay = it.day.toLong(),
+                        category = it.category,
+                        amount = it.amount,
+                        note = it.note,
+                        addedByMemberId = it.addedByMemberId,
+                        createdAt = it.createdAt.takeIf { c -> c > 0L } ?: (index.toLong() + 1L),
+                        updatedAt = now,
+                    )
+                }
+                file.budgets.forEach {
+                    expenseQueries.upsertBudget(
+                        id = it.id,
+                        periodYear = it.year.toLong(),
+                        periodMonth = it.month.toLong(),
+                        category = it.category,
+                        amount = it.amount,
+                        updatedAt = now,
+                    )
+                }
             }
         }
+    }
+
+    private fun deleteAllPlanData() {
+        planQueries.deleteAllPlanItems()
+        incomeQueries.deleteAllIncome()
+        expenseQueries.deleteAllExpenses()
+        expenseQueries.deleteAllBudgets()
     }
 
     override suspend fun deleteAllData() {
@@ -717,6 +838,7 @@ class SqlDelightPortfolioRepository(
                 priceQueries.deleteAllManualPrices()
                 priceQueries.deleteAllCachedPrices()
                 priceQueries.deleteAllPriceHistory()
+                deleteAllPlanData()
 
                 // Portfoy ve uye BIRAKILIR: onlar kullanici verisi degil kimlik.
                 // Silinirse islem eklerken "kim ekledi" bagi kopardi.

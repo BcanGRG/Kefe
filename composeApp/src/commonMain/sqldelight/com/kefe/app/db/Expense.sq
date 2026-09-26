@@ -1,0 +1,101 @@
+-- Giderler ve aylik gider butcesi - HANENIN (bkz. domain/model/Budget.kt, 12.sqm).
+--
+-- Iki yaprak tablo, FK yok, category duz metin - gerekce PlanItem.sq'da.
+--
+-- expense_entries: kimlik UUID. Her harcama ayri bir eylemdir; ayni gun ayni
+--   tutarda iki market alisverisi iki satirdir (islem defteriyle ayni kural).
+--   Sayildigi ay TARIHIN ayidir. createdAt ayni gun icindeki sira (bkz. 8.sqm).
+-- expense_budgets: kimlik icerikten, eb_<yyyy>_<mm>_<category>. "Ekim'in market
+--   butcesi" tektir.
+CREATE TABLE expense_entries (
+    id TEXT NOT NULL PRIMARY KEY,
+    dateYear INTEGER NOT NULL,
+    dateMonth INTEGER NOT NULL,
+    dateDay INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    amount REAL NOT NULL,
+    note TEXT,
+    addedByMemberId TEXT,
+    createdAt INTEGER NOT NULL DEFAULT 0,
+    updatedAt INTEGER NOT NULL DEFAULT 0,
+    deletedAt INTEGER
+);
+
+CREATE INDEX expense_entries_date ON expense_entries(dateYear, dateMonth);
+
+CREATE TABLE expense_budgets (
+    id TEXT NOT NULL PRIMARY KEY,
+    periodYear INTEGER NOT NULL,
+    periodMonth INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    amount REAL NOT NULL,
+    updatedAt INTEGER NOT NULL DEFAULT 0,
+    deletedAt INTEGER
+);
+
+CREATE INDEX expense_budgets_period ON expense_budgets(periodYear, periodMonth);
+
+-- En yeni ustte.
+selectAllExpenses:
+SELECT *
+FROM expense_entries
+WHERE deletedAt IS NULL
+ORDER BY dateYear DESC, dateMonth DESC, dateDay DESC, createdAt DESC, id;
+
+countExpenses:
+SELECT count(*)
+FROM expense_entries;
+
+selectExpensesChangedSince:
+SELECT *
+FROM expense_entries
+WHERE updatedAt >= :since
+ORDER BY updatedAt;
+
+upsertExpense:
+INSERT OR REPLACE INTO expense_entries(id, dateYear, dateMonth, dateDay, category, amount, note, addedByMemberId, createdAt, updatedAt, deletedAt)
+VALUES (:id, :dateYear, :dateMonth, :dateDay, :category, :amount, :note, :addedByMemberId, :createdAt, :updatedAt, NULL);
+
+applyExpensePull:
+INSERT OR REPLACE INTO expense_entries(id, dateYear, dateMonth, dateDay, category, amount, note, addedByMemberId, createdAt, updatedAt, deletedAt)
+VALUES (:id, :dateYear, :dateMonth, :dateDay, :category, :amount, :note, :addedByMemberId, :createdAt, :updatedAt, :deletedAt);
+
+deleteExpenseById:
+UPDATE expense_entries
+SET deletedAt = :deletedAt, updatedAt = :deletedAt
+WHERE id = :id AND deletedAt IS NULL;
+
+deleteAllExpenses:
+DELETE FROM expense_entries;
+
+selectAllBudgets:
+SELECT *
+FROM expense_budgets
+WHERE deletedAt IS NULL
+ORDER BY periodYear, periodMonth, category;
+
+countBudgets:
+SELECT count(*)
+FROM expense_budgets;
+
+selectBudgetsChangedSince:
+SELECT *
+FROM expense_budgets
+WHERE updatedAt >= :since
+ORDER BY updatedAt;
+
+upsertBudget:
+INSERT OR REPLACE INTO expense_budgets(id, periodYear, periodMonth, category, amount, updatedAt, deletedAt)
+VALUES (:id, :periodYear, :periodMonth, :category, :amount, :updatedAt, NULL);
+
+applyBudgetPull:
+INSERT OR REPLACE INTO expense_budgets(id, periodYear, periodMonth, category, amount, updatedAt, deletedAt)
+VALUES (:id, :periodYear, :periodMonth, :category, :amount, :updatedAt, :deletedAt);
+
+deleteBudgetById:
+UPDATE expense_budgets
+SET deletedAt = :deletedAt, updatedAt = :deletedAt
+WHERE id = :id AND deletedAt IS NULL;
+
+deleteAllBudgets:
+DELETE FROM expense_budgets;

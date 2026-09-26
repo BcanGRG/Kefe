@@ -1,0 +1,74 @@
+-- Aylik plan, gelir, gider ve butce tablolari.
+--
+-- NEYDI. Uygulama elde olani takip ediyordu ama "bu ay ne alacagim" planini,
+-- maasi ve giderleri tutacak bir yer yoktu.
+--
+-- NEDEN BOYLE.
+--   - Dort tablo da YAPRAK: yerel FOREIGN KEY yok, hedef/uye referanslari duz
+--     metin. goals ve positions'taki CASCADE tuzagi (OR REPLACE bagli satirlari
+--     silip atamalari ucuruyordu) burada dogamaz; geri yukleme ve pull da oksuz
+--     bir satir yuzunden butun islemi geri almaz. Sunucuda da FK yok.
+--   - mode/kind/category DUZ METIN: EnumColumnAdapter bilinmeyen metinde okurken
+--     patliyor (bkz. 10.sqm). Yeni surumden gelen bir kategori eski telefonu
+--     cokertmemeli; esleme mapper'da yapilir.
+--   - Plan satiri, gelir ve butce kimlikleri ICERIKTEN turer; iki telefon ayni
+--     satirda bulusur. Harcama girisi UUID - her harcama ayri bir eylemdir.
+--
+-- Sema .sq dosyalariyla BIREBIR ayni olmali (bkz. 11.sqm: ayrisma sessizce
+-- iki farkli semaya yol aciyordu).
+CREATE TABLE plan_items (
+    id TEXT NOT NULL PRIMARY KEY,
+    periodYear INTEGER NOT NULL,
+    periodMonth INTEGER NOT NULL,
+    assetKey TEXT NOT NULL,
+    assetName TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    target REAL NOT NULL,
+    goalId TEXT,
+    unitPriceAtPlan REAL,
+    updatedAt INTEGER NOT NULL DEFAULT 0,
+    deletedAt INTEGER
+);
+
+CREATE INDEX plan_items_period ON plan_items(periodYear, periodMonth);
+
+CREATE TABLE income_entries (
+    id TEXT NOT NULL PRIMARY KEY,
+    periodYear INTEGER NOT NULL,
+    periodMonth INTEGER NOT NULL,
+    memberId TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    amount REAL NOT NULL,
+    updatedAt INTEGER NOT NULL DEFAULT 0,
+    deletedAt INTEGER
+);
+
+CREATE INDEX income_entries_period ON income_entries(periodYear, periodMonth);
+
+CREATE TABLE expense_entries (
+    id TEXT NOT NULL PRIMARY KEY,
+    dateYear INTEGER NOT NULL,
+    dateMonth INTEGER NOT NULL,
+    dateDay INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    amount REAL NOT NULL,
+    note TEXT,
+    addedByMemberId TEXT,
+    createdAt INTEGER NOT NULL DEFAULT 0,
+    updatedAt INTEGER NOT NULL DEFAULT 0,
+    deletedAt INTEGER
+);
+
+CREATE INDEX expense_entries_date ON expense_entries(dateYear, dateMonth);
+
+CREATE TABLE expense_budgets (
+    id TEXT NOT NULL PRIMARY KEY,
+    periodYear INTEGER NOT NULL,
+    periodMonth INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    amount REAL NOT NULL,
+    updatedAt INTEGER NOT NULL DEFAULT 0,
+    deletedAt INTEGER
+);
+
+CREATE INDEX expense_budgets_period ON expense_budgets(periodYear, periodMonth);

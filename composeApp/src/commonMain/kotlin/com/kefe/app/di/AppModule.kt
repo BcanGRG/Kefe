@@ -21,6 +21,7 @@ import com.kefe.app.db.KefeDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.kefe.app.data.repository.SqlDelightAuthRepository
+import com.kefe.app.data.repository.SqlDelightPlanRepository
 import com.kefe.app.data.repository.SqlDelightPortfolioRepository
 import com.kefe.app.data.repository.SqlDelightPreferencesRepository
 import com.kefe.app.data.repository.SqlDelightPriceRepository
@@ -32,6 +33,7 @@ import com.kefe.app.data.sync.SyncLocalSource
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.SystemKefeClock
 import com.kefe.app.domain.repository.AuthRepository
+import com.kefe.app.domain.repository.PlanRepository
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.domain.repository.PriceRepository
@@ -97,6 +99,7 @@ val appModule = module {
     // Fiyat deposu ONCE: portfoy pozisyonlari okurken guncel fiyatla degerler.
     single<PriceRepository> { SqlDelightPriceRepository(get(), get(), get()) }
     single<PortfolioRepository> { SqlDelightPortfolioRepository(get(), get(), get()) }
+    single<PlanRepository> { SqlDelightPlanRepository(get(), get()) }
     single<PreferencesRepository> { SqlDelightPreferencesRepository(get()) }
 
     // Kimlik: Supabase auth ucu + oturumu cihazda tutan depo.
