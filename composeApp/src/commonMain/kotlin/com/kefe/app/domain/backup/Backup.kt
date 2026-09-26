@@ -30,9 +30,63 @@ data class BackupFile(
     val goalAssets: List<BackupGoalAsset> = emptyList(),
     val snapshots: List<BackupSnapshot> = emptyList(),
     val settings: Map<String, String> = emptyMap(),
+    // Aylik plan, gelir, gider, butce (bkz. 12.sqm). Eski yedeklerde YOK -
+    // bos liste gelir. Surum ARTIRILMADI (createdAt/goalId/quantity ile ayni
+    // emsal): eski bir surum yeni yedegi acarsa bu listeleri sessizce atlar,
+    // artirilsaydi yedegi tumden reddederdi. Iki telefon birlikte
+    // guncellendigi icin atlamak daha az zararli.
+    val planItems: List<BackupPlanItem> = emptyList(),
+    val incomes: List<BackupIncome> = emptyList(),
+    val expenses: List<BackupExpense> = emptyList(),
+    val budgets: List<BackupBudget> = emptyList(),
 )
 
 const val CurrentBackupVersion: Int = 1
+
+@Serializable
+data class BackupPlanItem(
+    val id: String,
+    val year: Int,
+    val month: Int,
+    val assetKey: String,
+    val assetName: String,
+    val mode: String,
+    val target: Double,
+    val goalId: String? = null,
+    val unitPriceAtPlan: Double? = null,
+)
+
+@Serializable
+data class BackupIncome(
+    val id: String,
+    val year: Int,
+    val month: Int,
+    val memberId: String,
+    val kind: String,
+    val amount: Double,
+)
+
+@Serializable
+data class BackupExpense(
+    val id: String,
+    val year: Int,
+    val month: Int,
+    val day: Int,
+    val category: String,
+    val amount: Double,
+    val note: String? = null,
+    val addedByMemberId: String? = null,
+    val createdAt: Long = 0L,
+)
+
+@Serializable
+data class BackupBudget(
+    val id: String,
+    val year: Int,
+    val month: Int,
+    val category: String,
+    val amount: Double,
+)
 
 @Serializable
 data class BackupMember(

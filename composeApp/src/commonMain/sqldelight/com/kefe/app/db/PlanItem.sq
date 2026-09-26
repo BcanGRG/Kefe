@@ -1,0 +1,66 @@
+-- Aylik yatirim plani satirlari (bkz. domain/model/MonthlyPlan.kt, 12.sqm).
+--
+-- YALNIZ NIYET SAKLANIR: "Ekim'de 10 gr gram altin". Neyin yapildigi islem
+-- defterinden turetilir; burada bir "tamamlandi" kolonu YOK ve olmamali.
+--
+-- YAPRAK TABLO: yerel FOREIGN KEY yok. goalId duz metin - hedef yumusak
+-- silindiginde satir kalir, okurken yok sayilir. Bagli tablo olmadigi icin
+-- OR REPLACE guvenli (goals/positions'taki CASCADE tuzagi burada yok).
+--
+-- KIMLIK ICERIKTEN: pi_<yyyy>_<mm>_<assetKey>. "Bir ayda bir varlik icin tek
+-- satir" kurali boylece SEMADA durur ve iki telefon ayni satirda bulusur.
+--
+-- mode DUZ METIN, `AS Enum` degil: EnumColumnAdapter bilinmeyen metinde
+-- okurken patliyor (bkz. 10.sqm). Esleme mapper'da, savunmaci.
+CREATE TABLE plan_items (
+    id TEXT NOT NULL PRIMARY KEY,
+    periodYear INTEGER NOT NULL,
+    periodMonth INTEGER NOT NULL,
+    assetKey TEXT NOT NULL,
+    assetName TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    target REAL NOT NULL,
+    goalId TEXT,
+    unitPriceAtPlan REAL,
+    updatedAt INTEGER NOT NULL DEFAULT 0,
+    deletedAt INTEGER
+);
+
+CREATE INDEX plan_items_period ON plan_items(periodYear, periodMonth);
+
+selectPlanItems:
+SELECT *
+FROM plan_items
+WHERE deletedAt IS NULL
+ORDER BY periodYear, periodMonth, updatedAt;
+
+-- Yerel degisim tetikleyicisi - mezar taslari da sayilir, silme de bir degisim.
+countPlanItems:
+SELECT count(*)
+FROM plan_items;
+
+-- Push: son esitlemeden beri degisenler (mezar tasi dahil).
+selectPlanItemsChangedSince:
+SELECT *
+FROM plan_items
+WHERE updatedAt >= :since
+ORDER BY updatedAt;
+
+-- Yerel yazma. deletedAt NULL'lanir: silinmis bir satiri yeniden eklemek onu
+-- diriltir (kimlik icerikten turedigi icin ayni satirdir).
+upsertPlanItem:
+INSERT OR REPLACE INTO plan_items(id, periodYear, periodMonth, assetKey, assetName, mode, target, goalId, unitPriceAtPlan, updatedAt, deletedAt)
+VALUES (:id, :periodYear, :periodMonth, :assetKey, :assetName, :mode, :target, :goalId, :unitPriceAtPlan, :updatedAt, NULL);
+
+-- Pull: sunucunun deletedAt'i de tasinir.
+applyPlanItemPull:
+INSERT OR REPLACE INTO plan_items(id, periodYear, periodMonth, assetKey, assetName, mode, target, goalId, unitPriceAtPlan, updatedAt, deletedAt)
+VALUES (:id, :periodYear, :periodMonth, :assetKey, :assetName, :mode, :target, :goalId, :unitPriceAtPlan, :updatedAt, :deletedAt);
+
+deletePlanItemById:
+UPDATE plan_items
+SET deletedAt = :deletedAt, updatedAt = :deletedAt
+WHERE id = :id AND deletedAt IS NULL;
+
+deleteAllPlanItems:
+DELETE FROM plan_items;
