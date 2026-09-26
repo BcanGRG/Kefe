@@ -6,6 +6,7 @@ import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.kefe.app.data.db.DefaultCurrency
 import com.kefe.app.data.db.DefaultPortfolioName
 import com.kefe.app.data.db.LocalPortfolioId
+import com.kefe.app.data.db.bootstrapIfNeeded
 import com.kefe.app.data.db.toDomain
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.db.Positions
@@ -538,7 +539,12 @@ class SqlDelightPortfolioRepository(
                         principal = it.principal,
                     )
                 },
+                // Cihaza ait tercihler yedege HIC YAZILMAZ. Geri yukleme onlari
+                // zaten atliyor; ama dosyada durmalari, baska bir telefonun
+                // kilidini ya da "bu telefon kimin" secimini WhatsApp'tan
+                // gezdirmek demekti ve eski bir surum onlari okuyup uygulardi.
                 settings = settingQueries.selectAllSettings().executeAsList()
+                    .filter { it.settingKey !in DeviceOnlySettings }
                     .associate { it.settingKey to it.settingValue },
                 // Satirlar HAM tasinir (metin kolonlar oldugu gibi): bu surumun
                 // tanimadigi bir kategori bile yedekte kaybolmamali.
@@ -846,9 +852,24 @@ class SqlDelightPortfolioRepository(
                 // Ayarlar tumden silinir - tercihler de kullanicinin verisi.
                 // Icindeki acilis bayraklari da gittigi icin uygulama sifirdan
                 // acilmis gibi baslar: bu, "her seyi sil" dedikten sonra
-                // beklenen davranis. Portfoy satirlari INSERT OR IGNORE ile
-                // kuruldugu icin acilis kurulumunun tekrar calismasi zararsiz.
+                // beklenen davranis.
                 settingQueries.deleteAllSettings()
+
+                // Silinen veritabani YENI bir veritabanidir: kurulum AYNI
+                // transaction'da (ic ice transaction distakine katilir) yeniden
+                // calisir ve bayragi, cihaz varsayilanlarini geri yazar. NEYDI:
+                // yalniz silinince kilit anahtari eksik kaliyordu; eksik anahtar
+                // "eski kurulum, kilit acik" okundugu icin (bkz. lockEnabled)
+                // kilidi hic acmamis biri bile surecin geri kalaninda ve sonraki
+                // acilista kilitli sayiliyordu.
+                //
+                // Bayragi elle yazmak YETMEZ: kurulum portfoyu ve IKI uyeyi
+                // INSERT OR IGNORE ile kurar. Es profilini kurmayan eski bir
+                // surumden kalan tek profilli veritabani, silme sonrasi tekrar
+                // calisan kurulumla onariliyordu; bayrak elle yazilsa bu onarim
+                // kaybolur ve "bu telefon kimin" adimi olmayan bir profili
+                // adlandirmaya calisirdi. Var olan uyelerin adlarina dokunulmaz.
+                database.bootstrapIfNeeded()
             }
         }
     }
@@ -1192,7 +1213,7 @@ class SqlDelightPortfolioRepository(
 private const val OnboardedKey = "onboarded"
 
 /**
- * Geri yuklemede ATLANACAK tercihler.
+ * Yedege YAZILMAYAN ve geri yuklemede ATLANAN tercihler.
  *
  * Bunlar veriye degil CIHAZA aittir: yedek dosyasi tercihler tablosunu oldugu
  * gibi tasidigi icin, atlanmasalar Volkan'in yedegini yukleyen Ayse'nin telefonu
@@ -1203,4 +1224,10 @@ private val DeviceOnlySettings = setOf(
     // Push watermark'i cihaza ait: geri yukleme onu sifirlamamali, yoksa restore
     // sonrasi butun defter yeniden itilir (zararsiz ama gereksiz trafik).
     PreferenceKeys.LastPushedAt,
+    // Acilis kilidi bu telefonun parmak izine/ekran kilidine baglidir. NEYDI:
+    // kilidi acik bir telefonun yedegi, kilidi hic istememis ya da kilit
+    // donanimi olmayan bir cihaza yuklenince kilidi de acip getiriyordu.
+    PreferenceKeys.BiometricLock,
+    // Bakiyeyi gizlemek de bu cihazin ortamina gore verilen bir karar.
+    PreferenceKeys.HideBalanceOnStart,
 )

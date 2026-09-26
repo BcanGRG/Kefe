@@ -15,7 +15,10 @@ import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.data.remote.SupabaseConfig
 import com.kefe.app.domain.repository.PreferencesRepository
+import com.kefe.app.domain.repository.lockEnabled
+import com.kefe.app.security.BiometricGate
 import com.kefe.app.ui.mvi.MviViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -32,9 +35,14 @@ class SettingsViewModel(
     private val files: FileTransfer,
     private val clock: KefeClock,
     private val authRepository: AuthRepository,
+    private val biometric: BiometricGate,
 ) : MviViewModel<SettingsUiState, SettingsIntent, SettingsEffect>(
     SettingsUiState(),
 ) {
+
+    // Acma istemi suruyor. Anahtara art arda dokunmak ikinci bir sistem istemi
+    // acmamali; ilki bitene kadar yenisi yok sayilir.
+    private var lockJob: Job? = null
 
     init {
         observe()
@@ -79,7 +87,8 @@ class SettingsViewModel(
             is SettingsIntent.SetShowCents -> put(PreferenceKeys.ShowCents, intent.value)
             is SettingsIntent.SetHideBalanceOnStart ->
                 put(PreferenceKeys.HideBalanceOnStart, intent.value)
-            is SettingsIntent.SetBiometricLock -> put(PreferenceKeys.BiometricLock, intent.value)
+            is SettingsIntent.SetBiometricLock ->
+                if (intent.value) enableLock() else put(PreferenceKeys.BiometricLock, false)
 
             // Silme ONAY ISTER. Dogrudan silen bir satir, yanlislikla dokunulunca
             // geri donusu olmayan bir kayip demekti.
@@ -98,6 +107,30 @@ class SettingsViewModel(
     }
 
     private fun put(key: String, value: Boolean) = put(key, value.toString())
+
+    /**
+     * Acilis kilidini ACAR - ancak kimlik bir kez dogrulanirsa.
+     *
+     * Kararin kendisi saf fonksiyonlarda (lockEnableStep, lockEnableOutcome):
+     * BiometricGate testte taklit edilemiyor. Kapatmak kimlik sormaz; kilidi
+     * kapatmak isteyen zaten uygulamanin icinde, kilidi bir kez acmis biri.
+     */
+    private fun enableLock() {
+        if (lockJob?.isActive == true) return
+        lockJob = viewModelScope.launch {
+            when (val step = lockEnableStep(biometric.availability())) {
+                LockEnableStep.Unavailable -> Unit
+                is LockEnableStep.Refuse -> emitEffect(SettingsEffect.Notice(step.message))
+                LockEnableStep.Authenticate -> {
+                    val outcome = lockEnableOutcome(
+                        biometric.authenticate(LockEnablePromptTitle, LockEnablePromptSubtitle),
+                    )
+                    if (outcome.enable) preferences.put(PreferenceKeys.BiometricLock, true.toString())
+                    outcome.notice?.let { emitEffect(SettingsEffect.Notice(it)) }
+                }
+            }
+        }
+    }
 
     private fun put(key: String, value: String) {
         viewModelScope.launch { preferences.put(key, value) }
@@ -188,6 +221,11 @@ class SettingsViewModel(
                 portfolioRepository.observeMembers(),
                 preferences.observeAll(),
             ) { portfolio, members, prefs ->
+                // Emisyon aninda bakmak yeter: satiri gizleyen tek sey
+                // donanimin/platformun olmamasi ve o surec icinde degismez.
+                // Parmak izi eklenip silinmesi (NotEnrolled <-> Available)
+                // satiri gizlemez; o fark acma aninda yeniden sorulur.
+                val availability = biometric.availability()
                 current.copy(
                     portfolioName = portfolio.name,
                     members = members.mapIndexed { index, member ->
@@ -196,7 +234,11 @@ class SettingsViewModel(
                     themeMode = prefs.themeMode(),
                     showCents = prefs.flag(PreferenceKeys.ShowCents, default = false),
                     hideBalanceOnStart = prefs.flag(PreferenceKeys.HideBalanceOnStart, true),
-                    biometricLock = prefs.flag(PreferenceKeys.BiometricLock, true),
+                    // Anahtar kilidin YAPACAGINI gosterir (bkz. lockSwitchOn):
+                    // kimligi tanimsiz eski kurulumda "acik" ama sessiz bir
+                    // anahtar yerine kapali bir anahtar.
+                    biometricLock = lockSwitchOn(prefs.lockEnabled(), availability),
+                    lockAvailable = lockRowVisible(availability),
                     prefsLoaded = true,
                     activeMemberId = prefs[PreferenceKeys.ActiveMemberId],
                     // Yedek satirinin sagi: son yedek tarihi. Bos ise "Henüz

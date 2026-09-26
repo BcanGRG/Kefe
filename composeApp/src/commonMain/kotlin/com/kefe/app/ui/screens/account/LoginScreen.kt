@@ -470,16 +470,19 @@ private fun LockStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
                 ) { onIntent(LoginIntent.Unlock) },
             contentAlignment = Alignment.Center,
         ) {
-            KefeIcon(KefeIcons.Fingerprint, "Parmak izi ile aç", size = 48.dp, tint = c.accent)
+            KefeIcon(KefeIcons.Fingerprint, "Kilidi aç", size = 48.dp, tint = c.accent)
         }
 
+        // "Parmak izi ile aç" degil: istem yuzu ve cihaz PIN'ini/desenini de
+        // kabul ediyor. Yuzle acilan telefonda "parmak izi" yazmak yanlis bir
+        // soz, PIN'le acan icin de kafa karistirici.
         Spacer(Modifier.height(Space.x20))
-        Text("Parmak izi ile aç", style = t.bodyStrong, color = c.onSurface)
+        Text("Kilidi aç", style = t.bodyStrong, color = c.onSurface)
         Spacer(Modifier.height(6.dp))
         Text(
             text = state.unlockError
-                ?: "Bakiyeler yalnız siz açtıktan sonra görünür. " +
-                "Fiyat güncellemesi arka planda sürer.",
+                ?: "Parmak izi, yüz ya da ekran kilidinizle açın. " +
+                "Fiyatlar arka planda güncellenir.",
             style = t.caption.copy(lineHeight = 19.sp),
             color = if (state.unlockError != null) c.negative else c.onSurfaceMuted,
             textAlign = TextAlign.Center,

@@ -112,14 +112,20 @@ fun SettingsScreen(
                     checked = state.hideBalanceOnStart,
                     onCheckedChange = { onIntent(SettingsIntent.SetHideBalanceOnStart(it)) },
                 )
-                KefeHairline()
-                SettingsSwitchRow(
-                    title = "Biyometrik kilit",
-                    subtitle = "Parmak izi veya yüz ile aç",
-                    checked = state.biometricLock,
-                    onCheckedChange = { onIntent(SettingsIntent.SetBiometricLock(it)) },
-                    leadingIcon = KefeIcons.Fingerprint,
-                )
+                // Kilidin karsiligi olmayan cihazda (masaustu, donanimsiz
+                // telefon) satir cizilmez; acilamayacak anahtar bozuk gorunur.
+                // Alt satir "parmak izi" ile sinirli degil: Android istemi cihaz
+                // PIN'ini de kabul ediyor, iOS da parolaya dusuyor.
+                if (state.lockAvailable) {
+                    KefeHairline()
+                    SettingsSwitchRow(
+                        title = "Açılış kilidi",
+                        subtitle = "Kefe açılırken parmak izi, yüz ya da ekran kilidi sorulur",
+                        checked = state.biometricLock,
+                        onCheckedChange = { onIntent(SettingsIntent.SetBiometricLock(it)) },
+                        leadingIcon = KefeIcons.Fingerprint,
+                    )
+                }
             }
 
             // Fiyat satirlari SALT OKUNUR: ayarlanabilir bir aralik ya da

@@ -69,20 +69,73 @@ data class LoginUiState(
 }
 
 /**
- * Acilis kilidi bu acilista devrede mi.
+ * Acilis kilidi bu acilista devrede mi. Dort kosulun HEPSI gerekir:
  *
- * KILIT YALNIZ KURULUMDAN SONRA. Kilit varsayilan olarak acik ve once kurulum
- * durumuna bakmiyordu: YENI kurulumda bile ilk ekran "Kefe kilitli" oluyordu.
- * Parmak izi (ya da parmak izi yoksa dogrudan) acilinca uygulama giris formunu
- * HIC gostermeden "Profiller" ekranina geciyordu - hesabi olan kullanici
- * e-postasini yazacagi yeri hic gormeden yeni profil olusturmaya itiliyordu ve
- * telefon hesaba baglanmadigi icin kayitlar hic inmiyordu.
+ * - [lockEnabled]: kullanici kilidi acmis (ya da eski kurulum; bkz. lockEnabled()).
  *
- * Kurulmamis bir uygulamada saklanacak bakiye yok; perde ancak kurulumdan
- * sonra anlamli.
+ * - [setupDone]: acilis akisi gecilmis VE bu telefonun profili secilmis. NEYDI:
+ *   once yalniz "onboarded" bakiliyordu, o da profil seciminden ONCE yaziliyor.
+ *   Yeni kurulumda "Atla" deyip profil ekraninda uygulamayi kapatan kullanici
+ *   bir sonraki acilista, henuz hicbir kaydi yokken "Kefe kilitli" goruyordu;
+ *   daha once de kilit acilinca giris formu hic gorunmeden "Profiller"e
+ *   geciliyordu. Kurulmamis bir uygulamada saklanacak bakiye yok.
+ *
+ * - [gateAvailable]: cihazda kimlik sorulabiliyor. NEYDI: masaustunde ve
+ *   parmak izi/ekran kilidi tanimsiz telefonda kilit ekrani bir an cizilip
+ *   hemen aciliyordu (kilit orada perdeden bile degil, bos bir parlama).
+ *
+ * - ![unlockedThisLaunch]: bu acilista bir kez acildiysa tekrar sorulmaz.
  */
-internal fun isLaunchLocked(lockEnabled: Boolean, onboarded: Boolean, unlockedThisLaunch: Boolean): Boolean =
-    lockEnabled && onboarded && !unlockedThisLaunch
+internal fun isLaunchLocked(
+    lockEnabled: Boolean,
+    setupDone: Boolean,
+    gateAvailable: Boolean,
+    unlockedThisLaunch: Boolean,
+): Boolean = lockEnabled && setupDone && gateAvailable && !unlockedThisLaunch
+
+/**
+ * Kilit icin kurulum BITTI mi: acilis akisi gecilmis VE bu telefonun profili
+ * secilmis. "onboarded" profil seciminden ONCE yazildigi icin tek basina yetmez
+ * (bkz. [isLaunchLocked]); `null` = henuz diskten okunmadi, bitmemis sayilir.
+ */
+internal fun launchSetupDone(onboarded: Boolean?, activeMemberId: String?): Boolean =
+    onboarded == true && activeMemberId != null
+
+/**
+ * Acilisin BASLANGIC degeri: kilitsiz baslayan acilis "acilmis" sayilir.
+ *
+ * KILIT YALNIZ ACILISTA. NEYDI: kilitsiz acilan uygulamada Ayarlar'dan kilit
+ * acilinca `locked` surecin ortasinda true'ya donuyordu; ardindan "Tüm verileri
+ * sil" koku LoginKey yapinca kilit asamasi takiliyor ve kullanici giris formu
+ * yerine "Kilitli" goruyordu. Yeni acilan kilit bir sonraki acilista gecerli.
+ */
+internal fun unlockedAtLaunchStart(lockEnabled: Boolean, setupDone: Boolean, gateAvailable: Boolean): Boolean =
+    !isLaunchLocked(lockEnabled, setupDone, gateAvailable, unlockedThisLaunch = false)
+
+/**
+ * LoginKey'in ekranda cizecegi durum. Asama YALNIZ kabuktan turetilir; VM'nin
+ * kendi `stage`/`unlocked` alanlarina guvenilmez.
+ *
+ * LoginKey CIFT GOREVLI: acilis KILIDI (yigin koku iken) ve bulut GIRISI
+ * (Ayarlar'dan itilince, ya da "Tüm verileri sil" sonrasi kok). AYNI VM surec
+ * boyunca yasar ve stage=Locked / unlocked=true hic sifirlanmaz. NEYDI:
+ *   - itilmis giriste kilit kalintisi parmak izi istemini acip unlocked
+ *     etkisiyle kullaniciyi Ozet'e geri atiyordu;
+ *   - "Tüm verileri sil" koku LoginKey yapinca eski unlocked=true enterApp'i
+ *     hemen tetikliyor (giris formu hic gorunmuyordu) ya da eski Locked asamasi
+ *     "Kilitli" ekranini geri getiriyordu.
+ *
+ * Bu yuzden: kok VE kilitliyse Locked (ILK KAREDEN - VM SignIn ile dogar,
+ * kilit ancak etkiyle gelir; arada giris formu bir kare parliyordu) ve
+ * [LoginUiState.unlocked] KORUNUR ki kilit acilinca kabuk iceri alsin. Aksi her
+ * durumda temiz SignIn: kilit kalintisi (unlocked, unlockError) yok sayilir.
+ */
+internal fun loginScreenState(vm: LoginUiState, asRoot: Boolean, locked: Boolean): LoginUiState =
+    if (asRoot && locked) {
+        vm.copy(stage = LoginStage.Locked)
+    } else {
+        vm.copy(stage = LoginStage.SignIn, unlocked = false, unlockError = null)
+    }
 
 /**
  * Tek "@" ve ondan sonra en az bir nokta. Ortak kodda regex yerine elle

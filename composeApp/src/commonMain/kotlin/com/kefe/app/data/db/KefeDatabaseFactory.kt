@@ -8,6 +8,7 @@ import com.kefe.app.db.Goals
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.db.Positions
 import com.kefe.app.db.Transactions
+import com.kefe.app.domain.repository.PreferenceKeys
 
 /**
  * Veritabani nesnesini kurar.
@@ -102,9 +103,33 @@ fun KefeDatabase.bootstrapIfNeeded() {
             initials = "E",
             sortOrder = 1L,
         )
+        writeNewDatabaseDefaults()
         settingQueries.upsertSetting(
             settingKey = BootstrapKey,
             settingValue = BootstrapValue,
+        )
+    }
+}
+
+/**
+ * Yeni bir veritabaninin cihaz tercihleri. Kurulum, ornek veri tohumu ve
+ * "Tüm verileri sil" ayni yerden gecer ki ucu ayrismasin.
+ *
+ * ACILIS KILIDI KAPALI yazilir. NEYDI: kilit varsayilan olarak acikti; yeni
+ * kurulumda "Atla" deyip profili olusturan ve uygulamayi kapatan kullanici bir
+ * sonraki acilista, hic istemedigi bir "Kefe kilitli" ekraniyla karsilasiyordu.
+ * Kilit artik istege bagli: kullanici Ayarlar'dan acar.
+ *
+ * ANAHTAR YOKSA yazilir, varsa dokunulmaz: kullanicinin actigi kilit bir
+ * yeniden kurulumda (bootstrapVersion silinip kurulum tekrar calisirsa) sessizce
+ * kapanmamali. Eski kurulumlar bootstrapVersion'i zaten tasidigi icin buraya hic
+ * gelmez; anahtarlari eksik kalir ve `lockEnabled()` onlari "acik" okur.
+ */
+internal fun KefeDatabase.writeNewDatabaseDefaults() {
+    if (settingQueries.selectSetting(PreferenceKeys.BiometricLock).executeAsOneOrNull() == null) {
+        settingQueries.upsertSetting(
+            settingKey = PreferenceKeys.BiometricLock,
+            settingValue = false.toString(),
         )
     }
 }

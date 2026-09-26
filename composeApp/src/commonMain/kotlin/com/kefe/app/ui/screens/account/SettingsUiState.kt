@@ -34,14 +34,31 @@ data class SettingsUiState(
 
     // Gizlilik
     val hideBalanceOnStart: Boolean = true,
-    val biometricLock: Boolean = true,
+
+    /**
+     * Acilis kilidi GERCEKTEN devrede mi. Varsayilan KAPALI: yeni kurulum
+     * kilitsiz baslar, kilit Ayarlar'dan acilir. Diskteki deger `lockEnabled()`
+     * ile okunur (anahtari olmayan eski kurulum acik sayilir), ama bu cihazda
+     * kimlik sorulamiyorsa kapali gorunur (bkz. lockSwitchOn) - anahtar ile
+     * acilis kapisi ayni seyi soylesin.
+     */
+    val biometricLock: Boolean = false,
+
+    /**
+     * "Açılış kilidi" satiri cizilsin mi. Donanimi olmayan telefonda ve
+     * masaustunde kilidin karsiligi yok; acilamayacak bir anahtar gostermek
+     * "bozuk" gorunuyordu. Kimligi tanimsiz (NotEnrolled) cihazda satir durur,
+     * acilmak istenince sebebini soyler.
+     */
+    val lockAvailable: Boolean = false,
 
     /**
      * Tercihler DISKTEN OKUNDU mu.
      *
-     * [biometricLock] varsayilani acik; bayrak olmasaydi uygulama diske hic
-     * bakmadan "kilitli" varsayar ve kilidi hic istememis bir kullaniciya bile
-     * ilk karede parmak izi sorardi. Kilit ancak bu true olunca uygulanir.
+     * Kilit varsayilani artik kapali, ama eski kurulumlarda kilit diskte ACIK
+     * okunur (bkz. lockEnabled). Bayrak olmasaydi uygulama diske bakmadan
+     * "kilitsiz" varsayar ve kilitli bir telefonda ilk karede bakiyeyi
+     * gosterirdi. Kilit karari ancak bu true olunca verilir.
      */
     val prefsLoaded: Boolean = false,
 
@@ -82,6 +99,8 @@ sealed interface SettingsIntent {
     data class SetShowCents(val value: Boolean) : SettingsIntent
 
     data class SetHideBalanceOnStart(val value: Boolean) : SettingsIntent
+
+    /** Acmak once kimlik dogrulamasi ister (bkz. lockEnableStep); kapatmak istemez. */
     data class SetBiometricLock(val value: Boolean) : SettingsIntent
 
     data object Backup : SettingsIntent
@@ -122,4 +141,11 @@ sealed interface SettingsEffect {
     data object Restored : SettingsEffect
 
     data class BackupFailed(val message: String) : SettingsEffect
+
+    /**
+     * Kullaniciya tek satirlik bilgi (orn. "Açılış kilidi açık..."). Kabuk
+     * seritte gosterir; anahtarin neden acilmadigini sessiz birakmak "anahtar
+     * bozuk" gibi gorunuyordu.
+     */
+    data class Notice(val message: String) : SettingsEffect
 }

@@ -31,7 +31,17 @@ interface PreferencesRepository {
 object PreferenceKeys {
     const val ThemeMode = "themeMode"
     const val ShowCents = "showCents"
+    /**
+     * Acilista bakiyeyi gizle. CIHAZA AITTIR: omuz ustunden bakis riski her
+     * telefonda ayri; Volkan'in yedegi Ayse'nin telefonundaki secimi degistirmemeli.
+     */
     const val HideBalanceOnStart = "hideBalanceOnStart"
+
+    /**
+     * Acilis kilidi. CIHAZA AITTIR (yedege girmez, geri yuklemede korunur):
+     * kilit bu telefonun parmak izine/ekran kilidine baglidir, baska bir
+     * cihazin yedegiyle acilip kapanmamali. Okuma yalniz [lockEnabled] ile.
+     */
     const val BiometricLock = "biometricLock"
     const val NotifyPartnerEntry = "notifyPartnerEntry"
     const val NotifyMonthlyReminder = "notifyMonthlyReminder"
@@ -58,3 +68,21 @@ object PreferenceKeys {
      */
     const val LastPushedAt = "lastPushedAt"
 }
+
+/**
+ * Acilis kilidi acik mi. Kilidi okuyan TEK yer.
+ *
+ * ANAHTAR YOKSA ACIK (eski kurulum). NEYDI: kilit varsayilan olarak acikti ve
+ * anahtar yalniz Ayarlar'daki anahtara dokunulunca yaziliyordu; o surumden gelen
+ * telefonlarda anahtar hic yok ve sahipleri kilitli acilisa alisik. Onlarinki
+ * sessizce kapanmasin diye eksik anahtar "acik" okunur.
+ *
+ * YENI veritabanlari kurulumda acikca "false" yazar (bkz. bootstrapIfNeeded,
+ * deleteAllData): yeni kurulum kilitsiz baslar, isteyen Ayarlar'dan acar.
+ *
+ * NEDEN TEK OKUYUCU: varsayilan once ekran durumunda ve ViewModel'de ayri ayri
+ * yaziliydi; biri degisip digeri kalinca ayni anahtar iki yerde iki anlam
+ * tasirdi.
+ */
+fun Map<String, String>.lockEnabled(): Boolean =
+    this[PreferenceKeys.BiometricLock]?.toBooleanStrictOrNull() ?: true

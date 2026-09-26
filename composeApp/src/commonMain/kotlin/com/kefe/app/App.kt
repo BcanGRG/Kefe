@@ -53,6 +53,7 @@ import com.kefe.app.navigation.ProfilesKey
 import com.kefe.app.navigation.SummaryKey
 import com.kefe.app.navigation.desktopDestinations
 import com.kefe.app.navigation.topLevelDestinations
+import com.kefe.app.security.BiometricGate
 import com.kefe.app.ui.brand.KefeSplash
 import com.kefe.app.ui.components.KefeBackHandler
 import com.kefe.app.ui.components.KefeBottomNav
@@ -69,7 +70,6 @@ import com.kefe.app.ui.screens.account.ActivityScreen
 import com.kefe.app.ui.screens.account.ActivityViewModel
 import com.kefe.app.ui.screens.account.LoginIntent
 import com.kefe.app.ui.screens.account.LoginScreen
-import com.kefe.app.ui.screens.account.LoginStage
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.OnboardingPageCount
 import com.kefe.app.ui.screens.account.OnboardingScreen
@@ -85,6 +85,10 @@ import com.kefe.app.ui.screens.account.ProfilesScreen
 import com.kefe.app.ui.screens.account.ProfilesViewModel
 import com.kefe.app.ui.screens.account.ThemeMode
 import com.kefe.app.ui.screens.account.isLaunchLocked
+import com.kefe.app.ui.screens.account.launchSetupDone
+import com.kefe.app.ui.screens.account.lockCanApply
+import com.kefe.app.ui.screens.account.loginScreenState
+import com.kefe.app.ui.screens.account.unlockedAtLaunchStart
 import com.kefe.app.ui.screens.assets.AssetDetailEffect
 import com.kefe.app.ui.screens.assets.AssetDetailScreen
 import com.kefe.app.ui.screens.assets.AssetDetailViewModel
@@ -226,8 +230,22 @@ private fun KefeApp(
     // Cihaz kilidi. Oturum ya da veri kapisi DEGIL - yalniz bu acilista bakiyeyi
     // gorunmez tutar; kullanici bir kez actiktan sonra uygulama kapanana kadar
     // tekrar sorulmaz.
-    var unlockedThisLaunch by remember { mutableStateOf(false) }
-    val locked = isLaunchLocked(settings.biometricLock, onboarded == true, unlockedThisLaunch)
+    //
+    // Kimlik sorulabiliyor mu, acilista BIR KEZ bakilir: karar bu acilisa ait.
+    // Masaustunde ve kimligi tanimsiz telefonda kilit hic devreye girmez; once
+    // kilit ekrani bir an cizilip hemen aciliyordu.
+    val biometric = koinInject<BiometricGate>()
+    val gateAvailable = remember { lockCanApply(biometric.availability()) }
+    // Kurulum BITMIS sayilmasi icin profil de secilmis olmali (bkz.
+    // launchSetupDone): yeni kurulum, henuz tek kaydi yokken kilitleniyordu.
+    val setupDone = launchSetupDone(onboarded, settings.activeMemberId)
+    // KILIT YALNIZ ACILISTA: kilitsiz baslayan acilis "acilmis" sayilir, surecin
+    // ortasinda acilan kilit bir sonraki acilista gecerli (bkz.
+    // unlockedAtLaunchStart).
+    var unlockedThisLaunch by remember {
+        mutableStateOf(unlockedAtLaunchStart(settings.biometricLock, setupDone, gateAvailable))
+    }
+    val locked = isLaunchLocked(settings.biometricLock, setupDone, gateAvailable, unlockedThisLaunch)
 
     // Acilistaki kok: giris yapilmamis ya da kilitliyse Login; profil secilmemisse
     // "bu telefon kimin"; aksi halde Ozet. Kilit ekrani Login'in bir asamasidir.
@@ -293,9 +311,9 @@ private fun KefeApp(
      * girmek erken olur.
      */
     fun enterApp() {
-        // Kurulumu bu acilista gecen kullanici bu acilista kilitlenmez:
-        // markOnboarded asagida kilidi "etkin" yapar, ama iceri yeni giren
-        // birine hemen parmak izi sormak anlamsiz.
+        // Iceri giren bu acilista bir daha kilitlenmez. Kilitsiz baslayan acilis
+        // zaten "acilmis" sayiliyor; bu satir kilit ekranindan gelen yolu da
+        // ayni yere baglar - iceri yeni giren birine hemen kimlik sormak anlamsiz.
         unlockedThisLaunch = true
         while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
         backStack[0] = if (settings.activeMemberId == null) ProfileSetupKey else SummaryKey
@@ -326,6 +344,9 @@ private fun KefeApp(
             SettingsEffect.BackupReady -> saveError = "Yedek hazır — kaydetmek için bir yer seçin."
             SettingsEffect.Restored -> saveError = "Yedek geri yüklendi."
             is SettingsEffect.BackupFailed -> saveError = effect.message
+            // Orn. acilis kilidi acildi / acilamadi: anahtarin neden oldugu gibi
+            // kaldigini sessiz birakmak "bozuk" gibi gorunuyordu.
+            is SettingsEffect.Notice -> saveError = effect.message
         }
     }
 
@@ -439,36 +460,14 @@ private fun KefeApp(
                             val vmState by vm.state.collectAsState()
 
                             // LoginKey CIFT GOREVLI: acilis KILIDI (yigin koku iken)
-                            // ve bulut GIRISI (Ayarlar'dan itilince). AYNI VM iki
-                            // baglama da hizmet ettigi icin kilitten arta kalan durum
-                            // (stage=Locked, unlocked=true) itilmis girise siziyordu:
-                            // "Giriş yap" bir an kilit ekranini -dolayisiyla parmak izi
-                            // istemini- acip, unlocked etkisiyle enterApp cagirip Ozet'e
-                            // geri atiyordu. Cozum: itilmis LoginKey HER ZAMAN temiz
-                            // SignIn gosterir; kilit kalintisini (stage/unlocked) yok
-                            // sayar. Boylece ne kilit ekrani cizilir ne de enterApp
-                            // tetiklenir - dogrudan e-posta/kod asamasi gelir.
-                            //
-                            // KOK LoginKey ve KILITLI ise asama ILK KAREDEN
-                            // itibaren Locked cizilir. ViewModel SignIn ile
-                            // dogar ve kilit ancak asagidaki LaunchedEffect ile
-                            // gelir; arada giris ekrani bir kare parliyordu -
-                            // splash'ten sonra "bir an login goruyorum" denen
-                            // sey buydu. Etki yine calisir, yalniz cizim onu
-                            // beklemez.
+                            // ve bulut GIRISI (Ayarlar'dan itilince ya da "Tüm
+                            // verileri sil" sonrasi kok). Ayni VM ikisine de hizmet
+                            // ettigi ve kilit kalintisi (stage=Locked,
+                            // unlocked=true) hic sifirlanmadigi icin asama YALNIZ
+                            // kabuktan (asRoot, locked) turetilir - kurallar ve
+                            // gecmis hatalar loginScreenState'te.
                             val asRoot = backStack.firstOrNull() == LoginKey
-                            val state = when {
-                                !asRoot -> vmState.copy(
-                                    stage = LoginStage.SignIn,
-                                    unlocked = false,
-                                    unlockError = null,
-                                )
-
-                                locked && !vmState.unlocked ->
-                                    vmState.copy(stage = LoginStage.Locked)
-
-                                else -> vmState
-                            }
+                            val state = loginScreenState(vmState, asRoot, locked)
 
                             // Kod dogrulanir dogrulanmaz iceri gireriz; ekranda
                             // ayrica "devam et" dedirtmek bos bir adim olurdu.
