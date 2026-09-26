@@ -40,6 +40,7 @@ import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.security.BiometricGate
 import com.kefe.app.security.SecureStore
 import com.kefe.app.ui.screens.account.ActivityViewModel
+import com.kefe.app.ui.screens.account.LockViewModel
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.ProfileSetupViewModel
 import com.kefe.app.ui.screens.account.SettingsViewModel
@@ -139,7 +140,9 @@ val appModule = module {
     viewModelOf(::ActivityViewModel)
     viewModelOf(::ProfilesViewModel)
     viewModelOf(::SettingsViewModel)
+    // Giris ve acilis kilidi AYRI: kilit yalniz acilista kok, giris hep itilir.
     viewModelOf(::LoginViewModel)
+    viewModelOf(::LockViewModel)
     viewModelOf(::ProfileSetupViewModel)
 
     // Detay ekranlari hedef/pozisyon kimligini calisma aninda alir.

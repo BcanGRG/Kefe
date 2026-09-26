@@ -123,8 +123,11 @@ fun OnboardingScreen(
                     contentColor = c.onSurfaceMuted,
                     horizontalPadding = Space.x14,
                 )
+                // Son sayfanin dugmesi bir sonraki ekrani soyler: "Kuruluma
+                // başla" deyip profil ekranina dusmek, hedef ve varlik bekleyen
+                // kullaniciya "bu ne?" dedirtiyordu.
                 AccountFilledButton(
-                    text = if (page == OnboardingPageCount - 1) "Kuruluma başla" else "Devam",
+                    text = if (page == OnboardingPageCount - 1) "Profilleri oluştur" else "Devam",
                     onClick = onNext,
                     horizontalPadding = Space.x24,
                 )
@@ -144,7 +147,9 @@ private val OnboardingBodies = listOf(
         "TL'ye çevrilir. Kefe bankaya bağlanmaz.",
     "Hedefi TL, gram altın veya dolar cinsinden sabitleyin. İlerleme ve " +
         "tahmini varış tarihi kendiliğinden hesaplanır.",
-    "Önce hedef, sonra hangi varlıkları tuttuğunuz. Kalanı sırayla " +
+    // Siralama gercek akisla ayni: tanitimdan sonra ILK ekran iki profil
+    // (siz ve esiniz), hedef ve varliklar ondan sonra gelir.
+    "Önce iki profil, sonra hedef ve varlıklar. Kalanı sırayla " +
         "girersiniz — sonradan da eklenir.",
 )
 

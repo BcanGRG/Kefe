@@ -60,9 +60,14 @@ fun SettingsScreen(
     state: SettingsUiState,
     onIntent: (SettingsIntent) -> Unit,
     onOpenShare: () -> Unit,
-    /** Hesap bolumundeki "Hesaba bağla" / "Yeniden giriş yap" - giris ekranina goturur. */
-    onOpenLogin: () -> Unit,
+    /** Hesap bolumundeki "Hesaba bağla" - giris ekranini baglama amaciyla acar. */
+    onLink: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Dusen oturumda "Yeniden giriş yap" - giris ekranini bagli hesabin
+     * e-postasiyla acar. Baglamadan AYRI: basligi ve notu farkli (bkz. signInCopy).
+     */
+    onRelogin: () -> Unit = onLink,
     /** Yarim baglantida "Tamamla" - hesabi indirip "bu telefon kimin"i soran adima. */
     onCompleteLink: () -> Unit = {},
     /** Surum satirina basinca acilan bilesen katalogu - gelistirme araci. */
@@ -100,7 +105,8 @@ fun SettingsScreen(
                     mode = state.cloudMode,
                     onAction = { action ->
                         when (action) {
-                            AccountAction.Link, AccountAction.Relogin -> onOpenLogin()
+                            AccountAction.Link -> onLink()
+                            AccountAction.Relogin -> onRelogin()
                             AccountAction.CompleteLink -> onCompleteLink()
                             AccountAction.DropLink -> onIntent(SettingsIntent.DropLink)
                             AccountAction.SyncNow -> onIntent(SettingsIntent.SyncNow)

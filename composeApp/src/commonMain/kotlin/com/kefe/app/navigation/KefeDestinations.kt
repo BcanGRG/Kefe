@@ -3,6 +3,7 @@ package com.kefe.app.navigation
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation3.runtime.NavKey
 import com.kefe.app.ui.icons.KefeIcons
+import com.kefe.app.ui.screens.account.SignInPurpose
 
 sealed interface KefeKey : NavKey
 
@@ -29,8 +30,28 @@ data object ActivityKey : KefeKey
 data object ProfilesKey : KefeKey
 
 // --- Hesap akisi -----------------------------------------------------------
+//
+// Eskiden tek bir LoginKey uc isi birden goruyordu: acilis kilidi (kok iken),
+// ilk acilis (kok iken) ve Ayarlar'dan itilen giris. Ayni ViewModel uc duruma
+// hizmet ettigi icin kilit kalintisi (stage=Locked, unlocked=true) itilen
+// girise sizuyor, kabuk bunu "asRoot" ve vmState.copy yamalariyla bastiriyordu.
+// Artik her is kendi anahtarinda; hangisinin kok olabilecegi de belli.
 
-data object LoginKey : KefeKey
+/**
+ * Ilk acilis: "Nasil kullanmak istersiniz?" - yalniz KOK. Hesapsiz ve hesapli
+ * kullanim esit iki kart; ikisi de secili gelmez.
+ */
+data object WelcomeKey : KefeKey
+
+/** Acilis kilidi - yalniz KOK ve yalniz acilista (bkz. isLaunchLocked). */
+data object LockKey : KefeKey
+
+/**
+ * E-posta koduyla giris. HER ZAMAN ITILIR (ust cubuk + geri oku): geri
+ * gidilecek bir yer her zaman var - hosgeldin, profil adimi ya da Ayarlar.
+ * [purpose] basligi ve notu belirler (bkz. signInCopy).
+ */
+data class SignInKey(val purpose: SignInPurpose) : KefeKey
 
 data object OnboardingKey : KefeKey
 

@@ -59,13 +59,27 @@ class ProfileSetupFlowTest {
 
     private class FlowAuth(signedIn: Boolean) : AuthRepository {
         val state = MutableStateFlow<AuthState>(
-            if (signedIn) AuthState.SignedIn(AuthSession("u1", "e@k.app", "tok", "r", 0L)) else AuthState.SignedOut,
+            if (signedIn) SignedInU1 else AuthState.SignedOut,
         )
+
+        /** Sunucu yenileme jetonunu reddeder: oturum silinir, jeton yok. */
+        var rejectRefresh = false
+
+        /** Ag yok: jeton alinamaz ama oturum cihazda kalir. */
+        var tokenUnavailable = false
+
         override fun observeAuthState(): Flow<AuthState> = state
         override val isCloudConfigured: Boolean = true
         override suspend fun sendCode(email: String): Result<Unit> = Result.success(Unit)
         override suspend fun verifyCode(email: String, code: String): Result<Unit> = Result.success(Unit)
-        override suspend fun validAccessToken(): String? = (state.value as? AuthState.SignedIn)?.session?.accessToken
+        override suspend fun validAccessToken(): String? {
+            if (rejectRefresh) {
+                state.value = AuthState.SignedOut
+                return null
+            }
+            if (tokenUnavailable) return null
+            return (state.value as? AuthState.SignedIn)?.session?.accessToken
+        }
         override suspend fun signOut() = Unit
     }
 
@@ -128,6 +142,7 @@ class ProfileSetupFlowTest {
         assertTrue(s.accountHasProfiles)
         assertEquals("Burak Can", s.ownerName)
         assertEquals("Merve", s.partnerName)
+        assertEquals("Hesabınızda iki profil var: Burak Can ve Merve. Bu cihaz hangisinin?", s.readyBody())
         // Bilerek secili gelmez: iki telefon ayni profili secmesin.
         assertNull(s.thisDeviceIsOwner)
         assertFalse(s.canSave)
@@ -188,6 +203,12 @@ class ProfileSetupFlowTest {
         e.vm.onIntent(ProfileSetupIntent.ContinueOffline)
         val s = e.awaitPhase(ProfileSetupPhase.Ready)
         assertFalse(s.editingNames)
+        // Kurulumun "Ben"/"Eşim"i secenek olarak gosterilmez: esin telefonu
+        // dogal olarak "Ben"i (sahibin profilini) seciyordu. Satirlar
+        // "1. profil"/"2. profil" okunur.
+        assertEquals("", s.ownerName)
+        assertEquals("", s.partnerName)
+        assertFalse(s.canEditNames, "adsiz secimde adlar duzenlenmez")
         e.vm.onIntent(ProfileSetupIntent.SelectThisDevice(true))
         e.vm.onIntent(ProfileSetupIntent.Save)
         e.awaitDone()
@@ -368,6 +389,231 @@ class ProfileSetupFlowTest {
         assertEquals(listOf(9_000L, 5_000L), e.stamps())
     }
 
+    /**
+     * Girissiz ama profilleri adlandirilmis cihaz (orn. "Tüm verileri sil"
+     * sonrasi adlar kaldi): secim YEREL metinle sorulur, "hesabınızda" denmez.
+     */
+    @Test
+    fun `girissiz adlandirilmis profiller yerel secimle sorulur`() = runTest {
+        val e = Env(signedIn = false)
+        e.repo.renameMember(LocalOwnerMemberId, "Volkan", "V")
+        e.repo.renameMember(LocalPartnerMemberId, "Ayşe", "A")
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+
+        assertFalse(s.editingNames)
+        assertTrue(s.profilesNamed)
+        assertFalse(s.accountHasProfiles, "girissizken hesap profili yok")
+        assertEquals("Bu cihazda iki profil var. Hangisi sizsiniz?", s.readyBody())
+        assertTrue(s.showLinkFooter)
+        assertEquals(0, e.api.calls)
+    }
+
+    /** Bulut yapilandirmasi ekrana gecer: "Hesaba bağla" ancak o zaman cizilir. */
+    @Test
+    fun `girissiz olusturmada hesaba bagla gorunur`() = runTest {
+        val e = Env(signedIn = false)
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+        assertTrue(s.cloudConfigured)
+        assertTrue(s.showLinkFooter)
+        assertTrue("yalnız bu cihazda durur" in s.readyBody())
+    }
+
+    /**
+     * Sunucu oturumu REDDETTI (jeton yok, oturum silindi): ag hatasi degil.
+     * Ekran "internet"i sucladigi "ulaşılamadı"ya DUSMEZ; girissiz kuruluma
+     * doner ve "Hesaba bağla" gorunur.
+     */
+    @Test
+    fun `reddedilen oturum girissiz kuruluma doner`() = runTest {
+        val e = Env(signedIn = true)
+        e.cloudMembers()
+        e.auth.rejectRefresh = true
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+
+        assertFalse(s.signedIn)
+        assertTrue(s.editingNames)
+        assertTrue(s.showLinkFooter)
+        assertEquals(0, e.api.calls, "oturumsuz hesap indirilmez")
+    }
+
+    /** Jeton alinamadi ama oturum duruyor: gecici hata, tekrar denenir. */
+    @Test
+    fun `jeton alinamazsa ama oturum duruyorsa hata gosterilir`() = runTest {
+        val e = Env(signedIn = true)
+        e.auth.tokenUnavailable = true
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val s = e.awaitPhase(ProfileSetupPhase.Failed)
+
+        assertTrue(s.signedIn)
+        assertEquals("Oturum doğrulanamadı", s.failureDetail)
+    }
+
+    /** Hata ekranindayken oturum kapandiysa devam, girissiz kurulumdur. */
+    @Test
+    fun `oturum kapandiktan sonra devam girissiz kurulum`() = runTest {
+        val e = Env(signedIn = true)
+        e.api.failWith = "offline"
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Failed)
+
+        e.auth.state.value = AuthState.SignedOut
+        e.vm.onIntent(ProfileSetupIntent.ContinueOffline)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+        assertFalse(s.signedIn)
+        assertTrue(s.editingNames)
+        assertTrue(s.showLinkFooter)
+    }
+
+    /**
+     * Kurulum adini ("Ben"/"Eşim") yazan kullanicinin adi da YAZILIR. NEYDI:
+     * yuklenen ad kurulum adiydi; ayni ad "degismedi" sayiliyor, profil adsiz
+     * (damgasiz) kaliyordu - ikinci telefon onu hic goremiyordu.
+     */
+    @Test
+    fun `kurulum adini yazan kullanicinin adi da yazilir`() = runTest {
+        val e = Env(signedIn = false)
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+        assertEquals("", s.loadedOwnerName)
+        assertEquals("", s.loadedPartnerName)
+
+        e.vm.onIntent(ProfileSetupIntent.ChangeOwnerName("Ben"))
+        e.vm.onIntent(ProfileSetupIntent.ChangePartnerName("Eşim"))
+        e.vm.onIntent(ProfileSetupIntent.Save)
+        e.awaitDone()
+
+        assertEquals(listOf(9_000L, 9_000L), e.stamps(), "iki profil de adlandirilmis olmali")
+        assertTrue(e.repo.observeMembers().first().all { it.isNamed })
+    }
+
+    /**
+     * Ekran her gorundugunde yeniden yuklenir. Olusturma modunda yazilan adlar
+     * ve secim KORUNUR. NEYDI: "Hesabım var, giriş yap"a gidip geri donen (ya da
+     * Android'de geri kaydirmayi yarida birakan) kullanicinin yazdiklari
+     * siliniyordu.
+     */
+    @Test
+    fun `yeniden yuklemede yazilan adlar korunur`() = runTest {
+        val e = Env(signedIn = false)
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Ready)
+        e.vm.onIntent(ProfileSetupIntent.ChangeOwnerName("Volkan"))
+        e.vm.onIntent(ProfileSetupIntent.ChangePartnerName("Ayşe"))
+        e.vm.onIntent(ProfileSetupIntent.SelectThisDevice(false))
+
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+
+        assertTrue(s.editingNames)
+        assertEquals("Volkan", s.ownerName)
+        assertEquals("Ayşe", s.partnerName)
+        assertEquals(false, s.thisDeviceIsOwner)
+    }
+
+    /** Girip hesabi BOS bulan kullanici yazdiklarini yeniden yazmaz. */
+    @Test
+    fun `bos hesaba girince yazilan adlar korunur`() = runTest {
+        val e = Env(signedIn = false)
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Ready)
+        e.vm.onIntent(ProfileSetupIntent.ChangeOwnerName("Volkan"))
+        e.vm.onIntent(ProfileSetupIntent.ChangePartnerName("Ayşe"))
+
+        e.auth.state.value = SignedInU1
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+
+        assertTrue(s.signedIn)
+        assertTrue(s.editingNames)
+        assertEquals("Volkan", s.ownerName)
+        assertEquals("Ayşe", s.partnerName)
+        assertTrue("hesabınıza da kaydedilir" in s.readyBody())
+    }
+
+    /** Hesapta profil varsa yazilanlar degil HESABIN adlari; secim yeniden sorulur. */
+    @Test
+    fun `hesapta profil varsa yazilanlar yerine hesabin adlari gelir`() = runTest {
+        val e = Env(signedIn = false)
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Ready)
+        e.vm.onIntent(ProfileSetupIntent.ChangeOwnerName("Volkan"))
+        e.vm.onIntent(ProfileSetupIntent.ChangePartnerName("Ayşe"))
+
+        e.auth.state.value = SignedInU1
+        e.cloudMembers()
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+
+        assertFalse(s.editingNames)
+        assertEquals("Burak Can", s.ownerName)
+        assertEquals("Merve", s.partnerName)
+        assertNull(s.thisDeviceIsOwner)
+    }
+
+    /**
+     * Hesap indirilemeden gecildi, cihazda adlar var (Ayarlar'dan baglanan
+     * hesapsiz kullanici): adlar CIHAZIN. NEYDI: "Hesabınızda iki profil var:
+     * Volkan ve Ayşe" deniyordu; hesaptan hicbir sey gelmemisti ve "Tamamla"
+     * hesabi indirince bu adlar hesabinkilerle degisecekti.
+     */
+    @Test
+    fun `indirilemeden devamda cihaz adlari hesabin sayilmaz`() = runTest {
+        val e = Env(signedIn = true)
+        e.repo.renameMember(LocalOwnerMemberId, "Volkan", "V")
+        e.repo.renameMember(LocalPartnerMemberId, "Ayşe", "A")
+        e.api.failWith = "offline"
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Failed)
+
+        e.vm.onIntent(ProfileSetupIntent.ContinueOffline)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+        assertTrue(s.signedIn)
+        assertFalse(s.accountHasProfiles)
+        assertFalse("Hesabınızda" in s.readyBody(), s.readyBody())
+        assertEquals("Volkan", s.ownerName)
+        assertFalse(s.canEditNames, "hesabin adlari gelince degisecek adlar duzenlenmez")
+        assertEquals("e@k.app", s.accountEmail)
+    }
+
+    /**
+     * Hesap indirildi ama BOS, adlar cihazda yazilmis: "Hesabınızda" denmez -
+     * adlar hesaba ancak baglantiyla gidecek.
+     */
+    @Test
+    fun `bos hesapta cihaz adlari hesabin sayilmaz`() = runTest {
+        val e = Env(signedIn = true)
+        e.repo.renameMember(LocalOwnerMemberId, "Volkan", "V")
+        e.repo.renameMember(LocalPartnerMemberId, "Ayşe", "A")
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+
+        assertTrue(s.accountDownloaded)
+        assertFalse(s.accountHasProfiles)
+        assertTrue(s.readyBody().startsWith("Bu cihazda iki profil var."), s.readyBody())
+        assertTrue(s.canEditNames)
+    }
+
+    /** Girisliyken hangi e-postayla girildigi ekrana gelir; oturum reddedilince duser. */
+    @Test
+    fun `girisliyken e-posta gorunur, oturum dusunce gider`() = runTest {
+        val e = Env(signedIn = true)
+        e.cloudMembers()
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+        assertEquals("e@k.app", s.accountEmail)
+        assertTrue(s.showAccountFooter)
+
+        e.auth.rejectRefresh = true
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val gone = e.awaitPhase(ProfileSetupPhase.Ready)
+        assertFalse(gone.signedIn)
+        assertNull(gone.accountEmail)
+        assertFalse(gone.showAccountFooter)
+    }
+
     /** VM surec boyunca yasiyor: cikista sifirlanir, sonraki gorunus eski "done"u gormez. */
     @Test
     fun `reset eski durumu siler`() = runTest {
@@ -378,6 +624,8 @@ class ProfileSetupFlowTest {
         assertEquals(ProfileSetupUiState(), e.vm.state.value)
     }
 }
+
+private val SignedInU1 = AuthState.SignedIn(AuthSession("u1", "e@k.app", "tok", "r", 0L))
 
 /**
  * Depo ve pull GERCEK is parcaciklarinda (Dispatchers.Default) calisiyor;

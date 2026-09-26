@@ -4,10 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.data.remote.AuthException
 import com.kefe.app.domain.repository.AuthRepository
-import com.kefe.app.security.BiometricAvailability
-import com.kefe.app.security.BiometricGate
-import com.kefe.app.security.BiometricResult
-import com.kefe.app.domain.repository.PortfolioRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,17 +12,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Giris / baslangic / kilit asamalari. MVI-lite: tek [LoginUiState] akisi.
+ * E-posta koduyla giris. MVI-lite: tek [LoginUiState] akisi.
  *
  * Giris PAROLASIZDIR: e-postaya alti haneli tek kullanimlik kod gider, kullanici
  * onu yazar. Kod yerine tiklanabilir baglanti kullanmak her platformda ayri is
  * demekti - Android'de intent filter, iOS'ta universal link, masaustunde dogru
  * duzgun bir karsiligi yok. Kod uc platformda ayni sekilde calisir.
+ *
+ * Kayit ile giris AYNI akistir: bu e-postayla hesap yoksa dogrulama onu acar.
+ *
+ * Acilis kilidi burada DEGIL (bkz. [LockViewModel]). VM surec boyunca yasar;
+ * her acilista [LoginIntent.Begin] ile sifirlanir.
  */
 class LoginViewModel(
-    private val portfolioRepository: PortfolioRepository,
     private val authRepository: AuthRepository,
-    private val biometric: BiometricGate,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState())
@@ -36,12 +35,15 @@ class LoginViewModel(
     // iptal edilir.
     private var cooldownJob: Job? = null
 
-    init {
-        observePortfolio()
-    }
+    // Yoldaki gonderim ve dogrulama. Begin ikisini de iptal eder: yarida
+    // birakilmis bir denemenin sonucu yeni acilan ekranin durumuna yazilmasin.
+    private var sendJob: Job? = null
+    private var verifyJob: Job? = null
 
     fun onIntent(intent: LoginIntent) {
         when (intent) {
+            is LoginIntent.Begin -> begin(intent.email)
+
             is LoginIntent.ChangeEmail -> _state.value = _state.value.copy(
                 // Kullanici yazmaya baslayinca hata ve "gonderildi" bilgisi duser.
                 email = intent.value.trim(),
@@ -59,6 +61,10 @@ class LoginViewModel(
             LoginIntent.VerifyCode -> verifyCode()
 
             LoginIntent.EditEmail -> {
+                // Dogrulama suruyorken e-postaya donulmez (bkz. signInBack):
+                // sonuc yine gelir ve oturum yazilir; ekran onu karsilayacak
+                // durumda kalmali, bos bir e-posta formunda degil.
+                if (_state.value.verifying) return
                 cooldownJob?.cancel()
                 _state.value = _state.value.copy(
                     codeSent = false,
@@ -72,21 +78,14 @@ class LoginViewModel(
 
             LoginIntent.SignInHandled -> _state.value =
                 _state.value.copy(signedIn = false, codeSent = false, code = "", emailError = null)
-
-            LoginIntent.Lock -> _state.value =
-                _state.value.copy(stage = LoginStage.Locked, unlocked = false)
-
-            LoginIntent.Unlock -> unlock()
         }
     }
 
-    /** Kilit ekranindaki portfoy adi depodan gelir - ekranda sabit yazilmaz. */
-    private fun observePortfolio() {
-        viewModelScope.launch {
-            portfolioRepository.observePortfolio().collect { portfolio ->
-                _state.value = _state.value.copy(portfolioName = portfolio.name)
-            }
-        }
+    private fun begin(email: String?) {
+        sendJob?.cancel()
+        verifyJob?.cancel()
+        cooldownJob?.cancel()
+        _state.value = LoginUiState(email = email?.trim().orEmpty())
     }
 
     private fun sendCode() {
@@ -96,7 +95,7 @@ class LoginViewModel(
             return
         }
         _state.value = current.copy(sendingCode = true, emailError = null)
-        viewModelScope.launch {
+        sendJob = viewModelScope.launch {
             val error = authRepository.sendCode(current.email).exceptionOrNull()
             _state.value = _state.value.copy(
                 sendingCode = false,
@@ -118,7 +117,7 @@ class LoginViewModel(
         val current = _state.value
         if (current.resendCooldown > 0 || current.sendingCode) return
         _state.value = current.copy(sendingCode = true, emailError = null)
-        viewModelScope.launch {
+        sendJob = viewModelScope.launch {
             val error = authRepository.sendCode(current.email).exceptionOrNull()
             _state.value = _state.value.copy(
                 sendingCode = false,
@@ -142,12 +141,13 @@ class LoginViewModel(
 
     private fun verifyCode() {
         val current = _state.value
+        if (current.verifying) return
         if (current.code.length != LoginCodeLength) {
             _state.value = current.copy(emailError = "Kod altı haneli olmalı")
             return
         }
         _state.value = current.copy(verifying = true, emailError = null)
-        viewModelScope.launch {
+        verifyJob = viewModelScope.launch {
             val error = authRepository.verifyCode(current.email, current.code).exceptionOrNull()
             _state.value = _state.value.copy(
                 verifying = false,
@@ -157,44 +157,6 @@ class LoginViewModel(
                 emailError = error?.let { it.userMessage() ?: "Kod doğrulanamadı" },
                 code = if (error == null) "" else current.code,
             )
-        }
-    }
-
-    /**
-     * Cihaz kilidini acar.
-     *
-     * KILIT KAPI DEGIL, PERDEDIR. Cihazda parmak izi tanimli degilse ya da
-     * donanim yoksa kullanici ICERI ALINIR - bakiyeyi baskasindan saklamak
-     * icin konan bir ozellik, kullaniciyi kendi verisinden etmemelidir.
-     *
-     * Yanlis parmak denemesi buraya hic gelmez: sistem istemi acik kalir ve
-     * kullanici tekrar dener. Buraya yalniz sonuc doner.
-     */
-    private fun unlock() {
-        if (_state.value.unlocking) return
-        _state.value = _state.value.copy(unlocking = true, unlockError = null)
-
-        viewModelScope.launch {
-            if (biometric.availability() != BiometricAvailability.Available) {
-                _state.value = _state.value.copy(unlocking = false, unlocked = true)
-                return@launch
-            }
-
-            val result = biometric.authenticate(
-                title = "Kefe kilitli",
-                subtitle = "Bakiyeleri görmek için kimliğinizi doğrulayın",
-            )
-            _state.value = when (result) {
-                BiometricResult.Success ->
-                    _state.value.copy(unlocking = false, unlocked = true, unlockError = null)
-
-                // Vazgecmek hata degil: ekran kilitli kalir, kirmizi yazi cikmaz.
-                BiometricResult.Cancelled ->
-                    _state.value.copy(unlocking = false, unlockError = null)
-
-                is BiometricResult.Failed ->
-                    _state.value.copy(unlocking = false, unlockError = result.message)
-            }
         }
     }
 }

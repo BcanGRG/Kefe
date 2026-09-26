@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.kefe.app.ui.components.KefeBackHandler
 import com.kefe.app.ui.components.KefeIconButton
+import com.kefe.app.ui.components.KefeInfoBanner
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
@@ -67,224 +68,188 @@ import com.kefe.app.ui.theme.Space
 import com.kefe.app.ui.theme.tabular
 
 /**
- * Giris, baslangic (yeni portfoy / davet kodu) ve cihaz kilidi.
+ * E-posta koduyla giris. HER ZAMAN ITILIR: ust cubukta baslik ve geri oku var,
+ * geri gidilecek yer hep belli (hosgeldin, profil adimi, Ayarlar ya da Ozet).
  *
- * Birincil yol sifresiz giristir: e-postaya tek kullanimlik baglanti. Sifre
- * yolu bilerek ikincil butondadir.
+ * Kayit ile giris ayni akis: e-postaya kod gelir, kod yazilir; bu e-postayla
+ * hesap yoksa acilir. Baslik ve notlar amaca gore degisir (bkz. [signInCopy]).
+ *
+ * "Hesapsız başla" BURADA YOK. NEYDI: giris ekrani ilk acilisin kendisiydi ve
+ * hesapsiz kullanim buradaki kucuk bir baglantiydi - hesapsiz kullanmak
+ * isteyen, once bir e-posta formuyla karsilaniyordu. Artik iki yol hosgeldin
+ * ekraninda esit iki kart; buraya yalniz hesap isteyen gelir.
+ *
+ * [onLeave] ekrani kapatir (kabuk yigini bir geri alir).
  */
 @Composable
-fun LoginScreen(
+fun SignInScreen(
     state: LoginUiState,
+    purpose: SignInPurpose,
     onIntent: (LoginIntent) -> Unit,
-    onStartOnboarding: () -> Unit,
-    onEnterApp: () -> Unit,
+    onLeave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LaunchedEffect(state.unlocked) { if (state.unlocked) onEnterApp() }
+    val copy = signInCopy(purpose)
+    val back = signInBack(state)
+    val onBack: () -> Unit = {
+        when (back) {
+            SignInBack.Ignore -> Unit
+            SignInBack.EditEmail -> onIntent(LoginIntent.EditEmail)
+            SignInBack.Leave -> onLeave()
+        }
+    }
 
     // Giris ekraninin ASAMALARI ayri gezinme girdisi degil, tek ekranin durumu.
-    // Sistem geri tusu bunu bilmedigi icin kod kutusundayken ya da Başlangıç
-    // adimindayken UYGULAMADAN CIKIYORDU: kullanici bir adim geri gitmek isterken
-    // kendini ana ekranda buluyordu.
-    //
-    // Kilit asamasi bilerek disarida: kilitliyken geri tusu uygulamadan cikarir,
-    // kilidi acmaz. Kapali tutmak da kullaniciyi ekranda hapsederdi.
-    // Kod kutusundayken geri, e-posta adimina doner. Kilit asamasi bilerek
-    // disarida: kilitliyken geri tusu uygulamadan cikarir, kilidi acmaz.
-    val backStep: (() -> Unit)? = when {
-        state.stage == LoginStage.SignIn && state.codeSent -> {
-            { onIntent(LoginIntent.EditEmail) }
-        }
-        else -> null
-    }
-    KefeBackHandler(enabled = backStep != null) { backStep?.invoke() }
+    // Kod kutusundayken sistem geri tusu once e-posta adimina doner; dogrulama
+    // surerken hicbir sey yapmaz (bkz. signInBack). E-posta adiminda isleyici
+    // kapalidir: geri, kabugun kendi isleyicisiyle ekrani kapatir.
+    KefeBackHandler(enabled = back != SignInBack.Leave) { onBack() }
 
     // Form masaustunde pencere boyunca uzarsa alan ve butonlar okunaksiz olur;
     // ust cubuk da icerikle ayni dar kolonda kalsin diye birlikte ortalanir.
     // Telefonda (390) sinir devreye girmez.
     Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // widthIn ONCE gelmeli: fillMaxWidth once uygulanirsa asagi kesin
+        // genislik kisiti iner ve sinir hicbir sey yapmaz.
         Column(
             Modifier
+                .widthIn(max = Sizes.formMaxWidth)
                 .fillMaxWidth()
-                .weight(1f)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .weight(1f),
         ) {
-            // widthIn ONCE gelmeli: fillMaxWidth once uygulanirsa asagi kesin
-            // genislik kisiti iner ve sinir hicbir sey yapmaz.
+            AccountTopBar(title = copy.title, onBack = onBack)
             Column(
                 Modifier
-                    .widthIn(max = Sizes.formMaxWidth)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = Space.x24, end = Space.x24, top = Space.x16, bottom = Space.x24),
             ) {
-                when (state.stage) {
-                    LoginStage.SignIn -> SignInStage(state, onIntent, onStartFresh = onStartOnboarding)
-                    LoginStage.Locked -> LockStage(state, onIntent)
-                }
+                SignInForm(state = state, copy = copy, onIntent = onIntent)
             }
         }
     }
 }
 
-// --- Giris -----------------------------------------------------------------
-
 @Composable
-private fun SignInStage(
+private fun SignInForm(
     state: LoginUiState,
+    copy: SignInCopy,
     onIntent: (LoginIntent) -> Unit,
-    onStartFresh: () -> Unit,
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = Space.x24, end = Space.x24, top = Space.x40),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(RoundedCornerShape(Space.x24))
-                .background(c.accentMuted),
-            contentAlignment = Alignment.Center,
-        ) {
-            KefeIcon(KefeIcons.Balance, null, size = Space.x40, tint = c.accent)
-        }
-        Spacer(Modifier.height(Space.x20))
-        Text("Kefe", style = t.h1, color = c.onSurface)
+    // Kod gonderilmeden once e-posta, gonderildikten sonra kod kutusu. Ikisi
+    // ayni anda durmaz: kullanicinin o an yapacagi tek bir is var.
+    if (!state.codeSent) {
+        Text("e-posta".trUpper(), style = t.label(11, 0.06), color = c.onSurfaceMuted)
         Spacer(Modifier.height(6.dp))
-        Text(
-            "Birikiminiz bir kefede,\nhedefiniz diğerinde.",
-            style = t.body.copy(lineHeight = 22.sp),
-            color = c.onSurfaceMuted,
-            textAlign = TextAlign.Center,
+
+        EmailField(
+            value = state.email,
+            onValueChange = { onIntent(LoginIntent.ChangeEmail(it)) },
+            hasError = state.emailError != null,
         )
+
+        Spacer(Modifier.height(Space.x12))
+        AccountFilledButton(
+            text = if (state.sendingCode) "Gönderiliyor…" else SendCodeLabel,
+            onClick = { onIntent(LoginIntent.SendCode) },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = state.canSendCode,
+        )
+    } else {
+        Text("e-postadaki kod".trUpper(), style = t.label(11, 0.06), color = c.onSurfaceMuted)
+        Spacer(Modifier.height(6.dp))
+
+        // Davet kodu kutusuyla AYNI bilesen: ikisi de alti haneli sayi ve
+        // ayni gorunumde. Ikinci bir kopya cikarmak, birinde yapilan
+        // duzeltmenin digerinde eksik kalmasi demekti.
+        InviteCodeInput(
+            code = state.code,
+            onCodeChange = { onIntent(LoginIntent.ChangeCode(it)) },
+            length = LoginCodeLength,
+        )
+
+        Spacer(Modifier.height(Space.x12))
+        AccountFilledButton(
+            text = if (state.verifying) "Kontrol ediliyor…" else VerifyCodeLabel,
+            onClick = { onIntent(LoginIntent.VerifyCode) },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = state.canVerify,
+        )
+        Spacer(Modifier.height(Space.x8))
+        // Iki ikincil eylem yan yana: yanlis adres icin duzelt, kod gelmediyse
+        // tekrar gonder. Tekrar gonderme geri sayim boyunca soluk ve tiklanamaz.
+        // Dogrulama surerken e-postaya donulmez: sonuc gelince oturum yazilir
+        // ve ekran onu karsilamali.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.x8)) {
+            AccountFlatButton(
+                text = "E-postayı düzelt",
+                onClick = { onIntent(LoginIntent.EditEmail) },
+                contentColor = c.onSurfaceMuted,
+                enabled = !state.verifying,
+                modifier = Modifier.weight(1f),
+            )
+            AccountFlatButton(
+                text = if (state.resendCooldown > 0) {
+                    "Tekrar gönder (${state.resendCooldown})"
+                } else {
+                    "Kodu tekrar gönder"
+                },
+                onClick = { onIntent(LoginIntent.ResendCode) },
+                contentColor = c.accent,
+                enabled = state.resendCooldown == 0 && !state.sendingCode && !state.verifying,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = Space.x24, end = Space.x24, top = 36.dp),
-    ) {
-        // Kod gonderilmeden once e-posta, gonderildikten sonra kod kutusu. Ikisi
-        // ayni anda durmaz: kullanicinin o an yapacagi tek bir is var.
-        if (!state.codeSent) {
-            Text("e-posta".trUpper(), style = t.label(11, 0.06), color = c.onSurfaceMuted)
-            Spacer(Modifier.height(6.dp))
-
-            EmailField(
-                value = state.email,
-                onValueChange = { onIntent(LoginIntent.ChangeEmail(it)) },
-                hasError = state.emailError != null,
-            )
-
-            Spacer(Modifier.height(Space.x12))
-            AccountFilledButton(
-                text = if (state.sendingCode) "Gönderiliyor…" else "Giriş kodu gönder",
-                onClick = { onIntent(LoginIntent.SendCode) },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = state.canSendCode,
-            )
+    Spacer(Modifier.height(Space.x10))
+    // Ayni satir uc bilgiyi tasir: aciklama, hata ve gonderim onayi.
+    val noteColor = if (state.emailError != null) c.negative else c.onSurfaceMuted
+    val noteText = state.emailError
+        ?: if (state.codeSent) {
+            // Hane sayisi metne SABIT yazilmaz: kod uzunlugu Supabase
+            // ayarindan geliyor, ikisi ayrilinca cumle yalan soyler.
+            "${state.email} adresine ${LoginCodeLength} haneli bir kod gönderdik."
         } else {
-            Text("giriş kodu".trUpper(), style = t.label(11, 0.06), color = c.onSurfaceMuted)
-            Spacer(Modifier.height(6.dp))
+            copy.note
+        }
+    NoteRow(
+        icon = if (state.codeSent) KefeIcons.Check else KefeIcons.Info,
+        text = noteText,
+        color = noteColor,
+    )
 
-            // Davet kodu kutusuyla AYNI bilesen: ikisi de alti haneli sayi ve
-            // ayni gorunumde. Ikinci bir kopya cikarmak, birinde yapilan
-            // duzeltmenin digerinde eksik kalmasi demekti.
-            InviteCodeInput(
-                code = state.code,
-                onCodeChange = { onIntent(LoginIntent.ChangeCode(it)) },
-                length = LoginCodeLength,
-            )
-
-            Spacer(Modifier.height(Space.x12))
-            AccountFilledButton(
-                text = if (state.verifying) "Kontrol ediliyor…" else "Giriş yap",
-                onClick = { onIntent(LoginIntent.VerifyCode) },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = state.canVerify,
-            )
+    // Uyari ve baglama notu YALNIZ e-posta adiminda: e-posta secilirken okunmali.
+    // Kod gonderildikten sonra karar verilmis olur, ekrani kalabaliklastirir.
+    if (!state.codeSent) {
+        copy.extra?.let { extra ->
             Spacer(Modifier.height(Space.x8))
-            // Iki ikincil eylem yan yana: yanlis adres icin duzelt, kod gelmediyse
-            // tekrar gonder. Tekrar gonderme geri sayim boyunca soluk ve tiklanamaz.
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.x8)) {
-                AccountFlatButton(
-                    text = "E-postayı düzelt",
-                    onClick = { onIntent(LoginIntent.EditEmail) },
-                    contentColor = c.onSurfaceMuted,
-                    modifier = Modifier.weight(1f),
-                )
-                AccountFlatButton(
-                    text = if (state.resendCooldown > 0) {
-                        "Tekrar gönder (${state.resendCooldown})"
-                    } else {
-                        "Kodu tekrar gönder"
-                    },
-                    onClick = { onIntent(LoginIntent.ResendCode) },
-                    contentColor = c.accent,
-                    enabled = state.resendCooldown == 0 && !state.sendingCode,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            NoteRow(icon = AccountIcons.Upload, text = extra, color = c.onSurfaceMuted)
         }
+        Spacer(Modifier.height(Space.x16))
+        // Ayni e-posta uyarisi ayri bir kutu: tek akista (kayit == giris) farkli
+        // bir e-posta hata VERMEZ, sessizce bos bir hesap acar. Notun icinde
+        // kaybolursa esin telefonu hic kayit gormez ve sebebi anlasilmaz.
+        KefeInfoBanner(text = copy.warning, icon = KefeIcons.Info)
+    }
+}
 
-        Spacer(Modifier.height(Space.x10))
-        // Ayni satir uc bilgiyi tasir: aciklama, hata ve gonderim onayi.
-        val noteIcon = if (state.codeSent) KefeIcons.Check else KefeIcons.Info
-        val noteColor = if (state.emailError != null) c.negative else c.onSurfaceMuted
-        val noteText = state.emailError
-            ?: if (state.codeSent) {
-                // Hane sayisi metne SABIT yazilmaz: kod uzunlugu Supabase
-                // ayarindan geliyor, ikisi ayrilinca cumle yalan soyler.
-                "${state.email} adresine ${LoginCodeLength} haneli bir kod gönderdik."
-            } else {
-                // Hesabi olan kullanici burada ne yapacagini gormeli: ayni
-                // e-posta = ayni hesap, kayitlar bu telefona gelir.
-                "Şifre yok: e-postanıza tek kullanımlık bir kod gelir. " +
-                    "Daha önce Kefe kullandıysanız aynı e-postayla girin — " +
-                    "profilleriniz ve kayıtlarınız bu telefona gelir."
-            }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.x8)) {
-            KefeIcon(
-                icon = noteIcon,
-                contentDescription = null,
-                modifier = Modifier.padding(top = 2.dp),
-                size = 15.dp,
-                tint = noteColor,
-            )
-            Text(noteText, style = t.micro.copy(lineHeight = 17.sp), color = noteColor)
-        }
-
-        // Tasarimdaki "Şifreyle giriş yap" secenegi KALDIRILDI. Kimlik parolasiz
-        // kuruldu - hesabin parolasi hic yok, dolayisiyla bu dugmenin bir gun
-        // isleyecek bir karsiligi da yok. Dokununca "henüz hazır değil" diyen
-        // kalici bir dugme birakmak, olmayan bir ozellik vaat etmekti.
-        Spacer(Modifier.height(Space.x28))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Text("İlk kez mi kullanıyorsunuz? ", style = t.caption, color = c.onSurfaceMuted)
-            // Dogrudan tanitima gecer. "Hesapsiz" acik yazilir: bu yol hesaba
-            // baglanmaz, hesabi olan biri yanlislikla secmesin. Secse bile
-            // "Profiller" ekraninda "Hesabım var, giriş yap" onu geri getirir.
-            Text(
-                "Hesapsız başla",
-                style = t.caption.copy(fontWeight = FontWeight.SemiBold),
-                color = c.accent,
-                modifier = Modifier.clickable(
-                    indication = null,
-                    interactionSource = null,
-                    role = Role.Button,
-                    onClick = onStartFresh,
-                ),
-            )
-        }
-        Spacer(Modifier.height(Space.x24))
+/** Ikonlu tek not satiri: aciklama, hata ya da onay. */
+@Composable
+private fun NoteRow(icon: ImageVector, text: String, color: Color) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.x8)) {
+        KefeIcon(
+            icon = icon,
+            contentDescription = null,
+            modifier = Modifier.padding(top = 2.dp),
+            size = 15.dp,
+            tint = color,
+        )
+        Text(text, style = KefeTheme.type.micro.copy(lineHeight = 17.sp), color = color)
     }
 }
 
@@ -409,89 +374,113 @@ private fun InviteCodeInput(
 
 // --- Kilit -----------------------------------------------------------------
 
+/**
+ * Acilis kilidi. Yalniz yigin KOKUNDE ve yalniz acilista (bkz. isLaunchLocked).
+ *
+ * Geri tusu bilerek yakalanmaz: kilitliyken geri uygulamadan cikarir, kilidi
+ * acmaz. Yakalamak da kullaniciyi ekranda hapsederdi.
+ */
 @Composable
-private fun LockStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
+fun LockScreen(
+    state: LockUiState,
+    onIntent: (LockIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
     Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = Space.x24, end = Space.x24, top = 96.dp),
+        modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(c.accentMuted),
-            contentAlignment = Alignment.Center,
+        Column(
+            Modifier
+                .widthIn(max = Sizes.formMaxWidth)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            KefeIcon(KefeIcons.Balance, null, size = 30.dp, tint = c.accent)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = Space.x24, end = Space.x24, top = 96.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(c.accentMuted),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    KefeIcon(KefeIcons.Balance, null, size = 30.dp, tint = c.accent)
+                }
+                Spacer(Modifier.height(Space.x16))
+                Text(state.portfolioName, style = t.bodyStrong, color = c.onSurface)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = Money.masked(state.maskedTotalDigits),
+                    // Tabular varyant maske ile rakam arasinda genislik farki birakmaz.
+                    style = t.display.copy(letterSpacing = 0.08.em).tabular(),
+                    color = c.onSurfaceMuted,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text("Kilitli", style = t.caption, color = c.onSurfaceMuted)
+            }
+
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = Space.x24, end = Space.x24, top = 56.dp, bottom = Space.x24),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // Kilit ekrani acilir acilmaz istem gosterilir: kullanicinin buraya
+                // gelme sebebi zaten kilidi acmak. Iptal ederse ekran kilitli kalir ve
+                // asagidaki buyuk parmak izi dugmesiyle tekrar deneyebilir.
+                LaunchedEffect(Unit) { onIntent(LockIntent.Unlock) }
+
+                val unlockInteraction = remember { MutableInteractionSource() }
+                val hovered by unlockInteraction.collectIsHoveredAsState()
+
+                Box(
+                    modifier = Modifier
+                        .size(96.dp)
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(if (hovered) lerp(c.accentMuted, Color.White, 0.12f) else c.accentMuted)
+                        .border(Sizes.hairline, c.accent, RoundedCornerShape(32.dp))
+                        .hoverable(unlockInteraction)
+                        .clickable(
+                            interactionSource = unlockInteraction,
+                            indication = null,
+                            role = Role.Button,
+                        ) { onIntent(LockIntent.Unlock) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    KefeIcon(KefeIcons.Fingerprint, "Kilidi aç", size = 48.dp, tint = c.accent)
+                }
+
+                // "Parmak izi ile aç" degil: istem yuzu ve cihaz PIN'ini/desenini de
+                // kabul ediyor. Yuzle acilan telefonda "parmak izi" yazmak yanlis bir
+                // soz, PIN'le acan icin de kafa karistirici.
+                Spacer(Modifier.height(Space.x20))
+                Text("Kilidi aç", style = t.bodyStrong, color = c.onSurface)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = state.unlockError
+                        ?: "Parmak izi, yüz ya da ekran kilidinizle açın. " +
+                        "Fiyatlar arka planda güncellenir.",
+                    style = t.caption.copy(lineHeight = 19.sp),
+                    color = if (state.unlockError != null) c.negative else c.onSurfaceMuted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = 280.dp),
+                )
+                // Tasarimdaki "Şifreyle aç" dugmesi KALDIRILDI. Hesabin parolasi yok -
+                // giris tek kullanimlik e-posta koduyla yapiliyor - yani bu dugmenin bir
+                // gun isleyecek karsiligi da yok. Sistem istemi zaten PIN/desen secenegi
+                // sunuyor: cihaz kimligi de kabul ediliyor.
+            }
         }
-        Spacer(Modifier.height(Space.x16))
-        Text(state.portfolioName, style = t.bodyStrong, color = c.onSurface)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = Money.masked(state.maskedTotalDigits),
-            // Tabular varyant maske ile rakam arasinda genislik farki birakmaz.
-            style = t.display.copy(letterSpacing = 0.08.em).tabular(),
-            color = c.onSurfaceMuted,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text("Kilitli", style = t.caption, color = c.onSurfaceMuted)
-    }
-
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = Space.x24, end = Space.x24, top = 56.dp, bottom = Space.x24),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        // Kilit ekrani acilir acilmaz istem gosterilir: kullanicinin buraya
-        // gelme sebebi zaten kilidi acmak. Iptal ederse ekran kilitli kalir ve
-        // asagidaki buyuk parmak izi dugmesiyle tekrar deneyebilir.
-        LaunchedEffect(Unit) { onIntent(LoginIntent.Unlock) }
-
-        val unlockInteraction = remember { MutableInteractionSource() }
-        val hovered by unlockInteraction.collectIsHoveredAsState()
-
-        Box(
-            modifier = Modifier
-                .size(96.dp)
-                .clip(RoundedCornerShape(32.dp))
-                .background(if (hovered) lerp(c.accentMuted, Color.White, 0.12f) else c.accentMuted)
-                .border(Sizes.hairline, c.accent, RoundedCornerShape(32.dp))
-                .hoverable(unlockInteraction)
-                .clickable(
-                    interactionSource = unlockInteraction,
-                    indication = null,
-                    role = Role.Button,
-                ) { onIntent(LoginIntent.Unlock) },
-            contentAlignment = Alignment.Center,
-        ) {
-            KefeIcon(KefeIcons.Fingerprint, "Kilidi aç", size = 48.dp, tint = c.accent)
-        }
-
-        // "Parmak izi ile aç" degil: istem yuzu ve cihaz PIN'ini/desenini de
-        // kabul ediyor. Yuzle acilan telefonda "parmak izi" yazmak yanlis bir
-        // soz, PIN'le acan icin de kafa karistirici.
-        Spacer(Modifier.height(Space.x20))
-        Text("Kilidi aç", style = t.bodyStrong, color = c.onSurface)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = state.unlockError
-                ?: "Parmak izi, yüz ya da ekran kilidinizle açın. " +
-                "Fiyatlar arka planda güncellenir.",
-            style = t.caption.copy(lineHeight = 19.sp),
-            color = if (state.unlockError != null) c.negative else c.onSurfaceMuted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.widthIn(max = 280.dp),
-        )
-        // Tasarimdaki "Şifreyle aç" dugmesi KALDIRILDI. Hesabin parolasi yok -
-        // giris tek kullanimlik e-posta koduyla yapiliyor - yani bu dugmenin bir
-        // gun isleyecek karsiligi da yok. Sistem istemi zaten PIN/desen secenegi
-        // sunuyor: cihaz kimligi de kabul ediliyor.
     }
 }
 

@@ -3,9 +3,7 @@ package com.kefe.app.ui.screens.account
 import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.domain.repository.lockEnabled
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -98,7 +96,7 @@ class LaunchLockTest {
     fun surecOrtasindaAcilanKilitBuAcilistaKilitlemez() {
         // Kilitsiz baslayan acilis "acilmis" sayilir; Ayarlar'dan kilit acilinca
         // `locked` true'ya donmemeli - yoksa "Tüm verileri sil" sonrasi kok
-        // LoginKey "Kilitli" gosteriyordu.
+        // giris ekrani "Kilitli" gosteriyordu.
         val start = unlockedAtLaunchStart(lockEnabled = false, setupDone = true, gateAvailable = true)
         assertTrue(start)
         assertFalse(locked(lockEnabled = true, unlockedThisLaunch = start))
@@ -113,39 +111,30 @@ class LaunchLockTest {
         assertFalse(locked(unlockedThisLaunch = start))
     }
 
+    /**
+     * Activity yeniden yaratildi (katlama, bolunmus ekran, dil): Compose durumu
+     * sifirlanir ama kilit VM'i kalir. Bu bir ACILIS degil - kilit bu
+     * Activity'de acildiysa kok kilide donmez. NEYDI: kok kilit oluyor, kalan
+     * `unlocked` kullaniciyi hemen iceri aliyor, kilit ekrani da ayni karede
+     * bakiyelerin ustunde sistem istemi aciyordu.
+     */
     @Test
-    fun kokKilitliyseKilitAsamasiVeAcilmaBilgisiKorunur() {
-        val vm = LoginUiState(stage = LoginStage.SignIn, unlocked = true)
-
-        val state = loginScreenState(vm, asRoot = true, locked = true)
-
-        assertEquals(LoginStage.Locked, state.stage)
-        // Kilit acilinca kabuk iceri alsin diye unlocked silinmez.
-        assertTrue(state.unlocked)
+    fun yenidenYaratilanEkranAcilmisKilidiKorur() {
+        val start = unlockedAtLaunchStart(
+            lockEnabled = true,
+            setupDone = true,
+            gateAvailable = true,
+            unlockedBefore = true,
+        )
+        assertTrue(start)
+        assertFalse(locked(unlockedThisLaunch = start))
     }
 
     @Test
-    fun tumVerileriSilSonrasiKokGirisTemizSignInGosterir() {
-        // VM surec boyunca yasar: onceki kilitten Locked / unlocked=true kalmis.
-        val stale = LoginUiState(stage = LoginStage.Locked, unlocked = true, unlockError = "hata")
-
-        val state = loginScreenState(stale, asRoot = true, locked = false)
-
-        assertEquals(LoginStage.SignIn, state.stage)
-        // unlocked=true kalsaydi etkisi enterApp'i hemen cagirir, giris formu
-        // hic gorunmezdi.
-        assertFalse(state.unlocked)
-        assertNull(state.unlockError)
-    }
-
-    @Test
-    fun itilmisGirisKilitliAcilistaBileKilitGostermez() {
-        val stale = LoginUiState(stage = LoginStage.Locked, unlocked = true)
-
-        val state = loginScreenState(stale, asRoot = false, locked = true)
-
-        assertEquals(LoginStage.SignIn, state.stage)
-        assertFalse(state.unlocked)
+    fun acilmisKilitIkinciIstemAcmaz() {
+        assertTrue(LockUiState().canStartUnlock())
+        assertFalse(LockUiState(unlocking = true).canStartUnlock(), "istem zaten acik")
+        assertFalse(LockUiState(unlocked = true).canStartUnlock(), "kilit zaten acildi")
     }
 
     @Test

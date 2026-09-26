@@ -46,18 +46,25 @@ import com.kefe.app.ui.theme.Space
  *
  * Girisliyse once hesap indirilir ("Hesabınız getiriliyor…"). Hesapta profil
  * varsa adlar oradan gelir ve yalniz bu telefonun hangisi oldugu secilir;
- * yoksa iki ad yazilir. Girissizken "Hesabım var, giriş yap" hesaba gecirir -
+ * yoksa iki ad yazilir. Girissizken alttaki "Hesaba bağla" hesaba gecirir -
  * o yol donuste bu ekrana geri gelir ve hesap indirilir.
  *
  * Secim onemlidir: bu telefondan eklenen her islem secilen profile yazilir.
+ *
+ * [onLink]: girissizken "Hesaba bağla" - giris ekranini (baglama amaciyla) iter.
+ *
+ * [onUseAnotherEmail]: girisliyken "Farklı e-postayla gir" - oturumu birakir ve
+ * giris ekranini yeniden acar. Baglanti henuz yazilmadigi icin (bkz.
+ * ProfileSetupViewModel) hicbir kayit etkilenmez.
  */
 @Composable
 fun ProfileSetupScreen(
     state: ProfileSetupUiState,
     onIntent: (ProfileSetupIntent) -> Unit,
-    onSignIn: () -> Unit,
+    onLink: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
+    onUseAnotherEmail: () -> Unit = {},
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
@@ -114,15 +121,22 @@ fun ProfileSetupScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(Space.x8))
+                    // Oturum KALIR ama baglanti yazilmaz: mod "Bağlantı yarım",
+                    // hicbir sey gonderilmez ve cekilmez. Ozet'teki "Tamamla"
+                    // hesabi indirip secimi yeniden sorar.
                     AccountFlatButton(
-                        text = "Bağlanmadan devam et",
+                        text = "Şimdilik hesapsız devam et",
                         onClick = { onIntent(ProfileSetupIntent.ContinueOffline) },
                         contentColor = c.onSurfaceMuted,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    AccountFooter(state, onUseAnotherEmail)
                 }
 
-                ProfileSetupPhase.Ready -> ReadyContent(state, onIntent, onSignIn)
+                ProfileSetupPhase.Ready -> {
+                    ReadyContent(state, onIntent, onLink)
+                    AccountFooter(state, onUseAnotherEmail)
+                }
             }
             Spacer(Modifier.height(Space.x24))
         }
@@ -133,19 +147,16 @@ fun ProfileSetupScreen(
 private fun ReadyContent(
     state: ProfileSetupUiState,
     onIntent: (ProfileSetupIntent) -> Unit,
-    onSignIn: () -> Unit,
+    onLink: () -> Unit,
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
+    // Govde metni duruma gore tek yerden (bkz. readyBody): hesap sozu yalniz
+    // girisliyken, hesapsiz olusturmada profillerin nerede durdugu.
+    BodyText(state.readyBody())
+
     if (state.editingNames) {
-        BodyText(
-            if (state.accountHasProfiles) {
-                "Profil adlarını düzenleyin. Bu telefondan eklediğiniz her kayıt, seçtiğiniz profile yazılır."
-            } else {
-                "İki profil oluşturun. Bu telefondan eklediğiniz her kayıt, seçtiğiniz profile yazılır."
-            },
-        )
         Spacer(Modifier.height(Space.x28))
         Text("İSİMLER", style = t.label(11, 0.06), color = c.onSurfaceMuted)
         Spacer(Modifier.height(Space.x10))
@@ -162,20 +173,6 @@ private fun ReadyContent(
         )
         Spacer(Modifier.height(Space.x28))
         Text("BU TELEFON KİMİN?", style = t.label(11, 0.06), color = c.onSurfaceMuted)
-    } else {
-        BodyText(
-            if (state.accountHasProfiles) {
-                "Hesabınızda iki profil bulduk. Bu telefondan eklediğiniz her kayıt, seçtiğiniz profile yazılır."
-            } else {
-                // Yalniz "Bağlanmadan devam et"ten gelinir: hesap indirilemedi,
-                // baglanti yazilmadi, mod "Bağlantı yarım". NEYDI: "kayitlar
-                // baglanti gelince kendiliginden gelir" deniyordu - oysa esitleme
-                // artik yalniz BAGLI cihazda calisiyor; kayitlar ancak Ozet'teki
-                // (ya da Ayarlar'daki) "Tamamla" ile iner.
-                "Bu telefondan eklediğiniz her kayıt, seçtiğiniz profile yazılır. " +
-                    "Bağlantı gelince Özet'teki \"Tamamla\" ile hesabınızdaki kayıtları indirin."
-            },
-        )
     }
     Spacer(Modifier.height(Space.x10))
 
@@ -202,7 +199,9 @@ private fun ReadyContent(
         enabled = state.canSave,
     )
 
-    if (!state.editingNames) {
+    // Adsiz secimde (hesap indirilemeden gecildi) duzenleme yok: yazilan adlar
+    // hesap indiginde hesabinkilerle degisir (bkz. canEditNames).
+    if (state.canEditNames) {
         Spacer(Modifier.height(Space.x8))
         AccountFlatButton(
             text = "Adları düzenle",
@@ -219,29 +218,78 @@ private fun ReadyContent(
         )
     }
 
-    // HESABI OLAN BURADA KAYBOLMAMALI. Girissiz gelindiyse (yeni telefon,
-    // "Hesapsız başla" ya da kilit ekranindan gecilmis bir ilk acilis) mevcut
-    // hesaba gecmenin yolu tam bu ekranda durur; giris sonrasi bu ekrana
-    // donulur ve hesaptaki profillerden secilir.
-    if (!state.signedIn) {
+    // HESABA GECMENIN YOLU BURADA DA DURUR. Hosgeldin'de "Bu cihazda kullan"i
+    // secen biri esiyle iki telefonda kullanacagini sonradan fark edebilir;
+    // giris bitince bu ekrana donulur ve hesaptaki profillerden secilir. Iki
+    // satir: tek satira sigmayinca baglanti cumlenin ortasindan kiriliyordu.
+    if (state.showLinkFooter) {
         Spacer(Modifier.height(Space.x28))
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("Zaten bir hesabınız var mı? ", style = t.caption, color = c.onSurfaceMuted)
             Text(
-                "Hesabım var, giriş yap",
+                "Eşinizle iki telefonda mı kullanacaksınız?",
+                style = t.caption,
+                color = c.onSurfaceMuted,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                "Hesaba bağla",
                 style = t.caption.copy(fontWeight = FontWeight.SemiBold),
                 color = c.accent,
-                modifier = Modifier.clickable(
+                modifier = Modifier
+                    .padding(top = Space.x4)
+                    .clickable(
+                        indication = null,
+                        interactionSource = null,
+                        role = Role.Button,
+                        onClick = onLink,
+                    ),
+            )
+        }
+    }
+}
+
+/**
+ * Girisliyken: hangi e-postayla girildigi ve "Farklı e-postayla gir".
+ *
+ * NEYDI: hosgeldinde "Hesapla, iki telefonda" deyip kodu dogrulayan kullanici
+ * bu ekrana KOK olarak geliyordu - geri tusu uygulamadan cikiyor, yeniden
+ * acilis da buraya donuyordu. E-postayi yanlis yazdiysa (ya da esinden farkli
+ * birini kullandiysa) tek yol profilleri olusturup yanlis hesaba baglanmak,
+ * sonra Ayarlar'dan cikmakti. Adres de hic gorunmuyordu.
+ */
+@Composable
+private fun AccountFooter(state: ProfileSetupUiState, onUseAnotherEmail: () -> Unit) {
+    if (!state.showAccountFooter) return
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    Spacer(Modifier.height(Space.x28))
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            "${state.accountEmail} ile giriş yaptınız.",
+            style = t.caption,
+            color = c.onSurfaceMuted,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "Farklı e-postayla gir",
+            style = t.caption.copy(fontWeight = FontWeight.SemiBold),
+            color = c.accent,
+            modifier = Modifier
+                .padding(top = Space.x4)
+                .clickable(
+                    enabled = !state.saving,
                     indication = null,
                     interactionSource = null,
                     role = Role.Button,
-                    onClick = onSignIn,
+                    onClick = onUseAnotherEmail,
                 ),
-            )
-        }
+        )
     }
 }
 
