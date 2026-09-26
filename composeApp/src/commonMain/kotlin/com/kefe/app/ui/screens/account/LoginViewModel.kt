@@ -70,7 +70,8 @@ class LoginViewModel(
 
             LoginIntent.ResendCode -> resendCode()
 
-            LoginIntent.CreatePortfolio -> _state.value = _state.value.copy(portfolioCreated = true)
+            LoginIntent.SignInHandled -> _state.value =
+                _state.value.copy(signedIn = false, codeSent = false, code = "", emailError = null)
 
             LoginIntent.Lock -> _state.value =
                 _state.value.copy(stage = LoginStage.Locked, unlocked = false)

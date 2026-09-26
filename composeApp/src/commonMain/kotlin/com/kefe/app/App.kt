@@ -73,6 +73,7 @@ import com.kefe.app.ui.screens.account.LoginStage
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.OnboardingPageCount
 import com.kefe.app.ui.screens.account.OnboardingScreen
+import com.kefe.app.ui.screens.account.ProfileSetupIntent
 import com.kefe.app.ui.screens.account.ProfileSetupScreen
 import com.kefe.app.ui.screens.account.ProfileSetupViewModel
 import com.kefe.app.ui.screens.account.SettingsEffect
@@ -83,6 +84,7 @@ import com.kefe.app.ui.screens.account.SettingsViewModel
 import com.kefe.app.ui.screens.account.ProfilesScreen
 import com.kefe.app.ui.screens.account.ProfilesViewModel
 import com.kefe.app.ui.screens.account.ThemeMode
+import com.kefe.app.ui.screens.account.isLaunchLocked
 import com.kefe.app.ui.screens.assets.AssetDetailEffect
 import com.kefe.app.ui.screens.assets.AssetDetailScreen
 import com.kefe.app.ui.screens.assets.AssetDetailViewModel
@@ -225,7 +227,7 @@ private fun KefeApp(
     // gorunmez tutar; kullanici bir kez actiktan sonra uygulama kapanana kadar
     // tekrar sorulmaz.
     var unlockedThisLaunch by remember { mutableStateOf(false) }
-    val locked = settings.biometricLock && !unlockedThisLaunch
+    val locked = isLaunchLocked(settings.biometricLock, onboarded == true, unlockedThisLaunch)
 
     // Acilistaki kok: giris yapilmamis ya da kilitliyse Login; profil secilmemisse
     // "bu telefon kimin"; aksi halde Ozet. Kilit ekrani Login'in bir asamasidir.
@@ -291,6 +293,10 @@ private fun KefeApp(
      * girmek erken olur.
      */
     fun enterApp() {
+        // Kurulumu bu acilista gecen kullanici bu acilista kilitlenmez:
+        // markOnboarded asagida kilidi "etkin" yapar, ama iceri yeni giren
+        // birine hemen parmak izi sormak anlamsiz.
+        unlockedThisLaunch = true
         while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
         backStack[0] = if (settings.activeMemberId == null) ProfileSetupKey else SummaryKey
         summaryVm.markOnboarded()
@@ -467,7 +473,12 @@ private fun KefeApp(
                             // Kod dogrulanir dogrulanmaz iceri gireriz; ekranda
                             // ayrica "devam et" dedirtmek bos bir adim olurdu.
                             LaunchedEffect(state.signedIn) {
-                                if (state.signedIn) enterApp()
+                                if (state.signedIn) {
+                                    // VM surec boyunca yasiyor; bayrak kalirsa bir
+                                    // sonraki "Giriş yap" e-postayi sormadan gecerdi.
+                                    vm.onIntent(LoginIntent.SignInHandled)
+                                    enterApp()
+                                }
                             }
                             // Kilit YALNIZ kok iken: itilmis (Ayarlar'dan giris)
                             // LoginKey kilit istemez.
@@ -522,13 +533,20 @@ private fun KefeApp(
                         entry<ProfileSetupKey> {
                             val vm = koinViewModel<ProfileSetupViewModel>()
                             val profileState by vm.state.collectAsState()
+                            // Her gorunuste: "Hesabım var, giriş yap" ile giristen
+                            // donuldugunde oturum artik acik, hesap indirilmeli.
+                            LaunchedEffect(Unit) { vm.onIntent(ProfileSetupIntent.Load) }
                             ScreenSurface {
                                 ProfileSetupScreen(
                                     state = profileState,
                                     onIntent = vm::onIntent,
+                                    // Itilen LoginKey kilit istemez, dogrudan e-posta
+                                    // adimi; giris bitince enterApp bu ekrana doner.
+                                    onSignIn = { goTo(LoginKey) },
                                     // Kaydedilince Ozet'e. activeMemberId yazildigi
                                     // icin enterApp artik ProfileSetup'a donmez.
                                     onDone = {
+                                        vm.onIntent(ProfileSetupIntent.Reset)
                                         while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
                                         backStack[0] = SummaryKey
                                     },

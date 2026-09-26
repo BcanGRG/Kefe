@@ -80,6 +80,7 @@ internal fun Members.toDomain(): Member = Member(
     id = id,
     name = name,
     initials = initials,
+    updatedAt = updatedAt,
 )
 
 internal fun Portfolios.toDomain(memberIds: List<String>): Portfolio = Portfolio(

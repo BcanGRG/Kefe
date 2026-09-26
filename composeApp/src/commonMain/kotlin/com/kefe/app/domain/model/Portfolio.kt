@@ -20,4 +20,13 @@ data class Member(
     val id: String,
     val name: String,
     val initials: String,
-)
+    /**
+     * Adin son yazildigi an. 0 = hic adlandirilmamis: kurulumun koydugu
+     * varsayilan ("Ben"/"Eşim"). "Profiller" ekrani buna bakarak hesapta
+     * gercek profil olup olmadigini anlar - varsayilan adi metinden tanimak
+     * yerine.
+     */
+    val updatedAt: Long = 0L,
+) {
+    val isNamed: Boolean get() = updatedAt > 0L
+}

@@ -22,13 +22,23 @@ class PullEngine(
     private val sink: SyncLocalSink,
 ) {
 
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    // coerceInputValues: sunucuda sonradan eklenen bir kolon (goal_delta,
+    // created_at) eski satirlarda acik bir NULL tasiyabilir. DTO alani null
+    // kabul etmiyorsa tek bir satir BUTUN pull'u dusururdu; boyle bir deger
+    // DTO'nun varsayilanina iner (bkz. SyncDtos: sonradan gelen alanlarin hepsi
+    // varsayilanli).
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
 
     // Iki pull cakismasin (giris + push-sonrasi ust uste gelebilir).
     private val mutex = Mutex()
 
-    /** Uygulanan (yerelden yeni) satir sayisini dondurur. Girisli degilse 0. */
-    suspend fun pullOnce(): Int = mutex.withLock {
+    /**
+     * Uygulanan (yerelden yeni) satir sayisini dondurur. Girisli degilse 0.
+     *
+     * [adoptServerMembers]: hesaba ILK BAGLANISTA profil adlari sunucudan
+     * alinir, yereldeki damga daha yeni olsa bile (bkz. [SyncLocalSink.apply]).
+     */
+    suspend fun pullOnce(adoptServerMembers: Boolean = false): Int = mutex.withLock {
         val token = authRepository.validAccessToken() ?: return@withLock 0
 
         val batch = PullBatch(
@@ -40,7 +50,7 @@ class PullEngine(
             snapshots = decode(postgrest.selectAll("daily_snapshots", token)),
             activity = decode(postgrest.selectAll("activity_events", token)),
         )
-        sink.apply(batch)
+        sink.apply(batch, adoptServerMembers)
     }
 
     private inline fun <reified T> decode(jsonArray: String): List<T> =

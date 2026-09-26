@@ -3,6 +3,9 @@ package com.kefe.app.data.sync
 import com.kefe.app.data.remote.RealtimeApi
 import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.AuthState
+import com.kefe.app.domain.repository.PreferenceKeys
+import com.kefe.app.domain.repository.PreferencesRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -69,6 +72,7 @@ class SyncCoordinator(
     private val pushEngine: PushEngine,
     private val pullEngine: PullEngine,
     private val realtimeApi: RealtimeApi,
+    private val preferences: PreferencesRepository,
 ) {
 
     // Conflated: bekleyen istek zaten varken gelen yenisi eskiyi duser - kuyruk
@@ -112,8 +116,8 @@ class SyncCoordinator(
             }
         }
 
-        // Oturum acikken degisimleri dinle, kapaninca birak. Girer girmez BIR pull
-        // istenir: yerel degisiklik olmasa da (bos ikinci telefon) sunucudakini ceker.
+        // Oturum acikken degisimleri dinle, kapaninca birak. Girer girmez ONCE
+        // pull, SONRA push dinleyicisi (bkz. [pullThenListen]).
         processScope.launch {
             var listener: Job? = null
             authRepository.observeAuthState().collect { state ->
@@ -124,11 +128,17 @@ class SyncCoordinator(
                 cloudStateFlow.value = if (userId == null) CloudState.Off else CloudState.Synced
                 if (userId != null) {
                     if (listener == null) {
-                        pullRequests.trySend(Unit)
                         listener = processScope.launch {
-                            localSource.localChanges()
-                                .debounce(DebounceMillis)
-                                .collect { pushRequests.trySend(userId) }
+                            pullThenListen(
+                                pull = {
+                                    // Hic push'lamamis cihaz hesaba ILK kez baglaniyor:
+                                    // profil adlari hesaptan devralinir.
+                                    val firstLink = preferences.get(PreferenceKeys.LastPushedAt) == null
+                                    pullEngine.pullOnce(adoptServerMembers = firstLink)
+                                },
+                                changes = localSource.localChanges(),
+                                requestPush = { pushRequests.trySend(userId) },
+                            )
                         }
                     }
                 } else {
@@ -143,6 +153,36 @@ class SyncCoordinator(
         processScope.launch {
             listenServerChanges(socketGates()) { pullRequests.trySend(Unit) }
         }
+    }
+
+    /**
+     * Giriste ONCE pull, BITINCE push dinleyicisi.
+     *
+     * NEYDI. Ikisi ayni anda baslatiliyordu: pull istegi kanala birakiliyor,
+     * push dinleyicisi de hemen kuruluyordu. localChanges ilk emisyonunu hemen
+     * verdigi icin 1,5 sn sonra watermark 0'dan push gidiyordu - pull'un bitip
+     * bitmedigine bakmadan. Hesaba ilk baglanan cihazin YEREL kayitlari (bu
+     * telefonda yazilmis profil adlari) sunucudakini goremeden itilebiliyordu.
+     * Once hesabin halini al, sonra kendi degisikligini gonder.
+     *
+     * Pull patlarsa push YINE baslar: cevrimdisi yazilan kayitlar sonsuza kadar
+     * bekletilmemeli. Sunucunun LWW korumasi (updated_at <=) eski damgali
+     * satirlari zaten geri cevirir.
+     */
+    @OptIn(FlowPreview::class)
+    internal suspend fun pullThenListen(
+        pull: suspend () -> Unit,
+        changes: Flow<Unit>,
+        requestPush: () -> Unit,
+    ) {
+        runCatching { pull() }
+            .onSuccess { markReachable() }
+            .onFailure {
+                if (it is CancellationException) throw it
+                println("Kefe senkron: ilk pull basarisiz - ${it.message}")
+                markUnreachable()
+            }
+        changes.debounce(DebounceMillis).collect { requestPush() }
     }
 
     /** Uygulama on plana girdi/cikti. Compose agacindan surulur (bkz. App.kt). */

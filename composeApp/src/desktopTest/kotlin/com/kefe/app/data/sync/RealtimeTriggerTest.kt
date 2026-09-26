@@ -88,6 +88,7 @@ private class TriggerHarness(signals: Flow<Unit>) {
             pushEngine = PushEngine(auth, localSource, api, preferences, TriggerClock()),
             pullEngine = PullEngine(auth, api, SyncLocalSink(database)),
             realtimeApi = realtime,
+            preferences = preferences,
         )
     }
 }

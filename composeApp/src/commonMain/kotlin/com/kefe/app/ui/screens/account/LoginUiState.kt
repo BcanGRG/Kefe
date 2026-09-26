@@ -49,9 +49,12 @@ data class LoginUiState(
     val unlocking: Boolean = false,
     val unlockError: String? = null,
 
-    // Tek seferlik gezinme isaretleri
+    // Tek seferlik gezinme isareti. "Yeni portfoy" icin bir bayrak
+    // (portfolioCreated) da vardi ve HIC temizlenmiyordu: tanitimin ilk
+    // sayfasindan geri donulunce bayrak hala true oldugu icin tanitim yeniden
+    // aciliyor, giris ekranina donmek imkansizlasiyordu. Artik dogrudan
+    // cagrilan bir geri donus.
     val unlocked: Boolean = false,
-    val portfolioCreated: Boolean = false,
 ) {
     /** Bos ya da bicimsiz e-posta ile kod gonderilmez. */
     val canSendCode: Boolean get() = !sendingCode && email.isValidEmail()
@@ -64,6 +67,22 @@ data class LoginUiState(
      */
     val canVerify: Boolean get() = !verifying && code.length >= MinLoginCodeLength
 }
+
+/**
+ * Acilis kilidi bu acilista devrede mi.
+ *
+ * KILIT YALNIZ KURULUMDAN SONRA. Kilit varsayilan olarak acik ve once kurulum
+ * durumuna bakmiyordu: YENI kurulumda bile ilk ekran "Kefe kilitli" oluyordu.
+ * Parmak izi (ya da parmak izi yoksa dogrudan) acilinca uygulama giris formunu
+ * HIC gostermeden "Profiller" ekranina geciyordu - hesabi olan kullanici
+ * e-postasini yazacagi yeri hic gormeden yeni profil olusturmaya itiliyordu ve
+ * telefon hesaba baglanmadigi icin kayitlar hic inmiyordu.
+ *
+ * Kurulmamis bir uygulamada saklanacak bakiye yok; perde ancak kurulumdan
+ * sonra anlamli.
+ */
+internal fun isLaunchLocked(lockEnabled: Boolean, onboarded: Boolean, unlockedThisLaunch: Boolean): Boolean =
+    lockEnabled && onboarded && !unlockedThisLaunch
 
 /**
  * Tek "@" ve ondan sonra en az bir nokta. Ortak kodda regex yerine elle
@@ -90,8 +109,12 @@ sealed interface LoginIntent {
     /** Ayni adrese yeni bir kod ister - kod gelmediyse ya da suresi dolduysa. */
     data object ResendCode : LoginIntent
 
-    /** "Yeni portfoy olustur" - dogrudan tanitima gecer. */
-    data object CreatePortfolio : LoginIntent
+    /**
+     * Kabuk girisi karsiladi. VM surec boyunca yasiyor: `signedIn` true kalirsa
+     * cikis yapip yeniden "Giriş yap" diyen kullanici e-posta adimini hic
+     * gormeden iceri atiliyordu.
+     */
+    data object SignInHandled : LoginIntent
 
     /** Kilit asamasina gec - kabuk acilista cagirir. */
     data object Lock : LoginIntent

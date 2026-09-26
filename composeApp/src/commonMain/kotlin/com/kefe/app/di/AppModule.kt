@@ -118,7 +118,7 @@ val appModule = module {
     single { SyncLocalSink(get()) }
     single { PushEngine(get(), get(), get(), get(), get()) }
     single { PullEngine(get(), get(), get()) }
-    single { SyncCoordinator(get(), get(), get(), get(), get()) }
+    single { SyncCoordinator(get(), get(), get(), get(), get(), get()) }
 
     // Dosya paylasimi/secimi platforma iner; Android tarafi Activity ister.
     single { FileTransfer() }

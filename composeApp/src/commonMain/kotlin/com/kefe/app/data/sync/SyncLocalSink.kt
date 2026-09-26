@@ -37,11 +37,23 @@ class SyncLocalSink(
     private val dispatcher: CoroutineContext = Dispatchers.Default,
 ) {
 
-    /** Uygulanan (yerelden yeni) satir sayisi - loglama/dogrulama icin. */
-    suspend fun apply(batch: PullBatch): Int = withContext(dispatcher) {
+    /**
+     * Uygulanan (yerelden yeni) satir sayisi - loglama/dogrulama icin.
+     *
+     * [adoptServerMembers] ILK BAGLANISTA true: profil adlari sunucudan alinir,
+     * yereldeki damga daha yeni olsa bile.
+     *
+     * NEYDI. Hesaba baglanmadan once bu telefonda "Profiller" ekraninda ad
+     * yazilmissa o adlar `updatedAt = simdi` ile damgalaniyordu - sunucudaki
+     * gercek adlardan (haftalar once yazilmis) YENI. Giris yapilinca LWW yerel
+     * adi korudu, push da onu sunucuya itti: "Burak Can / Merve" iki telefonda da
+     * bu cihazda yazilmis bir seyle degisiyordu. Hesap ORTAK bir kayittir; ilk
+     * baglanan cihaz onu devralir, ezmez. Sonraki pull'lar normal LWW'dir.
+     */
+    suspend fun apply(batch: PullBatch, adoptServerMembers: Boolean = false): Int = withContext(dispatcher) {
         var applied = 0
         database.transaction {
-            applied += applyMembers(batch.members)
+            applied += applyMembers(batch.members, adoptServerMembers)
             applied += applyPositions(batch.positions)
             applied += applyTransactions(batch.transactions)
             applied += applyGoals(batch.goals)
@@ -59,13 +71,16 @@ class SyncLocalSink(
 
     // Yereldeki tum satirlarin id -> updatedAt haritasi (mezar taslari dahil):
     // changedSince(0) hepsini getirir. LWW karsilastirmasi bunun uzerinden.
-    private fun applyMembers(rows: List<MemberDto>): Int {
+    private fun applyMembers(rows: List<MemberDto>, adopt: Boolean): Int {
         if (rows.isEmpty()) return 0
         val local = database.portfolioQueries.selectMembersChangedSince(0).executeAsList()
             .associate { it.id to it.updatedAt }
         var n = 0
         for (r in rows) {
-            if (!isNewer(r.updatedAt, local[r.id])) continue
+            // Devralmada bile hic adlandirilmamis (damgasi 0) sunucu satiri
+            // yereldekini ezmez: orada devralinacak bir ad yok.
+            val take = (adopt && r.updatedAt > 0 && r.updatedAt != local[r.id]) || isNewer(r.updatedAt, local[r.id])
+            if (!take) continue
             database.portfolioQueries.insertOrIgnoreMember(
                 id = r.id,
                 portfolioId = LocalPortfolioId,

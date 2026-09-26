@@ -81,7 +81,6 @@ fun LoginScreen(
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(state.unlocked) { if (state.unlocked) onEnterApp() }
-    LaunchedEffect(state.portfolioCreated) { if (state.portfolioCreated) onStartOnboarding() }
 
     // Giris ekraninin ASAMALARI ayri gezinme girdisi degil, tek ekranin durumu.
     // Sistem geri tusu bunu bilmedigi icin kod kutusundayken ya da Başlangıç
@@ -119,7 +118,7 @@ fun LoginScreen(
                     .fillMaxWidth(),
             ) {
                 when (state.stage) {
-                    LoginStage.SignIn -> SignInStage(state, onIntent)
+                    LoginStage.SignIn -> SignInStage(state, onIntent, onStartFresh = onStartOnboarding)
                     LoginStage.Locked -> LockStage(state, onIntent)
                 }
             }
@@ -130,7 +129,11 @@ fun LoginScreen(
 // --- Giris -----------------------------------------------------------------
 
 @Composable
-private fun SignInStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
+private fun SignInStage(
+    state: LoginUiState,
+    onIntent: (LoginIntent) -> Unit,
+    onStartFresh: () -> Unit,
+) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
@@ -238,8 +241,11 @@ private fun SignInStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
                 // ayarindan geliyor, ikisi ayrilinca cumle yalan soyler.
                 "${state.email} adresine ${LoginCodeLength} haneli bir kod gönderdik."
             } else {
+                // Hesabi olan kullanici burada ne yapacagini gormeli: ayni
+                // e-posta = ayni hesap, kayitlar bu telefona gelir.
                 "Şifre yok: e-postanıza tek kullanımlık bir kod gelir. " +
-                    "Verileriniz iki telefonda da güncel kalsın diye."
+                    "Daha önce Kefe kullandıysanız aynı e-postayla girin — " +
+                    "profilleriniz ve kayıtlarınız bu telefona gelir."
             }
 
         Row(horizontalArrangement = Arrangement.spacedBy(Space.x8)) {
@@ -262,18 +268,20 @@ private fun SignInStage(state: LoginUiState, onIntent: (LoginIntent) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
         ) {
-            Text("Hesabınız yok mu? ", style = t.caption, color = c.onSurfaceMuted)
-            // Dogrudan tanitima gecer. Once araya bir "Başlangıç" adimi giriyordu;
-            // tek secenek "yeni portfoy" oldugu icin o adim bos bir duraktı.
+            Text("İlk kez mi kullanıyorsunuz? ", style = t.caption, color = c.onSurfaceMuted)
+            // Dogrudan tanitima gecer. "Hesapsiz" acik yazilir: bu yol hesaba
+            // baglanmaz, hesabi olan biri yanlislikla secmesin. Secse bile
+            // "Profiller" ekraninda "Hesabım var, giriş yap" onu geri getirir.
             Text(
-                "Yeni portföy oluştur",
+                "Hesapsız başla",
                 style = t.caption.copy(fontWeight = FontWeight.SemiBold),
                 color = c.accent,
                 modifier = Modifier.clickable(
                     indication = null,
                     interactionSource = null,
                     role = Role.Button,
-                ) { onIntent(LoginIntent.CreatePortfolio) },
+                    onClick = onStartFresh,
+                ),
             )
         }
         Spacer(Modifier.height(Space.x24))
