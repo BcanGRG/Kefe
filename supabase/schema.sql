@@ -302,14 +302,15 @@ end $$;
 -- push'ta hem pull'da AYNI olur: updated_at buyuk olan kazanir. INSERT'e gerek
 -- yok - yeni satirda OLD yoktur.
 --
--- search_path = '': fonksiyon hicbir semadan ad cozmez (yalniz NEW/OLD
--- alanlarina bakar). Sabitlenmemis search_path, cagiranin yolundaki ayni adli
--- bir nesnenin araya girmesine izin verir; Supabase guvenlik danismani da
--- bunu isaretliyordu.
+-- search_path SABIT: fonksiyon yalniz NEW/OLD alanlarina bakar. Sabitlenmemis
+-- search_path, cagiranin yolundaki ayni adli bir nesnenin araya girmesine izin
+-- verir; Supabase guvenlik danismani da bunu isaretliyordu. Deger CANLIDAKIYLE
+-- BIREBIR ayni ('public', 'pg_temp'; 26 Eyl 2026'da pg_get_functiondef ile
+-- okundu): dosya yeniden calistirilinca canli tanim degismemeli.
 -- =========================================================================
 create or replace function public.kefe_lww_guard() returns trigger
     language plpgsql
-    set search_path = ''
+    set search_path to 'public', 'pg_temp'
 as $$
 begin
     if NEW.updated_at <= OLD.updated_at then
