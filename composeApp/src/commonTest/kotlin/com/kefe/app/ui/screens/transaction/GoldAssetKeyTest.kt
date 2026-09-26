@@ -2,6 +2,7 @@ package com.kefe.app.ui.screens.transaction
 
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.Karat
+import com.kefe.app.domain.model.goldAssetKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals

@@ -54,6 +54,20 @@ data class Goal(
 fun Goal.isOverdue(today: KefeDate): Boolean =
     status != GoalStatus.Completed && targetDate.monthOrdinal() < today.monthOrdinal()
 
+/**
+ * Hedef tarihine yetismek icin kalan aylarda ayda gereken TL.
+ *
+ * Ay sayimi hedef detayindaki "N ay" ile AYNIDIR (ay farki, en az 1): ayni
+ * ekranda iki farkli ay sayisi yazmasin. Tamamlanmis ya da tarihi gecmis
+ * hedefte null - "gereken" bir rakam anlamsiz. Hedefe zaten ulasildiysa 0.
+ */
+fun Goal.requiredMonthly(currentWealth: Double, today: KefeDate): Double? {
+    if (status == GoalStatus.Completed || isOverdue(today)) return null
+    if (currentWealth >= amount) return 0.0
+    val months = (targetDate.monthOrdinal() - today.monthOrdinal()).coerceAtLeast(1)
+    return (amount - currentWealth) / months
+}
+
 enum class GoalUnit {
     Try,
     GoldGram,
