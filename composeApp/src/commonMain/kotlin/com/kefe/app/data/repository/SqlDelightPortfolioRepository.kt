@@ -870,6 +870,18 @@ class SqlDelightPortfolioRepository(
                 // kaybolur ve "bu telefon kimin" adimi olmayan bir profili
                 // adlandirmaya calisirdi. Var olan uyelerin adlarina dokunulmaz.
                 database.bootstrapIfNeeded()
+
+                // Sifirlanmis veritabani baglanti gocunu GECMIS sayilir: gocun
+                // tamamlayacagi eski bir baglanti artik yok. NEYDI: isaret de
+                // siliniyordu. Silme aninda yoldaki bir push bitince watermark'i
+                // (LastPushedAt) yeniden yaziyor, oturum da duruyordu; bir sonraki
+                // acilista goc "oturum + watermark" gorup baglantiyi yeniden
+                // yaziyor, hesap silinen veritabanina geri iniyordu - "bu telefon
+                // kimin" sorulmadan.
+                settingQueries.upsertSetting(
+                    settingKey = PreferenceKeys.CloudLinkMigrated,
+                    settingValue = "1",
+                )
             }
         }
     }
@@ -1230,4 +1242,14 @@ private val DeviceOnlySettings = setOf(
     PreferenceKeys.BiometricLock,
     // Bakiyeyi gizlemek de bu cihazin ortamina gore verilen bir karar.
     PreferenceKeys.HideBalanceOnStart,
+    // Hesap baglantisi bu cihazin karari. NEDEN: yedekle gelselerdi, hesapli
+    // telefonun yedegini yukleyen hesapsiz cihaz kendini o hesaba bagli sanir
+    // ve oturumu yokken "Oturum kapandı" derdi; ya da ters yonde, bagli bir
+    // cihazin baglantisi eski bir yedekle silinirdi.
+    PreferenceKeys.CloudLinkUserId,
+    PreferenceKeys.CloudLinkEmail,
+    // Esitleme ani ve goc isareti de bu cihazin gecmisi, verinin degil.
+    PreferenceKeys.LastSyncedAt,
+    PreferenceKeys.CloudLinkMigrated,
+    PreferenceKeys.LocalRestoredAt,
 )

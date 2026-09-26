@@ -167,8 +167,13 @@ private fun ReadyContent(
             if (state.accountHasProfiles) {
                 "Hesabınızda iki profil bulduk. Bu telefondan eklediğiniz her kayıt, seçtiğiniz profile yazılır."
             } else {
+                // Yalniz "Bağlanmadan devam et"ten gelinir: hesap indirilemedi,
+                // baglanti yazilmadi, mod "Bağlantı yarım". NEYDI: "kayitlar
+                // baglanti gelince kendiliginden gelir" deniyordu - oysa esitleme
+                // artik yalniz BAGLI cihazda calisiyor; kayitlar ancak Ozet'teki
+                // (ya da Ayarlar'daki) "Tamamla" ile iner.
                 "Bu telefondan eklediğiniz her kayıt, seçtiğiniz profile yazılır. " +
-                    "Kayıtlarınız bağlantı gelince kendiliğinden gelir."
+                    "Bağlantı gelince Özet'teki \"Tamamla\" ile hesabınızdaki kayıtları indirin."
             },
         )
     }

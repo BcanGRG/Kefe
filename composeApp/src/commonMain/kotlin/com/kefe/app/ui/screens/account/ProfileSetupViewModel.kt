@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.kefe.app.data.db.LocalOwnerMemberId
 import com.kefe.app.data.db.LocalPartnerMemberId
 import com.kefe.app.data.sync.PullEngine
+import com.kefe.app.data.sync.linkedUserId
 import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.AuthState
 import com.kefe.app.domain.repository.PortfolioRepository
@@ -31,6 +32,12 @@ import kotlinx.coroutines.launch
  * henuz kurulumun "Ben"/"Eşim"ini tasiyordu, ekran bos alanlar gosteriyordu ve
  * kaydetmek iki adi `updatedAt = simdi` ile yeniden yaziyordu - hesaptaki
  * gercek adlardan YENI bir damgayla. Push onlari iki telefonun ustune itti.
+ *
+ * HESAP BAGLANTISI BURADA YAZILIR. Esitleme yalniz cihaz bir hesaba BAGLIYKEN
+ * calisir (bkz. CloudMode); baglanti ancak hesap BASARIYLA indirildikten ve bu
+ * telefonun kim oldugu secildikten sonra, secimle AYNI islemde yazilir. Hesap
+ * indirilemeden gecilirse ("Bağlanmadan devam et") baglanti yazilmaz: mod
+ * "Bağlantı yarım" kalir, hicbir sey gonderilmez ve cekilmez.
  */
 class ProfileSetupViewModel(
     private val portfolioRepository: PortfolioRepository,
@@ -43,6 +50,11 @@ class ProfileSetupViewModel(
     val state: StateFlow<ProfileSetupUiState> = _state.asStateFlow()
 
     private var loadJob: Job? = null
+
+    // Bu yuklemede BASARIYLA indirilen hesap (userId, e-posta). Kaydet
+    // baglantiyi yalniz bu doluysa yazar; girissiz ya da indirilemeyen
+    // yuklemede null kalir.
+    private var pulledAccount: Pair<String, String>? = null
 
     fun onIntent(intent: ProfileSetupIntent) {
         when (intent) {
@@ -65,6 +77,7 @@ class ProfileSetupViewModel(
 
             ProfileSetupIntent.Reset -> {
                 loadJob?.cancel()
+                pulledAccount = null
                 _state.value = ProfileSetupUiState()
             }
         }
@@ -76,20 +89,28 @@ class ProfileSetupViewModel(
      */
     private fun load() {
         loadJob?.cancel()
+        pulledAccount = null
         _state.value = _state.value.copy(phase = ProfileSetupPhase.Checking, failureDetail = null, done = false)
         loadJob = viewModelScope.launch {
             val auth = authRepository.observeAuthState().first { it !is AuthState.Unknown }
             val signedIn = auth is AuthState.SignedIn
             _state.value = _state.value.copy(signedIn = signedIn)
 
-            if (signedIn) {
+            if (auth is AuthState.SignedIn) {
                 _state.value = _state.value.copy(phase = ProfileSetupPhase.Syncing)
                 val pulled = runCatching {
                     // Jeton alinamiyorsa pull sessizce 0 donerdi - "indirildi"
                     // sanilip bos bir hesap gibi davranilmasin.
                     authRepository.validAccessToken() ?: error("Oturum doğrulanamadı")
-                    val firstLink = preferences.get(PreferenceKeys.LastPushedAt) == null
-                    pullEngine.pullOnce(adoptServerMembers = firstLink)
+                    // Devralma BAGLANTIYA gore: cihaz bu hesaba zaten bagliysa
+                    // (ayni hesaba yeniden giris) pull duz LWW'dir; degilse
+                    // hesabin adlari devralinir. NEYDI: "hic push'lamadi mi"
+                    // (LastPushedAt == null) soruluyordu - ilk pull patlayip
+                    // push gecince isaret kalici kayboluyor, devralma bir daha
+                    // olmuyordu; baska hesaba geciste de hic olmuyordu.
+                    val link = preferences.get(PreferenceKeys.CloudLinkUserId)
+                    val alreadyLinked = linkedUserId(auth, link) != null
+                    pullEngine.pullOnce(adoptServerMembers = !alreadyLinked)
                 }
                 pulled.exceptionOrNull()?.let { error ->
                     if (error is CancellationException) throw error
@@ -100,6 +121,7 @@ class ProfileSetupViewModel(
                     )
                     return@launch
                 }
+                pulledAccount = auth.session.userId to auth.session.email
             }
             showMembers(pickOnly = false)
         }
@@ -141,12 +163,53 @@ class ProfileSetupViewModel(
                 renameIfChanged(LocalOwnerMemberId, s.ownerName, s.loadedOwnerName)
                 renameIfChanged(LocalPartnerMemberId, s.partnerName, s.loadedPartnerName)
             }
-            preferences.put(
-                PreferenceKeys.ActiveMemberId,
-                if (isOwner) LocalOwnerMemberId else LocalPartnerMemberId,
+            // Secim ve (hesap indirildiyse) baglanti TEK islemde: yarim
+            // yazilirsa esitleme "bu telefon kimin" secilmeden baslayabilirdi.
+            val link = linkToCommit()
+            val previousLink = preferences.get(PreferenceKeys.CloudLinkUserId)
+            preferences.putAll(
+                buildMap {
+                    put(
+                        PreferenceKeys.ActiveMemberId,
+                        if (isOwner) LocalOwnerMemberId else LocalPartnerMemberId,
+                    )
+                    if (link != null) {
+                        put(PreferenceKeys.CloudLinkUserId, link.first)
+                        put(PreferenceKeys.CloudLinkEmail, link.second)
+                        // Baglanti kuruldu: hesapsizken yuklenen yedegin izi artik
+                        // bir sonraki baglantiyi ilgilendirmez.
+                        put(PreferenceKeys.LocalRestoredAt, null)
+                        // YENI bir baglantida (hic bagli degildi, acik cikistan
+                        // sonra ya da baska hesaptan geliyor) watermark sifirlanir.
+                        // NEYDI: eski hesabin watermark'i (T) kaliyordu ve push
+                        // yalniz T'den sonra degisenleri gonderiyordu - T'den once
+                        // kurulan pozisyon, hedef ve uyeler yeni hesaba hic
+                        // gitmiyor, karsi telefon pozisyonu olmayan islemler
+                        // goruyordu. Ayni hesaba tam yeniden gonderim zararsiz:
+                        // sunucunun LWW korumasi esit/eski damgayi yok sayar.
+                        if (previousLink != link.first) {
+                            put(PreferenceKeys.LastPushedAt, null)
+                            // "Son eşitleme" de onceki baglantinin ani; yeni
+                            // hesabin ilk turu kendi anini yazar.
+                            put(PreferenceKeys.LastSyncedAt, null)
+                        }
+                    }
+                },
             )
             _state.value = _state.value.copy(saving = false, done = true)
         }
+    }
+
+    /**
+     * Yazilacak baglanti: bu yuklemede indirilen hesap, oturum HALA o hesaptaysa.
+     * Ekranda beklerken cikis yapildiysa ya da baska hesaba girildiyse baglanti
+     * yazilmaz - indirilen hesap artik oturumun hesabi degil.
+     */
+    private suspend fun linkToCommit(): Pair<String, String>? {
+        val pulled = pulledAccount ?: return null
+        val auth = authRepository.observeAuthState().first { it !is AuthState.Unknown }
+        val session = (auth as? AuthState.SignedIn)?.session ?: return null
+        return pulled.takeIf { session.userId == it.first }
     }
 
     private suspend fun renameIfChanged(memberId: String, typed: String, loaded: String) {

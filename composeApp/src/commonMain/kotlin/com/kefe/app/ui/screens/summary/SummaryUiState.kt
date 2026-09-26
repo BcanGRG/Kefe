@@ -1,6 +1,6 @@
 package com.kefe.app.ui.screens.summary
 
-import com.kefe.app.data.sync.CloudState
+import com.kefe.app.data.sync.CloudMode
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.AllocationSlice
 import com.kefe.app.domain.model.Goal
@@ -12,6 +12,8 @@ import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.layout.KefeMarketRow
 import com.kefe.app.ui.format.UnknownChangeText
+import com.kefe.app.ui.components.longLabel
+import com.kefe.app.ui.components.shortLabel
 
 /**
  * Hero rakaminin gosterim birimi. Turkiye'de "kac gram altin ediyor" sorusu
@@ -129,8 +131,16 @@ data class SummaryUiState(
     /** FIYAT tazeligi - "son bilinen fiyatlar" seridini bu surer. */
     val freshness: PriceFreshness = PriceFreshness.Fresh,
     val pricesUpdatedAt: String = "",
-    /** ESITLEME durumu - basliktaki cipi bu surer. Fiyatla ilgisi yok. */
-    val cloudState: CloudState = CloudState.Off,
+    /**
+     * HESAP modu - cip, ray, yan navigasyon ve hesap seridi bunu okur. Fiyatla
+     * ilgisi yok. null = oturum henuz okunmadi; o ana kadar cip cizilmez ki
+     * "Bu cihazda" deyip bir kare sonra "Eşitlendi"ye atlamasin.
+     */
+    val cloudMode: CloudMode? = null,
+    /** Son basarili esitleme ("az önce", "5 dk önce"); hic yoksa null. */
+    val syncedAgo: String? = null,
+    /** Bulut anahtarlari bu surumde var mi - yoksa "Hesaba bağla" onerilmez. */
+    val cloudConfigured: Boolean = false,
     /**
      * Ana hedefin karsiligi. Hedefe varlik atanmissa TOPLAM birikimden farklidir;
      * o yuzden ayri tutulur.
@@ -144,7 +154,6 @@ data class SummaryUiState(
      * yolu yoktu; kart bu satiri hic cizmiyordu.
      */
     val mainGoalArrival: KefeDate? = null,
-    val pendingSyncCount: Int = 0,
     val refreshing: Boolean = false,
     /**
      * Son yenilemenin hatasi.
@@ -168,13 +177,42 @@ data class SummaryUiState(
     val openGoalCount: Int = 0,
     val marketRows: List<KefeMarketRow> = emptyList(),
 ) {
-    /** Masaustu yan navigasyonunun alt satiri: "Eşit · 14:32'de güncellendi". */
-    val syncLine: String
+    /**
+     * Cipin ve rayin etiketi. YALNIZ moddan gelir: fiyat tazeligi ne olursa
+     * olsun degismez (bkz. CloudModeTest). NEYDI: ray ve yan nav fiyat ucunun
+     * durumunu gosteriyordu - fiyat tokezleyince "Çevrimdışı", hesap gayet
+     * esitlenirken.
+     */
+    val badgeLabel: String?
+        get() = cloudMode?.shortLabel()
+
+    /**
+     * Masaustu yan navigasyonunun UST satiri: hesap modu, uzun bicimde.
+     * Hesapsiz ve bulut yapilandirilmissa bir sonraki adimi da soyler.
+     */
+    val navModeLine: String
+        get() {
+            val mode = cloudMode ?: return ""
+            val line = mode.longLabel(syncedAgo)
+            return if (mode == CloudMode.Local && cloudConfigured) "$line · Hesaba bağla" else line
+        }
+
+    /**
+     * Masaustu yan navigasyonunun ALT satiri: fiyatlarin durumu. Once tek satir
+     * ikisini karistiriyordu ("Eşit · 14:32'de güncellendi") - "eşit" kelimesi
+     * fiyat icin yaziliyordu, hesap hic sorulmadan.
+     */
+    val navPriceLine: String
         get() = when (freshness) {
             PriceFreshness.Loading -> "Fiyatlar alınıyor…"
-            PriceFreshness.Offline -> "Çevrimdışı · son bilinen fiyatlar"
+            PriceFreshness.Offline -> "Fiyatlar alınamadı · son bilinen fiyatlar"
             PriceFreshness.Stale -> "Fiyatlar 2 saatten eski"
-            PriceFreshness.Fresh -> "Eşit · $pricesUpdatedAt'te güncellendi"
+            PriceFreshness.Fresh ->
+                if (pricesUpdatedAt.isBlank()) {
+                    "Fiyatlar güncel"
+                } else {
+                    "Fiyatlar $pricesUpdatedAt${timeLocative(pricesUpdatedAt)} güncellendi"
+                }
         }
 
     /** Masaustu ust cubugunun baglam satiri. */
@@ -196,4 +234,51 @@ sealed interface SummaryIntent {
     data object Refresh : SummaryIntent
     data object DismissRefreshError : SummaryIntent
     data object DismissRefreshNotice : SummaryIntent
+
+    /**
+     * Hesap seridindeki "Vazgeç" / "Hesapsız devam et": baglanti birakilir,
+     * varsa oturum kapanir. Kayitlar cihazda kalir.
+     */
+    data object DropLink : SummaryIntent
+}
+
+/**
+ * Fiyat seridinin metni: iki satir ve "Yenile". Fiyatlar tazeyse ya da ilk
+ * istek yoldaysa null - uyaracak bir sey yok.
+ *
+ * NEYDI: alinamayan fiyat "Çevrimdışı · Son bilinen fiyatlarla" diye yaziyordu,
+ * ustu cizili bulut ikonuyla. Ucretsiz fiyat ucunun tokezlemesi uygulamanin
+ * internetsiz oldugu, hatta hesabin koptugu gibi okunuyordu. Artik ne oldugunu
+ * soyler: fiyatlar alinamadi, eldekiyle gosteriliyor. Ikon saat.
+ */
+data class PriceBannerLines(val line1: String, val line2: String?)
+
+fun priceBannerLines(freshness: PriceFreshness): PriceBannerLines? = when (freshness) {
+    PriceFreshness.Loading, PriceFreshness.Fresh -> null
+    PriceFreshness.Stale -> PriceBannerLines(line1 = "Fiyatlar 2 saatten eski", line2 = null)
+    PriceFreshness.Offline -> PriceBannerLines(
+        line1 = "Fiyatlar alınamadı · son bilinen fiyatlarla",
+        line2 = "Bağlantı gelince fiyatlar güncellenir",
+    )
+}
+
+/**
+ * "14:32'de" / "12:05'te" - saat metnine Turkce bulunma eki.
+ *
+ * Ek son SAYININ OKUNUSUNA gore secilir (otuz iki -> "de", beş -> "te");
+ * tek bir sabit ek her saatte yanlis okunur. Ust cubuk ve yan navigasyon ayni
+ * yerden alir; once yan nav her saate "'te" ekliyordu.
+ */
+internal fun timeLocative(time: String): String {
+    val minute = time.trim().substringAfterLast(':').takeLast(2).toIntOrNull() ?: return "'de"
+    return when (minute % 10) {
+        1, 2, 7, 8 -> "'de"
+        3, 4, 5 -> "'te"
+        6, 9 -> "'da"
+        else -> when (minute / 10) {
+            2, 5 -> "'de"   // yirmi, elli
+            4 -> "'ta"      // kirk
+            else -> "'da"   // sifir, on, otuz
+        }
+    }
 }

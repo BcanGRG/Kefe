@@ -3,6 +3,7 @@ package com.kefe.app.di
 import com.kefe.app.data.db.DatabaseDriverFactory
 import com.kefe.app.data.db.bootstrapIfNeeded
 import com.kefe.app.data.db.createKefeDatabase
+import com.kefe.app.data.db.migrateCloudLinkIfNeeded
 import com.kefe.app.data.db.seedSampleDataIfEmpty
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.domain.model.KefeDate
@@ -45,6 +46,10 @@ object KefePlatform {
         )
         val created = createKefeDatabase(factory.createDriver())
         if (seedSampleData) created.seedSampleDataIfEmpty(today) else created.bootstrapIfNeeded()
+        // Kurulumdan SONRA: bos veritabaninda oturum yok, goc yalniz isaretini
+        // yazar. Eski kurulumda baglantiyi oturumdan tamamlar ki guncelleme
+        // esitlemeyi durdurmasin (bkz. migrateCloudLinkIfNeeded).
+        created.migrateCloudLinkIfNeeded()
         database = created
         return created
     }

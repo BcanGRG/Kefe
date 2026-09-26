@@ -33,10 +33,10 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
+import com.kefe.app.data.sync.CloudMode
 import com.kefe.app.data.sync.SyncCoordinator
 import com.kefe.app.di.appModule
 import com.kefe.app.domain.model.TradeSide
-import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.navigation.ActivityKey
 import com.kefe.app.navigation.AssetDetailKey
 import com.kefe.app.navigation.AssetsKey
@@ -58,7 +58,6 @@ import com.kefe.app.ui.brand.KefeSplash
 import com.kefe.app.ui.components.KefeBackHandler
 import com.kefe.app.ui.components.KefeBottomNav
 import com.kefe.app.ui.components.KefeAutoDismissBanner
-import com.kefe.app.ui.components.SyncStatus
 import com.kefe.app.ui.gallery.DesignSystemGallery
 import com.kefe.app.ui.layout.KefeNavItem
 import com.kefe.app.ui.layout.KefeNavigationRail
@@ -88,6 +87,7 @@ import com.kefe.app.ui.screens.account.isLaunchLocked
 import com.kefe.app.ui.screens.account.launchSetupDone
 import com.kefe.app.ui.screens.account.lockCanApply
 import com.kefe.app.ui.screens.account.loginScreenState
+import com.kefe.app.ui.screens.account.profileSetupAfterSignIn
 import com.kefe.app.ui.screens.account.unlockedAtLaunchStart
 import com.kefe.app.ui.screens.assets.AssetDetailEffect
 import com.kefe.app.ui.screens.assets.AssetDetailScreen
@@ -120,6 +120,8 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.koinConfiguration
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Karsiligi henuz olmayan satirlarin ortak yaniti.
@@ -128,6 +130,13 @@ import org.koin.dsl.koinConfiguration
  * calismiyor" ile "burasi henuz yok" arasindaki farki soyluyor.
  */
 private const val NotReadyMessage = "Bu bölüm henüz hazır değil."
+
+/**
+ * Baglanti birakilinca (Ayarlar'dan ya da Ozet'teki "Vazgeç"ten) gosterilen
+ * TEK cumle. Iki yol ayni isi yapar; biri sessiz kalirsa kullanici tek
+ * dokunusla neyin degistigini (kayitlar duruyor mu?) bilemezdi.
+ */
+private const val DroppedLinkMessage = "Hesaptan çıkıldı. Kayıtlarınız bu cihazda duruyor."
 
 /**
  * [onReady] uygulamanin ilk gercek karesini cizmeye hazir oldugunu bildirir.
@@ -308,15 +317,17 @@ private fun KefeApp(
      *
      * "Bu telefon kimin" adimi henuz gecilmediyse ONA gideriz: kayitlar bir
      * profile yazilacak, cihazin hangi profil oldugu bilinmeden ana ekrana
-     * girmek erken olur.
+     * girmek erken olur. [forceProfileSetup]: profil secili olsa bile (bkz.
+     * profileSetupAfterSignIn) - hesaba yeni baglanan cihaz hesabin adlariyla
+     * yeniden sorulur.
      */
-    fun enterApp() {
+    fun enterApp(forceProfileSetup: Boolean = false) {
         // Iceri giren bu acilista bir daha kilitlenmez. Kilitsiz baslayan acilis
         // zaten "acilmis" sayiliyor; bu satir kilit ekranindan gelen yolu da
         // ayni yere baglar - iceri yeni giren birine hemen kimlik sormak anlamsiz.
         unlockedThisLaunch = true
         while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-        backStack[0] = if (settings.activeMemberId == null) ProfileSetupKey else SummaryKey
+        backStack[0] = if (forceProfileSetup || settings.activeMemberId == null) ProfileSetupKey else SummaryKey
         summaryVm.markOnboarded()
     }
 
@@ -333,10 +344,10 @@ private fun KefeApp(
             SettingsEffect.NotReady -> saveError = NotReadyMessage
 
             // Cikis artik giris ekranina ATMAZ: giris istege bagli, uygulama
-            // cevrimdisi tam calisir. Kullanici Ayarlar'da kalir; Bulut bolumu
-            // signedIn=false ile yeniden "Giriş yap" satirina doner.
+            // hesapsiz tam calisir. Kullanici Ayarlar'da kalir; hesap bolumu
+            // "Yalnız bu cihazda"ya doner. Mesaj kayitlarin akibetini soyler.
             SettingsEffect.SignedOut -> {
-                saveError = "Çıkış yapıldı — senkron kapatıldı."
+                saveError = DroppedLinkMessage
             }
 
             // Paylasim sayfasi acildi; dosyanin nereye gittigine kullanici karar
@@ -379,15 +390,11 @@ private fun KefeApp(
     val navItems = if (windowSize.isExpanded) desktopDestinations else topLevelDestinations
     val navIndex = navItems.indexOfFirst { it.key == current }.coerceAtLeast(0)
     val members = summary.members.mapIndexed { index, m -> m.initials to index }
-    // Devam eden bir istek her seyi yener. Once Offline ilk sirada bakiliyordu ve
-    // istek YOLDAYKEN bile "Çevrimdışı" yaziyordu - kullanicinin gordugu ilk sey
-    // buydu, hem de tam calisan bir agda.
-    val syncStatus = when {
-        summary.refreshing -> SyncStatus.Pending
-        summary.freshness == PriceFreshness.Loading -> SyncStatus.Pending
-        summary.freshness == PriceFreshness.Offline -> SyncStatus.Offline
-        else -> SyncStatus.Synced
-    }
+    // Ray ve yan navigasyonun durumu HESAP modudur (summary.cloudMode), fiyat
+    // tazeligi DEGIL. NEYDI: burada fiyattan turetiliyordu - fiyat ucu
+    // tokezleyince "Çevrimdışı", istek yoldayken "Bekliyor" yaziyordu; hesapsiz
+    // bir masaustu bile "Eşit" gorunuyordu. Fiyat artik yan navigasyonun ikinci
+    // satirinda, kendi adiyla.
 
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
@@ -413,9 +420,12 @@ private fun KefeApp(
                     onAdd = { openAddSheet() },
                     members = members,
                     memberNames = summary.members.joinToString(", ") { it.name },
-                    syncStatus = syncStatus,
-                    syncLine = summary.syncLine,
+                    cloudMode = summary.cloudMode,
+                    modeLine = summary.navModeLine,
+                    priceLine = summary.navPriceLine,
                     modifier = Modifier.fillMaxHeight(),
+                    // Hesap satirlari Ayarlar'in ilk bolumu: her platformda tek hedef.
+                    onStatusClick = { selectTab(SettingsKey) },
                 )
             } else if (inShell && windowSize.isMedium) {
                 KefeNavigationRail(
@@ -424,8 +434,9 @@ private fun KefeApp(
                     onSelect = { selectTab(navItems[it].key) },
                     onAdd = { openAddSheet() },
                     members = members,
-                    syncStatus = syncStatus,
+                    cloudMode = summary.cloudMode,
                     modifier = Modifier.fillMaxHeight(),
+                    onStatusClick = { selectTab(SettingsKey) },
                 )
             }
 
@@ -471,12 +482,33 @@ private fun KefeApp(
 
                             // Kod dogrulanir dogrulanmaz iceri gireriz; ekranda
                             // ayrica "devam et" dedirtmek bos bir adim olurdu.
+                            //
+                            // NEREYE: cihaz bu hesaba zaten bagliysa (ayni hesaba
+                            // yeniden giris) ve profili seciliyse Ozet; aksi her
+                            // durumda "bu telefon kimin". NEYDI: Ayarlar'dan giren
+                            // kurulu cihaz dogrudan Ozet'e gidiyordu; kordinator
+                            // hesabin adlarini devraliyor ama cihazin eski secimi
+                            // (member_owner) kaliyordu - telefon sessizce diger
+                            // kisi oluyordu. Profil adimi hesabi indirir, secimi
+                            // sorar ve baglantiyi ancak o zaman yazar.
                             LaunchedEffect(state.signedIn) {
                                 if (state.signedIn) {
+                                    // Oturum yazildi ama mod akisi onu bir an sonra
+                                    // gorur; eski modla ("Bu cihazda") karar
+                                    // verilmesin. Gelmezse guvenli yol: profil adimi.
+                                    val mode = withTimeoutOrNull(SignInModeWaitMillis) {
+                                        syncCoordinator.mode().first {
+                                            it is CloudMode.Cloud || it is CloudMode.LinkPending
+                                        }
+                                    }
                                     // VM surec boyunca yasiyor; bayrak kalirsa bir
                                     // sonraki "Giriş yap" e-postayi sormadan gecerdi.
+                                    // Beklemeden SONRA: bayrak once duserse bu etki
+                                    // yeniden baslar ve bekleme iptal olurdu.
                                     vm.onIntent(LoginIntent.SignInHandled)
-                                    enterApp()
+                                    enterApp(
+                                        forceProfileSetup = profileSetupAfterSignIn(mode, settings.activeMemberId),
+                                    )
                                 }
                             }
                             // Kilit YALNIZ kok iken: itilmis (Ayarlar'dan giris)
@@ -559,7 +591,11 @@ private fun KefeApp(
                             ScreenSurface {
                                 SummaryScreenAdaptive(
                                     state = summary,
-                                    onIntent = summaryVm::onIntent,
+                                    onIntent = { intent ->
+                                        summaryVm.onIntent(intent)
+                                        // "Vazgeç" Ayarlar'daki cikisla ayni sonucu soyler.
+                                        if (intent == SummaryIntent.DropLink) saveError = DroppedLinkMessage
+                                    },
                                     onOpenGoal = { goTo(GoalDetailKey(it)) },
                                     onOpenGoals = { selectTab(GoalsKey) },
                                     onOpenActivity = { goTo(ActivityKey) },
@@ -569,6 +605,12 @@ private fun KefeApp(
                                     searchQuery = searchQuery,
                                     onSearchQueryChange = { searchQuery = it },
                                     onOpenMarketRow = { goTo(MarketKey) },
+                                    // Cip: Ayarlar'in ilk bolumu hesap.
+                                    onOpenAccount = { selectTab(SettingsKey) },
+                                    // "Tamamla": hesabi indirip "bu telefon kimin"i
+                                    // soran adim; baglantiyi o yazar.
+                                    onCompleteLink = { goTo(ProfileSetupKey) },
+                                    onRelogin = { goTo(LoginKey) },
                                 )
                             }
                         }
@@ -702,6 +744,7 @@ private fun KefeApp(
                                     onIntent = settingsVm::onIntent,
                                     onOpenShare = { goTo(ProfilesKey) },
                                     onOpenLogin = { goTo(LoginKey) },
+                                    onCompleteLink = { goTo(ProfileSetupKey) },
                                     onOpenGallery = { goTo(GalleryKey) },
                                 )
                             }
@@ -886,3 +929,9 @@ private fun RowScope.SheetSideScrim(onDismiss: () -> Unit) {
  * kapanip acildiginda sifirlanir.
  */
 private var SplashAlreadyPlayed: Boolean = false
+
+/**
+ * Giristen sonra modun oturumu gormesi icin en cok bu kadar beklenir. Yerel
+ * veritabani okumasi; normalde milisaniyeler. Asilirsa profil adimina gidilir.
+ */
+private const val SignInModeWaitMillis = 3_000L

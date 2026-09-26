@@ -1,6 +1,7 @@
 package com.kefe.app.data.sync
 
 import com.kefe.app.data.remote.RealtimeApi
+import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.AuthState
 import com.kefe.app.domain.repository.PreferenceKeys
@@ -12,57 +13,75 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * Bulutla esitlemenin GORUNEN durumu.
+ * Surec boyunca yasayan senkron durumu: istek kanallari, bagli hesap, esitleme
+ * durumu ve on plan bayragi.
  *
- * FIYAT TAZELIGIYLE ILGISI YOKTUR. Once ekrandaki "Eşit / Çevrimdışı" cipi ve
- * "Kayıt cihazda tutulur; bağlanınca eşitlenir" seridi fiyat tazeliginden
- * suruluyordu: ucretsiz fiyat ucu tokezleyince uygulama, senkron gayet
- * calisirken bile kendini cevrimdisi ilan ediyor ve kaydi "Bekliyor" damgasiyla
- * DISKE yaziyordu. Adim 9b'nin acik notu ("çip aslında fiyat tazeliğini
- * gösteriyor, bulut senkronunu değil") tam olarak buydu; adim 11 gercek bulut
- * sinyalini getirdigi icin ayrim artik yapilabiliyor.
+ * NEDEN AYRI NESNE. Kordinator Koin grafigiyle birlikte (Activity yeniden
+ * yaratilinca) yeniden kurulur, isler ise surecte TEK sefer baslar. Kanallar
+ * once ornek alanlariydi: ikinci grafigin kordinatorune gelen "Şimdi eşitle"
+ * kimsenin dinlemedigi bir kanala dusuyordu. Hepsi burada toplanir; uretimde
+ * [SyncCoordinator.Process] tektir, testler her seferinde tazesini verir.
  */
-enum class CloudState {
-    /** Giris yapilmamis: esitleme kapali, kayitlar yalniz bu cihazda. */
-    Off,
+class SyncRuntime {
+    // Conflated: bekleyen istek zaten varken gelen yenisi eskiyi duser - kuyruk
+    // sismez, her tetik "en guncel haliyle bir kez daha push'la" demek.
+    internal val pushRequests = Channel<String>(Channel.CONFLATED)
 
-    /** Girisli ve son alisveris basarili. */
-    Synced,
+    // Pull istekleri ayri kanal: baglaninca, her push'tan sonra ve realtime sinyalinde.
+    internal val pullRequests = Channel<Unit>(Channel.CONFLATED)
 
-    /** Girisli ama son push/pull patladi: kayitlar cihazda bekliyor. */
-    Unreachable,
+    /** Esitlemenin calistigi hesap; null = bagli degil, hicbir sey gitmez/gelmez. */
+    internal val linkedUser = MutableStateFlow<String?>(null)
+
+    /** Bagli cihazin son turunun sonucu. Baglanti degisince Syncing'e doner. */
+    internal val status = MutableStateFlow(CloudStatus.Syncing)
+
+    /** Uygulama on planda mi (soket yalniz o zaman acik). */
+    internal val foreground = MutableStateFlow(false)
+
+    internal var started = false
 }
 
 /**
- * Push ve pull'u NE ZAMAN calistiracagina karar veren yer. Tamamen olay-guduml u,
+ * Push ve pull'u NE ZAMAN calistiracagina karar veren yer. Tamamen olay-gudumlu,
  * ARKA PLAN TICKER'I YOK:
  *
- *   1. Girisli oldugumuz surece [SyncLocalSource.localChanges] dinlenir - yerelde
- *      bir yazma olunca (SQLDelight tablo bildirimi) push tetiklenir.
+ *   1. Cihaz hesaba BAGLIYKEN (bkz. [CloudMode.Cloud]) [SyncLocalSource.localChanges]
+ *      dinlenir - yerelde bir yazma olunca (SQLDelight tablo bildirimi) push
+ *      tetiklenir.
  *   2. debounce: ard arda yazmalar (bir islem + pozisyon yeniden hesabi +
  *      aktivite hepsi tek saniyede) tek push'a toplanir.
- *   3. localChanges'in ILK emisyonu acilis/giris push'ini da kapsar: dinlemeye
- *      baslar baslamaz bir kez emit eder, yani girer girmez yereldeki her sey
- *      (watermark 0'dan) sunucuya gider.
- *   4. GERCEK ZAMANLI (adim 11): girisli VE uygulama ON PLANDA iken
+ *   3. localChanges'in ILK emisyonu baglanti push'ini da kapsar: dinlemeye
+ *      baslar baslamaz bir kez emit eder, yani yereldeki degisiklikler
+ *      watermark'tan itibaren sunucuya gider.
+ *   4. GERCEK ZAMANLI (adim 11): bagli VE uygulama ON PLANDA iken
  *      [RealtimeApi.serverChanges] dinlenir - karsi cihazin yazdigi, biz hicbir
  *      seye dokunmadan pull tetikler.
  *
+ * YALNIZ BAGLIYKEN. Once kapi "girisli mi" idi: hesaba giren cihaz, hesap
+ * inmeden ve "bu telefon kimin" sorulmadan push'a basliyordu. Ilk pull
+ * patlarsa bile push gidiyor, yerelde yazilmis profil adlari hesabin ustune
+ * yaziliyordu. Artik oturum ile baglanti ([PreferenceKeys.CloudLinkUserId])
+ * ayni hesabi gostermedikce ne push, ne pull, ne soket calisir; baglantiyi
+ * yalniz hesabi basariyla indiren adim yazar.
+ *
  * SUREC OMURLU. start() Compose agacindan cagrilir; Android'de Activity yeniden
  * yaratilinca Koin grafigi (dolayisiyla bu nesne) yeniden kurulur - tipki
- * veritabani gibi. Isler companion'daki TEK scope'ta ve TEK sefer baslar, yoksa
- * her donuste yeni bir dinleyici sizar ve ayni degisiklik defalarca push'lanirdi.
+ * veritabani gibi. Isler [SyncRuntime] uzerinde TEK sefer baslar, yoksa her
+ * donuste yeni bir dinleyici sizar ve ayni degisiklik defalarca push'lanirdi.
  * Bagimliliklar hep kalici veritabanina dayandigi icin ilk kurulumunkiler gecerli
  * kalir. start() ana is parcacigindan geldigi icin bayrak yalin olabilir.
  */
@@ -73,101 +92,163 @@ class SyncCoordinator(
     private val pullEngine: PullEngine,
     private val realtimeApi: RealtimeApi,
     private val preferences: PreferencesRepository,
+    private val clock: KefeClock,
+    private val runtime: SyncRuntime = Process,
 ) {
 
-    // Conflated: bekleyen istek zaten varken gelen yenisi eskiyi duser - kuyruk
-    // sismez, her tetik "en guncel haliyle bir kez daha push'la" demek.
-    private val pushRequests = Channel<String>(Channel.CONFLATED)
+    /** Bulut anahtarlari bu surumde var mi; yoksa hesap satirlari hic cizilmez. */
+    val cloudConfigured: Boolean get() = authRepository.isCloudConfigured
 
-    // Pull istekleri ayri kanal: giriste, her push'tan sonra ve realtime sinyalinde.
-    private val pullRequests = Channel<Unit>(Channel.CONFLATED)
-
-    @OptIn(FlowPreview::class)
     fun start() {
-        if (!claimStart()) return
+        if (runtime.started) return
+        runtime.started = true
 
-        // Tek tuketici: seri push. Hata kullaniciya YANSIMAZ - watermark
-        // ilerlemedigi icin veri kaybi yok, degisim bir sonraki tetikte yeniden
-        // denenir. Yalniz tanisal bir satir birakiriz (logcat/stdout): sessiz bir
-        // senkron, calisan bir senkrondan ayirt edilemez olurdu.
-        //
-        // Push'tan SONRA pull tetiklenir: benimkini gonderdim, simdi seninkini al.
-        processScope.launch {
-            for (userId in pushRequests) {
-                runCatching { pushEngine.pushOnce(userId) }
-                    .onSuccess { markReachable() }
-                    .onFailure {
-                        println("Kefe senkron: push basarisiz - ${it.message}")
-                        markUnreachable()
-                    }
-                pullRequests.trySend(Unit)
-            }
-        }
-
-        // Tek tuketici: seri pull. Ayni gerekce - hata yutulur, tanisal log kalir.
-        processScope.launch {
-            for (unit in pullRequests) {
-                runCatching { pullEngine.pullOnce() }
-                    .onSuccess { markReachable() }
-                    .onFailure {
-                        println("Kefe senkron: pull basarisiz - ${it.message}")
-                        markUnreachable()
-                    }
-            }
-        }
-
-        // Oturum acikken degisimleri dinle, kapaninca birak. Girer girmez ONCE
-        // pull, SONRA push dinleyicisi (bkz. [pullThenListen]).
-        processScope.launch {
-            var listener: Job? = null
-            authRepository.observeAuthState().collect { state ->
-                val userId = (state as? AuthState.SignedIn)?.session?.userId?.takeIf { it.isNotBlank() }
-                // Cikisliyken bulut KAPALI - "ulasilamiyor" degil. Ikisini ayni
-                // gostermek "baglanmayi bekle" izlenimi verirdi; oysa giris
-                // yapilana kadar esitlenecek bir sey yok.
-                cloudStateFlow.value = if (userId == null) CloudState.Off else CloudState.Synced
-                if (userId != null) {
-                    if (listener == null) {
-                        listener = processScope.launch {
-                            pullThenListen(
-                                pull = {
-                                    // Hic push'lamamis cihaz hesaba ILK kez baglaniyor:
-                                    // profil adlari hesaptan devralinir.
-                                    val firstLink = preferences.get(PreferenceKeys.LastPushedAt) == null
-                                    pullEngine.pullOnce(adoptServerMembers = firstLink)
-                                },
-                                changes = localSource.localChanges(),
-                                requestPush = { pushRequests.trySend(userId) },
-                            )
-                        }
-                    }
-                } else {
-                    listener?.cancel()
-                    listener = null
-                }
-            }
-        }
-
+        processScope.launch { consumePushes() }
+        processScope.launch { consumePulls() }
+        // Baglanti geldikce ONCE pull, SONRA push dinleyicisi; gidince birak.
+        processScope.launch { followLink() }
         // Gercek zamanli dinleme. Ayri launch: yasam omru ustteki push
-        // dinleyicisinden FARKLI - o yalniz girise, bu girise VE on plana bakar.
-        processScope.launch {
-            listenServerChanges(socketGates()) { pullRequests.trySend(Unit) }
+        // dinleyicisinden FARKLI - o yalniz baglantiya, bu baglantiya VE on
+        // plana bakar.
+        processScope.launch { listenServerChanges(socketGates()) { runtime.pullRequests.trySend(Unit) } }
+    }
+
+    /**
+     * Ekranlarin okudugu TEK durum: cip, ray, yan navigasyon, Ayarlar ve ekleme
+     * seridi hepsi buradan. Fiyat tazeliginden BAGIMSIZ.
+     *
+     * Oturum henuz okunmadiysa emisyon yok (bkz. [deriveCloudMode]).
+     */
+    fun mode(): Flow<CloudMode> =
+        combine(
+            authRepository.observeAuthState(),
+            preferences.observeAll()
+                .map { it[PreferenceKeys.CloudLinkUserId] to it[PreferenceKeys.CloudLinkEmail] }
+                .distinctUntilChanged(),
+            runtime.status,
+        ) { auth, link, status ->
+            deriveCloudMode(auth, link.first, link.second, status)
+        }.filterNotNull().distinctUntilChanged()
+
+    /** Uygulama on plana girdi/cikti. Compose agacindan surulur (bkz. App.kt). */
+    fun setForeground(active: Boolean) {
+        runtime.foreground.value = active
+    }
+
+    /**
+     * "Şimdi eşitle": bagliysa bir push (ardindan pull) ister. Durum hemen
+     * "Eşitleniyor"a doner ki dokunus bir sey yapmis gibi gorunsun; sonuc
+     * gelince Eşitlendi ya da Eşitlenemiyor olur.
+     */
+    fun syncNow() {
+        val userId = runtime.linkedUser.value ?: return
+        runtime.status.value = CloudStatus.Syncing
+        runtime.pushRequests.trySend(userId)
+    }
+
+    /**
+     * Baglantiyi birakir: "Vazgeç", "Hesapsız devam et" ve acik cikis.
+     *
+     * Kayitlar CIHAZDA KALIR; yalniz hesapla bag ve (varsa) oturum gider. Once
+     * baglanti silinir, sonra oturum: ters sira bir an "Oturum kapandı" gosterirdi
+     * (baglanti var, oturum yok).
+     */
+    suspend fun dropLink() {
+        preferences.putAll(
+            mapOf(
+                PreferenceKeys.CloudLinkUserId to null,
+                PreferenceKeys.CloudLinkEmail to null,
+            ),
+        )
+        val auth = authRepository.observeAuthState().first { it !is AuthState.Unknown }
+        if (auth is AuthState.SignedIn) authRepository.signOut()
+    }
+
+    // --- Isciler -----------------------------------------------------------
+
+    /**
+     * Tek tuketici: seri push. Hata kullaniciya YANSIMAZ - watermark
+     * ilerlemedigi icin veri kaybi yok, degisim bir sonraki tetikte yeniden
+     * denenir. Yalniz tanisal bir satir birakiriz (logcat/stdout): sessiz bir
+     * senkron, calisan bir senkrondan ayirt edilemez olurdu.
+     *
+     * Push'tan SONRA pull tetiklenir: benimkini gonderdim, simdi seninkini al.
+     */
+    internal suspend fun consumePushes() {
+        for (userId in runtime.pushRequests) {
+            // Istek kuyrukta beklerken baglanti kalkmis ya da hesap degismis
+            // olabilir: o hesaba artik hicbir sey gitmemeli.
+            if (runtime.linkedUser.value != userId) continue
+            runCatching {
+                requireToken()
+                pushEngine.pushOnce(userId)
+            }
+                .onSuccess { markReachable() }
+                .onFailure {
+                    if (it is CancellationException) throw it
+                    println("Kefe senkron: push basarisiz - ${it.message}")
+                    markUnreachable()
+                }
+            runtime.pullRequests.trySend(Unit)
+        }
+    }
+
+    /** Tek tuketici: seri pull. Ayni gerekce - hata yutulur, tanisal log kalir. */
+    internal suspend fun consumePulls() {
+        for (unit in runtime.pullRequests) {
+            if (runtime.linkedUser.value == null) continue
+            runCatching { pullLinked() }
+                .onSuccess { markReachable() }
+                .onFailure {
+                    if (it is CancellationException) throw it
+                    println("Kefe senkron: pull basarisiz - ${it.message}")
+                    markUnreachable()
+                }
         }
     }
 
     /**
-     * Giriste ONCE pull, BITINCE push dinleyicisi.
+     * Baglantiyi izler: bagli hesap her degistiginde eski dinleyici biter,
+     * durum "Eşitleniyor"a doner ve (bagliysa) yenisi [pullThenListen] ile
+     * baslar. Cocuk isler cagiranin kapsaminda - testte backgroundScope'ta.
+     */
+    internal suspend fun followLink() = coroutineScope {
+        var listener: Job? = null
+        var listenerUser: String? = null
+        linkedUserChanges().collect { userId ->
+            runtime.linkedUser.value = userId
+            if (userId == listenerUser) return@collect
+            listener?.cancel()
+            listener = null
+            listenerUser = userId
+            runtime.status.value = CloudStatus.Syncing
+            if (userId != null) {
+                listener = launch {
+                    pullThenListen(
+                        pull = { pullLinked() },
+                        changes = localSource.localChanges(),
+                        requestPush = { runtime.pushRequests.trySend(userId) },
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Baglaninca ONCE pull, BITINCE push dinleyicisi.
      *
      * NEYDI. Ikisi ayni anda baslatiliyordu: pull istegi kanala birakiliyor,
      * push dinleyicisi de hemen kuruluyordu. localChanges ilk emisyonunu hemen
-     * verdigi icin 1,5 sn sonra watermark 0'dan push gidiyordu - pull'un bitip
-     * bitmedigine bakmadan. Hesaba ilk baglanan cihazin YEREL kayitlari (bu
-     * telefonda yazilmis profil adlari) sunucudakini goremeden itilebiliyordu.
-     * Once hesabin halini al, sonra kendi degisikligini gonder.
+     * verdigi icin 1,5 sn sonra watermark'tan push gidiyordu - pull'un bitip
+     * bitmedigine bakmadan. Once hesabin halini al, sonra kendi degisikligini
+     * gonder.
      *
      * Pull patlarsa push YINE baslar: cevrimdisi yazilan kayitlar sonsuza kadar
-     * bekletilmemeli. Sunucunun LWW korumasi (updated_at <=) eski damgali
-     * satirlari zaten geri cevirir.
+     * bekletilmemeli. Bu artik guvenli, cunku buraya yalniz BAGLI cihaz gelir ve
+     * baglanti ancak hesabin adlari basariyla indirildikten sonra yazilir. Once
+     * ilk baglanista da buradan geciliyordu: ilk pull patlayinca yerelde yazilmis
+     * adlar (daha yeni damgayla - sunucunun LWW korumasi onlari "eski" saymaz)
+     * hesabin ustune gidiyordu.
      */
     @OptIn(FlowPreview::class)
     internal suspend fun pullThenListen(
@@ -185,34 +266,55 @@ class SyncCoordinator(
         changes.debounce(DebounceMillis).collect { requestPush() }
     }
 
-    /** Uygulama on plana girdi/cikti. Compose agacindan surulur (bkz. App.kt). */
-    fun setForeground(active: Boolean) {
-        foreground.value = active
+    /** Bagli hesabin kimligi ya da null; ayni degeri tekrar yaymaz. */
+    internal fun linkedUserChanges(): Flow<String?> =
+        combine(
+            authRepository.observeAuthState(),
+            preferences.observeAll().map { it[PreferenceKeys.CloudLinkUserId] }.distinctUntilChanged(),
+        ) { auth, link -> linkedUserId(auth, link) }
+            .distinctUntilChanged()
+
+    /**
+     * Jetonsuz tur BASARI SAYILMAZ. Motorlar jeton yoksa sessizce 0 donuyor ya
+     * da hic istek atmiyordu; o "basari" cipi "Eşitlendi"ye ceviriyordu - oysa
+     * sunucuya hic gidilmemisti (yenileme gecici olarak patlamis).
+     */
+    private suspend fun requireToken() {
+        authRepository.validAccessToken() ?: throw IllegalStateException("Oturum doğrulanamadı")
     }
 
-    /** Ekranin okudugu bulut durumu - fiyat tazeliginden BAGIMSIZ. */
-    fun cloudState(): StateFlow<CloudState> = cloudStateFlow.asStateFlow()
+    // Koordinator ASLA adlari devralmaz: devralma baglanti adiminin isi (hesap
+    // indirilip "bu telefon kimin" sorulurken). Bagli cihazda pull duz LWW'dir.
+    private suspend fun pullLinked() {
+        requireToken()
+        pullEngine.pullOnce(adoptServerMembers = false)
+    }
 
-    // Cikisliyken basari/hata bildirimi gelirse durum Off kalmali: motorlar
-    // jetonsuz sessizce cikiyor, o "basari" bulut aciktir demek degil.
-    private fun markReachable() {
-        if (cloudStateFlow.value != CloudState.Off) cloudStateFlow.value = CloudState.Synced
+    // Bagli degilken gelen bildirim (baglanti tam o anda kalkti) durumu
+    // degistirmez: artik gosterilen mod Cloud degil.
+    private suspend fun markReachable() {
+        if (runtime.linkedUser.value == null) return
+        runtime.status.value = CloudStatus.Synced
+        preferences.put(PreferenceKeys.LastSyncedAt, clock.nowEpochMillis().toString())
     }
 
     private fun markUnreachable() {
-        if (cloudStateFlow.value != CloudState.Off) cloudStateFlow.value = CloudState.Unreachable
+        if (runtime.linkedUser.value == null) return
+        runtime.status.value = CloudStatus.Unreachable
     }
 
     /**
-     * "Soket ne zaman acik olmali": girisli VE on planda iken true.
+     * "Soket ne zaman acik olmali": BAGLI VE on planda iken true.
      *
      * Arka planda soket KAPANIR - acik kalsa Phoenix heartbeat'i kullanicinin
      * hic bakmadigi bir ekran icin pil yakardi. Bedeli, kapaliyken olan
      * degisiklikleri kacirmak; onu da geri donusteki tek pull toparlar.
+     * Girisli ama bagli degilken de kapali: o hesabin degisikligini cekmek,
+     * baglanti adiminin sorusunu atlamak olurdu.
      */
     internal fun socketGates(): Flow<Boolean> =
-        combine(authRepository.observeAuthState(), foreground) { state, active ->
-            state is AuthState.SignedIn && state.session.userId.isNotBlank() && active
+        combine(linkedUserChanges(), runtime.foreground) { userId, active ->
+            userId != null && active
         }.distinctUntilChanged()
 
     /**
@@ -228,7 +330,7 @@ class SyncCoordinator(
     internal suspend fun listenServerChanges(gates: Flow<Boolean>, onPullNeeded: () -> Unit) {
         gates.collectLatest { open ->
             if (!open) {
-                println("Kefe senkron: realtime dinleme kapali (cikis ya da arka plan)")
+                println("Kefe senkron: realtime dinleme kapali (bagli degil ya da arka plan)")
                 return@collectLatest
             }
             onPullNeeded()
@@ -245,32 +347,23 @@ class SyncCoordinator(
         }
     }
 
-    private companion object {
+    companion object {
         // Yazma firtinasi dinsin diye kisa bekleme; ekleme sonrasi push'i gozle
         // gorulur geciktirmeyecek kadar da kisa.
-        const val DebounceMillis = 1500L
+        internal const val DebounceMillis = 1500L
 
         // Realtime sinyalleri icin daha kisa: burada beklenen sey bir kullanici
         // yazmasi degil, sunucudan gelen olay dizisi.
-        const val RealtimeDebounceMillis = 1000L
+        internal const val RealtimeDebounceMillis = 1000L
 
         // Surec omurlu: Koin yeniden kurulsa da isler burada tek sefer yasar.
         private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        private var started = false
 
-        // Uygulama on planda mi. Companion'da: Activity yeniden yaratilip Koin
-        // grafigi degisse de surec-omurlu dinleyici ayni bayragi okur.
-        private val foreground = MutableStateFlow(false)
-
-        // Bulut durumu da surec-omurlu: isleri tutan scope burada, durumu baska
-        // yerde tutmak Activity donusunde ekrani "Off"a dusururdu.
-        private val cloudStateFlow = MutableStateFlow(CloudState.Off)
-
-        /** Ilk cagri true, sonrakiler false. Ana is parcacigindan cagrilir. */
-        fun claimStart(): Boolean {
-            if (started) return false
-            started = true
-            return true
-        }
+        /**
+         * Uretimin tek durumu. Durum da surec-omurlu: isleri tutan scope burada,
+         * durumu kordinator orneginde tutmak Activity donusunde ekrani
+         * "Eşitleniyor"a dusururdu.
+         */
+        val Process: SyncRuntime = SyncRuntime()
     }
 }

@@ -6,7 +6,8 @@ import com.kefe.app.data.remote.TefasApi
 import com.kefe.app.data.remote.currencyConversion
 import com.kefe.app.data.remote.stockAssetKey
 import com.kefe.app.data.remote.stockSymbolOf
-import com.kefe.app.data.sync.CloudState
+import com.kefe.app.data.sync.CloudMode
+import com.kefe.app.data.sync.CloudStatus
 import com.kefe.app.data.sync.SyncCoordinator
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.ActivityEvent
@@ -292,14 +293,14 @@ class AddTransactionViewModel(
     }
 
     /**
-     * Bulut durumu FIYAT tazeliginden ayri okunur. Once ikisi tek bayrakti:
+     * Hesap modu FIYAT tazeliginden ayri okunur. Once ikisi tek bayrakti:
      * ucretsiz fiyat ucu tokezleyince kayit, senkron calisirken bile "Bekliyor"
-     * damgasiyla diske yaziliyordu (bkz. [CloudState]).
+     * damgasiyla diske yaziliyordu (bkz. [CloudMode]).
      */
     private fun observeCloud() {
         viewModelScope.launch {
-            syncCoordinator.cloudState().collect { cloud ->
-                _state.value = _state.value.copy(cloudState = cloud)
+            syncCoordinator.mode().collect { mode ->
+                _state.value = _state.value.copy(cloudMode = mode)
             }
         }
     }
@@ -725,12 +726,7 @@ class AddTransactionViewModel(
                     // Damga BULUT durumundan gelir. Once fiyat tazeliginden
                     // geliyordu: fiyat ucu tokezleyince kayit, esitleme gayet
                     // calisirken bile "Bekliyor" olarak DISKE yaziliyordu.
-                    syncState = when (s.cloudState) {
-                        CloudState.Synced -> SyncState.Synced
-                        // Bulut kapaliyken de kayit "esitlenmemis"tir: giris
-                        // yapilinca ilk push'la gidecek.
-                        CloudState.Off, CloudState.Unreachable -> SyncState.Pending
-                    },
+                    syncState = s.cloudMode.recordSyncState(),
                     // Duzenlemede eski kaydin damgasi DEVREDILIR: yeni satir
                     // ayni gunun sonuna dusmesin. Yeni kayitta 0 kalir ve depo
                     // simdiyi damgalar.
@@ -956,3 +952,14 @@ private fun newPositionName(s: AddTransactionUiState): String = when (s.assetCla
     AssetClass.Cash -> "Nakit"
 }
 
+/**
+ * Yeni kaydin esitleme damgasi. Yalniz hesaba ulasan BAGLI cihazda "Eşit":
+ * Eşitleniyor da buraya girer - ilk tur suruyor ama baglanti var, kayit bir
+ * sonraki push'la gidecek (eski "Synced" giriste hemen yaziliyordu, ayni
+ * anlam). Hesapsiz, yarim bagli ya da oturumu dusmus cihazda kayit
+ * "esitlenmemis"tir: baglanti kurulunca ilk push'la gider.
+ */
+internal fun CloudMode?.recordSyncState(): SyncState = when {
+    this is CloudMode.Cloud && status != CloudStatus.Unreachable -> SyncState.Synced
+    else -> SyncState.Pending
+}

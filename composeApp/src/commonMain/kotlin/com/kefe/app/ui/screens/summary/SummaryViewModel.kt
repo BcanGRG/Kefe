@@ -2,7 +2,6 @@ package com.kefe.app.ui.screens.summary
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kefe.app.data.sync.CloudState
 import com.kefe.app.data.sync.SyncCoordinator
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.ActivityEvent
@@ -29,12 +28,14 @@ import com.kefe.app.domain.repository.RefreshOutcome
 import com.kefe.app.domain.model.sellPrice
 import com.kefe.app.ui.screens.market.priceDecimals
 import com.kefe.app.ui.format.Money
+import com.kefe.app.ui.format.relativeSince
 import com.kefe.app.ui.layout.KefeMarketRow
 import com.kefe.app.domain.model.KefeDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -55,7 +56,7 @@ class SummaryViewModel(
     private val priceRepository: PriceRepository,
     private val preferences: PreferencesRepository,
     private val clock: KefeClock,
-    // Baslikta "Eşit / Çevrimdışı" cipi BUNU gosterir - fiyat tazeligini degil.
+    // Baslikta hesap cipi BUNU gosterir - fiyat tazeligini degil.
     private val syncCoordinator: SyncCoordinator,
 ) : ViewModel() {
 
@@ -96,15 +97,34 @@ class SummaryViewModel(
     }
 
     /**
-     * Bulut durumu fiyat tazeliginden AYRI. 9b'nin acik notu buydu: baslikta
+     * Hesap modu fiyat tazeliginden AYRI. 9b'nin acik notu buydu: baslikta
      * "Eşit" yazan cip aslinda fiyatlarin tazeligini gosteriyordu, esitlemeyi
      * degil - fiyat ucu tokezleyince senkron calisirken "Çevrimdışı" yaziyordu.
+     *
+     * "Son eşitleme" dakikada bir yeniden yazilir: esitleme bir sure olmazsa
+     * "az önce" saatlerce asili kalmasin. Yalniz metin degisince yayilir.
      */
     private fun observeCloud() {
+        _state.value = _state.value.copy(cloudConfigured = syncCoordinator.cloudConfigured)
         viewModelScope.launch {
-            syncCoordinator.cloudState().collect { cloud ->
-                _state.value = _state.value.copy(cloudState = cloud)
+            combine(
+                syncCoordinator.mode(),
+                preferences.observeAll()
+                    .map { it[PreferenceKeys.LastSyncedAt]?.toLongOrNull() }
+                    .distinctUntilChanged(),
+                minuteTicker(),
+            ) { mode, syncedAt, _ ->
+                mode to syncedAt?.let { relativeSince(it, clock.nowEpochMillis()) }
+            }.distinctUntilChanged().collect { (mode, ago) ->
+                _state.value = _state.value.copy(cloudMode = mode, syncedAgo = ago)
             }
+        }
+    }
+
+    private fun minuteTicker(): Flow<Unit> = flow {
+        while (true) {
+            emit(Unit)
+            delay(DayCheckMillis)
         }
     }
 
@@ -138,6 +158,8 @@ class SummaryViewModel(
 
             SummaryIntent.DismissRefreshNotice ->
                 _state.value = _state.value.copy(refreshNotice = null)
+
+            SummaryIntent.DropLink -> viewModelScope.launch { syncCoordinator.dropLink() }
         }
     }
 

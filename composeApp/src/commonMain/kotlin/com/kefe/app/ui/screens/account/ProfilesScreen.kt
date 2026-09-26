@@ -57,9 +57,10 @@ fun ProfilesScreen(
             AccountTopBar(title = "Profiller", onBack = onBack)
 
             Column(Modifier.fillMaxWidth().padding(horizontal = Space.x24)) {
+                // Not moda gore: hesapsizken adlar bu cihazda kalir, bagliyken
+                // iki telefona gider (bkz. profilesNote).
                 Text(
-                    "Bu telefondan eklediğiniz kayıtlar, işaretli profile yazılır. " +
-                        "Adı düzenlemek için dokunun.",
+                    state.note,
                     style = t.caption.copy(lineHeight = 18.sp),
                     color = c.onSurfaceMuted,
                 )

@@ -238,6 +238,17 @@ internal object KefeIconsCore {
 
     // --- Durum ---
 
+    /**
+     * Tek telefon: "Bu cihazda" modu. Hesapsiz kullanimin isareti - bulut
+     * ikonunun ustu cizilmis hali DEGIL; hesapsiz kullanim bir ariza degil.
+     */
+    private var _device: ImageVector? = null
+    val Device: ImageVector
+        get() = _device ?: kefeIcon("KefeDevice") {
+            roundedRect(6.5f, 2.5f, 17.5f, 21.5f, 2.5f)
+            moveTo(10.5f, 18f); lineTo(13.5f, 18f)
+        }.also { _device = it }
+
     private var _cloudOff: ImageVector? = null
     val CloudOff: ImageVector
         get() = _cloudOff ?: kefeIcon("KefeCloudOff") {

@@ -12,6 +12,8 @@ import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.AuthSession
 import com.kefe.app.domain.repository.AuthState
+import com.kefe.app.domain.repository.PreferenceKeys
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -20,11 +22,13 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Adim 11'in kalbi: soket NE ZAMAN dinlenir ve sinyal gelince ne olur.
@@ -68,9 +72,14 @@ private class TriggerRealtime(private val signals: Flow<Unit>) : RealtimeApi {
 private fun signedIn(userId: String = "u1") =
     AuthState.SignedIn(AuthSession(userId, "e@k.app", "tok", "r", 0L))
 
-private class TriggerHarness(signals: Flow<Unit>) {
+/**
+ * [dispatcher]: veritabani akislari (baglanti anahtari) bu baglamda okunur.
+ * Kapi testleri test zamanlayicisini verir ki runCurrent onlari da beklesin.
+ */
+private class TriggerHarness(signals: Flow<Unit>, dispatcher: CoroutineContext = Dispatchers.Default) {
     val auth = TriggerAuth(MutableStateFlow<AuthState>(AuthState.SignedOut))
     val realtime = TriggerRealtime(signals)
+    val preferences: SqlDelightPreferencesRepository
     val coordinator: SyncCoordinator
 
     init {
@@ -79,16 +88,19 @@ private class TriggerHarness(signals: Flow<Unit>) {
         val database: KefeDatabase = createKefeDatabase(driver)
         database.bootstrapIfNeeded()
 
-        val localSource = SyncLocalSource(database)
+        val localSource = SyncLocalSource(database, dispatcher)
         val api = TriggerApi()
-        val preferences = SqlDelightPreferencesRepository(database)
+        preferences = SqlDelightPreferencesRepository(database, dispatcher)
         coordinator = SyncCoordinator(
             authRepository = auth,
             localSource = localSource,
             pushEngine = PushEngine(auth, localSource, api, preferences, TriggerClock()),
-            pullEngine = PullEngine(auth, api, SyncLocalSink(database)),
+            pullEngine = PullEngine(auth, api, SyncLocalSink(database, dispatcher)),
             realtimeApi = realtime,
             preferences = preferences,
+            clock = TriggerClock(),
+            // Her test kendi durumunu alir: on plan bayragi baska teste sizmaz.
+            runtime = SyncRuntime(),
         )
     }
 }
@@ -193,11 +205,14 @@ class RealtimeTriggerTest {
         assertEquals(1, h.realtime.listeners)
     }
 
+    /**
+     * Soket yalniz cihaz hesaba BAGLIYKEN ve on plandayken acilir. Girisli ama
+     * bagli olmayan cihaz (yarim baglanti) soketi ACMAZ: o hesabin
+     * degisikligini cekmek, "bu telefon kimin" sorusunu atlamak olurdu.
+     */
     @Test
-    fun `soket yalniz girisli VE on planda acilir`() = runTest {
-        val h = TriggerHarness(MutableSharedFlow())
-        // foreground bayragi surec-omurlu (companion): testin basinda ve sonunda
-        // acikca sifirlanir ki baska bir teste sizmasin.
+    fun `soket yalniz bagli VE on planda acilir`() = runTest {
+        val h = TriggerHarness(MutableSharedFlow(), StandardTestDispatcher(testScheduler))
         h.coordinator.setForeground(false)
 
         val seen = mutableListOf<Boolean>()
@@ -207,16 +222,37 @@ class RealtimeTriggerTest {
 
         h.auth.states.value = signedIn()
         runCurrent()
-        assertEquals(listOf(false), seen, "girisli ama arka planda: soket acilmamali")
+        h.coordinator.setForeground(true)
+        runCurrent()
+        assertEquals(listOf(false), seen, "girisli + on plan ama bagli degil: soket acilmamali")
+
+        h.preferences.put(PreferenceKeys.CloudLinkUserId, "u1")
+        runCurrent()
+        assertEquals(listOf(false, true), seen, "bagli + on plan")
+
+        h.coordinator.setForeground(false)
+        runCurrent()
+        assertEquals(listOf(false, true, false), seen, "arka planda soket kapanmali")
 
         h.coordinator.setForeground(true)
         runCurrent()
-        assertEquals(listOf(false, true), seen, "girisli + on plan")
-
         h.auth.states.value = AuthState.SignedOut
         runCurrent()
-        assertEquals(listOf(false, true, false), seen, "cikista soket kapanmali")
+        assertEquals(listOf(false, true, false, true, false), seen, "oturum dusunce soket kapanmali")
+    }
 
-        h.coordinator.setForeground(false)
+    /** Baska bir hesaba girilmis cihaz (baglanti u2, oturum u1) soketi acmaz. */
+    @Test
+    fun `baska hesaba bagli cihazda soket acilmaz`() = runTest {
+        val h = TriggerHarness(MutableSharedFlow(), StandardTestDispatcher(testScheduler))
+        h.preferences.put(PreferenceKeys.CloudLinkUserId, "u2")
+        h.auth.states.value = signedIn("u1")
+        h.coordinator.setForeground(true)
+
+        val seen = mutableListOf<Boolean>()
+        backgroundScope.launch { h.coordinator.socketGates().toList(seen) }
+        runCurrent()
+
+        assertEquals(listOf(false), seen)
     }
 }

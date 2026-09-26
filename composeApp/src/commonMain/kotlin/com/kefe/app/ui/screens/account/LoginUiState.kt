@@ -1,5 +1,7 @@
 package com.kefe.app.ui.screens.account
 
+import com.kefe.app.data.sync.CloudMode
+
 /**
  * Giris ekraninin asamasi: `SignIn` (e-posta ile giris) ve `Locked` (cihaz
  * kilidi). Kilit hesap girisi DEGILDIR: oturum acikken de her acilista gelebilir,
@@ -136,6 +138,24 @@ internal fun loginScreenState(vm: LoginUiState, asRoot: Boolean, locked: Boolean
     } else {
         vm.copy(stage = LoginStage.SignIn, unlocked = false, unlockError = null)
     }
+
+/**
+ * Kod dogrulandiktan sonra "bu telefon kimin" adimi (ProfileSetup) sart mi.
+ *
+ * YALNIZ cihaz bu hesaba ZATEN bagliysa ([CloudMode.Cloud]: ayni hesaba
+ * yeniden giris) ve profili seciliyse atlanir. Diger her durumda sorulur:
+ *  - baglanti yok ya da baska bir hesaba ait ([CloudMode.LinkPending]): hesap
+ *    once indirilmeli, profil HESABIN adlariyla secilmeli, baglanti ancak o
+ *    zaman yazilir;
+ *  - mod gelmediyse (null, bekleme doldu): guvenli yol.
+ *
+ * NEYDI: Ayarlar'dan giris yapan kurulu cihaz (profili zaten secili) dogrudan
+ * Ozet'e gidiyordu. Hesabin adlari devralininca cihazin eski secimi
+ * ("member_owner") kaliyor, telefon sessizce diger kisinin adina kayit
+ * yaziyordu.
+ */
+internal fun profileSetupAfterSignIn(mode: CloudMode?, activeMemberId: String?): Boolean =
+    !(mode is CloudMode.Cloud && activeMemberId != null)
 
 /**
  * Tek "@" ve ondan sonra en az bir nokta. Ortak kodda regex yerine elle

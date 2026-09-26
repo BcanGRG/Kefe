@@ -9,17 +9,23 @@ import com.kefe.app.domain.backup.decodeBackup
 import com.kefe.app.domain.backup.encode
 import com.kefe.app.domain.backup.transactionsCsv
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.data.sync.SyncCoordinator
 import com.kefe.app.domain.repository.AuthRepository
-import com.kefe.app.domain.repository.AuthState
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.data.remote.SupabaseConfig
 import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.domain.repository.lockEnabled
 import com.kefe.app.security.BiometricGate
+import com.kefe.app.ui.format.relativeSince
 import com.kefe.app.ui.mvi.MviViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -36,6 +42,9 @@ class SettingsViewModel(
     private val clock: KefeClock,
     private val authRepository: AuthRepository,
     private val biometric: BiometricGate,
+    // Hesap bolumu MODU okur (bkz. CloudMode); cikis ve "Şimdi eşitle" de
+    // baglantinin sahibi olan kordinatorden gecer.
+    private val syncCoordinator: SyncCoordinator,
 ) : MviViewModel<SettingsUiState, SettingsIntent, SettingsEffect>(
     SettingsUiState(),
 ) {
@@ -50,33 +59,54 @@ class SettingsViewModel(
     }
 
     /**
-     * Hesap satirindaki e-posta OTURUMDAN gelir - once ekranda sabit bir ornek
-     * adres yaziliydi ve kullanici baskasinin adresini kendi hesabi saniyordu.
+     * Hesap bolumu MODDAN cizilir; e-posta da modun icinde, oturumdan gelir -
+     * once ekranda sabit bir ornek adres yaziliydi ve kullanici baskasinin
+     * adresini kendi hesabi saniyordu.
+     *
+     * "Son eşitleme" DAKIKADA BIR yeniden yazilir. NEYDI: etiket yalniz ayar
+     * emisyonunda hesaplaniyordu ve "her basarili tur anahtari yeniden yazar,
+     * kendiliginden tazelenir" varsayiliyordu. Esitleme olay-gudumlu: hesaba
+     * ulasilamayan ya da bosta duran cihazda hicbir sey yazmaz, satir saatlerce
+     * "az önce" kaliyordu - hem de "Hesaba ulaşılamıyor"un hemen altinda.
+     * Ozet'teki ayni etiket ayni sebeple zaten dakikada bir tazeleniyor.
      */
     private fun observeAccount() {
+        setState { copy(cloudConfigured = authRepository.isCloudConfigured) }
         viewModelScope.launch {
-            authRepository.observeAuthState().collect { auth ->
-                setState {
-                    copy(
-                        email = (auth as? AuthState.SignedIn)?.session?.email.orEmpty(),
-                        signedIn = auth is AuthState.SignedIn,
-                    )
-                }
+            combine(
+                syncCoordinator.mode(),
+                preferences.observeAll()
+                    .map { it[PreferenceKeys.LastSyncedAt]?.toLongOrNull() }
+                    .distinctUntilChanged(),
+                minuteTicker(),
+            ) { mode, syncedAt, _ ->
+                mode to (syncedAt?.let { relativeSince(it, clock.nowEpochMillis()) } ?: "Henüz yok")
+            }.distinctUntilChanged().collect { (mode, label) ->
+                setState { copy(cloudMode = mode, lastSyncedLabel = label) }
             }
         }
     }
 
+    private fun minuteTicker(): Flow<Unit> = flow {
+        while (true) {
+            emit(Unit)
+            delay(SyncedLabelTickMillis)
+        }
+    }
+
     /**
-     * Oturumu kapatir. YEREL VERI SILINMEZ - portfoy cihazda kalir, yalniz
-     * hesap baglantisi kesilir.
+     * Hesaptan cikar ya da yarim/dusmus baglantiyi birakir. YEREL VERI
+     * SILINMEZ - portfoy cihazda kalir, yalniz hesapla bag ve oturum gider.
+     *
+     * Baglanti da silinir: yalniz oturum kapansaydi mod "Oturum kapandı" olur ve
+     * kullaniciya kendi istedigi cikis bir ariza gibi gosterilirdi.
      */
-    private fun signOut() {
+    private fun dropLink() {
         viewModelScope.launch {
-            authRepository.signOut()
-            // Onboarded BIRAKILIR, yerel veri durur: giris artik zorunlu bir kapi
-            // degil, Bulut bolumunden acilip kapanan istege bagli bir baglanti.
-            // Cikinca kullanici uygulamada kalir (cevrimdisi tam calisir), senkron
-            // durur ve Bulut bolumu yeniden "Giriş yap" gosterir.
+            syncCoordinator.dropLink()
+            // Onboarded BIRAKILIR, yerel veri durur: hesap zorunlu bir kapi
+            // degil, Ayarlar'dan baglanip birakilan istege bagli bir esitleme.
+            // Kullanici uygulamada kalir, hesap bolumu "Yalnız bu cihazda"ya doner.
             emitEffect(SettingsEffect.SignedOut)
         }
     }
@@ -102,7 +132,8 @@ class SettingsViewModel(
             SettingsIntent.DismissRestoreConfirm -> setState { copy(confirmRestore = false) }
             SettingsIntent.ConfirmRestore -> restore()
 
-            SettingsIntent.SignOut -> signOut()
+            SettingsIntent.SignOut, SettingsIntent.DropLink -> dropLink()
+            SettingsIntent.SyncNow -> syncCoordinator.syncNow()
         }
     }
 
@@ -246,13 +277,8 @@ class SettingsViewModel(
                     // alindiktan sonra bile bos kaliyordu.
                     lastBackupLabel = prefs[PreferenceKeys.LastBackupAt]?.toBackupLabel()
                         ?: "Henüz alınmadı",
-                    // Bulut durumu: push watermark'i son ne zaman ilerledi. Push
-                    // yalniz TUM upsert'ler basardiktan sonra ilerledigi icin bu,
-                    // "en son ne zaman sunucuya ulastik" demek. Emisyon aninda
-                    // hesaplanir - ticker YOK; bir sonraki degisimde tazelenir.
-                    syncStatusLabel = prefs[PreferenceKeys.LastPushedAt]?.toLongOrNull()
-                        ?.let { relativeSince(it, clock.nowEpochMillis()) }
-                        ?: "Henüz yok",
+                    // "Son eşitleme" burada DEGIL, observeAccount'ta: dakikada
+                    // bir tazelenmesi gerekiyor (bkz. orasi).
                     appVersion = SupabaseConfig.AppVersion,
                 )
             }.collect { next -> setState { next } }
@@ -261,19 +287,10 @@ class SettingsViewModel(
 }
 
 /**
- * Iki epoch ms arasindaki farki kaba bir Turkce etikete cevirir ("az önce",
- * "5 dk önce", "2 sa önce", "3 gün önce"). Gun-alti duraklar yeterli: kullanici
- * "ne kadar taze" sorusuna bakar, saniye hassasiyeti istemez.
+ * "Son eşitleme" etiketinin tazelenme araligi. Etiketin en ince duragi dakika
+ * ("5 dk önce"); daha sik uyanmak ekranda bir sey degistirmez.
  */
-private fun relativeSince(then: Long, now: Long): String {
-    val seconds = ((now - then) / 1000L).coerceAtLeast(0)
-    return when {
-        seconds < 60 -> "az önce"
-        seconds < 3600 -> "${seconds / 60} dk önce"
-        seconds < 86_400 -> "${seconds / 3600} sa önce"
-        else -> "${seconds / 86_400} gün önce"
-    }
-}
+private const val SyncedLabelTickMillis = 60_000L
 
 /** "2026-07-28" -> "28 Temmuz 2026". Bicimsizse bos. */
 private fun String.toBackupLabel(): String {

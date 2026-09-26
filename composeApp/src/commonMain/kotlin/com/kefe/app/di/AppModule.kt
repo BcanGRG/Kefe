@@ -118,7 +118,9 @@ val appModule = module {
     single { SyncLocalSink(get()) }
     single { PushEngine(get(), get(), get(), get(), get()) }
     single { PullEngine(get(), get(), get()) }
-    single { SyncCoordinator(get(), get(), get(), get(), get(), get()) }
+    // Kordinator surec-omurlu durumunu (SyncRuntime.Process) kendisi tasir;
+    // Koin grafigi yeniden kurulsa da yeni ornek ayni durumu gorur.
+    single { SyncCoordinator(get(), get(), get(), get(), get(), get(), get()) }
 
     // Dosya paylasimi/secimi platforma iner; Android tarafi Activity ister.
     single { FileTransfer() }
@@ -126,8 +128,9 @@ val appModule = module {
     // Cihaz kilidi. Masaustunde karsiligi yok; oradaki actual Unsupported doner.
     single { BiometricGate() }
 
-    // SummaryViewModel ve AddTransactionViewModel BULUT durumunu okur (senkron
-    // cipi ve kaydin "Bekliyor" damgasi) - o yuzden kordinatoru de alirlar.
+    // Ozet, Ayarlar, Profiller ve ekleme sayfasi HESAP modunu okur (cip, hesap
+    // bolumu, profil notu, "Hesaba ulaşılamıyor" seridi) - o yuzden
+    // kordinatoru de alirlar. Mod tek yerden turetilir: CloudMode.
     viewModelOf(::SummaryViewModel)
     viewModelOf(::AssetsViewModel)
     viewModelOf(::GoalsViewModel)

@@ -30,6 +30,12 @@ fun SummaryScreenAdaptive(
     searchQuery: String = "",
     onSearchQueryChange: (String) -> Unit = {},
     onOpenMarketRow: ((KefeMarketRow) -> Unit)? = null,
+    /** Hesap cipi: Ayarlar'in hesap bolumu. */
+    onOpenAccount: () -> Unit = {},
+    /** "Tamamla": baglanti adimi ("bu telefon kimin"). */
+    onCompleteLink: () -> Unit = {},
+    /** "Yeniden giriş yap": oturumu dusen hesaba giris. */
+    onRelogin: () -> Unit = {},
 ) {
     when (LocalWindowSize.current) {
         WindowSize.Compact -> SummaryScreen(
@@ -41,6 +47,9 @@ fun SummaryScreenAdaptive(
             onOpenMarket = onOpenMarket,
             onAddAsset = onAddAsset,
             modifier = modifier,
+            onOpenAccount = onOpenAccount,
+            onCompleteLink = onCompleteLink,
+            onRelogin = onRelogin,
         )
 
         WindowSize.Medium -> SummaryScreenTablet(
@@ -52,6 +61,8 @@ fun SummaryScreenAdaptive(
             onOpenMarket = onOpenMarket,
             onAddAsset = onAddAsset,
             modifier = modifier,
+            onCompleteLink = onCompleteLink,
+            onRelogin = onRelogin,
         )
 
         WindowSize.Expanded -> SummaryScreenDesktop(
@@ -66,6 +77,8 @@ fun SummaryScreenAdaptive(
             searchQuery = searchQuery,
             onSearchQueryChange = onSearchQueryChange,
             onOpenMarketRow = onOpenMarketRow,
+            onCompleteLink = onCompleteLink,
+            onRelogin = onRelogin,
         )
     }
 }

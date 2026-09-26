@@ -115,10 +115,12 @@ class SupabaseAuthApi(
      *
      * Basarisiz olmasi cagirani DURDURMAZ: kullanici cikis dedigi anda cihazdaki
      * kayit zaten silinir. Ag yoksa "cikis yapamadiniz" demek anlamsiz olurdu.
+     *
+     * YALNIZ BU CIHAZ (bkz. [logoutUrl]).
      */
     override suspend fun signOut(accessToken: String) {
         runCatching {
-            client.post("$baseUrl/auth/v1/logout") {
+            client.post(logoutUrl(baseUrl)) {
                 authHeaders()
                 header("Authorization", "Bearer $accessToken")
             }
@@ -211,6 +213,17 @@ class SupabaseAuthApi(
         val CredentialRejected = setOf(400, 401, 403)
     }
 }
+
+/**
+ * Cikis ucu: YALNIZ bu cihazin oturumu kapanir (`scope=local`).
+ *
+ * NEYDI. Kapsam verilmiyordu; GoTrue'nun varsayilani `global` - kullanicinin
+ * TUM yenileme jetonlari iptal ediliyordu. Iki telefon ayni hesabi paylastigi
+ * icin birinde "Hesaptan çık" ya da Ozet'teki "Vazgeç", digerini jetonunun
+ * suresi dolunca "Oturum kapandı"ya dusuruyordu; ekrandaki metin ise yalniz bu
+ * cihazin etkilendigini soyluyordu.
+ */
+internal fun logoutUrl(baseUrl: String): String = "$baseUrl/auth/v1/logout?scope=local"
 
 /** Sunucudan donen ham oturum. */
 data class AuthTokens(

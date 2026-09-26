@@ -144,9 +144,10 @@ fun AddTransactionSheet(
 
             SheetHeader(state, onDismiss)
 
-            // Serit YALNIZ buluta ulasilamiyorsa. Once fiyat tazeliginden
-            // suruluyordu: fiyat ucu tokezleyince "bağlanınca eşitlenir" yaziyor,
-            // esitleme ise gayet calisiyordu.
+            // Serit YALNIZ bagli cihaz hesaba ulasamiyorsa. Once fiyat
+            // tazeliginden suruluyordu: fiyat ucu tokezleyince "bağlanınca
+            // eşitlenir" yaziyor, esitleme ise gayet calisiyordu. Hesapsiz
+            // kullanimda serit yok - cip ("Bu cihazda") yeterli.
             if (state.cloudUnreachable) OfflineStrip()
 
             // "Tekrar ekle" duzenlemede gizlenir: kisayol YENI kayit icindir,
@@ -242,7 +243,7 @@ private fun OfflineStrip() {
         )
         Spacer(Modifier.width(Space.x8))
         Text(
-            text = "Çevrimdışı · Kayıt cihazda tutulur, bağlanınca eşitlenir",
+            text = UnreachableStripText,
             style = KefeTheme.type.caption,
             color = c.onSurfaceMuted,
             modifier = Modifier.weight(1f),

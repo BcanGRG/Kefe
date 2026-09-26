@@ -2,6 +2,7 @@ package com.kefe.app.ui.screens.account
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kefe.app.data.sync.SyncCoordinator
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.domain.repository.PreferencesRepository
@@ -22,6 +23,9 @@ import kotlinx.coroutines.launch
 class ProfilesViewModel(
     private val portfolioRepository: PortfolioRepository,
     private val preferences: PreferencesRepository,
+    // Yalniz ustteki notun metni icin: adlar hesapla mi esitleniyor, bu
+    // cihazda mi kaliyor.
+    private val syncCoordinator: SyncCoordinator,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfilesUiState())
@@ -55,6 +59,11 @@ class ProfilesViewModel(
     }
 
     private fun observe() {
+        viewModelScope.launch {
+            syncCoordinator.mode().collect { mode ->
+                _state.value = _state.value.copy(cloudMode = mode)
+            }
+        }
         viewModelScope.launch {
             combine(
                 portfolioRepository.observeMembers(),

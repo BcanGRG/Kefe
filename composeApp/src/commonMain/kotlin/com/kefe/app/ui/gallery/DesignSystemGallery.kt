@@ -43,6 +43,8 @@ import com.kefe.app.domain.model.label
 import com.kefe.app.domain.model.monthLabel
 import com.kefe.app.data.sample.SampleData
 import com.kefe.app.data.sample.SampleSeries
+import com.kefe.app.data.sync.CloudMode
+import com.kefe.app.data.sync.CloudStatus
 import com.kefe.app.ui.brand.KefeAnimatedMark
 import com.kefe.app.ui.brand.KefeLogoHorizontal
 import com.kefe.app.ui.brand.KefeLogoVertical
@@ -77,7 +79,6 @@ import com.kefe.app.ui.components.KefeMainGoalBadge
 import com.kefe.app.ui.components.KefeManualBadge
 import com.kefe.app.ui.components.KefeMemberBadge
 import com.kefe.app.ui.components.KefeMilestoneBar
-import com.kefe.app.ui.components.KefeOfflineBanner
 import com.kefe.app.ui.components.KefeOwnerBadge
 import com.kefe.app.ui.components.KefePendingBadge
 import com.kefe.app.ui.components.KefePeriodChips
@@ -101,7 +102,7 @@ import com.kefe.app.ui.components.KefeSwitchRow
 import com.kefe.app.ui.components.KefeSyncChip
 import com.kefe.app.ui.components.KefeTextButton
 import com.kefe.app.ui.components.KefeTextField
-import com.kefe.app.ui.components.SyncStatus
+import com.kefe.app.ui.components.KefeTwoLineBanner
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcons
@@ -618,10 +619,20 @@ fun DesignSystemGallery(
                                 onAction = {},
                                 clockIcon = KefeIcons.Clock,
                             )
-                            KefeOfflineBanner(
-                                line1 = "Çevrimdışısın",
-                                line2 = "Kayıtların bağlantı gelince eşitlenecek",
-                                cloudOffIcon = KefeIcons.CloudOff,
+                            // Fiyat alinamadi seridi saat ikonu tasir; ustu cizili
+                            // bulut yalniz "Eşitlenemiyor" modunun isareti.
+                            KefeTwoLineBanner(
+                                line1 = "Fiyatlar alınamadı · son bilinen fiyatlarla",
+                                line2 = "Bağlantı gelince fiyatlar güncellenir",
+                                icon = KefeIcons.Clock,
+                                actionText = "Yenile",
+                            )
+                            KefeTwoLineBanner(
+                                line1 = "Hesap bağlantısı tamamlanmadı",
+                                line2 = "Kayıtlar henüz hesaba gönderilmiyor.",
+                                icon = KefeIcons.Info,
+                                actionText = "Tamamla",
+                                secondaryActionText = "Vazgeç",
                             )
                             KefeInfoBanner(
                                 text = "Hariç tutulan varlıklar hedef ilerlemesine sayılmaz.",
@@ -631,9 +642,17 @@ fun DesignSystemGallery(
                                 horizontalArrangement = Arrangement.spacedBy(Space.x8),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                KefeSyncChip(SyncStatus.Synced)
-                                KefeSyncChip(SyncStatus.Pending)
-                                KefeSyncChip(SyncStatus.Offline)
+                                KefeSyncChip(CloudMode.Local)
+                                KefeSyncChip(CloudMode.Cloud("e@k.app", CloudStatus.Syncing))
+                                KefeSyncChip(CloudMode.Cloud("e@k.app", CloudStatus.Synced))
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(Space.x8),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                KefeSyncChip(CloudMode.Cloud("e@k.app", CloudStatus.Unreachable))
+                                KefeSyncChip(CloudMode.LinkPending("e@k.app"))
+                                KefeSyncChip(CloudMode.SessionLost("e@k.app"))
                             }
                         }
                     }

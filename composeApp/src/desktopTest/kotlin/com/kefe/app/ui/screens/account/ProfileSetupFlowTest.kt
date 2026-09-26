@@ -194,6 +194,160 @@ class ProfileSetupFlowTest {
 
         assertEquals(listOf(0L, 0L), e.stamps(), "kurulum adlari damgasiz kalmali")
         assertEquals(LocalOwnerMemberId, e.prefs.get(PreferenceKeys.ActiveMemberId))
+        // Hesap indirilmeden baglanti YOK: mod "Bağlantı yarım", hicbir sey gitmez.
+        assertNull(e.prefs.get(PreferenceKeys.CloudLinkUserId))
+    }
+
+    /**
+     * Baglanti YALNIZ hesap basariyla indirilip profil secilince, secimle ayni
+     * islemde yazilir. NEYDI: "hic push'lamadi mi" tahmini; ilk pull patlayinca
+     * push yine gidiyor, yerelde yazilmis adlar hesabin ustune itiliyordu.
+     */
+    @Test
+    fun `hesap indirilip secilince baglanti yazilir`() = runTest {
+        val e = Env(signedIn = true)
+        e.cloudMembers()
+        e.prefs.put(PreferenceKeys.LocalRestoredAt, "700")
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Ready)
+        assertNull(e.prefs.get(PreferenceKeys.CloudLinkUserId), "secimden once baglanti yok")
+
+        e.vm.onIntent(ProfileSetupIntent.SelectThisDevice(false))
+        e.vm.onIntent(ProfileSetupIntent.Save)
+        e.awaitDone()
+
+        assertEquals("u1", e.prefs.get(PreferenceKeys.CloudLinkUserId))
+        assertEquals("e@k.app", e.prefs.get(PreferenceKeys.CloudLinkEmail))
+        assertEquals(LocalPartnerMemberId, e.prefs.get(PreferenceKeys.ActiveMemberId))
+        assertNull(e.prefs.get(PreferenceKeys.LocalRestoredAt), "baglanti yedek izini temizler")
+    }
+
+    @Test
+    fun `girissiz kurulum baglanti yazmaz`() = runTest {
+        val e = Env(signedIn = false)
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Ready)
+        e.vm.onIntent(ProfileSetupIntent.ChangeOwnerName("Volkan"))
+        e.vm.onIntent(ProfileSetupIntent.ChangePartnerName("Ayşe"))
+        e.vm.onIntent(ProfileSetupIntent.Save)
+        e.awaitDone()
+
+        assertNull(e.prefs.get(PreferenceKeys.CloudLinkUserId))
+    }
+
+    /** Ekranda beklerken oturum kapandiysa indirilen hesaba baglanilmaz. */
+    @Test
+    fun `oturum kapandiysa baglanti yazilmaz`() = runTest {
+        val e = Env(signedIn = true)
+        e.cloudMembers()
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Ready)
+
+        e.auth.state.value = AuthState.SignedOut
+        e.vm.onIntent(ProfileSetupIntent.SelectThisDevice(true))
+        e.vm.onIntent(ProfileSetupIntent.Save)
+        e.awaitDone()
+
+        assertNull(e.prefs.get(PreferenceKeys.CloudLinkUserId))
+        assertEquals(LocalOwnerMemberId, e.prefs.get(PreferenceKeys.ActiveMemberId))
+    }
+
+    /**
+     * Ayarlar'dan giren kurulu cihaz: yerelde adlandirilmis profiller hesabin
+     * adlarina DEVREDER ve secim yeniden sorulur (onceki secim korunmaz).
+     */
+    @Test
+    fun `bagli olmayan cihaz hesabin adlarini devralir ve yeniden sorar`() = runTest {
+        val e = Env(signedIn = true)
+        e.repo.renameMember(LocalOwnerMemberId, "Merve", "M")
+        e.repo.renameMember(LocalPartnerMemberId, "Burak", "B")
+        e.prefs.put(PreferenceKeys.ActiveMemberId, LocalOwnerMemberId)
+        e.cloudMembers()
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+
+        assertEquals(listOf("Burak Can", "Merve"), e.names())
+        assertEquals("Burak Can", s.ownerName)
+        assertNull(s.thisDeviceIsOwner, "secim yeniden sorulmali")
+    }
+
+    /**
+     * Zaten BAGLI cihaz (ayni hesap) yeniden indirirken adlar devralinmaz: duz
+     * LWW. NEYDI: devralma "hic push'lamadi" tahminine bagliydi; ilk push
+     * patlarsa her acilista yeniden calisip yeni yapilan adlandirmayi geri
+     * aliyordu.
+     */
+    @Test
+    fun `bagli cihaz adlari devralmaz`() = runTest {
+        val e = Env(signedIn = true)
+        e.repo.renameMember(LocalOwnerMemberId, "Yerel", "Y")
+        e.prefs.put(PreferenceKeys.CloudLinkUserId, "u1")
+        e.cloudMembers()
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Ready)
+
+        assertEquals("Yerel", e.names().first(), "yerel (9000) hesabinkinden (5000) yeni")
+    }
+
+    /**
+     * Baska bir hesaba bagli cihaz o hesap icin "bagli" sayilmaz: devralir.
+     * Yeni baglantida watermark SIFIRLANIR: eski hesabin watermark'i kalsaydi
+     * yeni hesaba yalniz ondan sonra degisenler gider, daha once kurulan
+     * pozisyonlar ve hedefler hic gitmezdi.
+     */
+    @Test
+    fun `baska hesaba bagli cihaz devralir ve yeni baglantiyi yazar`() = runTest {
+        val e = Env(signedIn = true)
+        e.repo.renameMember(LocalOwnerMemberId, "Yerel", "Y")
+        e.prefs.put(PreferenceKeys.CloudLinkUserId, "u2")
+        e.prefs.put(PreferenceKeys.LastPushedAt, "4000")
+        e.prefs.put(PreferenceKeys.LastSyncedAt, "4000")
+        e.cloudMembers()
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Ready)
+        assertEquals("Burak Can", e.names().first())
+
+        e.vm.onIntent(ProfileSetupIntent.SelectThisDevice(true))
+        e.vm.onIntent(ProfileSetupIntent.Save)
+        e.awaitDone()
+        assertEquals("u1", e.prefs.get(PreferenceKeys.CloudLinkUserId))
+        assertNull(e.prefs.get(PreferenceKeys.LastPushedAt), "yeni hesaba her sey bastan gitmeli")
+        assertNull(e.prefs.get(PreferenceKeys.LastSyncedAt), "onceki baglantinin ani gosterilmez")
+    }
+
+    /** Acik cikistan sonra (baglanti yok) ayni hesaba donus de tam gonderimdir. */
+    @Test
+    fun `cikistan sonra yeniden baglanti watermarki sifirlar`() = runTest {
+        val e = Env(signedIn = true)
+        e.prefs.put(PreferenceKeys.LastPushedAt, "4000")
+        e.cloudMembers()
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Ready)
+
+        e.vm.onIntent(ProfileSetupIntent.SelectThisDevice(true))
+        e.vm.onIntent(ProfileSetupIntent.Save)
+        e.awaitDone()
+
+        assertEquals("u1", e.prefs.get(PreferenceKeys.CloudLinkUserId))
+        assertNull(e.prefs.get(PreferenceKeys.LastPushedAt))
+    }
+
+    /** Zaten bu hesaba bagli cihazin secimi watermark'a dokunmaz. */
+    @Test
+    fun `ayni hesaba bagli cihaz watermarki korur`() = runTest {
+        val e = Env(signedIn = true)
+        e.prefs.put(PreferenceKeys.CloudLinkUserId, "u1")
+        e.prefs.put(PreferenceKeys.LastPushedAt, "4000")
+        e.cloudMembers()
+        e.vm.onIntent(ProfileSetupIntent.Load)
+        e.awaitPhase(ProfileSetupPhase.Ready)
+
+        e.vm.onIntent(ProfileSetupIntent.SelectThisDevice(true))
+        e.vm.onIntent(ProfileSetupIntent.Save)
+        e.awaitDone()
+
+        assertEquals("u1", e.prefs.get(PreferenceKeys.CloudLinkUserId))
+        assertEquals("4000", e.prefs.get(PreferenceKeys.LastPushedAt))
     }
 
     /** Adlari duzenlemede yalniz DEGISEN ad yazilir. */

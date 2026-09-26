@@ -31,4 +31,20 @@ class SqlDelightPreferencesRepository(
         withContext(dispatcher) {
             settingQueries.selectSetting(key).executeAsOneOrNull()
         }
+
+    override suspend fun putAll(changes: Map<String, String?>) {
+        withContext(dispatcher) {
+            // Tek transaction: akis yazmalarin sonunda BIR KEZ yayar, ara durum
+            // (orn. baglanti yazilmis ama profil secimi henuz yok) gorunmez.
+            settingQueries.transaction {
+                changes.forEach { (key, value) ->
+                    if (value == null) {
+                        settingQueries.deleteSetting(key)
+                    } else {
+                        settingQueries.upsertSetting(settingKey = key, settingValue = value)
+                    }
+                }
+            }
+        }
+    }
 }

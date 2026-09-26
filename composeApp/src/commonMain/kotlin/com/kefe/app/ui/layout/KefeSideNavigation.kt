@@ -36,7 +36,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.kefe.app.ui.components.SyncStatus
+import com.kefe.app.data.sync.CloudMode
+import com.kefe.app.ui.components.KefeCloudMark
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
 import com.kefe.app.ui.theme.KefeShapes
@@ -51,7 +52,14 @@ import com.kefe.app.ui.theme.tabular
  * Rayin genisletilmis hali degildir; farkli bir yerlesimdir: marka kutusu ad ve
  * portfoy adiyla birlikte gelir, "Ekle" ortadan cikip en uste TAM GENISLIKTE bir
  * butona donusur, sekmeler ikon+etiket satirlarina iner ve ALTI ust duzey hedef
- * birden gorunur (rayda dort tane vardi). En altta uyeler ve esitleme kutusu.
+ * birden gorunur (rayda dort tane vardi). En altta uyeler ve durum kutusu.
+ *
+ * Durum kutusu IKI SATIRDIR ve ikisi ayri seyler soyler: ust satir HESAP modu
+ * ([modeLine], isaretli - bkz. CloudMode.longLabel), alt satir FIYATLARIN
+ * durumu ([priceLine], soluk, isaretsiz). NEYDI: tek satir fiyat tazeligini
+ * "Eşit · 14:32'de güncellendi" diye yaziyordu; hesapsiz bir masaustunde bile
+ * "eşit" okunuyor, fiyat ucu tokezleyince "Çevrimdışı" cikiyordu. Kutuya
+ * dokununca hesap bolumu acilir ([onStatusClick]).
  */
 @Composable
 fun KefeSideNavigation(
@@ -64,10 +72,12 @@ fun KefeSideNavigation(
     onAdd: () -> Unit,
     members: List<Pair<String, Int>>,
     memberNames: String,
-    syncStatus: SyncStatus,
-    syncLine: String,
+    cloudMode: CloudMode?,
+    modeLine: String,
+    priceLine: String,
     modifier: Modifier = Modifier,
     addLabel: String = "İşlem Ekle",
+    onStatusClick: () -> Unit = {},
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
@@ -152,13 +162,19 @@ fun KefeSideNavigation(
 
         Spacer(Modifier.weight(1f))
 
-        // --- Uyeler + esitleme ---
+        // --- Uyeler + hesap + fiyatlar ---
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(KefeShapes.button)
                 .background(c.surfaceSunken)
                 .border(Sizes.hairline, c.outline, KefeShapes.button)
+                .clickable(
+                    indication = null,
+                    interactionSource = null,
+                    role = Role.Button,
+                    onClick = onStatusClick,
+                )
                 .padding(Space.x12),
         ) {
             Row(
@@ -187,23 +203,28 @@ fun KefeSideNavigation(
             }
 
             Spacer(Modifier.height(Space.x10))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                Box(
-                    Modifier
-                        .padding(top = 5.dp)
-                        .size(SyncDot)
-                        .clip(CircleShape)
-                        .background(syncStatus.dotColor()),
-                )
-                Text(
-                    text = syncLine,
-                    style = t.micro.tabular(),
-                    color = c.onSurfaceMuted,
-                )
+            if (cloudMode != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    KefeCloudMark(cloudMode, Modifier.padding(top = 4.dp))
+                    Text(
+                        text = modeLine,
+                        style = t.micro,
+                        color = c.onSurface,
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
             }
+            // Fiyat satiri isaretsiz ve soluk: hesap durumuyla karismasin diye
+            // noktasi yok, mod satirinin metin hizasindan baslar.
+            Text(
+                text = priceLine,
+                style = t.micro.tabular(),
+                color = c.onSurfaceMuted,
+                modifier = Modifier.padding(start = if (cloudMode != null) PriceLineIndent else 0.dp),
+            )
         }
     }
 }
@@ -324,3 +345,6 @@ private val NavRowHeight = 44.dp
 private val NavRowIcon = 22.dp
 private val MemberAvatarSize = 26.dp
 private val MemberAvatarOverlap = 8.dp
+
+/** Fiyat satiri mod satirinin METNIYLE hizalanir: isaret kutusu (11dp) + 6dp bosluk. */
+private val PriceLineIndent = 17.dp

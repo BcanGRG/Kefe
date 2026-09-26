@@ -1,6 +1,7 @@
 package com.kefe.app.ui.screens.transaction
 
-import com.kefe.app.data.sync.CloudState
+import com.kefe.app.data.sync.CloudMode
+import com.kefe.app.data.sync.CloudStatus
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.Currency
 import com.kefe.app.domain.model.Goal
@@ -156,11 +157,14 @@ data class AddTransactionUiState(
     val lastAdded: LastAdded? = null,
     /**
      * FIYAT cevrimdisi: guncel kotasyon alinamadi, son bilinen fiyat kullaniliyor.
-     * Kaydin esitlenmesiyle ILGISI YOK - bunun icin [cloudState] var.
+     * Kaydin esitlenmesiyle ILGISI YOK - bunun icin [cloudMode] var.
      */
     val offline: Boolean = false,
-    /** Esitleme durumu: serit, "Bekliyor" rozeti ve CTA metnini bu belirler. */
-    val cloudState: CloudState = CloudState.Off,
+    /**
+     * Hesap modu: serit, "Bekliyor" rozeti ve CTA metnini bu belirler. null =
+     * oturum henuz okunmadi (serit cizilmez).
+     */
+    val cloudMode: CloudMode? = null,
     /** Alt notta adi gecen diger uye - kayit ona da gorunecek. */
     val partnerName: String = "",
     val saving: Boolean = false,
@@ -422,19 +426,25 @@ val AddTransactionUiState.karatLine: String
     }
 
 /**
- * Kayit su an buluta GIDEMEZ: serit cizilir, "Bekliyor" rozeti ve farkli CTA.
+ * Kayit su an hesaba GIDEMEZ: serit cizilir, "Bekliyor" rozeti ve farkli CTA.
  *
- * Bulut KAPALI (giris yok) bunun disindadir: uygulama cevrimdisi tam calisir,
- * her kaydi "çevrimdışı" diye isaretlemek giris yapmamis kullaniciya bir sey
- * bozukmus gibi gosterirdi.
+ * YALNIZ bagli cihazda ulasilamayan hesap. Hesapsiz kullanim (Bu cihazda),
+ * yarim baglanti ve dusen oturum bunun disindadir: onlari cip ve Ozet'in
+ * seridi soyler; her kaydi "gidemedi" diye isaretlemek hesap kullanmayan
+ * birine bir sey bozukmus gibi gosterirdi.
  */
 val AddTransactionUiState.cloudUnreachable: Boolean
-    get() = cloudState == CloudState.Unreachable
+    get() = (cloudMode as? CloudMode.Cloud)?.status == CloudStatus.Unreachable
+
+/** Seridin metni - ekleme sayfasinin tek "hesaba gidemedi" uyarisi. */
+const val UnreachableStripText: String =
+    "Hesaba ulaşılamıyor · Kayıt bu cihazda tutulur, bağlantı gelince gönderilir."
 
 val AddTransactionUiState.ctaText: String
     get() = when {
         isFirstStep -> "Devam"
-        cloudUnreachable -> "Çevrimdışı kaydet"
+        // "Çevrimdışı kaydet" degil: kayit gercekten nereye gidiyor, onu soyler.
+        cloudUnreachable -> "Cihaza kaydet"
         isEditing -> "Güncelle"
         else -> "Kaydet"
     }
@@ -445,7 +455,7 @@ val AddTransactionUiState.isEditing: Boolean
 /**
  * Altligin ince aciklama satiri.
  *
- * Sira onemli: buluta ulasilamiyorsa kaydin akibeti, fiyat eskiyse fiyatin
+ * Sira onemli: hesaba ulasilamiyorsa kaydin akibeti, fiyat eskiyse fiyatin
  * kaynagi, aksi halde hesap. Once ikisi tek bayraktan geliyordu ve fiyat ucu
  * tokezleyince ekran "bağlanınca eşitlenir" diyordu - esitleme zaten
  * calisiyorken.
@@ -454,8 +464,8 @@ val AddTransactionUiState.footNote: String
     get() {
         if (cloudUnreachable) {
             val partner = partnerName.takeIf { it.isNotBlank() }
-                ?: return "Kayıt cihazda tutulur; bağlanınca eşitlenir."
-            return "Kayıt cihazda tutulur; bağlanınca ${trGenitive(partner)} telefonunda da görünür."
+                ?: return "Kayıt cihazda tutulur; bağlantı gelince eşitlenir."
+            return "Kayıt cihazda tutulur; bağlantı gelince ${trGenitive(partner)} telefonunda da görünür."
         }
         if (offline) return "Son bilinen fiyatla kaydedilir; tutarı elle düzeltebilirsiniz."
         val head = quantityText.ifBlank { "0" } + " × " +

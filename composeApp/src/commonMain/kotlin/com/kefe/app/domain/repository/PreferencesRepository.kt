@@ -21,6 +21,19 @@ interface PreferencesRepository {
 
     /** Tek seferlik okuma. Senkron watermark'i gibi akis istemeyen yerler icin. */
     suspend fun get(key: String): String?
+
+    /**
+     * Birden cok anahtari TEK ISLEMDE yazar; degeri null olan anahtar SILINIR.
+     *
+     * NEDEN TEK ISLEM: hesap baglantisi (CloudLinkUserId + CloudLinkEmail +
+     * ActiveMemberId) yarim yazilirsa mod ikisinin arasinda kalir - baglanti
+     * var ama profil yok ya da tersi. Ayri ayri put'larda iki yazma arasinda
+     * akis bir kez ara durumu yayar ve senkron o anlik durumla baslayabilirdi.
+     */
+    suspend fun putAll(changes: Map<String, String?>)
+
+    /** Anahtari siler. "Yok" ile "bos metin" ayri seyler: bos yazmak yerine sil. */
+    suspend fun remove(key: String) = putAll(mapOf(key to null))
 }
 
 /**
@@ -67,6 +80,52 @@ object PreferenceKeys {
      * geri yuklemede korunur (bkz. DeviceOnlySettings).
      */
     const val LastPushedAt = "lastPushedAt"
+
+    /**
+     * Bu cihazin verisi HANGI HESABA bagli (Supabase kullanici kimligi).
+     *
+     * NEDEN OTURUMDAN AYRI: oturum "kim giris yapmis", baglanti "bu cihazin
+     * kayitlari hangi hesapla esitleniyor" sorusunun cevabi. Ikisi ayni degilse
+     * (baglanti hic kurulmadi, baska bir hesaba girildi, oturum dustu) senkron
+     * CALISMAZ - bkz. deriveCloudMode. Once "hic push'lamadi mi" (LastPushedAt ==
+     * null) ilk baglanti sayiliyordu: ilk pull patlayip push gecince isaret
+     * kalici kayboluyor ve yerelde yazilmis adlar hesabin ustune itiliyordu.
+     *
+     * YALNIZ baglanti tamamlaninca yazilir (hesap indirildikten ve "bu telefon
+     * kimin" secildikten sonra). Acik cikis ve "Hesapsız devam et" siler.
+     * CIHAZA AITTIR: yedege girmez, geri yuklemede korunur.
+     */
+    const val CloudLinkUserId = "cloudLinkUserId"
+
+    /**
+     * Baglantinin e-postasi. Oturum dustugunde (SessionLost) "hangi hesaba
+     * yeniden gireceksiniz" sorusunun cevabi yalniz burada kalir. CIHAZA AITTIR.
+     */
+    const val CloudLinkEmail = "cloudLinkEmail"
+
+    /**
+     * Son BASARILI esitlemenin ani (epoch ms). "Son eşitleme" satiri bunu okur.
+     *
+     * NEYDI: satir push watermark'ini (LastPushedAt) okuyordu; o yalniz yereldeki
+     * bir degisiklik gidince ilerliyor. Karsi telefondan gelen her seyi alan ama
+     * kendisi bir sey yazmayan cihaz "3 gün önce" diyordu - pull her dakika
+     * calisirken. CIHAZA AITTIR.
+     */
+    const val LastSyncedAt = "lastSyncedAt"
+
+    /**
+     * Hesapsizken yedek geri yuklendiyse ani (epoch ms). Geri yukleme satirlari
+     * "simdi" damgalar; bu cihaz sonra bir hesaba baglanirsa hangi kaydin nereden
+     * geldigi ayirt edilemez - baglanti adimi bunu soru sormak icin okur.
+     * Baglanti tamamlaninca silinir. CIHAZA AITTIR.
+     */
+    const val LocalRestoredAt = "localRestoredAt"
+
+    /**
+     * Tek seferlik baglanti gocunun isareti (bkz. migrateCloudLinkIfNeeded).
+     * Varsa goc bir daha calismaz. CIHAZA AITTIR.
+     */
+    const val CloudLinkMigrated = "cloudLinkMigrated"
 }
 
 /**

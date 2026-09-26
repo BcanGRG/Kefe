@@ -39,7 +39,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kefe.app.ui.components.SyncStatus
+import com.kefe.app.data.sync.CloudMode
+import com.kefe.app.ui.components.KefeCloudMark
+import com.kefe.app.ui.components.shortLabel
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
 import com.kefe.app.ui.theme.IconSize
@@ -63,7 +65,12 @@ data class KefeNavItem(
  *
  * Yerlesim tasarimdan birebir: 44dp marka kutusu, 28dp bosluk, 60dp sekmeler
  * (6dp araliklarla), sekmelerin ARASINDA duran 56dp "Ekle" aksiyonu, en altta
- * esitleme durumu ve DIKEY avatar yigini.
+ * HESAP modu ve DIKEY avatar yigini.
+ *
+ * Alttaki durum [CloudMode]'dan gelir, fiyat tazeliginden DEGIL: once ray fiyat
+ * ucunun durumunu "Bekliyor / Çevrimdışı" diye gosteriyordu ve ayni an cipte
+ * baska bir sey yaziyordu. Etiket de renk de Banners.kt'deki tek kaynaktan.
+ * Dokununca hesap bolumu acilir ([onStatusClick]).
  *
  * Orta aksiyon sekme DEGILDIR: [selectedIndex] degerini degistirmez, secili
  * duruma girmez. Tasarimda Varliklar ile Hedefler arasinda durur -
@@ -76,9 +83,10 @@ fun KefeNavigationRail(
     onSelect: (Int) -> Unit,
     onAdd: () -> Unit,
     members: List<Pair<String, Int>>,
-    syncStatus: SyncStatus,
+    cloudMode: CloudMode?,
     modifier: Modifier = Modifier,
     addAfterIndex: Int = 1,
+    onStatusClick: () -> Unit = {},
 ) {
     val c = KefeTheme.colors
 
@@ -142,22 +150,30 @@ fun KefeNavigationRail(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(Space.x10),
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    Modifier
-                        .size(SyncDot)
-                        .clip(CircleShape)
-                        .background(syncStatus.dotColor()),
-                )
-                Text(
-                    text = syncStatus.label(),
-                    style = KefeTheme.type.nano.copy(fontWeight = FontWeight.SemiBold),
-                    color = c.onSurfaceMuted,
-                    maxLines = 1,
-                )
+            // Oturum henuz okunmadiysa bos: "Bu cihazda" deyip bir kare sonra
+            // "Eşitlendi"ye atlamasin.
+            if (cloudMode != null) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(RailStatusRadius))
+                        .clickable(
+                            indication = null,
+                            interactionSource = null,
+                            role = Role.Button,
+                            onClick = onStatusClick,
+                        )
+                        .padding(horizontal = Space.x4, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    KefeCloudMark(cloudMode)
+                    Text(
+                        text = cloudMode.shortLabel(),
+                        style = KefeTheme.type.nano.copy(fontWeight = FontWeight.SemiBold),
+                        color = c.onSurfaceMuted,
+                        maxLines = 1,
+                    )
+                }
             }
 
             // Rayda avatarlar yan yana degil, ALT ALTA bindirilir.
@@ -314,21 +330,6 @@ internal fun RailAvatar(
     }
 }
 
-// --- Ortak yardimcilar -----------------------------------------------------
-
-@Composable
-internal fun SyncStatus.dotColor(): Color = when (this) {
-    SyncStatus.Synced -> KefeTheme.colors.syncOk
-    SyncStatus.Pending -> KefeTheme.colors.syncPending
-    SyncStatus.Offline -> KefeTheme.colors.syncOffline
-}
-
-internal fun SyncStatus.label(): String = when (this) {
-    SyncStatus.Synced -> "Eşit"
-    SyncStatus.Pending -> "Bekliyor"
-    SyncStatus.Offline -> "Çevrimdışı"
-}
-
 // --- Olculer ---------------------------------------------------------------
 
 private val RailBrandBox = 44.dp
@@ -341,4 +342,4 @@ private val RailAddMargin = 6.dp
 private val RailAddRadius = 16.dp
 private val RailAvatarSize = 32.dp
 private val RailAvatarOverlap = 8.dp
-internal val SyncDot = 6.dp
+private val RailStatusRadius = 8.dp
