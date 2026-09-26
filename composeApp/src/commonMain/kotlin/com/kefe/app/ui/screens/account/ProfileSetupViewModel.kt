@@ -4,6 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.data.db.LocalOwnerMemberId
 import com.kefe.app.data.db.LocalPartnerMemberId
+import com.kefe.app.data.sync.AccountLinker
+import com.kefe.app.data.sync.ConflictChoice
+import com.kefe.app.data.sync.LinkDecision
+import com.kefe.app.data.sync.MemberRename
+import com.kefe.app.data.sync.PreparedLink
 import com.kefe.app.data.sync.PullEngine
 import com.kefe.app.data.sync.linkedUserId
 import com.kefe.app.domain.model.Member
@@ -22,29 +27,34 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * "Profiller / Bu telefon kimin?" adimi.
+ * "Profiller / Bu telefon kimin?" adimi - hesaba baglanmanin da adimi.
  *
- * GIRISLIYSE ONCE HESAP INDIRILIR, SONRA SORULUR. Hesapta adlandirilmis
- * profil varsa yalniz "hangisi sensin" sorulur ve kaydetmek YALNIZ bu cihazin
- * secimini ([PreferenceKeys.ActiveMemberId]) yazar - adlara dokunmaz. Hesapta
- * profil yoksa (ilk telefon ya da hesapsiz baslangic) iki ad yazilir.
+ * GIRISLIYSE ONCE HESABA BAKILIR, SONRA SORULUR. Cihaz bu hesaba henuz bagli
+ * degilse hesap onizlenir ([AccountLinker.preview]) ve HICBIR SEY YAZILMAZ;
+ * karar tablosu (bkz. classifyLink) ne olacagini soyler:
+ *  - cihaz bos: hesaptakiler iner, "bu telefon kimin" sorulur;
+ *  - hesap bos: cihazdakiler hesaba gider, yine sorulur;
+ *  - ayni hesaba donus (ortak kayitlar): soru da secim de yok, dogrudan baglanir;
+ *  - iki tarafta da kayit: once "Hesaptakileri kullan / Birleştir / Vazgeç",
+ *    sonra secim.
+ * "Devam" hepsini TEK ISLEMDE yazar ([AccountLinker.commit]): hesabin
+ * satirlari, adlar, bu telefonun profili ve baglanti.
  *
- * NEYDI. Adlar bir kez, pull beklenmeden okunuyordu: yeni telefonda veritabani
- * henuz kurulumun "Ben"/"Eşim"ini tasiyordu, ekran bos alanlar gosteriyordu ve
- * kaydetmek iki adi `updatedAt = simdi` ile yeniden yaziyordu - hesaptaki
- * gercek adlardan YENI bir damgayla. Push onlari iki telefonun ustune itti.
+ * NEYDI. Hesap yuklemede hemen uygulaniyordu: cihazda da kayit varsa iki
+ * portfoy kullanici hicbir sey gormeden karisiyordu; hesap indirilemeyince
+ * de yerelde yazilmis adlar bir sonraki push'la hesabin ustune gidiyordu.
+ * Artik onizleme patlarsa baglanti yazilmaz ve sunucuya tek satir gitmez.
  *
- * HESAP BAGLANTISI BURADA YAZILIR. Esitleme yalniz cihaz bir hesaba BAGLIYKEN
- * calisir (bkz. CloudMode); baglanti ancak hesap BASARIYLA indirildikten ve bu
- * telefonun kim oldugu secildikten sonra, secimle AYNI islemde yazilir. Hesap
- * indirilemeden gecilirse ("Şimdilik hesapsız devam et") baglanti yazilmaz: mod
- * "Bağlantı yarım" kalir, hicbir sey gonderilmez ve cekilmez.
+ * Adlar YENIDEN YAZILMAZ secim modunda; yalniz "Adları düzenle" ile degisen ad
+ * yazilir - aksi halde bu cihazin damgasi hesaptakinden yeni olur ve LWW ile
+ * iki telefondaki gercek adlarin uzerine yazardi.
  */
 class ProfileSetupViewModel(
     private val portfolioRepository: PortfolioRepository,
     private val preferences: PreferencesRepository,
     private val authRepository: AuthRepository,
     private val pullEngine: PullEngine,
+    private val accountLinker: AccountLinker,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileSetupUiState())
@@ -52,29 +62,47 @@ class ProfileSetupViewModel(
 
     private var loadJob: Job? = null
 
-    // Bu yuklemede BASARIYLA indirilen hesap (userId, e-posta). Kaydet
-    // baglantiyi yalniz bu doluysa yazar; girissiz ya da indirilemeyen
-    // yuklemede null kalir.
+    // Cihaz bu hesaba ZATEN bagliyken indirilen hesap (userId, e-posta). Kaydet
+    // o zaman yalniz secimi yazar; baglanti zaten var.
     private var pulledAccount: Pair<String, String>? = null
 
     // Indirilen hesap adlandirilmis bir profil GETIRDI mi (bkz. load). "Hesabınızda
     // iki profil var" yalniz o zaman denir.
     private var accountBroughtNames = false
 
+    // Onizlenmis, HENUZ YAZILMAMIS baglanti. Kaydet onu tek islemde kurar.
+    private var pending: PendingLink? = null
+
     fun onIntent(intent: ProfileSetupIntent) {
         when (intent) {
             ProfileSetupIntent.Load, ProfileSetupIntent.Retry -> load()
+
+            is ProfileSetupIntent.ChooseConflict -> {
+                val link = pending ?: return
+                if (_state.value.phase != ProfileSetupPhase.Conflict) return
+                pending = link.copy(choice = intent.choice)
+                viewModelScope.launch { showLinkPick(link.prepared, intent.choice) }
+            }
+
+            ProfileSetupIntent.BackToConflict -> {
+                val link = pending ?: return
+                if (link.prepared.decision != LinkDecision.Conflict || _state.value.saving) return
+                pending = link.copy(choice = null)
+                _state.value = _state.value.copy(phase = ProfileSetupPhase.Conflict, conflictChoice = null)
+            }
 
             // Oturum yeniden okunur: bu arada kapandiysa (sunucu jetonu
             // reddetti) bu artik girissiz bir kurulumdur - ad yazilir ve
             // "Hesaba bağla" gorunur. NEYDI: signedIn true kaliyor, giris
             // baglantisi gizleniyordu; girissiz kullanici geri donemiyordu.
             ProfileSetupIntent.ContinueOffline -> viewModelScope.launch {
+                pending = null
                 val auth = currentAuth()
                 val signedIn = auth is AuthState.SignedIn
                 _state.value = _state.value.copy(
                     signedIn = signedIn,
                     accountEmail = (auth as? AuthState.SignedIn)?.session?.email,
+                    linking = false,
                 )
                 showMembers(pickOnly = signedIn)
             }
@@ -96,6 +124,7 @@ class ProfileSetupViewModel(
                 loadJob?.cancel()
                 pulledAccount = null
                 accountBroughtNames = false
+                pending = null
                 _state.value = ProfileSetupUiState()
             }
         }
@@ -103,16 +132,21 @@ class ProfileSetupViewModel(
 
     /**
      * Ekran her gorundugunde yeniden calisir: "Hesaba bağla" ile
-     * giris ekranina gidip donuldugunde oturum artik acik ve hesap indirilmeli.
+     * giris ekranina gidip donuldugunde oturum artik acik ve hesaba bakilmali.
      */
     private fun load() {
         loadJob?.cancel()
         pulledAccount = null
         accountBroughtNames = false
+        pending = null
         _state.value = _state.value.copy(
             phase = ProfileSetupPhase.Checking,
             failureDetail = null,
+            commitFailed = false,
             done = false,
+            linkedNow = false,
+            linking = false,
+            conflictChoice = null,
             cloudConfigured = authRepository.isCloudConfigured,
         )
         loadJob = viewModelScope.launch {
@@ -122,56 +156,86 @@ class ProfileSetupViewModel(
                 signedIn = signedIn,
                 accountEmail = (auth as? AuthState.SignedIn)?.session?.email,
             )
+            if (auth !is AuthState.SignedIn) {
+                showMembers(pickOnly = false)
+                return@launch
+            }
 
-            if (auth is AuthState.SignedIn) {
-                _state.value = _state.value.copy(phase = ProfileSetupPhase.Syncing)
-                // Pull'dan ONCEKI damgalar: adlandirilmis bir profilin damgasi
-                // degistiyse adi hesap getirdi. Degismediyse adlar cihazda
-                // yazilmisti (hesap bos) ya da zaten ayniydi (ayni hesaba donus);
-                // ikisinde de "Bu cihazda" demek dogru.
-                val stampsBefore = memberStamps()
-                val pulled = runCatching {
-                    // Jeton alinamiyorsa pull sessizce 0 donerdi - "indirildi"
-                    // sanilip bos bir hesap gibi davranilmasin.
-                    if (authRepository.validAccessToken() == null) {
-                        // Iki ayri sebep, iki ayri ekran. Sunucu yenileme
-                        // jetonunu REDDETTIYSE oturum silinmistir: kullanici artik
-                        // girissiz, ekran hesapsiz kuruluma doner ve "Hesaba
-                        // bağla" gorunur. NEYDI: ikisi de "İnternet bağlantınızı
-                        // kontrol edin" diyordu ve signedIn true kaldigi icin
-                        // giris baglantisi gizleniyordu. Oturum duruyorsa gecici
-                        // bir ag hatasi: tekrar denenir.
-                        if (currentAuth() !is AuthState.SignedIn) throw SessionGone()
-                        error("Oturum doğrulanamadı")
-                    }
-                    // Devralma BAGLANTIYA gore: cihaz bu hesaba zaten bagliysa
-                    // (ayni hesaba yeniden giris) pull duz LWW'dir; degilse
-                    // hesabin adlari devralinir. NEYDI: "hic push'lamadi mi"
-                    // (LastPushedAt == null) soruluyordu - ilk pull patlayip
-                    // push gecince isaret kalici kayboluyor, devralma bir daha
-                    // olmuyordu; baska hesaba geciste de hic olmuyordu.
-                    val link = preferences.get(PreferenceKeys.CloudLinkUserId)
-                    val alreadyLinked = linkedUserId(auth, link) != null
-                    pullEngine.pullOnce(adoptServerMembers = !alreadyLinked)
+            _state.value = _state.value.copy(phase = ProfileSetupPhase.Syncing)
+            // Devralma ve onizleme BAGLANTIYA gore: cihaz bu hesaba zaten
+            // bagliysa (ayni hesaba yeniden giris, profil secimi eksik) olagan
+            // LWW pull'u yeter - esitleme zaten o hesapla calisiyor. Degilse hesap
+            // yalniz ONIZLENIR. NEYDI: "hic push'lamadi mi" (LastPushedAt == null)
+            // soruluyordu - ilk pull patlayip push gecince isaret kalici
+            // kayboluyordu.
+            val link = preferences.get(PreferenceKeys.CloudLinkUserId)
+            val alreadyLinked = linkedUserId(auth, link) != null
+            val stampsBefore = memberStamps()
+            val result = runCatching {
+                // Jeton alinamiyorsa hesaba ulasilmadi - "bos hesap" sanilmasin.
+                if (authRepository.validAccessToken() == null) {
+                    // Iki ayri sebep, iki ayri ekran. Sunucu yenileme jetonunu
+                    // REDDETTIYSE oturum silinmistir: kullanici artik girissiz,
+                    // ekran hesapsiz kuruluma doner ve "Hesaba bağla" gorunur.
+                    // Oturum duruyorsa gecici bir ag hatasi: tekrar denenir.
+                    if (currentAuth() !is AuthState.SignedIn) throw SessionGone()
+                    error("Oturum doğrulanamadı")
                 }
-                pulled.exceptionOrNull()?.let { error ->
-                    if (error is CancellationException) throw error
-                    if (error is SessionGone) {
-                        _state.value = _state.value.copy(signedIn = false, accountEmail = null)
-                        showMembers(pickOnly = false)
-                        return@launch
-                    }
-                    println("Kefe profil: hesap indirilemedi - ${error.message}")
-                    _state.value = _state.value.copy(
-                        phase = ProfileSetupPhase.Failed,
-                        failureDetail = error.message?.take(160),
-                    )
+                if (alreadyLinked) {
+                    pullEngine.pullOnce(adoptServerMembers = false)
+                    null
+                } else {
+                    accountLinker.preview() ?: error("Oturum doğrulanamadı")
+                }
+            }
+            result.exceptionOrNull()?.let { error ->
+                if (error is CancellationException) throw error
+                if (error is SessionGone) {
+                    _state.value = _state.value.copy(signedIn = false, accountEmail = null)
+                    showMembers(pickOnly = false)
                     return@launch
                 }
+                println("Kefe profil: hesaba bakilamadi - ${error.message}")
+                _state.value = _state.value.copy(
+                    phase = ProfileSetupPhase.Failed,
+                    failureDetail = error.message?.take(160),
+                )
+                return@launch
+            }
+
+            val prepared = result.getOrNull()
+            if (prepared == null) {
+                // Bagli cihaz: hesap LWW ile indi. Pull'dan ONCEKI damgalar:
+                // adlandirilmis bir profilin damgasi degistiyse adi hesap getirdi.
                 pulledAccount = auth.session.userId to auth.session.email
                 accountBroughtNames = memberStamps().any { (id, stamp) -> stamp > 0L && stampsBefore[id] != stamp }
+                showMembers(pickOnly = false)
+                return@launch
             }
-            showMembers(pickOnly = false)
+
+            pending = PendingLink(auth.session.userId, auth.session.email, prepared, choice = null)
+            when (prepared.decision) {
+                LinkDecision.Conflict -> _state.value = _state.value.copy(
+                    phase = ProfileSetupPhase.Conflict,
+                    conflictLocal = prepared.preview.localRecords,
+                    conflictServer = prepared.preview.serverRecords,
+                    conflictChoice = null,
+                )
+
+                // Ayni hesaba donus: ortak kayitlar var, soru yok, secim de yok -
+                // bu telefon zaten kim oldugunu biliyor. Profil hic secilmediyse
+                // (kurulum yarida kaldi) secim yine sorulur.
+                LinkDecision.Relink -> {
+                    val active = preferences.get(PreferenceKeys.ActiveMemberId)
+                    if (active != null) {
+                        commit(pending!!, activeMemberId = active, renames = emptyList())
+                    } else {
+                        showLinkPick(prepared, choice = null)
+                    }
+                }
+
+                LinkDecision.Download, LinkDecision.Upload -> showLinkPick(prepared, choice = null)
+            }
         }
     }
 
@@ -180,8 +244,61 @@ class ProfileSetupViewModel(
         portfolioRepository.observeMembers().first().associate { it.id to it.updatedAt }
 
     /**
-     * Yereldeki profilleri ekrana koyar. Adlandirilmis profil varsa (ya da
-     * [pickOnly]) yalniz secim yapilir; yoksa adlar yazilir.
+     * Baglanti bekliyorken secim ekrani. Adlar HESAPTAN (adlandirilmissa) - cihaza
+     * henuz inmediler, "Devam" indirecek. Hesap adsizsa cihazin adlari; o da
+     * yoksa iki ad yazilir.
+     *
+     * SECIM ZORUNLU: hazir isaretli bir satir olmaz. Cihazin eski secimi
+     * cihazdaki adlara gore yapilmisti; hesabin adlari gelince o secim diger
+     * kisiyi gosterebilir (bkz. remapNote).
+     *
+     * "Hesaptakileri kullan"da cihazin adlari sayilmaz - cihazdaki her sey
+     * silinecek.
+     */
+    private suspend fun showLinkPick(prepared: PreparedLink, choice: ConflictChoice?) {
+        val members = portfolioRepository.observeMembers().first()
+        val owner = members.firstOrNull { it.id == LocalOwnerMemberId }
+        val partner = members.firstOrNull { it.id == LocalPartnerMemberId }
+        val replace = choice == ConflictChoice.UseAccount
+        val serverNamed = prepared.serverNamed
+        val localNamed = !replace && members.any { it.isNamed }
+        val pick = serverNamed || localNamed
+        val current = _state.value
+        val keepTyped = !pick && current.editingNames && !current.profilesNamed
+        val typedSomething = current.ownerName.isNotBlank() || current.partnerName.isNotBlank()
+        val ownerLoaded = when {
+            serverNamed -> prepared.serverOwnerName.orEmpty()
+            localNamed -> owner.namedOrEmpty()
+            else -> ""
+        }
+        val partnerLoaded = when {
+            serverNamed -> prepared.serverPartnerName.orEmpty()
+            localNamed -> partner.namedOrEmpty()
+            else -> ""
+        }
+        _state.value = current.copy(
+            phase = ProfileSetupPhase.Ready,
+            linking = true,
+            accountDownloaded = true,
+            conflictChoice = choice,
+            profilesNamed = pick,
+            accountHasProfiles = serverNamed,
+            editingNames = !pick,
+            ownerName = if (pick) ownerLoaded else if (keepTyped) current.ownerName else "",
+            partnerName = if (pick) partnerLoaded else if (keepTyped) current.partnerName else "",
+            loadedOwnerName = ownerLoaded,
+            loadedPartnerName = partnerLoaded,
+            // Ad yazip gelen kullanicinin ekranda gordugu secim kalir; digerinde
+            // secim bos baslar.
+            thisDeviceIsOwner = if (keepTyped && typedSomething) current.thisDeviceIsOwner else null,
+            previousMemberId = preferences.get(PreferenceKeys.ActiveMemberId),
+            localOnlyByAuthor = if (replace) emptyMap() else prepared.localOnlyByAuthor,
+        )
+    }
+
+    /**
+     * Yereldeki profilleri ekrana koyar (baglanti beklemiyorken). Adlandirilmis
+     * profil varsa (ya da [pickOnly]) yalniz secim yapilir; yoksa adlar yazilir.
      */
     private suspend fun showMembers(pickOnly: Boolean) {
         val members = portfolioRepository.observeMembers().first()
@@ -199,6 +316,10 @@ class ProfileSetupViewModel(
         val keepTyped = !pick && current.editingNames && !current.profilesNamed
         _state.value = current.copy(
             phase = ProfileSetupPhase.Ready,
+            linking = false,
+            conflictChoice = null,
+            previousMemberId = null,
+            localOnlyByAuthor = emptyMap(),
             profilesNamed = named,
             // Hesap sozu yalniz hesap INDIRILDIYSE ve adlari o getirdiyse. NEYDI:
             // "adlandirilmis ve girisli" yetiyordu; "Şimdilik hesapsız devam et"
@@ -243,45 +364,40 @@ class ProfileSetupViewModel(
         val s = _state.value
         if (!s.canSave) return
         val isOwner = s.thisDeviceIsOwner ?: return
+        val activeMemberId = if (isOwner) LocalOwnerMemberId else LocalPartnerMemberId
         _state.value = s.copy(saving = true)
+        val link = pending
         viewModelScope.launch {
             // Secim modunda adlara DOKUNULMAZ. Duzenlemede yalniz DEGISEN ad
             // yazilir: degismeyeni yeniden yazmak damgasini tazeler ve digerinin
             // telefondaki son hali ezilebilirdi.
-            if (s.editingNames) {
-                renameIfChanged(LocalOwnerMemberId, s.ownerName, s.loadedOwnerName)
-                renameIfChanged(LocalPartnerMemberId, s.partnerName, s.loadedPartnerName)
+            val renames = if (s.editingNames) {
+                listOfNotNull(
+                    renameOf(LocalOwnerMemberId, s.ownerName, s.loadedOwnerName),
+                    renameOf(LocalPartnerMemberId, s.partnerName, s.loadedPartnerName),
+                )
+            } else {
+                emptyList()
             }
-            // Secim ve (hesap indirildiyse) baglanti TEK islemde: yarim
-            // yazilirsa esitleme "bu telefon kimin" secilmeden baslayabilirdi.
-            val link = linkToCommit()
-            val previousLink = preferences.get(PreferenceKeys.CloudLinkUserId)
+
+            if (link != null) {
+                commit(link, activeMemberId, renames)
+                return@launch
+            }
+
+            renames.forEach {
+                portfolioRepository.renameMember(memberId = it.memberId, name = it.name, initials = it.initials)
+            }
+            // Secim ve (bagli hesap yeniden indirildiyse) baglanti TEK islemde:
+            // yarim yazilirsa esitleme "bu telefon kimin" secilmeden baslayabilirdi.
+            val account = linkToCommit()
             preferences.putAll(
                 buildMap {
-                    put(
-                        PreferenceKeys.ActiveMemberId,
-                        if (isOwner) LocalOwnerMemberId else LocalPartnerMemberId,
-                    )
-                    if (link != null) {
-                        put(PreferenceKeys.CloudLinkUserId, link.first)
-                        put(PreferenceKeys.CloudLinkEmail, link.second)
-                        // Baglanti kuruldu: hesapsizken yuklenen yedegin izi artik
-                        // bir sonraki baglantiyi ilgilendirmez.
+                    put(PreferenceKeys.ActiveMemberId, activeMemberId)
+                    if (account != null) {
+                        put(PreferenceKeys.CloudLinkUserId, account.first)
+                        put(PreferenceKeys.CloudLinkEmail, account.second)
                         put(PreferenceKeys.LocalRestoredAt, null)
-                        // YENI bir baglantida (hic bagli degildi, acik cikistan
-                        // sonra ya da baska hesaptan geliyor) watermark sifirlanir.
-                        // NEYDI: eski hesabin watermark'i (T) kaliyordu ve push
-                        // yalniz T'den sonra degisenleri gonderiyordu - T'den once
-                        // kurulan pozisyon, hedef ve uyeler yeni hesaba hic
-                        // gitmiyor, karsi telefon pozisyonu olmayan islemler
-                        // goruyordu. Ayni hesaba tam yeniden gonderim zararsiz:
-                        // sunucunun LWW korumasi esit/eski damgayi yok sayar.
-                        if (previousLink != link.first) {
-                            put(PreferenceKeys.LastPushedAt, null)
-                            // "Son eşitleme" de onceki baglantinin ani; yeni
-                            // hesabin ilk turu kendi anini yazar.
-                            put(PreferenceKeys.LastSyncedAt, null)
-                        }
                     }
                 },
             )
@@ -290,9 +406,52 @@ class ProfileSetupViewModel(
     }
 
     /**
-     * Yazilacak baglanti: bu yuklemede indirilen hesap, oturum HALA o hesaptaysa.
-     * Ekranda beklerken cikis yapildiysa ya da baska hesaba girildiyse baglanti
-     * yazilmaz - indirilen hesap artik oturumun hesabi degil.
+     * Bekleyen baglantiyi kurar. Oturum bu arada kapandiysa ya da baska bir
+     * hesaba gectiyse KURULMAZ: onizlenen hesap artik oturumun hesabi degil.
+     * Ekran yeniden yuklenir - secim hesabin adlarina gore yapilmisti, cihazin
+     * adlariyla yazilirsa telefon yanlis kisi olurdu.
+     *
+     * Patlarsa hicbir sey yazilmamistir (tek islem): "Tekrar dene". Hata AG
+     * degil YEREL yazma: ekran "internetinizi kontrol edin" demez (bkz.
+     * commitFailed, failureMessage).
+     */
+    private suspend fun commit(link: PendingLink, activeMemberId: String, renames: List<MemberRename>) {
+        _state.value = _state.value.copy(saving = true)
+        val session = (currentAuth() as? AuthState.SignedIn)?.session
+        if (session?.userId != link.userId) {
+            _state.value = _state.value.copy(saving = false)
+            load()
+            return
+        }
+        val result = runCatching {
+            accountLinker.commit(
+                prepared = link.prepared,
+                choice = link.choice,
+                userId = link.userId,
+                email = link.email,
+                activeMemberId = activeMemberId,
+                renames = renames,
+            )
+        }
+        result.exceptionOrNull()?.let { error ->
+            if (error is CancellationException) throw error
+            println("Kefe profil: baglanti kurulamadi - ${error.message}")
+            _state.value = _state.value.copy(
+                saving = false,
+                phase = ProfileSetupPhase.Failed,
+                failureDetail = error.message?.take(160),
+                commitFailed = true,
+            )
+            return
+        }
+        pending = null
+        _state.value = _state.value.copy(saving = false, done = true, linkedNow = true)
+    }
+
+    /**
+     * Bagli hesabi yeniden indiren yuklemede yazilacak baglanti: oturum HALA o
+     * hesaptaysa. Ekranda beklerken cikis yapildiysa ya da baska hesaba
+     * girildiyse yazilmaz.
      */
     private suspend fun linkToCommit(): Pair<String, String>? {
         val pulled = pulledAccount ?: return null
@@ -300,12 +459,20 @@ class ProfileSetupViewModel(
         return pulled.takeIf { session.userId == it.first }
     }
 
-    private suspend fun renameIfChanged(memberId: String, typed: String, loaded: String) {
+    private fun renameOf(memberId: String, typed: String, loaded: String): MemberRename? {
         val name = typed.trim()
-        if (name.isEmpty() || name == loaded.trim()) return
-        portfolioRepository.renameMember(memberId = memberId, name = name, initials = name.initials())
+        if (name.isEmpty() || name == loaded.trim()) return null
+        return MemberRename(memberId = memberId, name = name, initials = name.initials())
     }
 }
+
+/** Onizlenmis, henuz yazilmamis baglanti ve (cakismada) kullanicinin secimi. */
+private data class PendingLink(
+    val userId: String,
+    val email: String,
+    val prepared: PreparedLink,
+    val choice: ConflictChoice?,
+)
 
 /** Yalniz adlandirilmis profilin adi; kurulumun "Ben"/"Eşim"i bos sayilir. */
 private fun Member?.namedOrEmpty(): String = this?.takeIf { it.isNamed }?.name.orEmpty()

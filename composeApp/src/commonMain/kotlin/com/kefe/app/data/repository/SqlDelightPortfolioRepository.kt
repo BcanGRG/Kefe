@@ -7,6 +7,7 @@ import com.kefe.app.data.db.DefaultCurrency
 import com.kefe.app.data.db.DefaultPortfolioName
 import com.kefe.app.data.db.LocalPortfolioId
 import com.kefe.app.data.db.bootstrapIfNeeded
+import com.kefe.app.data.db.resetMembersToDefaults
 import com.kefe.app.data.db.toDomain
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.db.Positions
@@ -632,6 +633,19 @@ class SqlDelightPortfolioRepository(
                     }
                 }
 
+                // Geri yukleme AYNI islemde isaretlenir. Yuklenen her satir
+                // "simdi" damgalanir; cihaz sonra bir hesaba baglanirsa bu
+                // satirlar hesaptakilerden YENI gorunur ve LWW'de onlarin
+                // ustune yazardi. Isaret baglanti adimini soru sormaya zorlar
+                // (bkz. classifyLink). Ayri bir yazmada kalsaydi, geri yukleme
+                // ile isaret arasinda kapanan uygulama bu korumayi kaybederdi.
+                // Hesaba bagliyken geri yukleme kapali (bkz. restoreLocked);
+                // buraya yalniz hesapsiz ya da baglantisi yarim cihaz gelir.
+                settingQueries.upsertSetting(
+                    settingKey = PreferenceKeys.LocalRestoredAt,
+                    settingValue = clock.nowEpochMillis().toString(),
+                )
+
                 portfolioQueries.updatePortfolio(
                     name = file.portfolioName,
                     currency = DefaultCurrency,
@@ -846,13 +860,19 @@ class SqlDelightPortfolioRepository(
                 priceQueries.deleteAllPriceHistory()
                 deleteAllPlanData()
 
-                // Portfoy ve uye BIRAKILIR: onlar kullanici verisi degil kimlik.
-                // Silinirse islem eklerken "kim ekledi" bagi kopardi.
-                //
+                // Portfoy ve uye SATIRLARI BIRAKILIR: onlar kimlik; silinirse
+                // islem eklerken "kim ekledi" bagi kopardi. Ama ADLARI kurulumun
+                // adsiz haline doner (damga 0). NEYDI: adlar damgali kaliyordu;
+                // sifirlanan cihaz baska bir hesaba baglaninca eski adlar yeni
+                // hesaba itiliyor, kurulum da eski kisilerin adlarini "Bu
+                // cihazda iki profil var" diye soruyordu.
+                database.resetMembersToDefaults()
+
                 // Ayarlar tumden silinir - tercihler de kullanicinin verisi.
                 // Icindeki acilis bayraklari da gittigi icin uygulama sifirdan
                 // acilmis gibi baslar: bu, "her seyi sil" dedikten sonra
-                // beklenen davranis.
+                // beklenen davranis. Hesap baglantisi (CloudLinkUserId/Email)
+                // da burada gider: silinen cihaz hicbir hesaba bagli degildir.
                 settingQueries.deleteAllSettings()
 
                 // Silinen veritabani YENI bir veritabanidir: kurulum AYNI

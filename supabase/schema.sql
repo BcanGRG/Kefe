@@ -29,14 +29,19 @@
 --    (member_owner / member_partner), iki cihazda ayni satira duser.
 --    role/permission/lastSeen cok kullanicili modelden kalmaydi, tasinmaz.
 --    Mezar tasi yok: iki profil silinmez.
+--
+--    ANAHTAR (user_id, id): kimlik her HESAPTA da ayni (member_owner). Yalniz
+--    id anahtar olunca ikinci bir hesabin upsert'i birinci hesabin satiriyla
+--    cakisip RLS'e takiliyordu (bkz. migrations/20260926_composite_keys.sql).
 -- =========================================================================
 create table if not exists public.members (
-    id         text  primary key,
+    id         text  not null,
     user_id    uuid  not null default auth.uid() references auth.users (id) on delete cascade,
     name       text  not null,
     initials   text  not null,
     sort_order bigint not null default 0,
-    updated_at bigint not null default 0
+    updated_at bigint not null default 0,
+    primary key (user_id, id)
 );
 
 alter table public.members enable row level security;
@@ -52,9 +57,12 @@ grant select, insert, update, delete on public.members to authenticated;
 --    YOK: onlar defterden ve cihazin kendi fiyat cekiminden turetilir.
 --    unit_price + manual_price tasinir cunku ELLE fiyatli varlikta bu
 --    kullanici verisidir, hicbir kaynaktan gelmez.
+--
+--    ANAHTAR (user_id, id): pos_<varlik> kimligi her hesapta ayni turetilir
+--    (bkz. members).
 -- =========================================================================
 create table if not exists public.positions (
-    id           text   primary key,
+    id           text   not null,
     user_id      uuid   not null default auth.uid() references auth.users (id) on delete cascade,
     name         text   not null,
     asset_class  text   not null,
@@ -64,7 +72,8 @@ create table if not exists public.positions (
     unit_price   double precision not null default 0,
     manual_price boolean not null default false,
     updated_at   bigint not null default 0,
-    deleted_at   bigint
+    deleted_at   bigint,
+    primary key (user_id, id)
 );
 
 alter table public.positions enable row level security;
@@ -94,8 +103,25 @@ create table if not exists public.transactions (
     storage            text,
     added_by_member_id text   not null,
     updated_at         bigint not null default 0,
-    deleted_at         bigint
+    deleted_at         bigint,
+    created_at         bigint not null default 0,
+    goal_id            text,
+    goal_delta         double precision not null default 0
 );
+
+-- Sonradan gelen kolonlar (yerelde 8.sqm ve 9.sqm). Canli projede zaten
+-- vardi ama bu dosyada yoktu: dosyadan kurulan yeni bir proje bunlar olmadan
+-- acilir, istemcinin her transactions push'u "kolon yok" diye 400 doner ve
+-- senkron sessizce durur. Tablo zaten kurulmus hesaplarda create table if not
+-- exists hicbir sey yapmadigi icin ayrica eklenir.
+--   created_at: ayni gun icindeki sira (8.sqm).
+--   goal_id / goal_delta: kaydin hedef atamasina katkisi - silme geri alabilsin (9.sqm).
+alter table public.transactions
+    add column if not exists created_at bigint not null default 0;
+alter table public.transactions
+    add column if not exists goal_id text;
+alter table public.transactions
+    add column if not exists goal_delta double precision not null default 0;
 
 alter table public.transactions enable row level security;
 drop policy if exists transactions_own on public.transactions;
@@ -138,19 +164,21 @@ grant select, insert, update, delete on public.goals to authenticated;
 
 -- =========================================================================
 -- 5. goal_assets - varlik -> hedef atamasi. position_id anahtar: bir varlik en
---    fazla bir hedefe.
+--    fazla bir hedefe. Anahtar (user_id, position_id): position_id pos_<varlik>
+--    bicimindedir, her hesapta ayni (bkz. members).
 -- =========================================================================
 -- quantity: atanan miktar; -1 = TUM VARLIK. Sonradan eklendi (yerelde 5.sqm),
 -- o yuzden ayri bir "add column if not exists" ile gelir: tablo zaten
 -- olusturulmus hesaplarda create table if not exists hicbir sey yapmaz ve
 -- kolon eksik kalirdi - push 400 doner, senkron sessizce durur.
 create table if not exists public.goal_assets (
-    position_id text   primary key,
+    position_id text   not null,
     user_id     uuid   not null default auth.uid() references auth.users (id) on delete cascade,
     goal_id     text   not null,
     quantity    double precision not null default -1,
     updated_at  bigint not null default 0,
-    deleted_at  bigint
+    deleted_at  bigint,
+    primary key (user_id, position_id)
 );
 
 alter table public.goal_assets
@@ -220,21 +248,76 @@ create index if not exists activity_events_user_updated on public.activity_event
 grant select, insert, update, delete on public.activity_events to authenticated;
 
 -- =========================================================================
+-- BILESIK ANAHTARLAR - tablolari eski anahtarla (yalniz id) kurulmus projeler
+-- icin. Yukaridaki create table if not exists var olan tabloya dokunmaz; bu
+-- blok anahtari (user_id, kimlik) yapar. Tekrar calistirilabilir: anahtar
+-- zaten user_id iceriyorsa atlanir. Ayni blok
+-- migrations/20260926_composite_keys.sql'de de durur.
+-- =========================================================================
+do $$
+declare
+    target record;
+    pkey_name text;
+    has_user_id boolean;
+begin
+    for target in
+        select * from (values
+            ('members',     'id'),
+            ('positions',   'id'),
+            ('goal_assets', 'position_id')
+        ) as t(tbl, key_col)
+    loop
+        select c.conname,
+               exists (
+                   select 1
+                   from unnest(c.conkey) as k(attnum)
+                   join pg_attribute a
+                     on a.attrelid = c.conrelid and a.attnum = k.attnum
+                   where a.attname = 'user_id'
+               )
+          into pkey_name, has_user_id
+          from pg_constraint c
+         where c.conrelid = format('public.%I', target.tbl)::regclass
+           and c.contype = 'p';
+
+        if pkey_name is null then
+            execute format(
+                'alter table public.%I add primary key (user_id, %I)',
+                target.tbl, target.key_col
+            );
+        elsif not has_user_id then
+            execute format(
+                'alter table public.%I drop constraint %I, add primary key (user_id, %I)',
+                target.tbl, pkey_name, target.key_col
+            );
+        end if;
+    end loop;
+end $$;
+
+-- =========================================================================
 -- LWW KORUMA (adim 10, pull ile geldi). Push, PostgREST upsert'iyle satiri
 -- KOSULSUZ ezer - son push kazanir, zaman damgasina bakmaz. Bos ya da eski bir
 -- cihazin push'u sunucudaki yeni veriyi ezerdi. Bu trigger gelen satir
 -- sunucudakinden ESKI/esitse guncellemeyi yok sayar; boylece cakisma cozumu hem
 -- push'ta hem pull'da AYNI olur: updated_at buyuk olan kazanir. INSERT'e gerek
 -- yok - yeni satirda OLD yoktur.
+--
+-- search_path = '': fonksiyon hicbir semadan ad cozmez (yalniz NEW/OLD
+-- alanlarina bakar). Sabitlenmemis search_path, cagiranin yolundaki ayni adli
+-- bir nesnenin araya girmesine izin verir; Supabase guvenlik danismani da
+-- bunu isaretliyordu.
 -- =========================================================================
-create or replace function public.kefe_lww_guard() returns trigger as $$
+create or replace function public.kefe_lww_guard() returns trigger
+    language plpgsql
+    set search_path = ''
+as $$
 begin
     if NEW.updated_at <= OLD.updated_at then
         return OLD;   -- gelen daha eski/esit: sunucudakini koru
     end if;
     return NEW;
 end;
-$$ language plpgsql;
+$$;
 
 drop trigger if exists members_lww on public.members;
 create trigger members_lww before update on public.members

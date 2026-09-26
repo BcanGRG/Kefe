@@ -3,6 +3,7 @@ package com.kefe.app.ui.screens.account
 import com.kefe.app.data.sync.CloudMode
 import com.kefe.app.data.sync.CloudStatus
 import com.kefe.app.ui.components.longLabel
+import com.kefe.app.ui.format.trGenitive
 
 /** Tema secimi. "Sistem" cihazin koyu/acik tercihini izler. */
 enum class ThemeMode {
@@ -97,9 +98,22 @@ data class SettingsUiState(
     val lastSyncedLabel: String = "Henüz yok",
     val appVersion: String = "",
 
-    /** "Tüm verileri sil" onay penceresi acik mi. */
+    /**
+     * Esin (bu cihazin profili OLMAYAN) adlandirilmis adi; adsizsa null.
+     * Onay metinleri "Merve'nin telefonu" der, ad yoksa "eşinizin telefonu".
+     */
+    val partnerName: String? = null,
+
+    /** "Tüm verileri sil" / "Bu cihazı sıfırla" onay penceresi acik mi. */
     val confirmDelete: Boolean = false,
     val deleting: Boolean = false,
+    /** "Hesaptan çık" onay penceresi acik mi. */
+    val confirmSignOut: Boolean = false,
+    /**
+     * Hesaba henuz gitmemis yerel degisiklik var (onay acilirken bakilir):
+     * cikis esitlemeyi durdurur, bunlar yalniz bu cihazda kalir.
+     */
+    val unsentChanges: Boolean = false,
     /** Geri yukleme onayi bekleniyor - mevcut veri silinecek. */
     val confirmRestore: Boolean = false,
     /** Yedekleme ya da geri yukleme suruyor. */
@@ -132,8 +146,15 @@ sealed interface SettingsIntent {
     /** Asil silme. Yalniz onay penceresinden gonderilir. */
     data object ConfirmDeleteAllData : SettingsIntent
 
-    /** "Hesaptan çık": baglanti ve oturum birakilir, kayitlar cihazda kalir. */
+    /**
+     * "Hesaptan çık" satiri: ONAY penceresini acar (cikmaz). Pencere kayitlarin
+     * akibetini ve gitmemis degisiklikleri soyler.
+     */
     data object SignOut : SettingsIntent
+
+    /** Onaydan: baglanti ve oturum birakilir, kayitlar cihazda kalir. */
+    data object ConfirmSignOut : SettingsIntent
+    data object DismissSignOutConfirm : SettingsIntent
 
     /** "Şimdi eşitle": yalniz hesaba ulasilamiyorken gorunur. */
     data object SyncNow : SettingsIntent
@@ -174,6 +195,105 @@ sealed interface SettingsEffect {
      * bozuk" gibi gorunuyordu.
      */
     data class Notice(val message: String) : SettingsEffect
+}
+
+// --- Veriye ne olacak: cikis, sifirlama, geri yukleme ------------------------
+
+/** Onay penceresinin metinleri. */
+data class DialogCopy(val title: String, val message: String, val confirmLabel: String)
+
+/** "Merve'nin telefonu" ya da (ad yoksa) "eşinizin telefonu". SAF. */
+internal fun partnerPhone(partnerName: String?): String =
+    partnerName?.takeIf { it.isNotBlank() }?.let { "${it.trGenitive()} telefonu" } ?: "eşinizin telefonu"
+
+/**
+ * "Hesaptan çık" onayi. SAF.
+ *
+ * NEYDI: satir dogrudan cikiyordu ve kullanici kayitlarina ne olacagini
+ * bilmiyordu - "cikarsam her sey silinir mi, esimin telefonu da mi cikar?".
+ * Metin ucunu de soyler: kayitlar bu cihazda kalir, esin telefonu etkilenmez,
+ * henuz gitmemis bir degisiklik varsa yalniz burada kalir.
+ */
+fun signOutDialog(partnerName: String?, unsentChanges: Boolean): DialogCopy {
+    val base = "Eşitleme bu cihazda durur. Kayıtlarınız bu cihazda kalır, hesapsız kullanmaya " +
+        "devam edersiniz; ${partnerPhone(partnerName)} hesapla eşitlenmeye devam eder."
+    val unsent = " Hesaba henüz gönderilmemiş değişiklikler var; çıkarsanız yalnız bu cihazda kalır."
+    return DialogCopy(
+        title = "Hesaptan çıkılsın mı?",
+        message = if (unsentChanges) base + unsent else base,
+        confirmLabel = "Hesaptan çık",
+    )
+}
+
+/**
+ * Silme bir HESABI da ilgilendiriyor mu: cihaz bagli, baglantisi yarim ya da
+ * oturumu dusmus. O zaman satir "Bu cihazı sıfırla" olur ve silmeden ONCE
+ * hesaptan cikilir (bkz. SettingsViewModel.deleteAll).
+ */
+fun resetsAccount(mode: CloudMode?): Boolean =
+    mode is CloudMode.Cloud || mode is CloudMode.LinkPending || mode is CloudMode.SessionLost
+
+/** Veri bolumundeki yikici satirin adi. SAF. */
+fun deleteRowLabel(mode: CloudMode?): String =
+    if (resetsAccount(mode)) "Bu cihazı sıfırla" else "Tüm verileri sil"
+
+/**
+ * Silme / sifirlama onayi. SAF.
+ *
+ * Hesapsiz cihazda kayitlarin TEK kopyasi burada: metin yedegi hatirlatir.
+ * Hesapli cihazda ise hesaptakiler ve esin telefonu etkilenmez; ayni e-postayla
+ * girilince kayitlar geri gelir. NEYDI: iki durumda da ayni "Tüm verileri sil"
+ * vardi ve hesapli cihazda silinenler bir sonraki pull'la ~1,5 sn icinde geri
+ * iniyordu - kullanici silmenin calismadigini saniyordu.
+ */
+fun deleteDialog(mode: CloudMode?, partnerName: String?): DialogCopy =
+    if (resetsAccount(mode)) {
+        DialogCopy(
+            title = "Bu cihaz sıfırlansın mı?",
+            message = "Hesaptan çıkılır ve bu cihazdaki kayıtlar ile tercihler silinir. " +
+                "Hesabınızdaki kayıtlar ve ${partnerPhone(partnerName)} etkilenmez; " +
+                "aynı e-postayla girdiğinizde geri gelir.",
+            confirmLabel = "Sıfırla",
+        )
+    } else {
+        DialogCopy(
+            title = "Tüm verileri sil",
+            message = "Bu cihazdaki varlıklar, işlemler, hedefler, planlar ve tercihler silinir. " +
+                "Hesap kullanmadığınız için başka bir kopyası yok — önce yedek almak isteyebilirsiniz. " +
+                "Bu işlem geri alınamaz.",
+            confirmLabel = "Sil",
+        )
+    }
+
+/**
+ * Geri yukleme KAPALI mi: cihaz bir hesaba bagli (oturumu dusmus olsa da).
+ *
+ * NEDEN. Geri yukleme her satiri "simdi" damgalar; bagli cihazda yedegin eski
+ * hali LWW ile hesabin yeni halinin USTUNE yazilir, iki telefona birden gider.
+ * Oturumu dusmus cihaz da ayni hesaba donunce sorusuz esitlenir. Hesapsiz ya
+ * da baglantisi yarim cihazda acik: orada sonraki baglanti soru sorar (bkz.
+ * LocalRestoredAt, classifyLink).
+ */
+fun restoreLocked(mode: CloudMode?): Boolean = mode is CloudMode.Cloud || mode is CloudMode.SessionLost
+
+/** Kapali geri yukleme satirinin degeri ve dokununca soyledigi. SAF. */
+const val RestoreLockedValue: String = "Hesaba bağlıyken kapalı"
+
+fun restoreLockedMessage(mode: CloudMode?): String {
+    val exit = if (mode is CloudMode.SessionLost) "Hesapsız devam et" else "Hesaptan çık"
+    return "Hesaba bağlıyken yüklenen yedek hesaptaki kayıtların yerine geçemez, onlarla karışır. " +
+        "Yedeği yüklemek için önce $exit."
+}
+
+/**
+ * Veri bolumunun alt notu: kayitlarin kac kopyasi var. SAF. Bulut yoksa ya da
+ * mod henuz okunmadiysa not yok.
+ */
+fun dataFootnote(mode: CloudMode?, cloudConfigured: Boolean): String? = when {
+    !cloudConfigured || mode == null -> null
+    mode is CloudMode.Cloud -> "Kayıtlarınız hesabınızda da saklanıyor."
+    mode == CloudMode.Local -> "Hesap kullanmadığınız için kayıtların tek kopyası bu cihazda. Ara sıra yedek alın."
+    else -> null
 }
 
 // --- Hesap ve esitleme bolumu ---------------------------------------------

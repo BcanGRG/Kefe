@@ -82,3 +82,9 @@ clearGoalAssignments:
 UPDATE goal_assets
 SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE goalId = :goalId AND deletedAt IS NULL;
+
+-- "Hesaptakileri kullan": esitlenen tablolar bosaltilirken atamalar ACIKCA
+-- silinir. CASCADE'e guvenilmez - "PRAGMA foreign_keys" kapali bir baglantida
+-- pozisyon ve hedef giderken atamalar oksuz kalirdi.
+deleteAllGoalAssets:
+DELETE FROM goal_assets;

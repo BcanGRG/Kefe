@@ -181,10 +181,14 @@ fun SettingsScreen(
                     )
                 }
                 KefeHairline()
+                // Bagliyken KAPALI (bkz. restoreLocked): baslik soluk, degeri
+                // nedenini soyler; dokunmak yine calisir ve cikis yolunu anlatir.
+                val restoreLocked = restoreLocked(state.cloudMode)
                 SettingsValueRow(
                     title = "Geri yükle",
-                    value = null,
+                    value = if (restoreLocked) RestoreLockedValue else null,
                     onClick = { onIntent(SettingsIntent.Restore) },
+                    titleColor = if (restoreLocked) c.onSurfaceMuted else c.onSurface,
                 )
                 KefeHairline()
                 SettingsRow(onClick = { onIntent(SettingsIntent.ExportCsv) }) {
@@ -201,13 +205,25 @@ fun SettingsScreen(
                     onClick = { onIntent(SettingsIntent.DeleteAllData) },
                     hoverBackground = c.negative.copy(alpha = 0.10f),
                 ) {
+                    // Hesap isin icindeyse "Bu cihazı sıfırla": silme hesabi
+                    // degil yalniz bu cihazi etkiler, once hesaptan cikilir.
                     Text(
-                        "Tüm verileri sil",
+                        deleteRowLabel(state.cloudMode),
                         style = t.body,
                         color = c.negative,
                         modifier = Modifier.weight(1f),
                     )
                 }
+            }
+            // Kayitlarin kac kopyasi var: hesapsizken tek kopya bu cihazda.
+            dataFootnote(state.cloudMode, state.cloudConfigured)?.let { note ->
+                Spacer(Modifier.height(Space.x8))
+                Text(
+                    note,
+                    style = t.micro,
+                    color = c.onSurfaceMuted,
+                    modifier = Modifier.padding(horizontal = Space.x4),
+                )
             }
 
             Row(
@@ -237,14 +253,28 @@ fun SettingsScreen(
 
         // Gorunurluk `if` ile DEGIL parametreyle verilir: kutunun geri
         // isleyicisi kosulsuz bestelenmeli (bkz. KefeBackHandler).
+        // Metin moda gore (bkz. deleteDialog): hesapsizken tek kopya burada,
+        // hesapliyken hesaptakiler ve esin telefonu etkilenmez.
+        val delete = deleteDialog(state.cloudMode, state.partnerName)
         KefeConfirmDialog(
             visible = state.confirmDelete,
-            title = "Tüm verileri sil",
-            message = "Varlıklarınız, işlem geçmişiniz, hedefleriniz ve tercihleriniz " +
-                "silinecek. Bu işlem geri alınamaz.",
-            confirmLabel = "Sil",
+            title = delete.title,
+            message = delete.message,
+            confirmLabel = delete.confirmLabel,
             onConfirm = { onIntent(SettingsIntent.ConfirmDeleteAllData) },
             onDismiss = { onIntent(SettingsIntent.DismissDeleteConfirm) },
+        )
+
+        // Hesaptan cikis: kayitlar kalir, esin telefonu etkilenmez; gitmemis
+        // degisiklik varsa yalniz bu cihazda kalir (bkz. signOutDialog).
+        val signOut = signOutDialog(state.partnerName, state.unsentChanges)
+        KefeConfirmDialog(
+            visible = state.confirmSignOut,
+            title = signOut.title,
+            message = signOut.message,
+            confirmLabel = signOut.confirmLabel,
+            onConfirm = { onIntent(SettingsIntent.ConfirmSignOut) },
+            onDismiss = { onIntent(SettingsIntent.DismissSignOutConfirm) },
         )
 
         // Geri yukleme de yikicidir: yedek mevcut verinin USTUNE degil YERINE
@@ -415,12 +445,17 @@ private fun SettingsRow(
 }
 
 @Composable
-private fun SettingsValueRow(title: String, value: String?, onClick: (() -> Unit)? = null) {
+private fun SettingsValueRow(
+    title: String,
+    value: String?,
+    onClick: (() -> Unit)? = null,
+    titleColor: Color = KefeTheme.colors.onSurface,
+) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
     SettingsRow(onClick = onClick) {
-        Text(title, style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
+        Text(title, style = t.body, color = titleColor, modifier = Modifier.weight(1f))
         if (value != null) {
             Text(value, style = t.caption, color = c.onSurfaceMuted)
         }

@@ -1,5 +1,9 @@
 package com.kefe.app.ui.screens.account
 
+import com.kefe.app.data.db.LocalOwnerMemberId
+import com.kefe.app.data.db.LocalPartnerMemberId
+import com.kefe.app.data.sync.ConflictChoice
+
 /**
  * "Profiller / Bu telefon kimin?" adiminin durumu.
  *
@@ -25,6 +29,13 @@ enum class ProfileSetupPhase {
 
     /** Hesaba ulasilamadi - tekrar dene ya da simdilik hesapsiz devam et. */
     Failed,
+
+    /**
+     * Cihazda da hesapta da kayit var ve ortak gecmis yok (bkz. classifyLink):
+     * "Hesaptakileri kullan", "Birleştir" ya da "Vazgeç". Secilene kadar HICBIR
+     * SEY yazilmaz.
+     */
+    Conflict,
     Ready,
 }
 
@@ -68,6 +79,12 @@ data class ProfileSetupUiState(
      */
     val accountHasProfiles: Boolean = false,
     val failureDetail: String? = null,
+    /**
+     * [ProfileSetupPhase.Failed]'in sebebi: hesap okundu ama baglanti CIHAZA
+     * yazilamadi (tek islem geri alindi). Ag hatasindan ayri bir metin gerekir
+     * (bkz. failureMessage).
+     */
+    val commitFailed: Boolean = false,
     val ownerName: String = "",
     val partnerName: String = "",
     /**
@@ -88,6 +105,30 @@ data class ProfileSetupUiState(
     val saving: Boolean = false,
     /** Kaydedildi - kabuk uygulamaya gecirir. */
     val done: Boolean = false,
+
+    /**
+     * Bir hesap BAGLANTISI bekliyor: hesap onizlendi ama henuz hicbir sey
+     * yazilmadi; "Devam" onu tek islemde kurar (bkz. AccountLinker.commit).
+     * Ekrandaki adlar hesabin (adlandirilmissa) - cihaza ancak o an iner.
+     */
+    val linking: Boolean = false,
+    /** Cakismada cihazdaki ve hesaptaki kayit sayisi (bkz. conflictCopy). */
+    val conflictLocal: Int = 0,
+    val conflictServer: Int = 0,
+    /** Cakismada secilen yol; secim ekraninda "ne olacak" notu buna gore. */
+    val conflictChoice: ConflictChoice? = null,
+    /**
+     * Bu telefonun ONCEKI profili. Secim ondan farkliysa cihazda girilmis
+     * kayitlar yeni profile aktarilir (bkz. remapNote).
+     */
+    val previousMemberId: String? = null,
+    /** Bu cihazda girilip hesapta olmayan kayitlar, ekleyen profile gore. */
+    val localOnlyByAuthor: Map<String, Int> = emptyMap(),
+    /**
+     * Kaydetme bu cihazi bir hesaba YENI bagladi. Kabuk "Hesaba bağlandı" der ve
+     * akisin basladigi yere doner.
+     */
+    val linkedNow: Boolean = false,
 ) {
     val canSave: Boolean
         get() = !saving &&
@@ -173,10 +214,88 @@ fun ProfileSetupUiState.readyBody(): String = when {
             "Bağlantı gelince Özet'teki \"Tamamla\" ile hesabınızdaki kayıtları indirin."
 }
 
+/**
+ * Basarisiz ekranin metni. SAF.
+ *
+ * NEYDI: hesabi okuma da, baglantiyi cihaza yazma da ayni "Hesabınıza
+ * ulaşılamadı. İnternet bağlantınızı kontrol edin" metnini gosteriyordu. Yazma
+ * patladiginda hesaba ulasilmisti; kullanici interneti kontrol ediyor, "Tekrar
+ * dene" ayni yerde yeniden patliyordu. Yazma TEK islemde oldugu icin cihazda
+ * hicbir sey degismedi - metin bunu soyler.
+ */
+fun ProfileSetupUiState.failureMessage(): String =
+    if (commitFailed) {
+        "Bağlantı kaydedilemedi; bu cihazda hiçbir şey değişmedi. Tekrar deneyin."
+    } else {
+        "Hesabınıza ulaşılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin."
+    }
+
+/** Cakisma ekraninin metinleri. */
+data class ConflictCopy(
+    val title: String,
+    val body: String,
+    val useAccountTitle: String,
+    val useAccountNote: String,
+    val mergeTitle: String,
+    val mergeNote: String,
+)
+
+/**
+ * Cakisma ekrani. SAF.
+ *
+ * Iki yolun notu NE KAYBEDILECEGINI soyler: "Hesaptakileri kullan" cihazdakini
+ * siler (yanindaki "Önce yedek al" bunun icin), "Birleştir" ayni alimi iki kez
+ * sayabilir. Kullanici sonucu secmeden once gormeli.
+ */
+fun conflictCopy(localRecords: Int, serverRecords: Int): ConflictCopy = ConflictCopy(
+    title = "Bu cihazda da, hesabınızda da kayıt var",
+    body = "Bu cihaz: $localRecords kayıt · Hesap: $serverRecords kayıt",
+    useAccountTitle = "Hesaptakileri kullan",
+    useAccountNote = "Bu cihazdaki kayıtlar silinir.",
+    mergeTitle = "Birleştir",
+    mergeNote = "Aynı alımı iki cihaza da girdiyseniz iki kez sayılır; sonra Aktivite'den silebilirsiniz.",
+)
+
+/**
+ * Cakismadan sonraki secim ekraninda, secilen yolun hatirlatmasi. Secim
+ * ekranina gecince cakisma metni kaybolur; "Devam"a basmadan once ne olacagi
+ * yine gorunmeli.
+ */
+fun ProfileSetupUiState.choiceNote(): String? = when (conflictChoice) {
+    ConflictChoice.UseAccount -> "Devam edince bu cihazdaki kayıtlar silinir, hesaptakiler gelir."
+    ConflictChoice.Merge -> "Devam edince bu cihazdaki kayıtlar hesaptakilerle birleştirilir."
+    null -> null
+}
+
+/**
+ * Secim onceki profilden farkliysa: cihazda girilmis kayitlarin akibeti. SAF.
+ *
+ * NEYDI: aktarim yoktu. Cihazda "Merve" birinci profildi; hesapta birinci profil
+ * "Burak Can" cikinca Merve ikinciyi seciyordu, ama bu telefonda girdigi her
+ * sey birinci profilde - yani Burak'in adina - kaliyordu.
+ */
+fun ProfileSetupUiState.remapNote(): String? {
+    if (!linking) return null
+    val owner = thisDeviceIsOwner ?: return null
+    val chosen = if (owner) LocalOwnerMemberId else LocalPartnerMemberId
+    val previous = previousMemberId ?: return null
+    if (chosen == previous) return null
+    val count = localOnlyByAuthor[previous] ?: 0
+    if (count == 0) return null
+    val name = if (owner) ownerName.ifBlank { "1. profil" } else partnerName.ifBlank { "2. profil" }
+    return "Bu cihazda daha önce girilen $count kayıt da $name adına aktarılır."
+}
+
 sealed interface ProfileSetupIntent {
     /** Ekran her gorundugunde: oturuma bakar, girisliyse hesabi indirir. */
     data object Load : ProfileSetupIntent
     data object Retry : ProfileSetupIntent
+
+    /** Cakismada "Hesaptakileri kullan" ya da "Birleştir": secim ekranina gecer. */
+    data class ChooseConflict(val choice: ConflictChoice) : ProfileSetupIntent
+
+    /** Secim ekranindan cakisma sorusuna geri doner (secim degistirilebilsin). */
+    data object BackToConflict : ProfileSetupIntent
 
     /** Hesaba ulasilamadi; yereldeki adlarla yalniz secim yapilir. */
     data object ContinueOffline : ProfileSetupIntent

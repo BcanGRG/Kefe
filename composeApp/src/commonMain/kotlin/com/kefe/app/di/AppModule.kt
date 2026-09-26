@@ -25,6 +25,7 @@ import com.kefe.app.data.repository.SqlDelightPlanRepository
 import com.kefe.app.data.repository.SqlDelightPortfolioRepository
 import com.kefe.app.data.repository.SqlDelightPreferencesRepository
 import com.kefe.app.data.repository.SqlDelightPriceRepository
+import com.kefe.app.data.sync.AccountLinker
 import com.kefe.app.data.sync.PullEngine
 import com.kefe.app.data.sync.PushEngine
 import com.kefe.app.data.sync.SyncCoordinator
@@ -119,6 +120,9 @@ val appModule = module {
     single { SyncLocalSink(get()) }
     single { PushEngine(get(), get(), get(), get(), get()) }
     single { PullEngine(get(), get(), get()) }
+    // Hesaba baglanma: once bakar (hicbir sey yazmadan), karar verilince tek
+    // islemde yazar. Baglanti anahtarini yalniz o yazar.
+    single { AccountLinker(get(), get(), get(), get()) }
     // Kordinator surec-omurlu durumunu (SyncRuntime.Process) kendisi tasir;
     // Koin grafigi yeniden kurulsa da yeni ornek ayni durumu gorur.
     single { SyncCoordinator(get(), get(), get(), get(), get(), get(), get()) }

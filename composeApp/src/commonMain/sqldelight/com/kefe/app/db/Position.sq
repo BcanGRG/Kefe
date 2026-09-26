@@ -165,3 +165,14 @@ WHERE id = :id;
 
 deleteAllPositions:
 DELETE FROM positions;
+
+-- Hesaba baglanirken: CANLI islemi olan pozisyon canli kalir. Pozisyon
+-- kimlikleri her portfoyde ayni (pos_<varlik>); hesabin bir zamanlar silmis
+-- oldugu ceyregin mezar tasi, bu cihazin hala tuttugu ceyregin ustune
+-- dusebiliyordu. Satir silinmis gorunur, islemleri canli kalir ve varlik
+-- toplamlardan sessizce kaybolurdu. Damga yenilenir: dirilis hesaba da gitmeli.
+revivePositionsWithLiveTransactions:
+UPDATE positions
+SET deletedAt = NULL, updatedAt = :updatedAt
+WHERE deletedAt IS NOT NULL
+  AND id IN (SELECT positionId FROM transactions WHERE deletedAt IS NULL);

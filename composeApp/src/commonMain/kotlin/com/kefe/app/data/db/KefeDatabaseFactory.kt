@@ -60,6 +60,36 @@ const val LocalPartnerMemberId: String = "member_partner"
 internal const val DefaultPortfolioName: String = "Birikimlerim"
 internal const val DefaultCurrency: String = "TRY"
 
+/**
+ * Kurulumun iki profilinin YER TUTUCU adlari. Damgalari 0 kalir (adlandirilmamis,
+ * bkz. Member.isNamed); ekranlar bunlari yazilmis bir ad saymaz.
+ */
+internal const val DefaultOwnerName: String = "Ben"
+internal const val DefaultPartnerName: String = "Eşim"
+
+/**
+ * Iki profili kurulumun adsiz haline dondurur (ad varsayilan, damga 0).
+ * Satirlar yoksa dokunmaz - eksik profili kurulum ekler.
+ *
+ * NEDEN. "Bu cihazı sıfırla" ve "Hesaptakileri kullan"dan sonra cihazda eski
+ * adlar DAMGALI kaliyordu. Sifirlanan cihaz baska bir hesaba baglaninca o adlar
+ * yeni hesaba itiliyor, kurulum da "Bu cihazda iki profil var" diye eski
+ * kisilerin adlarini soruyordu. Adsiz satiri hesap devralir, yerel ad hicbir
+ * yere gitmez.
+ */
+internal fun KefeDatabase.resetMembersToDefaults() {
+    portfolioQueries.resetMember(
+        name = DefaultOwnerName,
+        initials = DefaultOwnerName.take(1),
+        id = LocalOwnerMemberId,
+    )
+    portfolioQueries.resetMember(
+        name = DefaultPartnerName,
+        initials = DefaultPartnerName.take(1),
+        id = LocalPartnerMemberId,
+    )
+}
+
 internal const val BootstrapKey: String = "bootstrapVersion"
 internal const val BootstrapValue: String = "1"
 
@@ -92,15 +122,15 @@ fun KefeDatabase.bootstrapIfNeeded() {
         portfolioQueries.insertOrIgnoreMember(
             id = LocalOwnerMemberId,
             portfolioId = LocalPortfolioId,
-            name = "Ben",
-            initials = "B",
+            name = DefaultOwnerName,
+            initials = DefaultOwnerName.take(1),
             sortOrder = 0L,
         )
         portfolioQueries.insertOrIgnoreMember(
             id = LocalPartnerMemberId,
             portfolioId = LocalPortfolioId,
-            name = "Eşim",
-            initials = "E",
+            name = DefaultPartnerName,
+            initials = DefaultPartnerName.take(1),
             sortOrder = 1L,
         )
         writeNewDatabaseDefaults()

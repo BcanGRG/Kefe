@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kefe.app.data.sync.ConflictChoice
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
@@ -44,10 +45,12 @@ import com.kefe.app.ui.theme.Space
 /**
  * "Profiller / Bu telefon kimin?" adimi.
  *
- * Girisliyse once hesap indirilir ("Hesabınız getiriliyor…"). Hesapta profil
- * varsa adlar oradan gelir ve yalniz bu telefonun hangisi oldugu secilir;
- * yoksa iki ad yazilir. Girissizken alttaki "Hesaba bağla" hesaba gecirir -
- * o yol donuste bu ekrana geri gelir ve hesap indirilir.
+ * Girisliyse once hesaba bakilir ("Hesabınız kontrol ediliyor…") - cihaza
+ * HENUZ bir sey yazilmaz. Cihazda da hesapta da kayit varsa once ne olacagi
+ * sorulur ("Hesaptakileri kullan" / "Birleştir" / "Vazgeç"). Hesapta profil
+ * varsa adlar oradan gelir ve yalniz bu telefonun hangisi oldugu secilir; yoksa
+ * iki ad yazilir. "Devam" hepsini tek islemde yazar. Girissizken alttaki
+ * "Hesaba bağla" hesaba gecirir - o yol donuste bu ekrana geri gelir.
  *
  * Secim onemlidir: bu telefondan eklenen her islem secilen profile yazilir.
  *
@@ -56,6 +59,11 @@ import com.kefe.app.ui.theme.Space
  * [onUseAnotherEmail]: girisliyken "Farklı e-postayla gir" - oturumu birakir ve
  * giris ekranini yeniden acar. Baglanti henuz yazilmadigi icin (bkz.
  * ProfileSetupViewModel) hicbir kayit etkilenmez.
+ *
+ * [onCancelLink]: cakismada "Vazgeç" - yalniz bu cihazin oturumu kapanir, akisin
+ * basladigi yere donulur. Hicbir sey yazilmamistir.
+ *
+ * [onBackup]: cakismada "Önce yedek al" - Ayarlar'daki yedekle ayni is.
  */
 @Composable
 fun ProfileSetupScreen(
@@ -65,6 +73,8 @@ fun ProfileSetupScreen(
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
     onUseAnotherEmail: () -> Unit = {},
+    onCancelLink: () -> Unit = {},
+    onBackup: () -> Unit = {},
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
@@ -72,6 +82,12 @@ fun ProfileSetupScreen(
     LaunchedEffect(state.done) { if (state.done) onDone() }
 
     val picking = state.phase == ProfileSetupPhase.Ready && !state.editingNames
+    val conflict = conflictCopy(state.conflictLocal, state.conflictServer)
+    val title = when {
+        state.phase == ProfileSetupPhase.Conflict -> conflict.title
+        picking -> "Bu telefon kimin?"
+        else -> "Profiller"
+    }
 
     Column(
         modifier
@@ -85,7 +101,7 @@ fun ProfileSetupScreen(
                 .fillMaxWidth()
                 .padding(start = Space.x24, end = Space.x24, top = Space.x40),
         ) {
-            Text(if (picking) "Bu telefon kimin?" else "Profiller", style = t.h1, color = c.onSurface)
+            Text(title, style = t.h1, color = c.onSurface)
             Spacer(Modifier.height(6.dp))
 
             when (state.phase) {
@@ -93,20 +109,32 @@ fun ProfileSetupScreen(
                 // parlayip "getiriliyor"a donmesin.
                 ProfileSetupPhase.Checking -> Unit
 
+                // Bu asamada hicbir sey YAZILMAZ: hesaba yalniz bakilir (bkz.
+                // AccountLinker.preview). "İndiriliyor" demek dogru - cihaza
+                // ancak kullanici karar verince uygulanir.
                 ProfileSetupPhase.Syncing -> {
-                    BodyText("Hesabınız getiriliyor… Profilleriniz ve kayıtlarınız buluttan indiriliyor.")
+                    BodyText("Hesabınız kontrol ediliyor… Hesaptaki profiller ve kayıtlar indiriliyor.")
                     Spacer(Modifier.height(Space.x28))
                     AccountFilledButton(
-                        text = "Getiriliyor…",
+                        text = "Kontrol ediliyor…",
                         onClick = {},
                         modifier = Modifier.fillMaxWidth(),
                         enabled = false,
                     )
                 }
 
+                ProfileSetupPhase.Conflict -> ConflictContent(
+                    copy = conflict,
+                    onIntent = onIntent,
+                    onCancel = onCancelLink,
+                    onBackup = onBackup,
+                )
+
                 ProfileSetupPhase.Failed -> {
+                    // Hesaba ulasilamadi mi, yoksa baglanti cihaza mi
+                    // yazilamadi: iki ayri metin (bkz. failureMessage).
                     Text(
-                        "Hesabınıza ulaşılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.",
+                        state.failureMessage(),
                         style = t.body.copy(lineHeight = 22.sp),
                         color = c.negative,
                     )
@@ -191,6 +219,17 @@ private fun ReadyContent(
         onClick = { onIntent(ProfileSetupIntent.SelectThisDevice(false)) },
     )
 
+    // Secim eski profilden farkliysa cihazda girilmis kayitlarin akibeti; cakisma
+    // secildiyse "Devam"in ne yapacagi. "Devam"dan ONCE okunmali.
+    state.remapNote()?.let { note ->
+        Spacer(Modifier.height(Space.x10))
+        Text(note, style = t.micro, color = c.onSurfaceMuted)
+    }
+    state.choiceNote()?.let { note ->
+        Spacer(Modifier.height(Space.x10))
+        Text(note, style = t.micro, color = c.onSurfaceMuted)
+    }
+
     Spacer(Modifier.height(Space.x28))
     AccountFilledButton(
         text = if (state.saving) "Kaydediliyor…" else "Devam",
@@ -198,6 +237,19 @@ private fun ReadyContent(
         modifier = Modifier.fillMaxWidth(),
         enabled = state.canSave,
     )
+
+    // Cakismadan gelindiyse secim geri alinabilir: "Hesaptakileri kullan"i
+    // yanlislikla secen kullanici cihazdakileri silmeden donebilmeli.
+    if (state.conflictChoice != null) {
+        Spacer(Modifier.height(Space.x8))
+        AccountFlatButton(
+            text = "Seçimi değiştir",
+            onClick = { onIntent(ProfileSetupIntent.BackToConflict) },
+            contentColor = c.onSurfaceMuted,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !state.saving,
+        )
+    }
 
     // Adsiz secimde (hesap indirilemeden gecildi) duzenleme yok: yazilan adlar
     // hesap indiginde hesabinkilerle degisir (bkz. canEditNames).
@@ -290,6 +342,79 @@ private fun AccountFooter(state: ProfileSetupUiState, onUseAnotherEmail: () -> U
                     onClick = onUseAnotherEmail,
                 ),
         )
+    }
+}
+
+/**
+ * Cihazda da hesapta da kayit var: ne olacagini kullanici secer. Uc yol esit
+ * agirlikta degil - ikisi kart (ne olacagi altinda yazili), "Vazgeç" duz
+ * dugme. Hicbiri varsayilan degil; secilene kadar hicbir sey yazilmaz.
+ */
+@Composable
+private fun ConflictContent(
+    copy: ConflictCopy,
+    onIntent: (ProfileSetupIntent) -> Unit,
+    onCancel: () -> Unit,
+    onBackup: () -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    BodyText(copy.body)
+    Spacer(Modifier.height(Space.x28))
+
+    ConflictOption(
+        title = copy.useAccountTitle,
+        note = copy.useAccountNote,
+        onClick = { onIntent(ProfileSetupIntent.ChooseConflict(ConflictChoice.UseAccount)) },
+    )
+    // Silinecek olanin yedegi secmeden ONCE alinabilsin. Ayarlar'daki yedekle
+    // ayni is; dosya kullanicinin sectigi yere gider, ekran burada kalir.
+    Text(
+        "Önce yedek al",
+        style = t.caption.copy(fontWeight = FontWeight.SemiBold),
+        color = c.accent,
+        modifier = Modifier
+            .padding(top = Space.x8, start = Space.x4)
+            .clickable(
+                indication = null,
+                interactionSource = null,
+                role = Role.Button,
+                onClick = onBackup,
+            ),
+    )
+    Spacer(Modifier.height(Space.x16))
+    ConflictOption(
+        title = copy.mergeTitle,
+        note = copy.mergeNote,
+        onClick = { onIntent(ProfileSetupIntent.ChooseConflict(ConflictChoice.Merge)) },
+    )
+
+    Spacer(Modifier.height(Space.x16))
+    AccountFlatButton(
+        text = "Vazgeç",
+        onClick = onCancel,
+        contentColor = c.onSurfaceMuted,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** Cakisma secenegi: baslik ve ne olacagini soyleyen not. */
+@Composable
+private fun ConflictOption(title: String, note: String, onClick: () -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onClick)
+            .background(c.surfaceElevated, KefeShapes.button)
+            .border(Sizes.hairline, c.outline, KefeShapes.button)
+            .padding(horizontal = Space.x14, vertical = Space.x12),
+    ) {
+        Text(title, style = t.bodyStrong, color = c.onSurface)
+        Spacer(Modifier.height(Space.x4))
+        Text(note, style = t.micro, color = c.onSurfaceMuted)
     }
 }
 

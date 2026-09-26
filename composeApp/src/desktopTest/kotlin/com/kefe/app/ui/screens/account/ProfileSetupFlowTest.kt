@@ -9,6 +9,7 @@ import com.kefe.app.data.remote.PostgrestApi
 import com.kefe.app.data.repository.NoPrices
 import com.kefe.app.data.repository.SqlDelightPortfolioRepository
 import com.kefe.app.data.repository.SqlDelightPreferencesRepository
+import com.kefe.app.data.sync.AccountLinker
 import com.kefe.app.data.sync.MemberDto
 import com.kefe.app.data.sync.PullEngine
 import com.kefe.app.data.sync.SyncLocalSink
@@ -110,7 +111,12 @@ class ProfileSetupFlowTest {
             database.bootstrapIfNeeded()
             repo = SqlDelightPortfolioRepository(database, FixedKefeClock(millis = 9_000L), NoPrices())
             prefs = SqlDelightPreferencesRepository(database)
-            vm = ProfileSetupViewModel(repo, prefs, auth, PullEngine(auth, api, SyncLocalSink(database)))
+            val sink = SyncLocalSink(database)
+            val pull = PullEngine(auth, api, sink)
+            vm = ProfileSetupViewModel(
+                repo, prefs, auth, pull,
+                AccountLinker(pull, sink, prefs, FixedKefeClock(millis = 9_000L)),
+            )
         }
 
         fun cloudMembers(owner: String = "Burak Can", partner: String = "Merve") {
@@ -256,7 +262,12 @@ class ProfileSetupFlowTest {
         assertNull(e.prefs.get(PreferenceKeys.CloudLinkUserId))
     }
 
-    /** Ekranda beklerken oturum kapandiysa indirilen hesaba baglanilmaz. */
+    /**
+     * Ekranda beklerken oturum kapandiysa onizlenen hesaba baglanilmaz ve
+     * secim de YAZILMAZ: secim hesabin adlarina gore yapilmisti, cihaza inmemis
+     * adlarla yazilsa telefon yanlis kisi olurdu. Ekran girissiz haliyle
+     * yeniden yuklenir.
+     */
     @Test
     fun `oturum kapandiysa baglanti yazilmaz`() = runTest {
         val e = Env(signedIn = true)
@@ -267,15 +278,19 @@ class ProfileSetupFlowTest {
         e.auth.state.value = AuthState.SignedOut
         e.vm.onIntent(ProfileSetupIntent.SelectThisDevice(true))
         e.vm.onIntent(ProfileSetupIntent.Save)
-        e.awaitDone()
+        val s = realTime { e.vm.state.first { it.phase == ProfileSetupPhase.Ready && !it.signedIn } }
 
+        assertFalse(s.done)
+        assertTrue(s.editingNames, "girissiz, adsiz cihaz: olusturma")
         assertNull(e.prefs.get(PreferenceKeys.CloudLinkUserId))
-        assertEquals(LocalOwnerMemberId, e.prefs.get(PreferenceKeys.ActiveMemberId))
+        assertNull(e.prefs.get(PreferenceKeys.ActiveMemberId))
+        assertEquals(listOf(0L, 0L), e.stamps(), "hesabin adlari cihaza inmemeli")
     }
 
     /**
-     * Ayarlar'dan giren kurulu cihaz: yerelde adlandirilmis profiller hesabin
-     * adlarina DEVREDER ve secim yeniden sorulur (onceki secim korunmaz).
+     * Ayarlar'dan giren kurulu cihaz: secim HESABIN adlariyla yeniden sorulur
+     * (onceki secim korunmaz). Onizlemede cihaza hicbir sey yazilmaz; "Devam"
+     * hesabin adlarini devralir.
      */
     @Test
     fun `bagli olmayan cihaz hesabin adlarini devralir ve yeniden sorar`() = runTest {
@@ -287,9 +302,16 @@ class ProfileSetupFlowTest {
         e.vm.onIntent(ProfileSetupIntent.Load)
         val s = e.awaitPhase(ProfileSetupPhase.Ready)
 
-        assertEquals(listOf("Burak Can", "Merve"), e.names())
+        assertEquals(listOf("Merve", "Burak"), e.names(), "onizleme bir sey yazmaz")
         assertEquals("Burak Can", s.ownerName)
+        assertTrue(s.accountHasProfiles)
         assertNull(s.thisDeviceIsOwner, "secim yeniden sorulmali")
+
+        e.vm.onIntent(ProfileSetupIntent.SelectThisDevice(false))
+        e.vm.onIntent(ProfileSetupIntent.Save)
+        e.awaitDone()
+        assertEquals(listOf("Burak Can", "Merve"), e.names())
+        assertEquals(LocalPartnerMemberId, e.prefs.get(PreferenceKeys.ActiveMemberId))
     }
 
     /**
@@ -325,12 +347,13 @@ class ProfileSetupFlowTest {
         e.prefs.put(PreferenceKeys.LastSyncedAt, "4000")
         e.cloudMembers()
         e.vm.onIntent(ProfileSetupIntent.Load)
-        e.awaitPhase(ProfileSetupPhase.Ready)
-        assertEquals("Burak Can", e.names().first())
+        val s = e.awaitPhase(ProfileSetupPhase.Ready)
+        assertEquals("Burak Can", s.ownerName)
 
         e.vm.onIntent(ProfileSetupIntent.SelectThisDevice(true))
         e.vm.onIntent(ProfileSetupIntent.Save)
         e.awaitDone()
+        assertEquals("Burak Can", e.names().first(), "baglanti hesabin adlarini devralir")
         assertEquals("u1", e.prefs.get(PreferenceKeys.CloudLinkUserId))
         assertNull(e.prefs.get(PreferenceKeys.LastPushedAt), "yeni hesaba her sey bastan gitmeli")
         assertNull(e.prefs.get(PreferenceKeys.LastSyncedAt), "onceki baglantinin ani gosterilmez")

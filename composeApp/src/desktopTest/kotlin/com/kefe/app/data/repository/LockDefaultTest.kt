@@ -111,8 +111,11 @@ class LockDefaultTest {
 
         val members = db.portfolioQueries.selectMembers().executeAsList()
         assertEquals(listOf(LocalOwnerMemberId, LocalPartnerMemberId), members.map { it.id })
-        // Var olan profile dokunulmaz (INSERT OR IGNORE); yalniz eksik olan gelir.
-        assertEquals("Volkan", members.first { it.id == LocalOwnerMemberId }.name)
+        // Var olan profil SILINMEZ, adsiz haline doner (sifirlanan cihaz yeni
+        // bir kurulumdur); eksik olani kurulum ekler.
+        val owner = members.first { it.id == LocalOwnerMemberId }
+        assertEquals("Ben", owner.name)
+        assertEquals(0L, owner.updatedAt)
         assertEquals("Eşim", members.first { it.id == LocalPartnerMemberId }.name)
         assertEquals(BootstrapValue, db.settingQueries.selectSetting(BootstrapKey).executeAsOneOrNull())
         assertEquals("false", db.lockValue())

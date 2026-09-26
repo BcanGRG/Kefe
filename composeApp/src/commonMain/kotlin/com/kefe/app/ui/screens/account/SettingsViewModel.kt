@@ -111,6 +111,17 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * Cikis onayini acar. Gitmemis degisiklik o an sorulur: onay metni "çıkarsanız
+     * yalnız bu cihazda kalır" diyecekse bunu bilmeli.
+     */
+    private fun askSignOut() {
+        viewModelScope.launch {
+            val unsent = runCatching { syncCoordinator.hasUnsentChanges() }.getOrDefault(false)
+            setState { copy(confirmSignOut = true, unsentChanges = unsent) }
+        }
+    }
+
     override fun onIntent(intent: SettingsIntent) {
         when (intent) {
             is SettingsIntent.SelectTheme -> put(PreferenceKeys.ThemeMode, intent.mode.name)
@@ -128,11 +139,27 @@ class SettingsViewModel(
 
             SettingsIntent.Backup -> exportBackup()
             SettingsIntent.ExportCsv -> exportCsv()
-            SettingsIntent.Restore -> setState { copy(confirmRestore = true) }
+            // Bagli cihazda geri yukleme KAPALI (bkz. restoreLocked): satir
+            // soluk durur, dokununca nedenini ve cikis yolunu soyler.
+            SettingsIntent.Restore ->
+                if (restoreLocked(current.cloudMode)) {
+                    emitEffect(SettingsEffect.Notice(restoreLockedMessage(current.cloudMode)))
+                } else {
+                    setState { copy(confirmRestore = true) }
+                }
             SettingsIntent.DismissRestoreConfirm -> setState { copy(confirmRestore = false) }
             SettingsIntent.ConfirmRestore -> restore()
 
-            SettingsIntent.SignOut, SettingsIntent.DropLink -> dropLink()
+            // Acik cikis ONAY ISTER: kayitlarin akibeti ve gitmemis degisiklik
+            // cikmadan once soylenir. "Vazgeç" (yarim baglanti) ve "Hesapsız
+            // devam et" (dusen oturum) sormaz - orada esitlenen bir sey yok.
+            SettingsIntent.SignOut -> askSignOut()
+            SettingsIntent.DismissSignOutConfirm -> setState { copy(confirmSignOut = false) }
+            SettingsIntent.ConfirmSignOut -> {
+                setState { copy(confirmSignOut = false) }
+                dropLink()
+            }
+            SettingsIntent.DropLink -> dropLink()
             SettingsIntent.SyncNow -> syncCoordinator.syncNow()
         }
     }
@@ -222,7 +249,13 @@ class SettingsViewModel(
      * bugunku portfoyunu kaybeder.
      */
     private fun restore() {
-        setState { copy(confirmRestore = false, working = true) }
+        setState { copy(confirmRestore = false) }
+        // Onay acikken baglanti kurulmus olabilir: kapi burada da tutulur.
+        if (restoreLocked(current.cloudMode)) {
+            emitEffect(SettingsEffect.Notice(restoreLockedMessage(current.cloudMode)))
+            return
+        }
+        setState { copy(working = true) }
         viewModelScope.launch {
             runCatching {
                 val text = files.pickText()
@@ -235,10 +268,28 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * "Tüm verileri sil" / "Bu cihazı sıfırla".
+     *
+     * Hesap isin icindeyse (bkz. resetsAccount) ONCE hesaptan cikilir (yalniz bu
+     * cihazin oturumu), SONRA silinir. NEYDI: yalniz silinirdi; oturum ve
+     * baglanti durdugu icin silmenin tetikledigi push -> pull ~1,5 sn icinde
+     * hesabin tum kayitlarini geri indiriyordu. Ters sira da olmaz: silme ile
+     * cikis arasinda gelen bir pull ayni isi yapardi. Silme de pull'larla ayni
+     * kilitte calisir (bkz. SyncCoordinator.resetDevice): cikis aninda zaten
+     * suren bir pull, silmeden sonra bitip hesabi geri yazmasin.
+     */
     private fun deleteAll() {
+        val resets = resetsAccount(current.cloudMode)
         setState { copy(confirmDelete = false, deleting = true) }
         viewModelScope.launch {
-            runCatching { portfolioRepository.deleteAllData() }
+            runCatching {
+                if (resets) {
+                    syncCoordinator.resetDevice { portfolioRepository.deleteAllData() }
+                } else {
+                    portfolioRepository.deleteAllData()
+                }
+            }
                 .onSuccess { emitEffect(SettingsEffect.AllDataDeleted) }
                 .onFailure { emitEffect(SettingsEffect.DeleteFailed(it.message ?: "Silinemedi.")) }
             setState { copy(deleting = false) }
@@ -272,6 +323,12 @@ class SettingsViewModel(
                     lockAvailable = lockRowVisible(availability),
                     prefsLoaded = true,
                     activeMemberId = prefs[PreferenceKeys.ActiveMemberId],
+                    // Bu cihazin profili OLMAYAN, adlandirilmis profil: onay
+                    // metinleri "Merve'nin telefonu" diyebilsin. Profil secilmediyse
+                    // ya da es adsizsa null ("eşinizin telefonu").
+                    partnerName = prefs[PreferenceKeys.ActiveMemberId]?.let { active ->
+                        members.firstOrNull { it.id != active && it.isNamed }?.name
+                    },
                     // Yedek satirinin sagi: son yedek tarihi. Bos ise "Henüz
                     // alınmadı" - once bu etiket hicbir zaman yazilmiyor ve yedek
                     // alindiktan sonra bile bos kaliyordu.

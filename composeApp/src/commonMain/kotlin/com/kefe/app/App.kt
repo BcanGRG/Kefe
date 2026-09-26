@@ -152,6 +152,9 @@ private const val NotReadyMessage = "Bu bölüm henüz hazır değil."
  */
 private const val DroppedLinkMessage = "Hesaptan çıkıldı. Kayıtlarınız bu cihazda duruyor."
 
+/** Profil adimi cihazi bir hesaba YENI bagladiginda. */
+private const val LinkedMessage = "Hesaba bağlandı — eşitleme açık."
+
 /**
  * [onReady] uygulamanin ilk gercek karesini cizmeye hazir oldugunu bildirir.
  * Android'de sistemin acilis penceresi bu ana kadar ekranda tutulur; masaustu ve
@@ -428,6 +431,43 @@ private fun KefeApp(
         }
     }
 
+    /**
+     * Profil adiminda (cakismada) "Vazgeç": YALNIZ bu cihazin oturumu kapanir,
+     * akisin basladigi yere donulur. Hicbir sey yazilmamistir - hesaba bakildi,
+     * o kadar.
+     *
+     * Baglanti anahtarlarina dokunulmaz (bkz. useAnotherEmail): burada bir
+     * baglanti varsa baska bir hesaba aittir ve korunmali.
+     *
+     * Profil adimi uygulamanin ustune itildiyse o kapanir. Kokse (ilk kurulum
+     * yarida) kok acilistaki kurala gore yeniden secilir; profil adimi kok
+     * kalirsa girdisi ayni oldugu icin yeniden yuklenmez - elle yuklenir.
+     */
+    fun cancelLink() {
+        if (switchingEmail) return
+        switchingEmail = true
+        scope.launch {
+            try {
+                authRepository.signOut()
+                profileSetupVm.onIntent(ProfileSetupIntent.Reset)
+                if (backStack.size > 1) {
+                    goBack()
+                } else {
+                    val root = rootFor(
+                        locked = false,
+                        onboarded = onboarded == true,
+                        activeMemberId = settings.activeMemberId,
+                        signedIn = false,
+                    )
+                    backStack[0] = root
+                    if (root == ProfileSetupKey) profileSetupVm.onIntent(ProfileSetupIntent.Load)
+                }
+            } finally {
+                switchingEmail = false
+            }
+        }
+    }
+
     // Ayarlar etkileri kabukta karsilanir: silme sonrasi yigini sifirlamak ve
     // seride mesaj gostermek ekranin isi degil.
     CollectEffects(settingsVm.effects) { effect ->
@@ -446,16 +486,23 @@ private fun KefeApp(
             //
             // Profil adiminin eski yazilari da silinir - sonraki kurulum temiz
             // baslar.
+            //
+            // Oturum ANLIK okunur: "Bu cihazı sıfırla" silmeden once hesaptan
+            // cikar ve bestelenmis `authState` henuz eski (girisli) olabilir -
+            // o zaman kok profil adimi olur ve hesap yeniden indirilirdi.
             SettingsEffect.AllDataDeleted -> {
                 saveError = "Tüm veriler silindi."
                 profileSetupVm.onIntent(ProfileSetupIntent.Reset)
-                while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-                backStack[0] = rootFor(
-                    locked = false,
-                    onboarded = false,
-                    activeMemberId = null,
-                    signedIn = authState is AuthState.SignedIn,
-                )
+                scope.launch {
+                    val auth = authRepository.observeAuthState().first { it !is AuthState.Unknown }
+                    while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                    backStack[0] = rootFor(
+                        locked = false,
+                        onboarded = false,
+                        activeMemberId = null,
+                        signedIn = auth is AuthState.SignedIn,
+                    )
+                }
             }
             is SettingsEffect.DeleteFailed -> saveError = effect.message
             SettingsEffect.NotReady -> saveError = NotReadyMessage
@@ -646,7 +693,17 @@ private fun KefeApp(
                                     val caller = backStack.firstOrNull() as? KefeKey
                                     val callerInShell = backStack.size > 1 && caller?.isAccountFlow() == false
                                     when (afterSignIn(mode, settings.activeMemberId, callerInShell)) {
-                                        AfterSignIn.ProfileSetup -> enterApp(forceProfileSetup = true)
+                                        // Uygulamanin icinden (Ayarlar, Ozet) gelindiyse profil
+                                        // adimi giris ekraninin YERINE itilir: bitince ya da
+                                        // "Vazgeç"te akisin basladigi yere donulur. NEYDI: yigin
+                                        // sifirlanip profil adimi kok oluyordu; Ayarlar'dan
+                                        // baglanan kullanici is bitince Ozet'e atiliyordu.
+                                        AfterSignIn.ProfileSetup ->
+                                            if (callerInShell) {
+                                                backStack[backStack.lastIndex] = ProfileSetupKey
+                                            } else {
+                                                enterApp(forceProfileSetup = true)
+                                            }
                                         AfterSignIn.ReturnToCaller -> goBack()
                                         AfterSignIn.EnterApp -> enterApp()
                                     }
@@ -700,12 +757,23 @@ private fun KefeApp(
                                     // bu ekrana doner ve hesap indirilir.
                                     onLink = { openSignIn(SignInPurpose.Link) },
                                     onUseAnotherEmail = { useAnotherEmail() },
-                                    // Kaydedilince Ozet'e. activeMemberId yazildigi
-                                    // icin enterApp artik ProfileSetup'a donmez.
+                                    onCancelLink = { cancelLink() },
+                                    // "Önce yedek al": Ayarlar'daki yedekle ayni is;
+                                    // sonucu kabugun seridi soyler.
+                                    onBackup = { settingsVm.onIntent(SettingsIntent.Backup) },
+                                    // Kaydedilince akisin basladigi yere: uygulamanin
+                                    // ustune itildiyse (Ayarlar, Ozet'teki "Tamamla")
+                                    // oraya doner, kokse Ozet'e gecer. Yeni baglanti
+                                    // tek cumleyle soylenir.
                                     onDone = {
+                                        val linked = profileState.linkedNow
                                         vm.onIntent(ProfileSetupIntent.Reset)
-                                        while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-                                        backStack[0] = SummaryKey
+                                        if (backStack.size > 1) {
+                                            goBack()
+                                        } else {
+                                            backStack[0] = SummaryKey
+                                        }
+                                        if (linked) saveError = LinkedMessage
                                     },
                                 )
                             }

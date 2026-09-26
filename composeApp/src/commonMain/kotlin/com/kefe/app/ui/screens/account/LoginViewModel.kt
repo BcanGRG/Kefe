@@ -4,11 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.data.remote.AuthException
 import com.kefe.app.domain.repository.AuthRepository
+import com.kefe.app.domain.repository.AuthState
+import com.kefe.app.domain.repository.PreferenceKeys
+import com.kefe.app.domain.repository.PreferencesRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -21,11 +25,16 @@ import kotlinx.coroutines.launch
  *
  * Kayit ile giris AYNI akistir: bu e-postayla hesap yoksa dogrulama onu acar.
  *
+ * Cihaz bir hesaba bagliyken baska bir hesapla girilemez (bkz.
+ * accountSwitchBlocked): kod dogru olsa da oturum bu cihazda kapatilir.
+ *
  * Acilis kilidi burada DEGIL (bkz. [LockViewModel]). VM surec boyunca yasar;
  * her acilista [LoginIntent.Begin] ile sifirlanir.
  */
 class LoginViewModel(
     private val authRepository: AuthRepository,
+    // Hesap degistirme engeli bu cihazin baglantisini okur (bkz. verifyCode).
+    private val preferences: PreferencesRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState())
@@ -45,10 +54,12 @@ class LoginViewModel(
             is LoginIntent.Begin -> begin(intent.email)
 
             is LoginIntent.ChangeEmail -> _state.value = _state.value.copy(
-                // Kullanici yazmaya baslayinca hata ve "gonderildi" bilgisi duser.
+                // Kullanici yazmaya baslayinca hata, engel ve "gonderildi"
+                // bilgisi duser.
                 email = intent.value.trim(),
                 emailError = null,
                 codeSent = false,
+                guard = null,
             )
 
             LoginIntent.SendCode -> sendCode()
@@ -146,9 +157,38 @@ class LoginViewModel(
             _state.value = current.copy(emailError = "Kod altı haneli olmalı")
             return
         }
-        _state.value = current.copy(verifying = true, emailError = null)
+        _state.value = current.copy(verifying = true, emailError = null, guard = null)
         verifyJob = viewModelScope.launch {
+            // Baglanti DOGRULAMADAN ONCE okunur: dogrulama bitince esitleme
+            // bir sonraki karede baslayabilir; o anki okuma yarisa girerdi.
+            val linkUserId = preferences.get(PreferenceKeys.CloudLinkUserId)
+            val linkEmail = preferences.get(PreferenceKeys.CloudLinkEmail)
             val error = authRepository.verifyCode(current.email, current.code).exceptionOrNull()
+            if (error == null) {
+                val session = (
+                    authRepository.observeAuthState().first { it !is AuthState.Unknown } as? AuthState.SignedIn
+                    )?.session
+                if (accountSwitchBlocked(linkUserId, session?.userId)) {
+                    // HESAP DEGISTIRME ENGELI. Bu cihazin kayitlari baska bir
+                    // hesaba ait: yeni hesaba baglanmak iki portfoyu karistirir.
+                    // Yeni oturum YALNIZ bu cihazda kapanir; baglanti ve kayitlar
+                    // yerinde kalir (mod "Oturum kapandı"ya doner, dogru hesapla
+                    // yeniden girilebilir). NEYDI: engel yoktu; yanlis e-postayla
+                    // giren cihaz profil adimina gidiyor, oradan iki hesabin
+                    // kayitlari birbirine akabiliyordu.
+                    authRepository.signOut()
+                    _state.value = _state.value.copy(
+                        verifying = false,
+                        signedIn = false,
+                        codeSent = false,
+                        code = "",
+                        resendCooldown = 0,
+                        guard = accountSwitchCopy(linkEmail),
+                    )
+                    cooldownJob?.cancel()
+                    return@launch
+                }
+            }
             _state.value = _state.value.copy(
                 verifying = false,
                 signedIn = error == null,

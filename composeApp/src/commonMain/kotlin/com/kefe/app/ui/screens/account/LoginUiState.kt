@@ -49,6 +49,11 @@ data class LoginUiState(
     val resendCooldown: Int = 0,
     /** Dogrulama basarili - cagiran taraf bir sonraki adima gecirir. */
     val signedIn: Boolean = false,
+    /**
+     * Kod dogru ama bu cihaz BASKA bir hesaba bagli: giris geri alindi (bkz.
+     * accountSwitchBlocked). Ekran nedenini ve cikis yolunu soyler.
+     */
+    val guard: SignInGuard? = null,
 ) {
     /** Bos ya da bicimsiz e-posta ile kod gonderilmez. */
     val canSendCode: Boolean get() = !sendingCode && email.isValidEmail()
@@ -117,6 +122,33 @@ fun signInCopy(purpose: SignInPurpose): SignInCopy = when (purpose) {
         note = "Şifre yok: e-postanıza tek kullanımlık bir kod gelir. " +
             "Bu cihazın bağlı olduğu e-postayla girin; eşitleme kaldığı yerden sürer.",
         warning = SameEmailWarning,
+    )
+}
+
+/** Girisin geri alindigi durumun metni: baslik ve ne yapilacagi. */
+data class SignInGuard(val title: String, val body: String)
+
+/**
+ * Hesap degistirme engeli. SAF.
+ *
+ * Cihaz bir hesaba BAGLIYSA ([linkUserId]) ve yeni oturum baska bir hesaba
+ * aitse giris kabul edilmez. Bu cihazin kayitlari bagli hesabin kopyasidir;
+ * baska bir hesaba baglamak iki portfoyu karistirirdi. Farkli hesap icin once
+ * "Bu cihazı sıfırla". Baglanti yoksa ya da ayni hesapsa engel yok.
+ */
+internal fun accountSwitchBlocked(linkUserId: String?, sessionUserId: String?): Boolean {
+    val link = linkUserId?.takeIf { it.isNotBlank() } ?: return false
+    val session = sessionUserId?.takeIf { it.isNotBlank() } ?: return false
+    return link != session
+}
+
+/** Engelin metni. Baglantinin e-postasi bilinmiyorsa adres yazilmaz. SAF. */
+internal fun accountSwitchCopy(linkEmail: String?): SignInGuard {
+    val owner = linkEmail?.takeIf { it.isNotBlank() }?.let { "$it hesabına" } ?: "başka bir hesaba"
+    return SignInGuard(
+        title = "Bu cihaz başka bir hesaba bağlı",
+        body = "Bu cihazdaki kayıtlar $owner ait. " +
+            "Farklı bir hesapla kullanmak için önce Ayarlar › Bu cihazı sıfırla.",
     )
 }
 

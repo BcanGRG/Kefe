@@ -178,6 +178,14 @@ UPDATE transactions
 SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE id = :id;
 
+-- Hesaba baglanirken bu telefon BASKA bir profil oldu: bu cihazda girilmis ve
+-- hesapta olmayan kayit yeni profile aktarilir (bkz. SyncLocalSink.remapAuthor).
+-- Damga yenilenir - aktarim da bir yazmadir ve hesaba gitmeli.
+remapTransactionAuthor:
+UPDATE transactions
+SET addedByMemberId = :memberId, updatedAt = :updatedAt
+WHERE id = :id;
+
 -- Pozisyon silinirken CASCADE zaten calisir; bu sorgu pragma foreign_keys kapali
 -- kalirsa diye acik yol birakir.
 deleteTransactionsByPosition:

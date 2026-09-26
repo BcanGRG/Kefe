@@ -164,6 +164,29 @@ class SyncCoordinator(
         if (auth is AuthState.SignedIn) authRepository.signOut()
     }
 
+    /**
+     * "Bu cihazı sıfırla": ONCE baglanti ve oturum birakilir, SONRA [wipe]
+     * pull'larla ayni kilitte calisir (bkz. [PullEngine.exclusive]).
+     *
+     * Iki koruma birlikte: kilit, o an suren bir pull'un silmeden SONRA
+     * uygulanmasini engeller (once o biter, sonra silinir); pull da uygulamadan
+     * once baglantiyi yeniden okur (bkz. pullLinked), kilidi silmeden sonra alan
+     * tur hicbir sey yazmaz. Yalniz sira (cikis, sonra silme) yetmiyordu: cikis
+     * yeni turlari durdurur, suren turu durdurmaz.
+     */
+    suspend fun resetDevice(wipe: suspend () -> Unit) {
+        dropLink()
+        pullEngine.exclusive { wipe() }
+    }
+
+    /**
+     * Hesaba henuz gitmemis yerel yazma var mi (bkz. [SyncLocalSource.hasChangesSince]).
+     * "Hesaptan çık" onayi bunu okur: cikis esitlemeyi durdurur, gitmemis
+     * degisiklik yalniz bu cihazda kalir - kullanici bunu cikmadan once bilmeli.
+     */
+    suspend fun hasUnsentChanges(): Boolean =
+        localSource.hasChangesSince(preferences.get(PreferenceKeys.LastPushedAt)?.toLongOrNull())
+
     // --- Isciler -----------------------------------------------------------
 
     /**
@@ -285,9 +308,16 @@ class SyncCoordinator(
 
     // Koordinator ASLA adlari devralmaz: devralma baglanti adiminin isi (hesap
     // indirilip "bu telefon kimin" sorulurken). Bagli cihazda pull duz LWW'dir.
+    //
+    // Uygulamadan once baglanti DISKTEN yeniden okunur: indirme surerken cihaz
+    // hesaptan cikmis ya da sifirlanmis olabilir. runtime.linkedUser yetmez -
+    // tercih akisindan gecikmeli guncellenir; dropLink ise diske beklenerek yazar.
     private suspend fun pullLinked() {
         requireToken()
-        pullEngine.pullOnce(adoptServerMembers = false)
+        val userId = runtime.linkedUser.value ?: return
+        pullEngine.pullOnce(adoptServerMembers = false) {
+            preferences.get(PreferenceKeys.CloudLinkUserId) == userId
+        }
     }
 
     // Bagli degilken gelen bildirim (baglanti tam o anda kalkti) durumu

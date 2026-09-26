@@ -56,7 +56,7 @@ class SignInFlowTest {
 
     @Test
     fun `acilis onceki denemenin izini siler`() = runTest {
-        val vm = LoginViewModel(GatedAuth())
+        val vm = LoginViewModel(GatedAuth(), MemoryPreferences())
         vm.toCodeStep()
         vm.onIntent(LoginIntent.VerifyCode)
         assertTrue(vm.state.value.signedIn)
@@ -74,7 +74,7 @@ class SignInFlowTest {
 
     @Test
     fun `yeniden giris e-postayla dolu acilir`() = runTest {
-        val vm = LoginViewModel(GatedAuth())
+        val vm = LoginViewModel(GatedAuth(), MemoryPreferences())
         vm.onIntent(LoginIntent.Begin(" burak@k.app "))
         assertEquals("burak@k.app", vm.state.value.email)
         assertTrue(vm.state.value.canSendCode)
@@ -85,7 +85,7 @@ class SignInFlowTest {
         val auth = GatedAuth()
         val gate = CompletableDeferred<Result<Unit>>()
         auth.verifyGate = gate
-        val vm = LoginViewModel(auth)
+        val vm = LoginViewModel(auth, MemoryPreferences())
         vm.toCodeStep()
         vm.onIntent(LoginIntent.VerifyCode)
         assertTrue(vm.state.value.verifying)
@@ -103,7 +103,7 @@ class SignInFlowTest {
         val auth = GatedAuth()
         val gate = CompletableDeferred<Result<Unit>>()
         auth.verifyGate = gate
-        val vm = LoginViewModel(auth)
+        val vm = LoginViewModel(auth, MemoryPreferences())
         vm.toCodeStep()
         vm.onIntent(LoginIntent.VerifyCode)
 

@@ -140,6 +140,24 @@ private fun SignInForm(
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
+    // Hesap degistirme engeli: kod dogruydu ama cihaz baska bir hesaba bagli.
+    // Formun USTUNDE durur - neden iceri alinmadigini ve cikis yolunu soyler;
+    // e-posta degisince kalkar.
+    state.guard?.let { guard ->
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(KefeShapes.boxSmall)
+                .background(c.surfaceSunken)
+                .padding(Space.x12),
+        ) {
+            Text(guard.title, style = t.bodyStrong, color = c.negative)
+            Spacer(Modifier.height(Space.x4))
+            Text(guard.body, style = t.micro.copy(lineHeight = 17.sp), color = c.onSurface)
+        }
+        Spacer(Modifier.height(Space.x16))
+    }
+
     // Kod gonderilmeden once e-posta, gonderildikten sonra kod kutusu. Ikisi
     // ayni anda durmaz: kullanicinin o an yapacagi tek bir is var.
     if (!state.codeSent) {
