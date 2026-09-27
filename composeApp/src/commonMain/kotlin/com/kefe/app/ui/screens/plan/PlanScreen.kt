@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -527,36 +529,34 @@ private fun MoneyFlowCardView(card: MoneyFlowCard, onIntent: (PlanIntent) -> Uni
     val t = KefeTheme.type
 
     KefeCard(Modifier.fillMaxWidth()) {
-        Text("Para akışı", style = t.bodyStrong, color = c.onSurface)
-
-        card.table?.let { rows ->
-            Spacer(Modifier.height(Space.x12))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.weight(1f))
-                FlowHeaderCell("Plan")
-                FlowHeaderCell("Gerçekleşen")
-            }
-            rows.forEach { row ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        // Satir tek cumle okunur ("Gelir: plan ₺85.000, gerçekleşen yok");
-                        // uc ayri hucre birbirinden kopuk okunurdu.
-                        .semantics(mergeDescendants = true) { contentDescription = row.spoken }
-                        .padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(row.label, style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
-                    FlowValueCell(row.planned)
-                    FlowValueCell(row.actual)
-                }
-            }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Para akışı", style = t.bodyStrong, color = c.onSurface, modifier = Modifier.weight(1f))
+            Text(card.caption, style = t.caption, color = c.onSurfaceMuted)
         }
 
-        val lines = listOfNotNull(card.savingsLine, card.planShareLine, card.salesLine)
-        if (lines.isNotEmpty()) {
+        card.lines?.let { lines ->
             Spacer(Modifier.height(Space.x8))
-            lines.forEach { line -> Text(line, style = t.caption.tabular(), color = c.onSurfaceMuted) }
+            lines.forEach { line ->
+                // Sonuc satiri hesabin altinda, cizgiyle ayrilir: "= Elde kalan".
+                if (line.kind == FlowLineKind.Remaining) {
+                    Spacer(Modifier.height(Space.x4))
+                    KefeHairline()
+                    Spacer(Modifier.height(Space.x4))
+                }
+                FlowLineRow(line)
+            }
+        }
+        card.emptyHint?.let { hint ->
+            Spacer(Modifier.height(Space.x8))
+            Text(hint, style = t.caption, color = c.onSurfaceMuted)
+        }
+        card.split?.let { split ->
+            Spacer(Modifier.height(Space.x12))
+            FlowSplitBar(split)
+        }
+        card.planLine?.let { line ->
+            Spacer(Modifier.height(Space.x12))
+            Text(line, style = t.caption.tabular(), color = c.onSurfaceMuted)
         }
 
         if (card.incomeRows.isNotEmpty()) {
@@ -569,28 +569,89 @@ private fun MoneyFlowCardView(card: MoneyFlowCard, onIntent: (PlanIntent) -> Uni
     }
 }
 
+/**
+ * Hesabin bir satiri: isaret ("−", "="), ad, altinda not, sagda tutar. Satir tek
+ * cumle okunur ("Giderler ₺1.500, bütçe yok"); parcalar birbirinden kopuk okunurdu.
+ */
 @Composable
-private fun FlowHeaderCell(text: String) {
-    Text(
-        text = text,
-        style = KefeTheme.type.micro,
-        color = KefeTheme.colors.onSurfaceMuted,
-        textAlign = TextAlign.End,
-        maxLines = 1,
-        modifier = Modifier.width(FlowColumnWidth),
-    )
+private fun FlowLineRow(line: FlowLine) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    val result = line.kind == FlowLineKind.Remaining
+    val style = if (result) t.bodyStrong else t.body
+    val sign = when (line.kind) {
+        FlowLineKind.Income -> ""
+        FlowLineKind.Expense, FlowLineKind.Invest -> "−"
+        FlowLineKind.Remaining -> "="
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) { contentDescription = line.spoken }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(sign, style = style, color = c.onSurfaceMuted, modifier = Modifier.width(FlowSignWidth))
+        Column(Modifier.weight(1f)) {
+            Text(line.label, style = style, color = c.onSurface)
+            line.note?.let { note ->
+                Text(note, style = t.micro.tabular(), color = c.onSurfaceMuted)
+            }
+        }
+        Spacer(Modifier.width(Space.x8))
+        Text(
+            text = line.amount,
+            style = style.tabular(),
+            color = if (line.negative) c.negative else c.onSurface,
+            maxLines = 1,
+        )
+    }
 }
 
+/**
+ * Gelirin nereye gittigi: gider, yatirim ve kalan tek cubukta. Renk tek basina
+ * sinyal degil - anahtar her payi yazar, asim ayrica metinle soylenir.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FlowValueCell(text: String) {
-    Text(
-        text = text,
-        style = KefeTheme.type.body.tabular(),
-        color = KefeTheme.colors.onSurface,
-        textAlign = TextAlign.End,
-        maxLines = 1,
-        modifier = Modifier.width(FlowColumnWidth),
+private fun FlowSplitBar(split: FlowSplit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    val parts = listOf(
+        Triple(split.expense, c.onSurfaceMuted, "gider ${split.expenseText}"),
+        Triple(split.invest, c.accent, "yatırım ${split.investText}"),
+        Triple(split.remaining, c.positive, "kalan ${split.remainingText}"),
     )
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(FlowBarHeight)
+            .clip(CircleShape)
+            .background(c.surfaceSunken),
+    ) {
+        parts.filter { it.first > 0f }.forEach { (share, color, _) ->
+            Box(Modifier.weight(share).fillMaxHeight().background(color))
+        }
+    }
+    Spacer(Modifier.height(Space.x8))
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(Space.x12),
+        verticalArrangement = Arrangement.spacedBy(Space.x4),
+    ) {
+        parts.forEach { (_, color, label) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(FlowSwatch).clip(CircleShape).background(color))
+                Spacer(Modifier.width(6.dp))
+                Text(label, style = t.micro.tabular(), color = c.onSurfaceMuted)
+            }
+        }
+    }
+    split.deficitText?.let { text ->
+        Spacer(Modifier.height(Space.x4))
+        Text(text, style = t.micro.tabular(), color = c.negative)
+    }
 }
 
 @Composable
@@ -794,7 +855,9 @@ private val MonthTitleMinWidth = 132.dp
 private val AssetBoxSize = 36.dp
 
 /** Para akisi tablosunun Plan ve Gerçekleşen sutunlari - "₺185.000" sigar. */
-private val FlowColumnWidth = 104.dp
+private val FlowSignWidth = 18.dp
+private val FlowBarHeight = 10.dp
+private val FlowSwatch = 8.dp
 
 /** Bos durum dugmeleri genis ekranda satir boyu uzamasin. */
 private val EmptyActionsMaxWidth = 320.dp

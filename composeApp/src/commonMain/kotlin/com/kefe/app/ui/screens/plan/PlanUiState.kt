@@ -183,29 +183,71 @@ data class GoalContributionRow(
 // --- Para akisi ve giderler ----------------------------------------------------
 
 /**
- * "Para akışı" karti. Hic girilmemis bir rakam "—" kalir, 0 degil: gider
- * girilmemis bir ay "Tasarruf oranı %100" demez (bkz. PlanDerive.moneyFlowCard).
+ * "Para akışı" karti - bir HESAP gibi okunur: gelirden gider ve yatirim dusulur,
+ * altta elde kalan cikar; altinda gelirin nereye gittigini gosteren tek cubuk.
+ *
+ * NEYDI: "Plan / Gerçekleşen" iki sutunlu dort satirlik bir tabloydu. "Kalan:
+ * ₺10.851 / ₺83.500" neyin neyden cikarildigini soylemiyor, "Tasarruf oranı %98"
+ * yatirilmamis parayi da tasarruf sayiyordu. Plan artik satirin altinda kucuk bir
+ * not ("planlanan ₺74.149") ve kartin sonunda tek bir cumle.
+ *
+ * Hic girilmemis bir rakam "—" kalir, 0 degil: gider girilmemis bir ay elde
+ * kalani gelirin kendisi diye yazmaz (bkz. PlanDerive.moneyFlowCard).
  */
 data class MoneyFlowCard(
-    /** Gelir, Gider, Yatırım, Kalan; karsilastiracak hicbir sey yoksa null (tablo cizilmez). */
-    val table: List<FlowRow>?,
-    /** "Tasarruf oranı %32" | "Gider gelirin %112'si" | null (gelir ya da gider yok, gelecek ay). */
-    val savingsLine: String?,
-    /** "Plan gelirin %38'i". */
-    val planShareLine: String?,
-    /** "Satışlar ₺12.000" - net yatirim ile brut alim arasindaki farki aciklar. */
-    val salesLine: String?,
+    /** Basligin yanindaki not: "Bu ay şimdiye kadar" | "Ay sonu" | "Plan". */
+    val caption: String,
+    /** Gelir, Giderler, Yatirima giden, Elde kalan; gosterecek hicbir sey yoksa null. */
+    val lines: List<FlowLine>?,
+    /** [lines] null iken: ne girilince hesaplanacagi. */
+    val emptyHint: String?,
+    /** Gelirin dagilimi; gelir ya da gider girilmediyse ve gelecek ayda null. */
+    val split: FlowSplit?,
+    /** "Plana göre ₺74.149 yatırıma gidecek, ay sonunda ₺10.851 kalacak." - yalniz bu ay. */
+    val planLine: String?,
     /** Her uye - gelir girisinin kapisi, girilmemisse tutar "—". */
     val incomeRows: List<IncomeRowUi>,
 )
 
-data class FlowRow(
+enum class FlowLineKind {
+    Income,
+
+    /** Gelirden dusulen: satir "−" ile baslar. */
+    Expense,
+    Invest,
+
+    /** Hesabin sonucu: ustunde cizgi, satir "=" ile baslar. */
+    Remaining,
+}
+
+data class FlowLine(
+    val kind: FlowLineKind,
+    /** "Gelir", "Giderler", "Yatırıma giden", "Elde kalan"; gelecek ayda plan adlari. */
     val label: String,
-    /** Bilinmeyen "—". */
-    val planned: String,
-    val actual: String,
-    /** Ekran okuyucu tek cumle okur: "Gelir: plan ₺85.000, gerçekleşen ₺85.000"; "—" -> "yok". */
+    /** "₺85.000" | "−₺12.000" (acik) | "—" (girilmedi). */
+    val amount: String,
+    /** "bütçe ₺25.000" | "bütçe yok" | "planlanan ₺74.149" | "girilmedi"; yoksa null. */
+    val note: String?,
+    /** Elde kalan eksiye dustu: tutar uyari renginde. */
+    val negative: Boolean = false,
+    /** Ekran okuyucu tek cumle: "Giderler ₺1.500, bütçe yok". */
     val spoken: String,
+)
+
+/**
+ * Gelirin dagilimi, 0..1 paylar. Gider ve yatirim geliri astiysa ikisi toplamla
+ * olceklenir ve [remaining] 0 olur; acik [deficitText]'te yazar.
+ */
+data class FlowSplit(
+    val expense: Float,
+    val invest: Float,
+    val remaining: Float,
+    /** "%2", "%0", "%98" - cubugun altindaki anahtarda. */
+    val expenseText: String,
+    val investText: String,
+    val remainingText: String,
+    /** "Gelirin ₺12.000 üstünde" - gider + yatirim geliri astiysa; yoksa null. */
+    val deficitText: String?,
 )
 
 data class IncomeRowUi(

@@ -12,6 +12,7 @@ import com.kefe.app.domain.model.IncomeKind
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.MonthBook
+import com.kefe.app.domain.model.MonthFlow
 import com.kefe.app.domain.model.MonthPlanProgress
 import com.kefe.app.domain.model.PlanAssetOption
 import com.kefe.app.domain.model.PlanItem
@@ -44,6 +45,7 @@ import com.kefe.app.domain.model.sellPrice
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.rawAmount
+import kotlin.math.round
 
 // Plan sekmesinin turetimi. SAF ve Compose'suz: ViewModel yalniz akislari
 // toplar ve niyetleri isler, butun hesap buradadir. NEDEN: turetim ana is
@@ -355,13 +357,13 @@ internal fun goalContributionRows(
 // --- Para akisi ve giderler --------------------------------------------------
 
 /**
- * "Para akışı": plan ve gerceklesen yan yana.
+ * "Para akışı": gelir - giderler - yatirima giden = elde kalan (bkz. MoneyFlowCard).
  *
- * monthFlow hic gider girilmemisken de gideri 0 verir; o yuzden tasarruf orani,
- * kalan ve planli kalan tek baslarina olgu sayilmaz. Gider girilmemisken
- * "Kalan = gelir - yatirim" ve "Tasarruf oranı %100" uydurma rakam olurdu; butce
- * ve plan yokken planli Kalan da gelirin kendisini "dagitilmamis" diye yazardi.
- * Gelecek ayda gerceklesen hicbir sey yoktur: sutun "—" (0 bir olgu degil).
+ * monthFlow hic gider girilmemisken de gideri 0 verir; o yuzden gider "—" ve elde
+ * kalan tek basina olgu sayilmaz. Gider girilmemisken "gelir - yatirim" elde kalan
+ * diye yazilsaydi uydurma bir rakam olurdu; butce ve plan yokken gelecek ayin
+ * "kalacak"i da gelirin kendisini dagitilmamis diye yazardi. Gelecek ayda
+ * gerceklesen hicbir sey yoktur: satirlar planin kendisidir.
  */
 internal fun moneyFlowCard(inputs: PlanInputs, progress: MonthPlanProgress, relation: MonthRelation): MoneyFlowCard {
     val book = inputs.book
@@ -369,70 +371,183 @@ internal fun moneyFlowCard(inputs: PlanInputs, progress: MonthPlanProgress, rela
     // kartinin "₺0 planlandı" yazmamasiyla ayni kural.
     val plannedInvest = progress.plannedTl.takeIf { progress.items.isNotEmpty() && it > 0.0 }
     val flow = monthFlow(book, inputs.transactions, plannedInvest)
-    val future = relation == MonthRelation.Future
-    val hasExpenses = book.expenses.isNotEmpty()
-    val income = flow.income
-
-    val nothingToCompare = income == null && flow.budgetTotal == null && plannedInvest == null &&
-        !hasExpenses && flow.investedNet == 0.0
-    val table = if (nothingToCompare) {
-        null
-    } else {
-        listOf(
-            flowRow("Gelir", income, income.takeUnless { future }),
-            flowRow("Gider", flow.budgetTotal, flow.expenses.takeIf { hasExpenses && !future }),
-            flowRow("Yatırım", plannedInvest, flow.investedNet.takeUnless { future }),
-            flowRow(
-                "Kalan",
-                flow.plannedRemaining.takeIf { income != null && (flow.budgetTotal != null || plannedInvest != null) },
-                flow.remaining.takeIf { hasExpenses && !future },
-            ),
+    val incomeRows = inputs.members.mapIndexed { index, member ->
+        IncomeRowUi(
+            memberId = member.id,
+            name = member.name,
+            initials = member.initials,
+            index = index,
+            amount = flow.incomeByMember[member.id]?.let { Money.tl(it) } ?: "—",
         )
     }
-
-    val savingsLine = if (income != null && income > 0.0 && hasExpenses && !future) {
-        val rate = (income - flow.expenses) / income
-        if (rate >= 0.0) "Tasarruf oranı ${Money.ratioOf(rate)}" else "Gider gelirin ${trPercentOf(flow.expenses / income)}"
-    } else {
-        null
+    val hasExpenses = book.expenses.isNotEmpty()
+    val nothingToShow = flow.income == null && flow.budgetTotal == null && plannedInvest == null &&
+        !hasExpenses && flow.investedNet == 0.0 && flow.sells == 0.0
+    return when {
+        nothingToShow -> MoneyFlowCard(
+            caption = flowCaption(relation),
+            lines = null,
+            emptyHint = "Gelir ve harcamaları girince ay burada hesaplanır.",
+            split = null,
+            planLine = null,
+            incomeRows = incomeRows,
+        )
+        relation == MonthRelation.Future -> plannedFlowCard(flow, plannedInvest, incomeRows)
+        else -> actualFlowCard(flow, plannedInvest, hasExpenses, relation, incomeRows)
     }
-    // Gelecek ayda da yazilir: ikisi de plan.
-    val planShareLine = if (plannedInvest != null && income != null && income > 0.0) {
-        "Plan gelirin ${trPercentOf(plannedInvest / income)}"
-    } else {
-        null
-    }
+}
 
+private fun flowCaption(relation: MonthRelation): String = when (relation) {
+    MonthRelation.Current -> "Bu ay şimdiye kadar"
+    MonthRelation.Past -> "Ay sonu"
+    MonthRelation.Future -> "Plan"
+}
+
+/**
+ * Bu ay ve gecmis ay: gerceklesen. Elde kalan YALNIZ gelir ve gider birlikte
+ * girildiyse hesaplanir - gider girilmemisken "gelir - yatirim" elde kalan diye
+ * yazilsaydi hic girilmemis harcamalar yokmus gibi okunurdu.
+ */
+private fun actualFlowCard(
+    flow: MonthFlow,
+    plannedInvest: Double?,
+    hasExpenses: Boolean,
+    relation: MonthRelation,
+    incomeRows: List<IncomeRowUi>,
+): MoneyFlowCard {
+    val income = flow.income
+    val remaining = flow.remaining.takeIf { hasExpenses }
+    val investNote = listOfNotNull(
+        plannedInvest?.let { "planlanan ${Money.tl(it)}" },
+        // Yatirima giden NET: ayni ay satilan dusulur, yoksa alimlarin toplamiyla karisirdi.
+        flow.sells.takeIf { it > 0.0 }?.let { "${Money.tl(it)} satış düşüldü" },
+    ).joinToString(" · ").ifEmpty { null }
+    val lines = listOf(
+        flowLine(FlowLineKind.Income, "Gelir", income, note = if (income == null) "girilmedi" else null),
+        flowLine(
+            FlowLineKind.Expense,
+            "Giderler",
+            flow.expenses.takeIf { hasExpenses },
+            note = when {
+                !hasExpenses -> "girilmedi"
+                flow.budgetTotal != null -> "bütçe ${Money.tl(flow.budgetTotal)}"
+                else -> "bütçe yok"
+            },
+        ),
+        flowLine(FlowLineKind.Invest, "Yatırıma giden", flow.investedNet, note = investNote),
+        flowLine(
+            FlowLineKind.Remaining,
+            "Elde kalan",
+            remaining,
+            note = when {
+                remaining != null && remaining < 0.0 -> "gelirin üstünde harcandı"
+                income == null -> "gelir girilince hesaplanır"
+                !hasExpenses -> "giderler girilince hesaplanır"
+                else -> null
+            },
+        ),
+    )
     return MoneyFlowCard(
-        table = table,
-        savingsLine = savingsLine,
-        planShareLine = planShareLine,
-        salesLine = flow.sells.takeIf { it > 0.0 }?.let { "Satışlar ${Money.tl(it)}" },
-        incomeRows = inputs.members.mapIndexed { index, member ->
-            IncomeRowUi(
-                memberId = member.id,
-                name = member.name,
-                initials = member.initials,
-                index = index,
-                amount = flow.incomeByMember[member.id]?.let { Money.tl(it) } ?: "—",
-            )
-        },
+        caption = flowCaption(relation),
+        lines = lines,
+        emptyHint = null,
+        split = if (income != null && income > 0.0 && hasExpenses) flowSplit(income, flow.expenses, flow.investedNet) else null,
+        planLine = if (relation == MonthRelation.Current) planLine(income, flow.budgetTotal, plannedInvest) else null,
+        incomeRows = incomeRows,
     )
 }
 
-private fun flowRow(label: String, planned: Double?, actual: Double?): FlowRow {
-    val plannedText = planned?.let { Money.tl(it) } ?: "—"
-    val actualText = actual?.let { Money.tl(it) } ?: "—"
-    return FlowRow(
-        label = label,
-        planned = plannedText,
-        actual = actualText,
-        spoken = "$label: plan ${spokenAmount(plannedText)}, gerçekleşen ${spokenAmount(actualText)}",
+/** Gelecek ay: gerceklesen bir sey yok, satirlar planin kendisi (butce, planlanan yatirim). */
+private fun plannedFlowCard(flow: MonthFlow, plannedInvest: Double?, incomeRows: List<IncomeRowUi>): MoneyFlowCard {
+    val income = flow.income
+    // Butce de plan da yoksa "kalacak" gelirin kendisi olurdu - dagitilmamis para bir plan degil.
+    val remaining = flow.plannedRemaining.takeIf { income != null && (flow.budgetTotal != null || plannedInvest != null) }
+    val lines = listOf(
+        flowLine(FlowLineKind.Income, "Gelir", income, note = if (income == null) "girilmedi" else null),
+        flowLine(FlowLineKind.Expense, "Gider bütçesi", flow.budgetTotal, note = if (flow.budgetTotal == null) "bütçe yok" else null),
+        flowLine(FlowLineKind.Invest, "Planlanan yatırım", plannedInvest, note = if (plannedInvest == null) "plan yok" else null),
+        flowLine(
+            FlowLineKind.Remaining,
+            "Kalacak",
+            remaining,
+            note = if (remaining != null && remaining < 0.0) "plan gelirin üstünde" else null,
+        ),
+    )
+    return MoneyFlowCard(
+        caption = flowCaption(MonthRelation.Future),
+        lines = lines,
+        emptyHint = null,
+        split = null,
+        planLine = null,
+        incomeRows = incomeRows,
     )
 }
 
-/** Ekran okuyucu "—"yu "tire" diye okur; bilinmeyen rakam "yok" diye soylenir. */
-private fun spokenAmount(text: String): String = if (text == "—") "yok" else text
+private fun flowLine(kind: FlowLineKind, label: String, value: Double?, note: String?): FlowLine {
+    val negative = kind == FlowLineKind.Remaining && value != null && value < 0.0
+    val amount = when {
+        value == null -> "—"
+        negative -> "−${Money.tl(-value)}"
+        else -> Money.tl(value)
+    }
+    // "—" ekran okuyucuda "tire" diye okunur; bilinmeyen rakam soylenmez, not soyler.
+    val spoken = listOfNotNull(label, amount.takeIf { value != null }, note).joinToString(", ")
+    return FlowLine(kind = kind, label = label, amount = amount, note = note, negative = negative, spoken = spoken)
+}
+
+/**
+ * Gelirin dagilimi. Gider + yatirim geliri astiysa cubuk ikisini toplamla olcekler
+ * (kalan 0) ve asimi metinle soyler; renk tek basina sinyal degil.
+ */
+internal fun flowSplit(income: Double, expenses: Double, investedNet: Double): FlowSplit {
+    val invest = investedNet.coerceAtLeast(0.0)
+    val used = expenses + invest
+    val scale = if (used > income) used else income
+    val left = (income - used).coerceAtLeast(0.0)
+    return FlowSplit(
+        expense = (expenses / scale).toFloat(),
+        invest = (invest / scale).toFloat(),
+        remaining = (left / scale).toFloat(),
+        expenseText = sharePercent(expenses / income),
+        investText = sharePercent(invest / income),
+        remainingText = sharePercent(left / income),
+        deficitText = (used - income).takeIf { it > 0.0 }?.let { "Gelirin ${Money.tl(it)} üstünde" },
+    )
+}
+
+/**
+ * Pay yuzdesi: 0'dan buyuk bir pay "%0" yazilmaz ("%1'den az" - "%<1"); %100'e
+ * yuvarlanan eksik pay "%100" yazilmaz (skorla ayni kural).
+ */
+private fun sharePercent(fraction: Double): String {
+    val percent = round(fraction * 100.0)
+    return when {
+        fraction > 0.0 && percent < 1.0 -> "%<1"
+        fraction < 1.0 && percent >= 100.0 -> Money.ratio(99.0)
+        else -> Money.ratio(percent)
+    }
+}
+
+/**
+ * Bu ayin plani tek cumlede: "Plana göre ₺74.149 yatırıma gidecek, ay sonunda
+ * ₺10.851 kalacak." Butce varsa gider de soylenir; plan geliri asiyorsa asim.
+ * Plan yoksa null - "Plana göre" cumlesi planin kendisini ister.
+ */
+internal fun planLine(income: Double?, budget: Double?, plannedInvest: Double?): String? {
+    val invest = plannedInvest ?: return null
+    val outgoing = buildString {
+        append("Plana göre ")
+        if (budget != null) append("${Money.tl(budget)} gidere, ")
+        append("${Money.tl(invest)} yatırıma gidecek")
+    }
+    if (income == null) return "$outgoing."
+    val left = income - (budget ?: 0.0) - invest
+    return if (left >= 0.0) {
+        "$outgoing, ay sonunda ${Money.tl(left)} kalacak."
+    } else {
+        "$outgoing; bu, gelirin ${Money.tl(-left)} üstünde."
+    }
+}
 
 /**
  * "Giderler" - bos ayda da kurulur (harcama ve butcenin giris noktasi). "Bu ay"
