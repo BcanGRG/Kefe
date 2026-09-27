@@ -2143,3 +2143,56 @@ uygulandı (bkz. #51).
   istedi.
 - 6 aylık ve 1 yıllık planlar: bir kez kurmak, sonra tek tek ayları
   değiştirebilmek.
+
+## 44 · Para akışı bir hesap gibi okunuyor; koyu temada kara kutular yok ✅
+
+**Neydi.** Kullanıcı Plan sekmesine telefonda bakınca iki şey söyledi.
+Renklendirme, özellikle koyu temada, karışık duruyordu. "Para akışı" da
+yeterince açıklayıcı değildi.
+
+- **Koyu tema.** Kartın içindeki dolgu (`surfaceSunken`) `#0E0C09` idi, sayfanın
+  kendisinden bile koyu. Bu dolguyu kullanan her şey kahverengi kartın üstünde
+  kara bir delik gibi duruyordu: ikon kutuları, "Bekliyor" rozeti, hedef çipi ve
+  boş çubuklar. %0'daki kalın skor çubuğu "dolmamış" değil, kapkara bir şerit
+  gibi okunuyordu. Aynı kutular Ayarlar'da ve Hedefler'de de vardı.
+- **Para akışı.** Kart dört satırlık bir "Plan / Gerçekleşen" tablosuydu.
+  - "Kalan ₺10.851 / ₺83.500" neyin neyden çıkarıldığını söylemiyordu.
+  - "Tasarruf oranı %98" yatırılmamış parayı da tasarruf sayıyordu.
+  - "Plan gelirin %87'si" belirsizdi.
+
+**Ne yapıldı.** Kararların ikisi de önerilen seçenek: kart "hesap gibi" okunacak,
+koyu tema düzeltmesi uygulamanın genelinde yapılacak.
+
+- Koyu temada `surfaceSunken` artık `#29241D`, karttan bir ton açık. Koyu
+  temada iç içe yüzeyler açılarak ayrılır. Açık tema değişmedi.
+- Seri ızgarasındaki "Plan yok" noktaları kenar çizgisi rengindeydi ve iki
+  temada da kayboluyordu. Artık ikincil metin renginde ve biraz daha büyükler.
+- Para akışının satırları: Gelir, − Giderler, − Yatırıma giden, ardından
+  çizginin altında = Elde kalan.
+  - Her satırın altında kısa bir not var: "bütçe yok", "planlanan ₺74.149",
+    "₺12.000 satış düşüldü".
+  - Altında gelirin nereye gittiğini gösteren tek bir çubuk (gider, yatırım,
+    kalan; her biri payıyla) ve planı anlatan tek cümle: "Plana göre ₺74.149
+    yatırıma gidecek, ay sonunda ₺10.851 kalacak."
+  - Başlığın yanındaki not neyin gösterildiğini söyler: "Bu ay şimdiye kadar",
+    "Ay sonu" ya da gelecek ay için "Plan".
+  - Gelecek ayda satırlar planın kendisidir: Gider bütçesi, Planlanan
+    yatırım, Kalacak.
+- **Korunan kurallar.**
+  - Girilmemiş rakam "—" yazılır, 0 değil.
+  - Elde kalan ve dağılım çubuğu ancak gelir ve gider birlikte girildiyse
+    çıkar.
+  - Gelir aşıldığında elde kalan kırmızı yazılır ve not düşülür; çubuk da
+    açığı sözle söyler.
+
+**Doğrulama.**
+
+- **809 masaüstü testi**, hepsi yeşil. Para akışı testleri yeni hesaba göre
+  yeniden yazıldı: boş ay, gider girilmemiş ay, dağılım ve gelir aşımı, plan
+  cümlesi, geçmiş ay, gelecek ay ve küçük paylar ("%<1").
+- Cihazda, 27 Eylül 2026, R58N81SAZ1Y, hem açık hem koyu tema. Kart "Gelir
+  ₺85.000 · − Giderler ₺1.500 (bütçe yok) · − Yatırıma giden ₺0 (planlanan
+  ₺74.149) · = Elde kalan ₺83.500" gösterdi. Çubuk "gider %2 · yatırım %0 ·
+  kalan %98", plan cümlesi "…ay sonunda ₺10.851 kalacak." Koyu temada Plan,
+  Özet ve Ayarlar'ın ikon kutuları, rozetleri ve çubuk izleri artık kara
+  delik gibi görünmüyor.
