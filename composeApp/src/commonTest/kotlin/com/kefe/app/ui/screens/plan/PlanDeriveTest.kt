@@ -342,53 +342,83 @@ class PlanDeriveTest {
     // --- Para akisi -----------------------------------------------------------
 
     @Test
-    fun `karsilastiracak bir sey yoksa tablo yok, gelir satirlari yine var`() {
+    fun `gosterecek bir sey yoksa hesap yok, gelir satirlari yine var`() {
         val flow = assertNotNull(planContent(inputs(members = members)).flow)
-        assertNull(flow.table)
-        assertNull(flow.savingsLine)
-        assertNull(flow.planShareLine)
+        assertNull(flow.lines)
+        assertEquals("Gelir ve harcamaları girince ay burada hesaplanır.", flow.emptyHint)
+        assertNull(flow.split)
+        assertNull(flow.planLine)
         assertEquals(listOf("—", "—"), flow.incomeRows.map { it.amount })
         assertEquals(listOf("Burak", "Ayşe"), flow.incomeRows.map { it.name })
     }
 
     @Test
-    fun `gider girilmemisse gider ve kalan yok, tasarruf orani uydurulmaz`() {
+    fun `gider girilmemisse gider ve elde kalan yok, dagilim uydurulmaz`() {
         val book = MonthBook(oct, incomes = listOf(income("member_owner", 85_000.0)))
         val flow = assertNotNull(planContent(inputs(members = members, books = listOf(book))).flow)
-        val table = assertNotNull(flow.table).associateBy { it.label }
-        assertEquals("₺85.000", table.getValue("Gelir").planned)
-        assertEquals("₺85.000", table.getValue("Gelir").actual)
-        assertEquals("—", table.getValue("Gider").actual)
-        // Butce de plan da yok: planli Kalan gelirin kendisini "dagitilmamis" diye yazmaz.
-        assertEquals("—", table.getValue("Kalan").planned)
-        assertEquals("—", table.getValue("Kalan").actual)
-        assertNull(flow.savingsLine)
-        assertEquals("Gider: plan yok, gerçekleşen yok", table.getValue("Gider").spoken)
-        assertEquals("Gelir: plan ₺85.000, gerçekleşen ₺85.000", table.getValue("Gelir").spoken)
+        assertEquals("Bu ay şimdiye kadar", flow.caption)
+        val lines = assertNotNull(flow.lines).associateBy { it.kind }
+        assertEquals(listOf("Gelir", "Giderler", "Yatırıma giden", "Elde kalan"), flow.lines!!.map { it.label })
+        assertEquals("₺85.000", lines.getValue(FlowLineKind.Income).amount)
+        assertEquals("—", lines.getValue(FlowLineKind.Expense).amount)
+        assertEquals("girilmedi", lines.getValue(FlowLineKind.Expense).note)
+        // Hicbir sey alinmadi: 0 bir olgu, "—" degil.
+        assertEquals("₺0", lines.getValue(FlowLineKind.Invest).amount)
+        assertEquals("—", lines.getValue(FlowLineKind.Remaining).amount)
+        assertEquals("giderler girilince hesaplanır", lines.getValue(FlowLineKind.Remaining).note)
+        assertNull(flow.split)
+        assertEquals("Giderler, girilmedi", lines.getValue(FlowLineKind.Expense).spoken)
+        assertEquals("Gelir, ₺85.000", lines.getValue(FlowLineKind.Income).spoken)
         assertEquals(listOf("₺85.000", "—"), flow.incomeRows.map { it.amount })
     }
 
     @Test
-    fun `tasarruf orani ve gelirden fazla gider`() {
+    fun `elde kalan ve gelirin dagilimi, gelirden fazla gider`() {
         val saving = MonthBook(oct, incomes = listOf(income("member_owner", 100_000.0)), expenses = listOf(expense("e1", 14, 68_000.0)))
-        assertEquals("Tasarruf oranı %32", planContent(inputs(books = listOf(saving))).flow?.savingsLine)
+        val flow = assertNotNull(planContent(inputs(books = listOf(saving))).flow)
+        val remaining = flow.lines!!.single { it.kind == FlowLineKind.Remaining }
+        assertEquals("₺32.000", remaining.amount)
+        assertEquals("bütçe yok", flow.lines!!.single { it.kind == FlowLineKind.Expense }.note)
+        val split = assertNotNull(flow.split)
+        assertEquals(listOf("%68", "%0", "%32"), listOf(split.expenseText, split.investText, split.remainingText))
+        assertNull(split.deficitText)
 
         val over = MonthBook(oct, incomes = listOf(income("member_owner", 50_000.0)), expenses = listOf(expense("e1", 14, 56_000.0)))
-        assertEquals("Gider gelirin %112'si", planContent(inputs(books = listOf(over))).flow?.savingsLine)
+        val overFlow = assertNotNull(planContent(inputs(books = listOf(over))).flow)
+        val overRemaining = overFlow.lines!!.single { it.kind == FlowLineKind.Remaining }
+        assertEquals("−₺6.000", overRemaining.amount)
+        assertTrue(overRemaining.negative)
+        assertEquals("gelirin üstünde harcandı", overRemaining.note)
+        val overSplit = assertNotNull(overFlow.split)
+        assertEquals("Gelirin ₺6.000 üstünde", overSplit.deficitText)
+        assertEquals(0f, overSplit.remaining)
+        assertEquals(1f, overSplit.expense)
     }
 
     @Test
-    fun `plan gelirin payi ve planli kalan`() {
+    fun `bu ayin plani tek cumle, yatirim satirinda planlanan`() {
         val book = MonthBook(oct, incomes = listOf(income("member_owner", 185_000.0)))
         val flow = assertNotNull(planContent(fiveItemMonth().copy(books = listOf(book))).flow)
-        assertEquals("Plan gelirin %38'i", flow.planShareLine)
-        val table = assertNotNull(flow.table).associateBy { it.label }
-        assertEquals("₺70.330", table.getValue("Yatırım").planned)
-        assertEquals("₺114.670", table.getValue("Kalan").planned)
+        assertEquals("Plana göre ₺70.330 yatırıma gidecek, ay sonunda ₺114.670 kalacak.", flow.planLine)
+        val invest = flow.lines!!.single { it.kind == FlowLineKind.Invest }
+        assertTrue(invest.note!!.startsWith("planlanan ₺70.330"))
     }
 
     @Test
-    fun `gelecek ayda gerceklesen sutunu bos, tasarruf orani yok`() {
+    fun `gecmis ayda plan cumlesi yok, baslik ay sonu`() {
+        val book = MonthBook(sep, incomes = listOf(income("member_owner", 85_000.0, month = sep)))
+        val flow = assertNotNull(
+            planContent(
+                inputs(selection = sep, items = listOf(item(sep, "gold_gram", 5.0, price = 6_000.0)), books = listOf(book)),
+            ).flow,
+        )
+        assertEquals("Ay sonu", flow.caption)
+        assertNull(flow.planLine)
+        assertEquals("planlanan ₺30.000", flow.lines!!.single { it.kind == FlowLineKind.Invest }.note)
+    }
+
+    @Test
+    fun `gelecek ayda satirlar planin kendisi`() {
         val book = MonthBook(
             nov,
             incomes = listOf(income("member_owner", 85_000.0, month = nov)),
@@ -396,10 +426,33 @@ class PlanDeriveTest {
             budgets = listOf(ExpenseBudget("b1", nov, ExpenseCategory.Groceries, 10_000.0)),
         )
         val flow = assertNotNull(planContent(inputs(selection = nov, books = listOf(book))).flow)
-        val table = assertNotNull(flow.table)
-        assertTrue(table.all { it.actual == "—" })
-        assertEquals("₺85.000", table.first { it.label == "Gelir" }.planned)
-        assertNull(flow.savingsLine)
+        assertEquals("Plan", flow.caption)
+        assertEquals(listOf("Gelir", "Gider bütçesi", "Planlanan yatırım", "Kalacak"), flow.lines!!.map { it.label })
+        assertEquals(listOf("₺85.000", "₺10.000", "—", "₺75.000"), flow.lines!!.map { it.amount })
+        assertEquals("plan yok", flow.lines!![2].note)
+        assertNull(flow.split)
+        assertNull(flow.planLine)
+    }
+
+    @Test
+    fun `plan cumlesi butceyi ve asimi soyler`() {
+        assertEquals("Plana göre ₺1.000 yatırıma gidecek.", planLine(null, null, 1_000.0))
+        assertEquals(
+            "Plana göre ₺25.000 gidere, ₺50.000 yatırıma gidecek, ay sonunda ₺10.000 kalacak.",
+            planLine(85_000.0, 25_000.0, 50_000.0),
+        )
+        assertEquals(
+            "Plana göre ₺25.000 gidere, ₺74.149 yatırıma gidecek; bu, gelirin ₺14.149 üstünde.",
+            planLine(85_000.0, 25_000.0, 74_149.0),
+        )
+        assertNull(planLine(85_000.0, 25_000.0, null))
+    }
+
+    @Test
+    fun `kucuk pay sifir yazilmaz, eksik pay yuz yazilmaz`() {
+        val split = flowSplit(income = 100_000.0, expenses = 300.0, investedNet = 0.0)
+        assertEquals("%<1", split.expenseText)
+        assertEquals("%99", split.remainingText)
     }
 
     // --- Giderler ------------------------------------------------------------

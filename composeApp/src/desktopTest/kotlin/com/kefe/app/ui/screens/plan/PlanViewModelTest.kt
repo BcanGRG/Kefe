@@ -876,32 +876,32 @@ class PlanViewModelTest {
     // --- Para akisi ----------------------------------------------------------
 
     @Test
-    fun `gelir var gider yok - tasarruf orani yok, gerceklesen kalan bos`() = runTest {
+    fun `gelir var gider yok - elde kalan ve dagilim yok`() = runTest {
         val env = Env()
         env.plan.setIncome(October, "member_owner", IncomeKind.Salary, 85_000.0)
         val vm = env.vm()
-        val state = vm.awaitState { it.flowRow("Gelir")?.actual == "₺85.000" }
-        assertNull(state.content.flow?.savingsLine)
-        assertEquals("—", state.flowRow("Kalan")?.actual)
-        assertEquals("—", state.flowRow("Gider")?.actual)
+        val state = vm.awaitState { it.flowLine(FlowLineKind.Income)?.amount == "₺85.000" }
+        assertNull(state.content.flow?.split)
+        assertEquals("—", state.flowLine(FlowLineKind.Remaining)?.amount)
+        assertEquals("—", state.flowLine(FlowLineKind.Expense)?.amount)
     }
 
     @Test
-    fun `gelecek ayda gerceklesen sutunu bos`() = runTest {
+    fun `gelecek ayda satirlar plan, dagilim yok`() = runTest {
         val env = Env()
         env.plan.setIncome(October, "member_owner", IncomeKind.Salary, 85_000.0)
         env.plan.setIncome(November, "member_owner", IncomeKind.Salary, 85_000.0)
         env.expense("e_ekim", KefeDate(2026, 10, 5), 20_000.0)
         val vm = env.vm()
-        val october = vm.awaitState { it.content.flow?.savingsLine != null }
-        assertEquals("Tasarruf oranı %76", october.content.flow?.savingsLine)
+        val october = vm.awaitState { it.content.flow?.split != null }
+        assertEquals("%76", october.content.flow?.split?.remainingText)
+        assertEquals("₺65.000", october.flowLine(FlowLineKind.Remaining)?.amount)
 
         vm.onIntent(PlanIntent.NextMonth)
         val november = vm.awaitState { it.content.header.title == "Kasım 2026" }
-        val table = assertNotNull(november.content.flow?.table)
-        assertTrue(table.all { it.actual == "—" })
-        assertEquals("₺85.000", table.first { it.label == "Gelir" }.planned)
-        assertNull(november.content.flow?.savingsLine)
+        assertEquals("Plan", november.content.flow?.caption)
+        assertEquals("₺85.000", november.flowLine(FlowLineKind.Income)?.amount)
+        assertNull(november.content.flow?.split)
     }
 
     // --- Seri ve rozet -------------------------------------------------------
@@ -953,7 +953,7 @@ private fun PlanViewModel.incomeEditor(): IncomeEditor? = (state.value.sheet as?
 private fun PlanUiState.incomeOf(memberId: String): String? =
     content.flow?.incomeRows?.firstOrNull { it.memberId == memberId }?.amount
 
-private fun PlanUiState.flowRow(label: String): FlowRow? = content.flow?.table?.firstOrNull { it.label == label }
+private fun PlanUiState.flowLine(kind: FlowLineKind): FlowLine? = content.flow?.lines?.firstOrNull { it.kind == kind }
 
 private val October = YearMonth(2026, 10)
 private val September = YearMonth(2026, 9)

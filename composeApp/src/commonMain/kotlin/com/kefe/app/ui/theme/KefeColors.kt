@@ -81,7 +81,12 @@ val KefeDarkColors = KefeColors(
     isDark = true,
     surface = Color(0xFF15120E),
     surfaceElevated = Color(0xFF1E1A15),
-    surfaceSunken = Color(0xFF0E0C09),
+    // KARTIN ICINDEKI dolgu: ikon kutusu, rozet, cip, cubuk izi, alan, kapali anahtar.
+    // Karttan (surfaceElevated) biraz ACIK. Eskiden 0E0C09 idi - sayfadan bile koyu;
+    // koyu kahve kartin ustunde her kutu ve bos cubuk kara bir delik gibi duruyordu.
+    // Koyu temada ic ice yuzeyler acilarak ayrilir, kararak degil; acik temada
+    // ayni jeton karttan koyu bir bej ve orada sorun yok.
+    surfaceSunken = Color(0xFF29241D),
     onSurface = Color(0xFFF3EEE5),
     onSurfaceMuted = Color(0xFFA39B8E),
     accent = Color(0xFFD9AE5F),

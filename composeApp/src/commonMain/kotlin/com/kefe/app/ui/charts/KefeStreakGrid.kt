@@ -200,11 +200,13 @@ private fun DrawScope.drawStreakMark(mark: StreakMark, p: StreakPalette) {
             drawLine(p.muted, Offset(c.x + arm, c.y - arm), Offset(c.x - arm, c.y + arm), stroke, StrokeCap.Round)
         }
 
-        StreakMark.NoPlan -> drawCircle(color = p.outline, radius = DotRadius.toPx(), center = center)
+        // Nokta ikincil metin renginde: kenar cizgisi (outline) renginde iki temada da
+        // karta karisiyor, ay "bos" degil "yok" gibi okunuyordu.
+        StreakMark.NoPlan -> drawCircle(color = p.muted, radius = DotRadius.toPx(), center = center, alpha = 0.7f)
 
         // Ilk plandan onceki ay: ayni nokta, soluk - seri henuz baslamamisti.
         StreakMark.BeforeStart ->
-            drawCircle(color = p.outline, radius = DotRadius.toPx(), center = center, alpha = 0.4f)
+            drawCircle(color = p.muted, radius = DotRadius.toPx(), center = center, alpha = 0.35f)
 
         StreakMark.InProgress -> drawRoundRect(
             color = p.accent,
@@ -229,5 +231,5 @@ private val FullLabelMinCell = 24.dp
 
 private val LegendCellSize = 12.dp
 
-/** "Plan yok" noktasi 4dp. */
-private val DotRadius = 2.dp
+/** "Plan yok" noktasi 5dp. */
+private val DotRadius = 2.5.dp
