@@ -129,6 +129,7 @@ class PlanViewModel(
             PlanIntent.OpenCopy -> openCopy()
 
             is PlanIntent.ItemSelectAsset -> selectAsset(intent.assetKey)
+            PlanIntent.ItemChangeAsset -> withItemContext { it.copy(pickerOpen = true) }
             is PlanIntent.ItemOpenCode -> openCode(intent.assetClass)
             is PlanIntent.ItemCode -> withItemContext {
                 it.copy(codeText = intent.value.trim().uppercase(), assetError = null, switchedToExisting = false)
@@ -261,7 +262,11 @@ class PlanViewModel(
     private fun selectAsset(key: String) {
         val inputs = latest ?: return
         val editor = (current.sheet as? PlanSheet.Item)?.editor ?: return
-        if (key == editor.assetKey && editor.codeClass == null) return
+        // Ayni varliga yeniden dokunmak yalniz listeyi kapatir.
+        if (key == editor.assetKey && editor.codeClass == null) {
+            if (editor.pickerOpen) reduce { copy(sheet = PlanSheet.Item(editor.copy(pickerOpen = false))) }
+            return
+        }
 
         val other = inputs.items.firstOrNull {
             it.month == editor.month && it.assetKey == key && it.id != editor.editingId
@@ -291,6 +296,7 @@ class PlanViewModel(
             mode = mode,
             targetText = target,
             switchedToExisting = false,
+            pickerOpen = false,
             assetError = null,
             targetError = null,
         ).withContext(inputs)

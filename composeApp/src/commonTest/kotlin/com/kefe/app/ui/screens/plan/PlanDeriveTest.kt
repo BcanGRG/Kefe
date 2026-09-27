@@ -373,6 +373,7 @@ class PlanDeriveTest {
     fun `bos ayda gider karti harcama girilmedi der`() {
         val card = assertNotNull(planContent(inputs()).expenses)
         assertEquals("Harcama girilmedi.", card.totalLine)
+        assertTrue(card.isEmpty, "bos durum not olarak cizilir, tutar basligi olarak degil")
         assertNull(card.totalRatio)
         assertTrue(card.categories.isEmpty())
         assertTrue(card.recent.isEmpty())

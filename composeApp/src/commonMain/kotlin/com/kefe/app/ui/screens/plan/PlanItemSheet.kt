@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.PlanTargetMode
 import com.kefe.app.domain.model.QuantityUnit
+import com.kefe.app.domain.model.catalogName
 import com.kefe.app.domain.model.label
 import com.kefe.app.domain.model.monthName
 import com.kefe.app.ui.components.AmountKeyboard
@@ -37,6 +38,7 @@ import com.kefe.app.ui.components.KefeDestructiveTextButton
 import com.kefe.app.ui.components.KefeFieldLabel
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeSegmentedControl
+import com.kefe.app.ui.components.KefeTextButton
 import com.kefe.app.ui.components.KefeTextField
 import com.kefe.app.ui.components.ThousandsSeparatorTransformation
 import com.kefe.app.ui.components.asAmountInput
@@ -90,6 +92,47 @@ private fun ColumnScope.ItemBody(editor: PlanItemEditor, onIntent: (PlanIntent) 
     // --- Varlik ---
     KefeFieldLabel("Varlık")
     Spacer(Modifier.height(Space.x8))
+    if (editor.pickerCollapsed) {
+        SelectedAssetRow(editor, onIntent)
+        Spacer(Modifier.height(Space.x16))
+    } else {
+        AssetPicker(editor, onIntent)
+    }
+    ItemDetails(editor, onIntent)
+}
+
+/** Secili varlik tek satir: ad + "Değiştir". Liste yeniden acilmadikca miktar alani hemen altinda. */
+@Composable
+private fun SelectedAssetRow(editor: PlanItemEditor, onIntent: (PlanIntent) -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    val name = editor.options.firstOrNull { it.assetKey == editor.assetKey }?.name
+        ?: editor.assetKey?.let(::catalogName).orEmpty()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        KefeChip(
+            text = name,
+            selected = true,
+            onClick = { onIntent(PlanIntent.ItemChangeAsset) },
+            height = Sizes.chipSmall,
+            modifier = Modifier.weight(1f, fill = false).semantics { selected = true },
+        )
+        Spacer(Modifier.width(Space.x8))
+        KefeTextButton(text = "Değiştir", onClick = { onIntent(PlanIntent.ItemChangeAsset) })
+    }
+    if (editor.assetError != null) {
+        Spacer(Modifier.height(Space.x8))
+        Text(editor.assetError, style = t.caption, color = c.negative)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AssetPicker(editor: PlanItemEditor, onIntent: (PlanIntent) -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
     editor.groups().forEach { (assetClass, options) ->
         Text(assetClass.label(), style = t.micro, color = c.onSurfaceMuted)
         Spacer(Modifier.height(6.dp))
@@ -129,6 +172,13 @@ private fun ColumnScope.ItemBody(editor: PlanItemEditor, onIntent: (PlanIntent) 
         Text(editor.assetError, style = t.caption, color = c.negative)
         Spacer(Modifier.height(Space.x12))
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ItemDetails(editor: PlanItemEditor, onIntent: (PlanIntent) -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
 
     // --- Miktar / Tutar ---
     if (editor.showModeSwitch()) {

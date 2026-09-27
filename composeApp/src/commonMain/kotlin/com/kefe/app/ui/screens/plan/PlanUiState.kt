@@ -195,7 +195,14 @@ data class ExpensesCard(
     val categories: List<CategoryRowUi>,
     /** En yeni 5 giris. */
     val recent: List<ExpenseRowUi>,
-)
+) {
+    /**
+     * Ayda ne harcama ne butce var: [totalLine] bir TUTAR degil, bir not.
+     * NEYDI: "Harcama girilmedi." tutar basligi boyutunda (h2) ciziliyor,
+     * kartin en buyuk yazisi bos durumun kendisi oluyordu.
+     */
+    val isEmpty: Boolean get() = totalRatio == null && categories.isEmpty() && recent.isEmpty()
+}
 
 data class CategoryRowUi(
     val category: ExpenseCategory,
@@ -269,6 +276,15 @@ data class PlanItemEditor(
     val goalId: String? = null,
     /** Secilen varlik bu ay zaten planliydi; editor o kaleme gecti. */
     val switchedToExisting: Boolean = false,
+    /**
+     * Varlik secili olsa da liste acik mi ("Değiştir"e basildi).
+     *
+     * NEYDI: varlik listesi her zaman acikti. Eldekiler + katalog + fonlar
+     * telefonda bir ekrandan uzundu; miktar ve hedef alanlari listenin ALTINDA
+     * kaliyordu, her kalemde en asagi kaydirmak gerekiyordu. Artik secilince
+     * liste tek satira iner.
+     */
+    val pickerOpen: Boolean = false,
     val assetError: String? = null,
     val targetError: String? = null,
     // --- baglam: her veri emisyonunda tazelenir ---
@@ -280,6 +296,9 @@ data class PlanItemEditor(
     val conflictGoalName: String? = null,
 ) {
     val isNew: Boolean get() = editingId == null
+
+    /** Liste tek satira inmis: katalogdan bir varlik secili ve liste acilmadi. */
+    val pickerCollapsed: Boolean get() = assetKey != null && codeClass == null && !pickerOpen
 }
 
 data class GoalChipUi(val goalId: String, val name: String)
@@ -367,6 +386,9 @@ sealed interface PlanIntent {
 
     // --- Kalem editoru ---
     data class ItemSelectAsset(val assetKey: String) : PlanIntent
+
+    /** Tek satira inmis varlik listesini yeniden acar. */
+    data object ItemChangeAsset : PlanIntent
 
     /** Fund | Stock: katalogda olmayan bir fon kodu / hisse sembolu yazilacak. */
     data class ItemOpenCode(val assetClass: AssetClass) : PlanIntent

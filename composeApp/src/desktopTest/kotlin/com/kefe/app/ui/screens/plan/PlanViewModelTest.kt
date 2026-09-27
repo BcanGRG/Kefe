@@ -459,6 +459,36 @@ class PlanViewModelTest {
         assertEquals("Miktar girin.", empty.targetError)
     }
 
+    /**
+     * Varlik secilince liste tek satira iner; miktar alani hemen altinda kalir.
+     * NEYDI: liste hep acikti ve telefonda miktar/hedef alanlari listenin
+     * altinda kaliyordu - her kalemde en asagi kaydirmak gerekiyordu.
+     */
+    @Test
+    fun `varlik secilince liste kapanir ve degistir ile yeniden acilir`() = runTest {
+        val env = Env()
+        val vm = env.vm()
+        vm.awaitState { it.content.emptyPlan != null }
+
+        vm.onIntent(PlanIntent.AddItem)
+        assertFalse(vm.itemEditor()!!.pickerCollapsed, "yeni kalemde liste acik baslar")
+
+        vm.onIntent(PlanIntent.ItemSelectAsset("gold_gram"))
+        assertTrue(vm.itemEditor()!!.pickerCollapsed)
+
+        vm.onIntent(PlanIntent.ItemChangeAsset)
+        assertFalse(vm.itemEditor()!!.pickerCollapsed)
+        // Ayni varliga yeniden dokunmak listeyi kapatir, secimi degistirmez.
+        vm.onIntent(PlanIntent.ItemSelectAsset("gold_gram"))
+        assertTrue(vm.itemEditor()!!.pickerCollapsed)
+        assertEquals("gold_gram", vm.itemEditor()!!.assetKey)
+
+        // Kod alani acikken liste acik kalir (alan listenin icinde).
+        vm.onIntent(PlanIntent.ItemChangeAsset)
+        vm.onIntent(PlanIntent.ItemOpenCode(AssetClass.Fund))
+        assertFalse(vm.itemEditor()!!.pickerCollapsed)
+    }
+
     @Test
     fun `yazilan hedef ilgisiz bir veri emisyonunda yerinde kalir`() = runTest {
         val env = Env()

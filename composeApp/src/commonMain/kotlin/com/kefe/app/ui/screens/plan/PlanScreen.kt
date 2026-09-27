@@ -647,7 +647,11 @@ private fun ExpensesCardView(card: ExpensesCard, onIntent: (PlanIntent) -> Unit)
                 Text("Giderler", style = t.bodyStrong, color = c.onSurface, modifier = Modifier.weight(1f))
                 KefeTextButton(text = "Bütçe", onClick = { onIntent(PlanIntent.EditBudget) })
             }
-            Text(card.totalLine, style = t.h2.tabular(), color = c.onSurface)
+            if (card.isEmpty) {
+                Text(card.totalLine, style = t.body, color = c.onSurfaceMuted)
+            } else {
+                Text(card.totalLine, style = t.h2.tabular(), color = c.onSurface)
+            }
             val over = card.totalOverText != null
             card.totalRatio?.let { ratio ->
                 Spacer(Modifier.height(Space.x8))
