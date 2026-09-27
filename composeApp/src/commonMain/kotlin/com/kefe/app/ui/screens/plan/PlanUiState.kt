@@ -2,7 +2,9 @@ package com.kefe.app.ui.screens.plan
 
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.CopyRow
+import com.kefe.app.domain.model.ExpenseCategory
 import com.kefe.app.domain.model.FundKeyPrefix
+import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.PlanAssetOption
 import com.kefe.app.domain.model.PlanItemStatus
 import com.kefe.app.domain.model.PlanTargetMode
@@ -39,6 +41,10 @@ data class PlanContent(
     val extras: ExtrasCard? = null,
     /** Ayin kalemlerinin baglandigi hedefler; bossa kart gizli. */
     val goalContributions: List<GoalContributionRow> = emptyList(),
+    /** "Para akışı": plan ve gerceklesen yan yana; gelir satirlari giris noktasi oldugu icin hep var. */
+    val flow: MoneyFlowCard? = null,
+    /** "Giderler": bos ayda da cizilir - harcama ve butcenin giris noktasi. */
+    val expenses: ExpensesCard? = null,
 )
 
 /**
@@ -128,11 +134,81 @@ data class GoalContributionRow(
     val ratio: Float?,
 )
 
+// --- Para akisi ve giderler ----------------------------------------------------
+
+/**
+ * "Para akışı" karti. Hic girilmemis bir rakam "—" kalir, 0 degil: gider
+ * girilmemis bir ay "Tasarruf oranı %100" demez (bkz. PlanDerive.moneyFlowCard).
+ */
+data class MoneyFlowCard(
+    /** Gelir, Gider, Yatırım, Kalan; karsilastiracak hicbir sey yoksa null (tablo cizilmez). */
+    val table: List<FlowRow>?,
+    /** "Tasarruf oranı %32" | "Gider gelirin %112'si" | null (gelir ya da gider yok, gelecek ay). */
+    val savingsLine: String?,
+    /** "Plan gelirin %38'i". */
+    val planShareLine: String?,
+    /** "Satışlar ₺12.000" - net yatirim ile brut alim arasindaki farki aciklar. */
+    val salesLine: String?,
+    /** Her uye - gelir girisinin kapisi, girilmemisse tutar "—". */
+    val incomeRows: List<IncomeRowUi>,
+)
+
+data class FlowRow(
+    val label: String,
+    /** Bilinmeyen "—". */
+    val planned: String,
+    val actual: String,
+    /** Ekran okuyucu tek cumle okur: "Gelir: plan ₺85.000, gerçekleşen ₺85.000"; "—" -> "yok". */
+    val spoken: String,
+)
+
+data class IncomeRowUi(
+    val memberId: String,
+    val name: String,
+    val initials: String,
+    /** Avatar rengi - uye listesindeki sira. */
+    val index: Int,
+    val amount: String,
+)
+
+data class ExpensesCard(
+    /** "₺18.400 / ₺25.000" | "₺18.400" | "Harcama girilmedi.". */
+    val totalLine: String,
+    /** Harcanan / butce; butce yoksa null (cubuk cizilmez). */
+    val totalRatio: Float?,
+    /** "₺2.300 aşıldı" - asimin sinyali metindir, renk yalniz eslik eder. */
+    val totalOverText: String?,
+    /** Harcamasi VE butcesi olmayan kategori listede yok. */
+    val categories: List<CategoryRowUi>,
+    /** En yeni 5 giris. */
+    val recent: List<ExpenseRowUi>,
+)
+
+data class CategoryRowUi(
+    val category: ExpenseCategory,
+    val label: String,
+    /** "₺4.200 / ₺5.000" | "₺4.200". */
+    val amounts: String,
+    val ratio: Float?,
+    val overText: String?,
+)
+
+data class ExpenseRowUi(
+    val id: String,
+    val title: String,
+    /** "14 Eki · market" - gun, kisa ay ve varsa not. */
+    val subtitle: String,
+    val amount: String,
+)
+
 // --- Sheet'ler (ayni anda en fazla bir tane) ------------------------------------
 
 sealed interface PlanSheet {
     data class Item(val editor: PlanItemEditor) : PlanSheet
     data class Copy(val draft: CopyDraftUi) : PlanSheet
+    data class Income(val editor: IncomeEditor) : PlanSheet
+    data class Expense(val editor: ExpenseEditor) : PlanSheet
+    data class Budget(val editor: BudgetEditor) : PlanSheet
 }
 
 /**
@@ -189,6 +265,54 @@ data class CopyDraftUi(
     val hasNewRows: Boolean get() = rows.any { !it.alreadyInTarget }
 }
 
+/**
+ * Bir uyenin ayin geliri. Metinler HAM; bos alan kayitta satiri siler -
+ * "girilmedi" ile "0" ayni degil.
+ */
+data class IncomeEditor(
+    val month: YearMonth,
+    val memberId: String,
+    /** Yalniz alt baslikta ("Burak · Ekim 2026"): "Ben'in geliri" gibi bir ek bozuk okunurdu. */
+    val memberName: String,
+    val salaryText: String,
+    val extraText: String,
+    /** Bir onceki ayin girisi - "Geçen ay: ₺85.000 — aynısı" cipi; yoksa null. */
+    val lastSalary: Double?,
+    val lastExtra: Double?,
+)
+
+/**
+ * Tek harcama. Kimlik editor ACILIRKEN uretilir, kayitta degil: cift dokunus
+ * ayni satiri iki kez yazar, iki satir olusturmaz.
+ */
+data class ExpenseEditor(
+    val month: YearMonth,
+    val id: String,
+    val isNew: Boolean,
+    val category: ExpenseCategory?,
+    val amountText: String,
+    val note: String,
+    /** Bu ayda bugun, baska ayda o ayin son gunu (onayli kural); duzenlemede kayitli tarih. */
+    val date: KefeDate,
+    /** 0 = yeni; depo kayitta ani damgalar. Duzenlemede sira (en yeni) degismesin diye korunur. */
+    val createdAt: Long = 0L,
+    val addedByMemberId: String?,
+    val categoryError: Boolean = false,
+    val amountError: Boolean = false,
+)
+
+/** Ayin kategori butceleri. Bos metin o kategoriyi butceden cikarir. */
+data class BudgetEditor(
+    val month: YearMonth,
+    val texts: Map<ExpenseCategory, String>,
+    /** Gecen ay kategoride harcanan - alan ipucu. */
+    val lastSpent: Map<ExpenseCategory, Double>,
+    /** Gecen ayin butcesi - "Geçen aydan kopyala". */
+    val lastBudgets: Map<ExpenseCategory, Double>,
+    /** Ayin geliri; girilmemisse null (toplamin gelire orani yazilmaz). */
+    val income: Double?,
+)
+
 sealed interface PlanIntent {
     data object PreviousMonth : PlanIntent
     data object NextMonth : PlanIntent
@@ -222,6 +346,29 @@ sealed interface PlanIntent {
     // --- Kopyala/Devir ---
     data class CopyCarry(val assetKey: String, val carry: Boolean) : PlanIntent
     data object ConfirmCopy : PlanIntent
+
+    // --- Defter: gelir ---
+    data class EditIncome(val memberId: String) : PlanIntent
+    data class IncomeSalary(val value: String) : PlanIntent
+    data class IncomeExtra(val value: String) : PlanIntent
+    data object IncomeUseLastSalary : PlanIntent
+    data object IncomeUseLastExtra : PlanIntent
+    data object SaveIncome : PlanIntent
+
+    // --- Defter: gider ---
+    data object AddExpense : PlanIntent
+    data class EditExpense(val id: String) : PlanIntent
+    data class ExpenseSelectCategory(val category: ExpenseCategory) : PlanIntent
+    data class ExpenseAmount(val value: String) : PlanIntent
+    data class ExpenseNote(val value: String) : PlanIntent
+    data object SaveExpense : PlanIntent
+    data object DeleteExpense : PlanIntent
+
+    // --- Defter: butce ---
+    data object EditBudget : PlanIntent
+    data class BudgetAmount(val category: ExpenseCategory, val value: String) : PlanIntent
+    data object BudgetCopyLastMonth : PlanIntent
+    data object SaveBudget : PlanIntent
 }
 
 /** Kabukta karsilanir (bkz. App.kt): ekleme sayfasi ve serit kabugun. */
@@ -301,6 +448,16 @@ fun PlanItemEditor.groups(): List<Pair<AssetClass, List<PlanAssetOption>>> =
  * yazilmaz (bkz. toItems) - fiyat sayimi etkilemez.
  */
 fun CopyDraftUi.writableCount(): Int = rows.toItems(target, carry) { null }.size
+
+/**
+ * Butce sayfasinin alt satiri: "Toplam ₺25.000 · gelirin %29'u". Gelir yoksa
+ * yalniz toplam - oran uydurulmaz.
+ */
+fun BudgetEditor.totalLine(): String {
+    val total = texts.values.sumOf { it.parseTrAmountOrNull()?.takeIf { v -> v > 0.0 } ?: 0.0 }
+    val share = income?.takeIf { it > 0.0 }?.let { " · gelirin ${trPercentOf(total / it)}" }.orEmpty()
+    return "Toplam ${Money.tl(total)}$share"
+}
 
 /** Pozisyon anahtarindaki kod bicimi (AssetKey.kt ile ayni). */
 private val PlanCodePattern = Regex("^[A-Za-z0-9][A-Za-z0-9.\\-]{1,14}$")

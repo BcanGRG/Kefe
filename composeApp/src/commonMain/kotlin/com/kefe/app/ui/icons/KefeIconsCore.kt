@@ -347,6 +347,17 @@ internal object KefeIconsCore {
             moveTo(5.2f, 15f); lineTo(12f, 15f)
         }.also { _halfCircle = it }
 
+    /** Fis - Plan'daki "Son girişler" satiri: elle girilen tek bir harcama. */
+    private var _receipt: ImageVector? = null
+    val Receipt: ImageVector
+        get() = _receipt ?: kefeIcon("KefeReceipt") {
+            moveTo(6f, 3f); lineTo(18f, 3f); lineTo(18f, 21f); lineTo(15.6f, 19.5f)
+            lineTo(13.2f, 21f); lineTo(10.8f, 19.5f); lineTo(8.4f, 21f); lineTo(6f, 19.5f); close()
+            moveTo(9f, 8f); lineTo(15f, 8f)
+            moveTo(9f, 12f); lineTo(15f, 12f)
+            moveTo(9f, 16f); lineTo(12.5f, 16f)
+        }.also { _receipt = it }
+
     private var _lock: ImageVector? = null
     val Lock: ImageVector
         get() = _lock ?: kefeIcon("KefeLock") {

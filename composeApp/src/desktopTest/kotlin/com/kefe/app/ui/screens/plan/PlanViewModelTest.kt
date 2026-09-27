@@ -14,6 +14,7 @@ import com.kefe.app.domain.model.ExpenseEntry
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.GoldSubtype
+import com.kefe.app.domain.model.IncomeKind
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.PlanItem
 import com.kefe.app.domain.model.PlanItemStatus
@@ -68,6 +69,11 @@ import kotlin.test.assertTrue
  *
  * "Bugun" YALNIZ gun akisindan gelir: saat 22 Ekim'de sabit kalirken gun akisi
  * 1 Kasim'a ilerletilir - saatten okuyan tek satir burada yakalanir.
+ *
+ * Defter: gelir kisi basinadir ve bosaltilan alan satiri siler ("—", 0 degil);
+ * yeni harcamanin tarihi bu ayda bugun, gecmis ayda ayin son gunudur; kimlik
+ * editor acilirken uretildigi icin cift kayit tek satir birakir; gider
+ * girilmemis ayda tasarruf orani ve gerceklesen Kalan yazilmaz.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlanViewModelTest {
@@ -163,6 +169,9 @@ class PlanViewModelTest {
             realTime { plan.observePlanItems().first(predicate) }
 
         suspend fun items(): List<PlanItem> = plan.observePlanItems().first()
+
+        suspend fun expense(id: String, date: KefeDate, amount: Double, category: ExpenseCategory = ExpenseCategory.Groceries) =
+            plan.upsertExpense(ExpenseEntry(id = id, date = date, category = category, amount = amount))
     }
 
     // --- Acilis ve ay gecisi -------------------------------------------------
@@ -659,7 +668,174 @@ class PlanViewModelTest {
         assertNull(vm.state.value.sheet)
         assertEquals(14.0, env.items().first { it.month == October }.target)
     }
+
+    // --- Defter: gelir -------------------------------------------------------
+
+    @Test
+    fun `gelir kisi basina, bosaltilan alan satiri siler`() = runTest {
+        val env = Env()
+        env.plan.setIncome(September, "member_owner", IncomeKind.Salary, 80_000.0)
+        val vm = env.vm()
+        vm.awaitState { it.incomeOf("member_owner") == "—" }
+
+        vm.onIntent(PlanIntent.EditIncome("member_owner"))
+        assertEquals(80_000.0, vm.incomeEditor()?.lastSalary)
+        vm.onIntent(PlanIntent.IncomeUseLastSalary)
+        assertEquals("80000", vm.incomeEditor()?.salaryText)
+        vm.onIntent(PlanIntent.IncomeSalary("85000"))
+        vm.onIntent(PlanIntent.SaveIncome)
+        assertNull(vm.state.value.sheet)
+
+        val saved = vm.awaitState { it.incomeOf("member_owner") == "₺85.000" }
+        // Gelir kisinin: esin satiri girilmedi olarak kalir.
+        assertEquals("—", saved.incomeOf("member_partner"))
+
+        vm.onIntent(PlanIntent.EditIncome("member_owner"))
+        assertEquals("85000", vm.incomeEditor()?.salaryText)
+        vm.onIntent(PlanIntent.IncomeSalary(""))
+        vm.onIntent(PlanIntent.SaveIncome)
+        vm.awaitState { it.incomeOf("member_owner") == "—" }
+        assertTrue(env.plan.observeMonthBook(October).first().incomes.isEmpty())
+    }
+
+    // --- Defter: gider -------------------------------------------------------
+
+    @Test
+    fun `yeni harcama bu ayda bugune, gecmis ayda ayin son gunune yazilir`() = runTest {
+        val env = Env()
+        val vm = env.vm()
+        vm.awaitHeader { it.title == "Ekim 2026" }
+
+        vm.onIntent(PlanIntent.AddExpense)
+        assertEquals(KefeDate(2026, 10, 22), vm.expenseEditor()?.date)
+        vm.onIntent(PlanIntent.DismissSheet)
+
+        vm.onIntent(PlanIntent.PreviousMonth)
+        vm.awaitHeader { it.title == "Eylül 2026" }
+        vm.onIntent(PlanIntent.AddExpense)
+        assertEquals(KefeDate(2026, 9, 30), vm.expenseEditor()?.date)
+    }
+
+    @Test
+    fun `gun donunce yeni harcama saatin degil gun akisinin gunune yazilir`() = runTest {
+        val env = Env()
+        val vm = env.vm()
+        vm.awaitHeader { it.title == "Ekim 2026" }
+        // Saat 22 Ekim'de kalir; gun akisi 1 Kasim'a ilerler.
+        env.days.value = KefeDate(2026, 11, 1)
+        vm.awaitHeader { it.title == "Kasım 2026" }
+
+        vm.onIntent(PlanIntent.AddExpense)
+        assertEquals(KefeDate(2026, 11, 1), vm.expenseEditor()?.date)
+    }
+
+    @Test
+    fun `cift kayit tek harcama birakir, eksik alan kaydetmez`() = runTest {
+        val env = Env()
+        val vm = env.vm()
+        vm.awaitState { it.content.expenses != null }
+
+        vm.onIntent(PlanIntent.AddExpense)
+        vm.onIntent(PlanIntent.ExpenseAmount("1500"))
+        vm.onIntent(PlanIntent.SaveExpense)
+        // Kategori secilmedi: sheet acik kalir, hata gorunur.
+        assertEquals(true, vm.expenseEditor()?.categoryError)
+
+        vm.onIntent(PlanIntent.ExpenseSelectCategory(ExpenseCategory.Groceries))
+        vm.onIntent(PlanIntent.ExpenseNote(" market "))
+        vm.onIntent(PlanIntent.SaveExpense)
+        vm.onIntent(PlanIntent.SaveExpense)
+        assertNull(vm.state.value.sheet)
+
+        val card = vm.awaitState { it.content.expenses?.recent?.isNotEmpty() == true }.content.expenses!!
+        assertEquals("₺1.500", card.totalLine)
+        val book = env.plan.observeMonthBook(October).first()
+        assertEquals(1, book.expenses.size)
+        assertEquals("market", book.expenses.single().note)
+    }
+
+    @Test
+    fun `butce asimi metinle gorunur`() = runTest {
+        val env = Env()
+        env.plan.setBudgets(October, mapOf(ExpenseCategory.Groceries to 10_000.0))
+        env.expense("e1", KefeDate(2026, 10, 5), 12_300.0)
+        val vm = env.vm()
+        val card = vm.awaitState { it.content.expenses?.totalOverText != null }.content.expenses!!
+        assertEquals("₺2.300 aşıldı", card.totalOverText)
+        assertEquals("₺2.300 aşıldı", card.categories.single().overText)
+    }
+
+    // --- Defter: butce -------------------------------------------------------
+
+    @Test
+    fun `butce gecen aydan kopyalanir ve bu aya yazilir`() = runTest {
+        val env = Env()
+        env.plan.setBudgets(September, mapOf(ExpenseCategory.Groceries to 10_000.0, ExpenseCategory.Housing to 20_000.0))
+        env.expense("e_eylul", KefeDate(2026, 9, 12), 9_000.0)
+        val vm = env.vm()
+        vm.awaitState { it.content.expenses != null }
+
+        vm.onIntent(PlanIntent.EditBudget)
+        val editor = assertNotNull(vm.budgetEditor())
+        assertEquals(9_000.0, editor.lastSpent[ExpenseCategory.Groceries])
+        vm.onIntent(PlanIntent.BudgetCopyLastMonth)
+        assertEquals(
+            mapOf(ExpenseCategory.Groceries to "10000", ExpenseCategory.Housing to "20000"),
+            vm.budgetEditor()?.texts,
+        )
+        vm.onIntent(PlanIntent.BudgetAmount(ExpenseCategory.Groceries, "12000"))
+        vm.onIntent(PlanIntent.SaveBudget)
+        assertNull(vm.state.value.sheet)
+
+        val card = vm.awaitState { it.content.expenses?.totalLine == "₺0 / ₺32.000" }.content.expenses!!
+        assertEquals(2, card.categories.size)
+        val budgets = env.plan.observeMonthBook(October).first().budgets.associate { it.category to it.amount }
+        assertEquals(mapOf(ExpenseCategory.Groceries to 12_000.0, ExpenseCategory.Housing to 20_000.0), budgets)
+    }
+
+    // --- Para akisi ----------------------------------------------------------
+
+    @Test
+    fun `gelir var gider yok - tasarruf orani yok, gerceklesen kalan bos`() = runTest {
+        val env = Env()
+        env.plan.setIncome(October, "member_owner", IncomeKind.Salary, 85_000.0)
+        val vm = env.vm()
+        val state = vm.awaitState { it.flowRow("Gelir")?.actual == "₺85.000" }
+        assertNull(state.content.flow?.savingsLine)
+        assertEquals("—", state.flowRow("Kalan")?.actual)
+        assertEquals("—", state.flowRow("Gider")?.actual)
+    }
+
+    @Test
+    fun `gelecek ayda gerceklesen sutunu bos`() = runTest {
+        val env = Env()
+        env.plan.setIncome(October, "member_owner", IncomeKind.Salary, 85_000.0)
+        env.plan.setIncome(November, "member_owner", IncomeKind.Salary, 85_000.0)
+        env.expense("e_ekim", KefeDate(2026, 10, 5), 20_000.0)
+        val vm = env.vm()
+        val october = vm.awaitState { it.content.flow?.savingsLine != null }
+        assertEquals("Tasarruf oranı %76", october.content.flow?.savingsLine)
+
+        vm.onIntent(PlanIntent.NextMonth)
+        val november = vm.awaitState { it.content.header.title == "Kasım 2026" }
+        val table = assertNotNull(november.content.flow?.table)
+        assertTrue(table.all { it.actual == "—" })
+        assertEquals("₺85.000", table.first { it.label == "Gelir" }.planned)
+        assertNull(november.content.flow?.savingsLine)
+    }
 }
+
+/** Acik harcama editoru; baska sheet ya da hic sheet yoksa null. */
+private fun PlanViewModel.expenseEditor(): ExpenseEditor? = (state.value.sheet as? PlanSheet.Expense)?.editor
+
+private fun PlanViewModel.budgetEditor(): BudgetEditor? = (state.value.sheet as? PlanSheet.Budget)?.editor
+
+private fun PlanViewModel.incomeEditor(): IncomeEditor? = (state.value.sheet as? PlanSheet.Income)?.editor
+
+private fun PlanUiState.incomeOf(memberId: String): String? =
+    content.flow?.incomeRows?.firstOrNull { it.memberId == memberId }?.amount
+
+private fun PlanUiState.flowRow(label: String): FlowRow? = content.flow?.table?.firstOrNull { it.label == label }
 
 private val October = YearMonth(2026, 10)
 private val September = YearMonth(2026, 9)

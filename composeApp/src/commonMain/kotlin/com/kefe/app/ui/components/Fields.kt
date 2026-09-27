@@ -143,6 +143,11 @@ fun KefeTextField(
      * "İleri" bir sonraki alana gecer, "Tamam" klavyeyi kapatir.
      */
     keyboardActions: KeyboardActions? = null,
+    /**
+     * Cizim donusumu - tutar alanlarinda binlik ayrac ([ThousandsSeparatorTransformation]).
+     * Deger HAM kalir. Varsayilan yok: mevcut metin alanlari degismez.
+     */
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     val colors = KefeTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
@@ -200,6 +205,7 @@ fun KefeTextField(
                     keyboardOptions = keyboardOptions,
                     keyboardActions = actions,
                     interactionSource = interactionSource,
+                    visualTransformation = visualTransformation,
                     decorationBox = { innerTextField ->
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (value.isEmpty() && placeholder != null) {

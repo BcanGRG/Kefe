@@ -1,12 +1,19 @@
 package com.kefe.app.ui.screens.plan
 
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.ExpenseBudget
+import com.kefe.app.domain.model.ExpenseCategory
+import com.kefe.app.domain.model.ExpenseEntry
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.GoldSubtype
+import com.kefe.app.domain.model.IncomeEntry
+import com.kefe.app.domain.model.IncomeKind
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.Member
+import com.kefe.app.domain.model.MonthBook
 import com.kefe.app.domain.model.PlanItem
 import com.kefe.app.domain.model.PlanItemStatus
 import com.kefe.app.domain.model.PlanTargetMode
@@ -34,6 +41,11 @@ import kotlin.test.assertTrue
  * yazilmaz; kopyalama girisi YALNIZ kaynakta bu ayda olmayan bir varlik varken
  * acilir (ikinci kopya ayni eksigi bir daha tasirdi); elde olmadan planlanan fon,
  * alininca eldeki adiyla gorunur; ayin her kaleminin editorde bir cipi vardir.
+ *
+ * Para akisi: hic girilmemis rakam "—" kalir, 0 degil - gider girilmemis ay
+ * "Tasarruf oranı %100" demez, gelecek ayda gerceklesen sutunu bostur; butce ve
+ * plan yokken planli Kalan yazilmaz. Giderler: bos ay "Harcama girilmedi." der,
+ * harcamasi ve butcesi olmayan kategori listelenmez, son girisler en yeni 5.
  */
 class PlanDeriveTest {
 
@@ -292,6 +304,118 @@ class PlanDeriveTest {
         assertEquals(100.0, planTargetStep(PlanTargetMode.Quantity, QuantityUnit.Currency))
     }
 
+    // --- Para akisi -----------------------------------------------------------
+
+    @Test
+    fun `karsilastiracak bir sey yoksa tablo yok, gelir satirlari yine var`() {
+        val flow = assertNotNull(planContent(inputs(members = members)).flow)
+        assertNull(flow.table)
+        assertNull(flow.savingsLine)
+        assertNull(flow.planShareLine)
+        assertEquals(listOf("—", "—"), flow.incomeRows.map { it.amount })
+        assertEquals(listOf("Burak", "Ayşe"), flow.incomeRows.map { it.name })
+    }
+
+    @Test
+    fun `gider girilmemisse gider ve kalan yok, tasarruf orani uydurulmaz`() {
+        val book = MonthBook(oct, incomes = listOf(income("member_owner", 85_000.0)))
+        val flow = assertNotNull(planContent(inputs(members = members, books = listOf(book))).flow)
+        val table = assertNotNull(flow.table).associateBy { it.label }
+        assertEquals("₺85.000", table.getValue("Gelir").planned)
+        assertEquals("₺85.000", table.getValue("Gelir").actual)
+        assertEquals("—", table.getValue("Gider").actual)
+        // Butce de plan da yok: planli Kalan gelirin kendisini "dagitilmamis" diye yazmaz.
+        assertEquals("—", table.getValue("Kalan").planned)
+        assertEquals("—", table.getValue("Kalan").actual)
+        assertNull(flow.savingsLine)
+        assertEquals("Gider: plan yok, gerçekleşen yok", table.getValue("Gider").spoken)
+        assertEquals("Gelir: plan ₺85.000, gerçekleşen ₺85.000", table.getValue("Gelir").spoken)
+        assertEquals(listOf("₺85.000", "—"), flow.incomeRows.map { it.amount })
+    }
+
+    @Test
+    fun `tasarruf orani ve gelirden fazla gider`() {
+        val saving = MonthBook(oct, incomes = listOf(income("member_owner", 100_000.0)), expenses = listOf(expense("e1", 14, 68_000.0)))
+        assertEquals("Tasarruf oranı %32", planContent(inputs(books = listOf(saving))).flow?.savingsLine)
+
+        val over = MonthBook(oct, incomes = listOf(income("member_owner", 50_000.0)), expenses = listOf(expense("e1", 14, 56_000.0)))
+        assertEquals("Gider gelirin %112'si", planContent(inputs(books = listOf(over))).flow?.savingsLine)
+    }
+
+    @Test
+    fun `plan gelirin payi ve planli kalan`() {
+        val book = MonthBook(oct, incomes = listOf(income("member_owner", 185_000.0)))
+        val flow = assertNotNull(planContent(fiveItemMonth().copy(books = listOf(book))).flow)
+        assertEquals("Plan gelirin %38'i", flow.planShareLine)
+        val table = assertNotNull(flow.table).associateBy { it.label }
+        assertEquals("₺70.330", table.getValue("Yatırım").planned)
+        assertEquals("₺114.670", table.getValue("Kalan").planned)
+    }
+
+    @Test
+    fun `gelecek ayda gerceklesen sutunu bos, tasarruf orani yok`() {
+        val book = MonthBook(
+            nov,
+            incomes = listOf(income("member_owner", 85_000.0, month = nov)),
+            expenses = listOf(expense("e_kasim", 30, 2_000.0, month = nov)),
+            budgets = listOf(ExpenseBudget("b1", nov, ExpenseCategory.Groceries, 10_000.0)),
+        )
+        val flow = assertNotNull(planContent(inputs(selection = nov, books = listOf(book))).flow)
+        val table = assertNotNull(flow.table)
+        assertTrue(table.all { it.actual == "—" })
+        assertEquals("₺85.000", table.first { it.label == "Gelir" }.planned)
+        assertNull(flow.savingsLine)
+    }
+
+    // --- Giderler ------------------------------------------------------------
+
+    @Test
+    fun `bos ayda gider karti harcama girilmedi der`() {
+        val card = assertNotNull(planContent(inputs()).expenses)
+        assertEquals("Harcama girilmedi.", card.totalLine)
+        assertNull(card.totalRatio)
+        assertTrue(card.categories.isEmpty())
+        assertTrue(card.recent.isEmpty())
+    }
+
+    @Test
+    fun `butce asimi metinle, harcamasi ve butcesi olmayan kategori yok`() {
+        val book = MonthBook(
+            oct,
+            expenses = listOf(expense("e1", 3, 12_300.0), expense("e2", 5, 1_000.0, category = ExpenseCategory.Transport)),
+            budgets = listOf(
+                ExpenseBudget("b1", oct, ExpenseCategory.Groceries, 10_000.0),
+                ExpenseBudget("b2", oct, ExpenseCategory.Leisure, 2_000.0),
+            ),
+        )
+        val card = assertNotNull(planContent(inputs(books = listOf(book))).expenses)
+        assertEquals("₺13.300 / ₺12.000", card.totalLine)
+        assertEquals("₺1.300 aşıldı", card.totalOverText)
+        assertEquals(
+            listOf(ExpenseCategory.Groceries, ExpenseCategory.Transport, ExpenseCategory.Leisure),
+            card.categories.map { it.category },
+        )
+        val groceries = card.categories.first { it.category == ExpenseCategory.Groceries }
+        assertEquals("₺12.300 / ₺10.000", groceries.amounts)
+        assertEquals("₺2.300 aşıldı", groceries.overText)
+        assertEquals("₺1.000", card.categories.first { it.category == ExpenseCategory.Transport }.amounts)
+        assertNull(card.categories.first { it.category == ExpenseCategory.Transport }.ratio)
+        assertEquals("₺0 / ₺2.000", card.categories.first { it.category == ExpenseCategory.Leisure }.amounts)
+    }
+
+    @Test
+    fun `son girisler en yeni bes`() {
+        val book = MonthBook(
+            oct,
+            expenses = (1..7).map { day -> expense("e$day", day, 100.0 * day, note = if (day == 7) "market" else null) },
+        )
+        val recent = assertNotNull(planContent(inputs(books = listOf(book))).expenses).recent
+        assertEquals(listOf("e7", "e6", "e5", "e4", "e3"), recent.map { it.id })
+        assertEquals("7 Eki · market", recent.first().subtitle)
+        assertEquals("Market", recent.first().title)
+        assertEquals("6 Eki", recent[1].subtitle)
+    }
+
     // --- Yardimcilar ---------------------------------------------------------
 
     /**
@@ -398,6 +522,35 @@ class PlanDeriveTest {
         monthlyContribution = 50_000.0,
     )
 
+    private val members = listOf(
+        Member(id = "member_owner", name = "Burak", initials = "B"),
+        Member(id = "member_partner", name = "Ayşe", initials = "A"),
+    )
+
+    private fun income(memberId: String, amount: Double, month: YearMonth = oct) = IncomeEntry(
+        id = "inc_${month.month}_$memberId",
+        month = month,
+        memberId = memberId,
+        kind = IncomeKind.Salary,
+        amount = amount,
+    )
+
+    private fun expense(
+        id: String,
+        day: Int,
+        amount: Double,
+        month: YearMonth = oct,
+        category: ExpenseCategory = ExpenseCategory.Groceries,
+        note: String? = null,
+    ) = ExpenseEntry(
+        id = id,
+        date = KefeDate(month.year, month.month, day),
+        category = category,
+        amount = amount,
+        note = note,
+        createdAt = day.toLong(),
+    )
+
     private fun inputs(
         selection: YearMonth? = null,
         items: List<PlanItem> = emptyList(),
@@ -405,6 +558,8 @@ class PlanDeriveTest {
         transactions: List<Transaction> = emptyList(),
         goals: List<Goal> = emptyList(),
         assignments: Map<String, GoalAssignment> = emptyMap(),
+        members: List<Member> = emptyList(),
+        books: List<MonthBook> = emptyList(),
     ) = PlanInputs(
         selection = selection,
         today = today,
@@ -413,10 +568,10 @@ class PlanDeriveTest {
         positions = positions,
         goals = goals,
         assignments = assignments,
-        members = emptyList(),
+        members = members,
         board = PriceBoard(emptyList(), "", PriceFreshness.Offline),
         activeMemberId = null,
-        books = emptyList(),
+        books = books,
     )
 
     private companion object {

@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kefe.app.domain.model.PlanItemStatus
 import com.kefe.app.domain.model.color
+import com.kefe.app.ui.components.KefeAvatar
 import com.kefe.app.ui.components.KefeBadge
 import com.kefe.app.ui.components.KefeCard
 import com.kefe.app.ui.components.KefeChip
@@ -60,7 +61,7 @@ import com.kefe.app.ui.theme.Space
 import com.kefe.app.ui.theme.tabular
 
 /**
- * Plan sekmesi: ayin yatirim plani, para akisi ve serisi - tek kolon.
+ * Plan sekmesi: ayin yatirim plani, para akisi, giderleri ve serisi - tek kolon.
  *
  * Ekran sheet CIZMEZ: plan sheet'leri kabukta, her ekranin ustunde tek yerde
  * cizilir (bkz. App.kt, PlanSheets). Masaustunde genislik ContentWidth ile
@@ -107,6 +108,8 @@ private fun PlanBody(
         if (content.goalContributions.isNotEmpty()) {
             GoalContributionCard(content.goalContributions, onOpenGoal)
         }
+        content.flow?.let { MoneyFlowCardView(it, onIntent) }
+        content.expenses?.let { ExpensesCardView(it, onIntent) }
     }
 }
 
@@ -487,6 +490,213 @@ private fun GoalContributionCard(rows: List<GoalContributionRow>, onOpenGoal: (S
     }
 }
 
+// --- Para akisi ---------------------------------------------------------------
+
+/**
+ * "Para akışı": plan ve gerceklesen iki sutunda, altta uye uye gelir. Gelir
+ * satirlari hep cizilir - gelirin giris kapisi burasi.
+ */
+@Composable
+private fun MoneyFlowCardView(card: MoneyFlowCard, onIntent: (PlanIntent) -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    KefeCard(Modifier.fillMaxWidth()) {
+        Text("Para akışı", style = t.bodyStrong, color = c.onSurface)
+
+        card.table?.let { rows ->
+            Spacer(Modifier.height(Space.x12))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.weight(1f))
+                FlowHeaderCell("Plan")
+                FlowHeaderCell("Gerçekleşen")
+            }
+            rows.forEach { row ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // Satir tek cumle okunur ("Gelir: plan ₺85.000, gerçekleşen yok");
+                        // uc ayri hucre birbirinden kopuk okunurdu.
+                        .semantics(mergeDescendants = true) { contentDescription = row.spoken }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(row.label, style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
+                    FlowValueCell(row.planned)
+                    FlowValueCell(row.actual)
+                }
+            }
+        }
+
+        val lines = listOfNotNull(card.savingsLine, card.planShareLine, card.salesLine)
+        if (lines.isNotEmpty()) {
+            Spacer(Modifier.height(Space.x8))
+            lines.forEach { line -> Text(line, style = t.caption.tabular(), color = c.onSurfaceMuted) }
+        }
+
+        if (card.incomeRows.isNotEmpty()) {
+            Spacer(Modifier.height(Space.x12))
+            KefeHairline()
+            Spacer(Modifier.height(Space.x12))
+            Text("Gelir", style = t.micro, color = c.onSurfaceMuted)
+            card.incomeRows.forEach { row -> IncomeRow(row, onIntent) }
+        }
+    }
+}
+
+@Composable
+private fun FlowHeaderCell(text: String) {
+    Text(
+        text = text,
+        style = KefeTheme.type.micro,
+        color = KefeTheme.colors.onSurfaceMuted,
+        textAlign = TextAlign.End,
+        maxLines = 1,
+        modifier = Modifier.width(FlowColumnWidth),
+    )
+}
+
+@Composable
+private fun FlowValueCell(text: String) {
+    Text(
+        text = text,
+        style = KefeTheme.type.body.tabular(),
+        color = KefeTheme.colors.onSurface,
+        textAlign = TextAlign.End,
+        maxLines = 1,
+        modifier = Modifier.width(FlowColumnWidth),
+    )
+}
+
+@Composable
+private fun IncomeRow(row: IncomeRowUi, onIntent: (PlanIntent) -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = Sizes.touchTarget)
+            .clickable(onClickLabel = "Düzenle", role = Role.Button) { onIntent(PlanIntent.EditIncome(row.memberId)) },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        KefeAvatar(initials = row.initials, index = row.index, size = Sizes.avatarSmall)
+        Spacer(Modifier.width(Space.x12))
+        Text(
+            text = row.name,
+            style = t.body,
+            color = c.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(Space.x8))
+        Text(row.amount, style = t.body.tabular(), color = c.onSurface)
+        Spacer(Modifier.width(Space.x8))
+        KefeIcon(KefeIcons.ChevronRight, null, size = IconSize.small, tint = c.onSurfaceMuted)
+    }
+}
+
+// --- Giderler ------------------------------------------------------------------
+
+/**
+ * "Giderler": toplam (butceye karsi), kategoriler ve son girisler. Bos ayda da
+ * cizilir - harcama ve butcenin giris kapisi. Asim METINLE soylenir ("₺2.300
+ * aşıldı"); kirmizi yalniz eslik eder.
+ */
+@Composable
+private fun ExpensesCardView(card: ExpensesCard, onIntent: (PlanIntent) -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    // Yatay dolgu 4dp: "Son girişler" KefeListRow'un kendi 12dp dolgusunu tasir; geri
+    // kalan icerik 12dp ile diger kartlarin 16dp hizasinda durur (Plan dışı alımlar gibi).
+    KefeCard(
+        modifier = Modifier.fillMaxWidth(),
+        // Ust dolgu 4dp: basliktaki "Bütçe" dugmesi 44dp; "Giderler" boylece diger
+        // kartlarin basligiyla ayni yukseklikte durur.
+        contentPadding = PaddingValues(start = Space.x4, end = Space.x4, top = Space.x4, bottom = Space.x8),
+    ) {
+        Column(Modifier.padding(horizontal = Space.x12)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Giderler", style = t.bodyStrong, color = c.onSurface, modifier = Modifier.weight(1f))
+                KefeTextButton(text = "Bütçe", onClick = { onIntent(PlanIntent.EditBudget) })
+            }
+            Text(card.totalLine, style = t.h2.tabular(), color = c.onSurface)
+            val over = card.totalOverText != null
+            card.totalRatio?.let { ratio ->
+                Spacer(Modifier.height(Space.x8))
+                KefeProgressBar(progress = ratio, color = if (over) c.negative else c.accent)
+            }
+            card.totalOverText?.let { text ->
+                Spacer(Modifier.height(Space.x4))
+                Text(text, style = t.caption.tabular(), color = c.negative)
+            }
+
+            card.categories.forEach { row ->
+                Spacer(Modifier.height(Space.x12))
+                CategoryRow(row)
+            }
+
+            Spacer(Modifier.height(Space.x8))
+            KefeTextButton(
+                text = "Harcama ekle",
+                onClick = { onIntent(PlanIntent.AddExpense) },
+                leadingIcon = KefeIcons.Plus,
+            )
+        }
+
+        if (card.recent.isNotEmpty()) {
+            Spacer(Modifier.height(Space.x4))
+            Text(
+                "Son girişler",
+                style = t.micro,
+                color = c.onSurfaceMuted,
+                modifier = Modifier.padding(horizontal = Space.x12),
+            )
+            card.recent.forEach { row ->
+                KefeListRow(
+                    title = row.title,
+                    subtitle = row.subtitle,
+                    value = row.amount,
+                    leadingIcon = KefeIcons.Receipt,
+                    onClick = { onIntent(PlanIntent.EditExpense(row.id)) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryRow(row: CategoryRowUi) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    val over = row.overText != null
+
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = row.label,
+                style = t.body,
+                color = c.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(Space.x8))
+            Text(row.amounts, style = t.caption.tabular(), color = c.onSurfaceMuted)
+        }
+        row.ratio?.let { ratio ->
+            Spacer(Modifier.height(6.dp))
+            KefeProgressBarThin(progress = ratio, color = if (over) c.negative else c.accent)
+        }
+        row.overText?.let { text ->
+            Spacer(Modifier.height(Space.x4))
+            Text(text, style = t.micro.tabular(), color = c.negative)
+        }
+    }
+}
+
 // --- Yuklenme --------------------------------------------------------------
 
 @Composable
@@ -512,6 +722,9 @@ private val AssetBoxSize = 36.dp
 
 /** Uzun bir hedef adi varligin adini satirdan itmesin. */
 private val GoalBadgeMaxWidth = 140.dp
+
+/** Para akisi tablosunun Plan ve Gerçekleşen sutunlari - "₺185.000" sigar. */
+private val FlowColumnWidth = 104.dp
 
 /** Bos durum dugmeleri genis ekranda satir boyu uzamasin. */
 private val EmptyActionsMaxWidth = 320.dp

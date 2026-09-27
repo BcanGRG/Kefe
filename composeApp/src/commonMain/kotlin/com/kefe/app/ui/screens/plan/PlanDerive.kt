@@ -1,11 +1,14 @@
 package com.kefe.app.ui.screens.plan
 
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.ExpenseCategory
+import com.kefe.app.domain.model.ExpenseEntry
 import com.kefe.app.domain.model.ExtraKind
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.GoldSubtype
+import com.kefe.app.domain.model.IncomeKind
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.MonthBook
@@ -25,6 +28,8 @@ import com.kefe.app.domain.model.copySourceFor
 import com.kefe.app.domain.model.currentUnitPrice
 import com.kefe.app.domain.model.goalWealth
 import com.kefe.app.domain.model.label
+import com.kefe.app.domain.model.monthFlow
+import com.kefe.app.domain.model.monthLabel
 import com.kefe.app.domain.model.monthName
 import com.kefe.app.domain.model.monthPlanProgress
 import com.kefe.app.domain.model.otherGoalOf
@@ -150,6 +155,8 @@ internal fun planContent(inputs: PlanInputs): PlanContent {
         emptyPlan = if (progress.items.isEmpty()) emptyPlanCard(month, copy) else null,
         extras = extrasCard(progress),
         goalContributions = goalContributionRows(inputs, progress, relation),
+        flow = moneyFlowCard(inputs, progress, relation),
+        expenses = expensesCard(inputs.book),
     )
 }
 
@@ -273,6 +280,217 @@ internal fun goalContributionRows(
         )
     }
 }
+
+// --- Para akisi ve giderler --------------------------------------------------
+
+/**
+ * "Para akışı": plan ve gerceklesen yan yana.
+ *
+ * monthFlow hic gider girilmemisken de gideri 0 verir; o yuzden tasarruf orani,
+ * kalan ve planli kalan tek baslarina olgu sayilmaz. Gider girilmemisken
+ * "Kalan = gelir - yatirim" ve "Tasarruf oranı %100" uydurma rakam olurdu; butce
+ * ve plan yokken planli Kalan da gelirin kendisini "dagitilmamis" diye yazardi.
+ * Gelecek ayda gerceklesen hicbir sey yoktur: sutun "—" (0 bir olgu degil).
+ */
+internal fun moneyFlowCard(inputs: PlanInputs, progress: MonthPlanProgress, relation: MonthRelation): MoneyFlowCard {
+    val book = inputs.book
+    // Plan yoksa ya da hicbir kalemin agirligi bilinmiyorsa planli yatirim "—": yatirim
+    // kartinin "₺0 planlandı" yazmamasiyla ayni kural.
+    val plannedInvest = progress.plannedTl.takeIf { progress.items.isNotEmpty() && it > 0.0 }
+    val flow = monthFlow(book, inputs.transactions, plannedInvest)
+    val future = relation == MonthRelation.Future
+    val hasExpenses = book.expenses.isNotEmpty()
+    val income = flow.income
+
+    val nothingToCompare = income == null && flow.budgetTotal == null && plannedInvest == null &&
+        !hasExpenses && flow.investedNet == 0.0
+    val table = if (nothingToCompare) {
+        null
+    } else {
+        listOf(
+            flowRow("Gelir", income, income.takeUnless { future }),
+            flowRow("Gider", flow.budgetTotal, flow.expenses.takeIf { hasExpenses && !future }),
+            flowRow("Yatırım", plannedInvest, flow.investedNet.takeUnless { future }),
+            flowRow(
+                "Kalan",
+                flow.plannedRemaining.takeIf { income != null && (flow.budgetTotal != null || plannedInvest != null) },
+                flow.remaining.takeIf { hasExpenses && !future },
+            ),
+        )
+    }
+
+    val savingsLine = if (income != null && income > 0.0 && hasExpenses && !future) {
+        val rate = (income - flow.expenses) / income
+        if (rate >= 0.0) "Tasarruf oranı ${Money.ratioOf(rate)}" else "Gider gelirin ${trPercentOf(flow.expenses / income)}"
+    } else {
+        null
+    }
+    // Gelecek ayda da yazilir: ikisi de plan.
+    val planShareLine = if (plannedInvest != null && income != null && income > 0.0) {
+        "Plan gelirin ${trPercentOf(plannedInvest / income)}"
+    } else {
+        null
+    }
+
+    return MoneyFlowCard(
+        table = table,
+        savingsLine = savingsLine,
+        planShareLine = planShareLine,
+        salesLine = flow.sells.takeIf { it > 0.0 }?.let { "Satışlar ${Money.tl(it)}" },
+        incomeRows = inputs.members.mapIndexed { index, member ->
+            IncomeRowUi(
+                memberId = member.id,
+                name = member.name,
+                initials = member.initials,
+                index = index,
+                amount = flow.incomeByMember[member.id]?.let { Money.tl(it) } ?: "—",
+            )
+        },
+    )
+}
+
+private fun flowRow(label: String, planned: Double?, actual: Double?): FlowRow {
+    val plannedText = planned?.let { Money.tl(it) } ?: "—"
+    val actualText = actual?.let { Money.tl(it) } ?: "—"
+    return FlowRow(
+        label = label,
+        planned = plannedText,
+        actual = actualText,
+        spoken = "$label: plan ${spokenAmount(plannedText)}, gerçekleşen ${spokenAmount(actualText)}",
+    )
+}
+
+/** Ekran okuyucu "—"yu "tire" diye okur; bilinmeyen rakam "yok" diye soylenir. */
+private fun spokenAmount(text: String): String = if (text == "—") "yok" else text
+
+/**
+ * "Giderler" - bos ayda da kurulur (harcama ve butcenin giris noktasi). "Bu ay"
+ * denmez: sayfa baska aylari da gosterir.
+ */
+internal fun expensesCard(book: MonthBook): ExpensesCard {
+    val spentBy = book.expenses.totalsByCategory()
+    val budgetBy = book.budgets.groupBy { it.category }.mapValues { (_, list) -> list.sumOf { it.amount } }
+    val spent = spentBy.values.sum()
+    val budget = budgetBy.takeIf { it.isNotEmpty() }?.values?.sum()
+
+    val categories = ExpenseCategory.entries.mapNotNull { category ->
+        val categorySpent = spentBy[category] ?: 0.0
+        val categoryBudget = budgetBy[category]
+        if (categorySpent == 0.0 && categoryBudget == null) return@mapNotNull null
+        CategoryRowUi(
+            category = category,
+            label = category.label(),
+            amounts = categoryBudget?.let { "${Money.tl(categorySpent)} / ${Money.tl(it)}" } ?: Money.tl(categorySpent),
+            ratio = categoryBudget?.let { spentRatio(categorySpent, it) },
+            overText = overText(categorySpent, categoryBudget),
+        )
+    }
+
+    return ExpensesCard(
+        totalLine = when {
+            budget != null -> "${Money.tl(spent)} / ${Money.tl(budget)}"
+            book.expenses.isNotEmpty() -> Money.tl(spent)
+            else -> "Harcama girilmedi."
+        },
+        totalRatio = budget?.let { spentRatio(spent, it) },
+        totalOverText = overText(spent, budget),
+        categories = categories,
+        recent = book.expenses
+            .sortedWith(NewestFirst)
+            .take(RecentExpenseCount)
+            .map { e ->
+                val note = e.note?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+                ExpenseRowUi(
+                    id = e.id,
+                    title = e.category.label(),
+                    subtitle = "${e.date.day} ${e.date.monthLabel()}$note",
+                    amount = Money.tl(e.amount),
+                )
+            },
+    )
+}
+
+private fun List<ExpenseEntry>.totalsByCategory(): Map<ExpenseCategory, Double> =
+    groupBy { it.category }.mapValues { (_, list) -> list.sumOf { it.amount } }
+
+private fun spentRatio(spent: Double, budget: Double): Float? =
+    if (budget > 0.0) (spent / budget).coerceIn(0.0, 1.0).toFloat() else null
+
+/** "₺2.300 aşıldı" - yalniz butce varken ve asildiysa. */
+private fun overText(spent: Double, budget: Double?): String? =
+    if (budget != null && spent > budget) "${Money.tl(spent - budget)} aşıldı" else null
+
+/** En yeni once: tarih, ayni gunde giris ani. */
+private val NewestFirst: Comparator<ExpenseEntry> =
+    compareByDescending<ExpenseEntry> { it.date.year }
+        .thenByDescending { it.date.month }
+        .thenByDescending { it.date.day }
+        .thenByDescending { it.createdAt }
+
+/** "Son girişler"de gosterilen en fazla giris. */
+private const val RecentExpenseCount = 5
+
+// --- Defter editorleri -------------------------------------------------------
+
+/** Uyenin gosterilen aydaki geliri; uye yoksa (silinmis) null. */
+internal fun incomeEditorOf(inputs: PlanInputs, memberId: String): IncomeEditor? {
+    val member = inputs.members.firstOrNull { it.id == memberId } ?: return null
+    return IncomeEditor(
+        month = inputs.month,
+        memberId = member.id,
+        memberName = member.name,
+        salaryText = rawAmount(inputs.book.incomeOf(memberId, IncomeKind.Salary) ?: 0.0),
+        extraText = rawAmount(inputs.book.incomeOf(memberId, IncomeKind.Extra) ?: 0.0),
+        lastSalary = inputs.previousBook.incomeOf(memberId, IncomeKind.Salary),
+        lastExtra = inputs.previousBook.incomeOf(memberId, IncomeKind.Extra),
+    )
+}
+
+/** Uyenin o turdeki geliri; girilmemisse null. */
+private fun MonthBook.incomeOf(memberId: String, kind: IncomeKind): Double? =
+    incomes.filter { it.memberId == memberId && it.kind == kind }
+        .takeIf { it.isNotEmpty() }
+        ?.sumOf { it.amount }
+        ?.takeIf { it > 0.0 }
+
+/**
+ * Yeni harcama. Kimlik BURADA, editor acilirken gelir ([id]). Tarih: bu ayda
+ * bugun, baska ayda o ayin son gunu (onayli kural). Ekleyen: bu cihazin profili,
+ * yoksa ilk uye (ekleme sayfasiyla ayni kural).
+ */
+internal fun newExpenseEditor(inputs: PlanInputs, id: String): ExpenseEditor = ExpenseEditor(
+    month = inputs.month,
+    id = id,
+    isNew = true,
+    category = null,
+    amountText = "",
+    note = "",
+    date = if (inputs.month == inputs.current) inputs.today else inputs.month.lastDay(),
+    addedByMemberId = inputs.activeMemberId ?: inputs.members.firstOrNull()?.id,
+)
+
+/** Kayitli harcama: kimligi, tarihi ve giris ani korunur (sira degismez). */
+internal fun expenseEditorOf(entry: ExpenseEntry): ExpenseEditor = ExpenseEditor(
+    month = entry.month,
+    id = entry.id,
+    isNew = false,
+    category = entry.category,
+    amountText = rawAmount(entry.amount),
+    note = entry.note.orEmpty(),
+    date = entry.date,
+    createdAt = entry.createdAt,
+    addedByMemberId = entry.addedByMemberId,
+)
+
+internal fun budgetEditorOf(inputs: PlanInputs): BudgetEditor = BudgetEditor(
+    month = inputs.month,
+    texts = inputs.book.budgets.groupBy { it.category }
+        .mapValues { (_, list) -> rawAmount(list.sumOf { it.amount }) },
+    lastSpent = inputs.previousBook.expenses.totalsByCategory(),
+    lastBudgets = inputs.previousBook.budgets.groupBy { it.category }
+        .mapValues { (_, list) -> list.sumOf { it.amount } },
+    income = monthFlow(inputs.book, emptyList(), plannedInvest = null).income,
+)
 
 // --- Fiyat -------------------------------------------------------------------
 
@@ -404,4 +622,28 @@ internal fun PlanSheet.refreshed(inputs: PlanInputs): PlanSheet = when (this) {
         } else {
             this
         }
+
+    // Yalniz ipuclari (gecen ay) tazelenir; yazilan tutarlar yerinde kalir.
+    is PlanSheet.Income ->
+        if (editor.month == inputs.month) {
+            PlanSheet.Income(
+                editor.copy(
+                    lastSalary = inputs.previousBook.incomeOf(editor.memberId, IncomeKind.Salary),
+                    lastExtra = inputs.previousBook.incomeOf(editor.memberId, IncomeKind.Extra),
+                ),
+            )
+        } else {
+            this
+        }
+
+    is PlanSheet.Budget ->
+        if (editor.month == inputs.month) {
+            val fresh = budgetEditorOf(inputs)
+            PlanSheet.Budget(editor.copy(lastSpent = fresh.lastSpent, lastBudgets = fresh.lastBudgets, income = fresh.income))
+        } else {
+            this
+        }
+
+    // Harcamanin baglami yok: kategori, tutar, not ve tarih kullanicinin.
+    is PlanSheet.Expense -> this
 }

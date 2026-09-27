@@ -299,6 +299,39 @@ class PlanTextTest {
         assertEquals(null, buyPriceOf("fund_xyz", empty, listOf(afa)))
     }
 
+    // --- Yuzde ve iyelik eki -------------------------------------------------
+
+    @Test
+    fun `iyelik eki sayinin okunan son kelimesine gore`() {
+        val table = mapOf(
+            0 to "'ı", 3 to "'ü", 6 to "'sı", 9 to "'u", 10 to "'u", 20 to "'si", 29 to "'u",
+            30 to "'u", 38 to "'i", 40 to "'ı", 50 to "'si", 60 to "'ı", 70 to "'i", 80 to "'i",
+            90 to "'ı", 100 to "'ü", 112 to "'si", 1000 to "'i",
+        )
+        table.forEach { (n, suffix) -> assertEquals(suffix, trPercentSuffix(n), "$n") }
+    }
+
+    @Test
+    fun `yuzde bir kez yuvarlanir - rakam ve ek ayni sayidan`() {
+        assertEquals("%38'i", trPercentOf(0.376))
+        assertEquals("%38'i", trPercentOf(0.375))
+        assertEquals("%29'u", trPercentOf(0.2949))
+        assertEquals("%112'si", trPercentOf(1.12))
+    }
+
+    @Test
+    fun `butce toplami gelire oranla, gelir yoksa yalniz toplam`() {
+        val editor = BudgetEditor(
+            month = YearMonth(2026, 10),
+            texts = mapOf(ExpenseCategory.Housing to "20000", ExpenseCategory.Groceries to "5000", ExpenseCategory.Other to ""),
+            lastSpent = emptyMap(),
+            lastBudgets = emptyMap(),
+            income = 85_000.0,
+        )
+        assertEquals("Toplam ₺25.000 · gelirin %29'u", editor.totalLine())
+        assertEquals("Toplam ₺25.000", editor.copy(income = null).totalLine())
+    }
+
     // --- Yardimcilar ---------------------------------------------------------
 
     private fun progress(

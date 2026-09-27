@@ -12,6 +12,8 @@ import com.kefe.app.domain.model.monthName
 import com.kefe.app.domain.model.parseAssetKey
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.maxQuantityDecimals
+import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.round
 
@@ -140,3 +142,45 @@ internal fun copyButtonLabel(source: YearMonth, target: YearMonth): String =
 /** Bos plan kartinin dugmesi: "Geçen ayı kopyala (Eylül)" | "Ağustos planını kopyala". */
 internal fun emptyCopyLabel(source: YearMonth, target: YearMonth): String =
     if (source == target.previous()) "Geçen ayı kopyala (${source.monthName()})" else "${source.monthName()} planını kopyala"
+
+// --- Para akisi --------------------------------------------------------------
+
+/**
+ * Turkce iyelik ekiyle yuzde: "%38'i", "%29'u", "%112'si". Yuzdeyi iyelikle
+ * yazmanin TEK yolu.
+ *
+ * Bir kez yuvarlar (yarim yukari, Money.format gibi) ve rakam ile eki AYNI
+ * tamsayidan kurar. NEDEN: Money.ratioOf kendi yuvarlar; ek ayri bir sayidan
+ * hesaplansaydi 37,6 icin "%38'si" gibi uyumsuz bir cift cikardi.
+ */
+internal fun trPercentOf(fraction: Double): String {
+    val percent = floor(abs(fraction) * 100.0 + 0.5).toInt()
+    return Money.ratio(percent.toDouble()) + trPercentSuffix(percent)
+}
+
+/**
+ * Sayidan sonra 3. tekil iyelik eki - sayinin SESLI okunan son kelimesine gore:
+ * 38 "otuz sekiz" -> sekiz-i, 112 "yuz on iki" -> iki-si, 100 "yuz" -> yuz-u,
+ * 1000 "bin" -> bin-i. Tablo testi icin internal (bkz. PlanTextTest).
+ */
+internal fun trPercentSuffix(percent: Int): String {
+    val n = abs(percent)
+    if (n == 0) return "'ı"
+    if (n % 100 == 0) return if (n % 1000 == 0) "'i" else "'ü"
+    val ones = n % 10
+    if (ones != 0) {
+        return when (ones) {
+            1, 5, 8 -> "'i"
+            2, 7 -> "'si"
+            3, 4 -> "'ü"
+            6 -> "'sı"
+            else -> "'u" // 9 dokuz
+        }
+    }
+    return when ((n / 10) % 10) {
+        1, 3 -> "'u" // on, otuz
+        2, 5 -> "'si" // yirmi, elli
+        4, 6, 9 -> "'ı" // kirk, altmis, doksan
+        else -> "'i" // 7 yetmis, 8 seksen
+    }
+}

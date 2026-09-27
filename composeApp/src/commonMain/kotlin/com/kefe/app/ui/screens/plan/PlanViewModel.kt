@@ -3,8 +3,11 @@ package com.kefe.app.ui.screens.plan
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.ExpenseCategory
+import com.kefe.app.domain.model.ExpenseEntry
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAssignment
+import com.kefe.app.domain.model.IncomeKind
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.PlanItem
@@ -15,6 +18,7 @@ import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.YearMonth
 import com.kefe.app.domain.model.catalogName
 import com.kefe.app.domain.model.defaultPlanMode
+import com.kefe.app.domain.model.newId
 import com.kefe.app.domain.model.parseAssetKey
 import com.kefe.app.domain.model.planItemId
 import com.kefe.app.domain.model.toItems
@@ -59,7 +63,7 @@ import kotlinx.coroutines.launch
  * (sabit saat 22 Ekim'de kalir); saatten okuyan tek bir satir gece yarisi
  * donumunde ve gun donumu testlerinde sayfayla farkli bir "bugun" gorurdu.
  *
- * YAZMA KURALI (her Kaydet / Sil / Kopyala): dogrulama ESZAMANLI yapilir, gecerliyse
+ * YAZMA KURALI (her Kaydet / Sil / Kopyala; gelir, gider ve butce dahil): dogrulama ESZAMANLI yapilir, gecerliyse
  * sheet HEMEN kapanir ve yazma ancak ondan sonra baslar. NEDEN: sheet yazma bitince
  * kapansaydi cift dokunus ikinci kez yazardi - Kopyala'da ilk yazmanin emisyonu
  * taslagi tazeleyip "Taşı"yi korudugu icin ikinci dokunus eksigi bir daha ekler
@@ -151,6 +155,45 @@ class PlanViewModel(
                 copy(sheet = PlanSheet.Copy(open.draft.copy(carry = carry)))
             }
             PlanIntent.ConfirmCopy -> confirmCopy()
+
+            is PlanIntent.EditIncome -> latest?.let { inputs ->
+                val editor = incomeEditorOf(inputs, intent.memberId) ?: return
+                reduce { copy(sheet = PlanSheet.Income(editor)) }
+            }
+            is PlanIntent.IncomeSalary -> updateIncome { it.copy(salaryText = intent.value) }
+            is PlanIntent.IncomeExtra -> updateIncome { it.copy(extraText = intent.value) }
+            PlanIntent.IncomeUseLastSalary -> updateIncome { e ->
+                e.lastSalary?.let { e.copy(salaryText = rawAmount(it)) } ?: e
+            }
+            PlanIntent.IncomeUseLastExtra -> updateIncome { e ->
+                e.lastExtra?.let { e.copy(extraText = rawAmount(it)) } ?: e
+            }
+            PlanIntent.SaveIncome -> saveIncome()
+
+            // Kimlik editor ACILIRKEN uretilir: cift dokunusla gelen ikinci kayit ayni
+            // satiri yeniden yazar, ikinci bir satir olusturmaz.
+            PlanIntent.AddExpense -> latest?.let { inputs ->
+                reduce { copy(sheet = PlanSheet.Expense(newExpenseEditor(inputs, newId()))) }
+            }
+            is PlanIntent.EditExpense -> latest?.let { inputs ->
+                val entry = inputs.books.firstNotNullOfOrNull { book -> book.expenses.firstOrNull { it.id == intent.id } }
+                    ?: return
+                reduce { copy(sheet = PlanSheet.Expense(expenseEditorOf(entry))) }
+            }
+            is PlanIntent.ExpenseSelectCategory -> updateExpense { it.copy(category = intent.category, categoryError = false) }
+            is PlanIntent.ExpenseAmount -> updateExpense { it.copy(amountText = intent.value, amountError = false) }
+            is PlanIntent.ExpenseNote -> updateExpense { it.copy(note = intent.value) }
+            PlanIntent.SaveExpense -> saveExpense()
+            PlanIntent.DeleteExpense -> deleteExpense()
+
+            PlanIntent.EditBudget -> latest?.let { inputs ->
+                reduce { copy(sheet = PlanSheet.Budget(budgetEditorOf(inputs))) }
+            }
+            is PlanIntent.BudgetAmount -> updateBudget { it.copy(texts = it.texts + (intent.category to intent.value)) }
+            PlanIntent.BudgetCopyLastMonth -> updateBudget { e ->
+                e.copy(texts = e.lastBudgets.mapValues { (_, amount) -> rawAmount(amount) })
+            }
+            PlanIntent.SaveBudget -> saveBudget()
         }
     }
 
@@ -345,6 +388,58 @@ class PlanViewModel(
         write { planRepository.deletePlanItem(id) }
     }
 
+    // --- Defter: gelir, gider, butce ----------------------------------------
+
+    /** Bos alan "girilmedi"dir: depo satiri siler (0 yazmaz). */
+    private fun saveIncome() {
+        val editor = (current.sheet as? PlanSheet.Income)?.editor ?: return
+        val salary = editor.salaryText.parseTrAmountOrNull()
+        val extra = editor.extraText.parseTrAmountOrNull()
+        reduce { copy(sheet = null) }
+        write("Gelir kaydedilemedi.") {
+            planRepository.setIncome(editor.month, editor.memberId, IncomeKind.Salary, salary)
+            planRepository.setIncome(editor.month, editor.memberId, IncomeKind.Extra, extra)
+        }
+    }
+
+    private fun saveExpense() {
+        val editor = (current.sheet as? PlanSheet.Expense)?.editor ?: return
+        val category = editor.category
+        val amount = editor.amountText.parseTrAmountOrNull()?.takeIf { it > 0.0 }
+        if (category == null || amount == null) {
+            updateExpense { it.copy(categoryError = category == null, amountError = amount == null) }
+            return
+        }
+        val entry = ExpenseEntry(
+            id = editor.id,
+            date = editor.date,
+            category = category,
+            amount = amount,
+            note = editor.note.trim().takeIf { it.isNotEmpty() },
+            addedByMemberId = editor.addedByMemberId,
+            // 0 ise depo kayit anini damgalar; duzenlemede eski an korunur.
+            createdAt = editor.createdAt,
+        )
+        reduce { copy(sheet = null) }
+        write("Harcama kaydedilemedi.") { planRepository.upsertExpense(entry) }
+    }
+
+    private fun deleteExpense() {
+        val editor = (current.sheet as? PlanSheet.Expense)?.editor ?: return
+        if (editor.isNew) return
+        reduce { copy(sheet = null) }
+        write("Harcama kaydedilemedi.") { planRepository.deleteExpense(editor.id) }
+    }
+
+    /** Dokuz kategori tek islemde; bos ya da sifir alan o kategoriyi butceden cikarir. */
+    private fun saveBudget() {
+        val editor = (current.sheet as? PlanSheet.Budget)?.editor ?: return
+        val amounts: Map<ExpenseCategory, Double?> =
+            ExpenseCategory.entries.associateWith { editor.texts[it]?.parseTrAmountOrNull() }
+        reduce { copy(sheet = null) }
+        write("Bütçe kaydedilemedi.") { planRepository.setBudgets(editor.month, amounts) }
+    }
+
     // --- Yardimci ------------------------------------------------------------
 
     /**
@@ -361,6 +456,21 @@ class PlanViewModel(
         copy(sheet = PlanSheet.Item(block(open.editor)))
     }
 
+    private fun updateIncome(block: (IncomeEditor) -> IncomeEditor) = reduce {
+        val open = sheet as? PlanSheet.Income ?: return@reduce this
+        copy(sheet = PlanSheet.Income(block(open.editor)))
+    }
+
+    private fun updateExpense(block: (ExpenseEditor) -> ExpenseEditor) = reduce {
+        val open = sheet as? PlanSheet.Expense ?: return@reduce this
+        copy(sheet = PlanSheet.Expense(block(open.editor)))
+    }
+
+    private fun updateBudget(block: (BudgetEditor) -> BudgetEditor) = reduce {
+        val open = sheet as? PlanSheet.Budget ?: return@reduce this
+        copy(sheet = PlanSheet.Budget(block(open.editor)))
+    }
+
     /** [updateItem] + baglam: secilen varlik ya da hedef degisince fiyat ve cakisma yeniden hesaplanir. */
     private fun withItemContext(block: (PlanItemEditor) -> PlanItemEditor) {
         val inputs = latest ?: return
@@ -368,12 +478,12 @@ class PlanViewModel(
     }
 
     /** Yazma arka planda; hata seritte soylenir (yerel SQLite'ta pratikte olmaz). */
-    private fun write(block: suspend () -> Unit) {
+    private fun write(failure: String = "Plan kaydedilemedi.", block: suspend () -> Unit) {
         viewModelScope.launch {
             try {
                 block()
             } catch (error: Exception) {
-                emitEffect(PlanEffect.Message("Plan kaydedilemedi."))
+                emitEffect(PlanEffect.Message(failure))
             }
         }
     }

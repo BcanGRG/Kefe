@@ -43,4 +43,22 @@ fun PlanSheets(
         onIntent = onIntent,
         modifier = modifier,
     )
+    PlanIncomeSheet(
+        visible = sheet is PlanSheet.Income,
+        editor = (shown as? PlanSheet.Income)?.editor,
+        onIntent = onIntent,
+        modifier = modifier,
+    )
+    PlanExpenseSheet(
+        visible = sheet is PlanSheet.Expense,
+        editor = (shown as? PlanSheet.Expense)?.editor,
+        onIntent = onIntent,
+        modifier = modifier,
+    )
+    PlanBudgetSheet(
+        visible = sheet is PlanSheet.Budget,
+        editor = (shown as? PlanSheet.Budget)?.editor,
+        onIntent = onIntent,
+        modifier = modifier,
+    )
 }
