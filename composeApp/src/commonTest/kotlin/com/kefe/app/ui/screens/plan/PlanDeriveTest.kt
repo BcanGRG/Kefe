@@ -177,6 +177,7 @@ class PlanDeriveTest {
         assertEquals("g_car", goal.goalId)
         assertEquals(listOf("gold_gram"), goal.rows.map { it.assetKey })
         assertTrue(goal.rows.single().canBuy)
+        assertNull(goal.rows.single().goalName)
         assertEquals("Planlanan ₺67.330 · Aylık katkı ₺50.000", goal.summary)
         // requiredMonthly ile ayni ay sayimi: Ekim 2026 -> Ekim 2027 = 12 ay.
         assertEquals("Gereken aylık ≈ ₺36.083 (12 ay)", goal.requiredLine)

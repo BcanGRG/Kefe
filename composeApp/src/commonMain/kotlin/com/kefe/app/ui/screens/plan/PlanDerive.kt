@@ -196,7 +196,8 @@ internal fun currentMonthPlan(inputs: PlanInputs, progress: MonthPlanProgress): 
                 ?.let { "Gereken aylık ≈ ${Money.tl(it)} (${monthsToTarget(goal, inputs.today)} ay)" }
             GoalMonthPlan(
                 goalId = goal.id,
-                rows = lines.map { planRow(inputs, it, MonthRelation.Current) },
+                // Hedef cipi yazilmaz: kart zaten o hedefin sayfasinda.
+                rows = lines.map { planRow(inputs, it, MonthRelation.Current).copy(goalName = null) },
                 summary = summary,
                 requiredLine = required,
             )

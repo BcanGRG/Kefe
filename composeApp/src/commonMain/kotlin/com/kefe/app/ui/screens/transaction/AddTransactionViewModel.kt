@@ -259,13 +259,18 @@ class AddTransactionViewModel(
             is AddTransactionIntent.EditTransaction -> loadForEdit(intent.transactionId)
 
             is AddTransactionIntent.StartNew -> {
-                // Tasinanlar yalniz sheet'e ait olmayanlar: kisayol ve es adi
-                // portfoyden gelir, formun onceki icerigiyle ilgisi yok.
+                // Tasinanlar yalniz sheet'e ait olmayanlar: kisayol, es adi ve
+                // hedefler portfoyden, hesap modu senkrondan gelir; formun onceki
+                // icerigiyle ilgisi yok. Hedefler tasinmiyordu: secici bir sonraki
+                // portfoy emisyonuna kadar hic cizilmiyor, planin hedefi de
+                // "bilinmeyen hedef" sayilip onsecilmiyordu.
                 val fresh = AddTransactionUiState(
                     date = clock.today(),
                     side = intent.side,
                     lastAdded = s.lastAdded,
                     partnerName = s.partnerName,
+                    availableGoals = s.availableGoals,
+                    cloudMode = s.cloudMode,
                 )
                 val prefill = intent.prefill
                 // Plandan gelen varlik eldeyse EN BUYUK pozisyonuyla acilir (Plan
