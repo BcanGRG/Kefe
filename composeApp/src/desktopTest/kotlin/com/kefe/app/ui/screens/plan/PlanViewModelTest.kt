@@ -286,6 +286,23 @@ class PlanViewModelTest {
         assertTrue(oct.showThisMonthChip)
     }
 
+    @Test
+    fun `bu aya donusen secili gelecek ay birakilir - sayfa sonraki ayda ilerler`() = runTest {
+        val env = Env()
+        env.days.value = KefeDate(2026, 10, 31)
+        val vm = env.vm()
+        vm.awaitHeader { it.title == "Ekim 2026" }
+        vm.onIntent(PlanIntent.NextMonth)
+        vm.awaitHeader { it.title == "Kasım 2026" && it.relation == MonthRelation.Future }
+
+        env.days.value = KefeDate(2026, 11, 1)
+        vm.awaitHeader { it.title == "Kasım 2026" && it.relation == MonthRelation.Current }
+        // Secim Kasim'da kalsaydi Aralik'ta sayfa Kasim'da gecmis ay olarak asili kalirdi.
+        env.days.value = KefeDate(2026, 12, 1)
+        val dec = vm.awaitHeader { it.relation == MonthRelation.Current && it.title != "Kasım 2026" }
+        assertEquals("Aralık 2026", dec.title)
+    }
+
     // --- Sinirlar ------------------------------------------------------------
 
     @Test
@@ -669,6 +686,30 @@ class PlanViewModelTest {
         assertEquals(14.0, env.items().first { it.month == October }.target)
     }
 
+    @Test
+    fun `gecmis ayin planli kalemine devir kayitli fiyati korur`() = runTest {
+        val env = Env()
+        env.prices.board.value = PriceBoard(listOf(gramPrice(bid = 6_700.0, ask = 6_800.0)), "", PriceFreshness.Fresh)
+        // Agustos: 10 gr planlandi, 6 gr alindi (eksik 4); Eylul'de olmayan gumus da var.
+        env.planItem(August, "gold_gram", 10.0, price = 5_900.0)
+        env.planItem(August, "silver_gram", 5.0)
+        env.buyGram("tx_agustos", KefeDate(2026, 8, 5), quantity = 6.0)
+        env.planItem(September, "gold_gram", 10.0, price = 6_000.0)
+        val vm = env.vm()
+        vm.awaitHeader { it.title == "Ekim 2026" }
+
+        vm.onIntent(PlanIntent.PreviousMonth)
+        vm.awaitState { it.content.header.title == "Eylül 2026" && it.content.investment?.copyLabel != null }
+        vm.onIntent(PlanIntent.OpenCopy)
+        vm.onIntent(PlanIntent.CopyCarry("gold_gram", carry = true))
+        vm.onIntent(PlanIntent.ConfirmCopy)
+
+        val sep = env.awaitItems { list -> list.any { it.month == September && it.target == 14.0 } }
+            .first { it.month == September && it.assetKey == "gold_gram" }
+        // Gecmis ayin TL agirligi bugunku 6.800 ile yeniden yazilmamali.
+        assertEquals(6_000.0, sep.unitPriceAtPlan)
+    }
+
     // --- Defter: gelir -------------------------------------------------------
 
     @Test
@@ -878,6 +919,7 @@ private fun PlanUiState.flowRow(label: String): FlowRow? = content.flow?.table?.
 private val October = YearMonth(2026, 10)
 private val September = YearMonth(2026, 9)
 private val November = YearMonth(2026, 11)
+private val August = YearMonth(2026, 8)
 
 private fun gramPrice(bid: Double, ask: Double) = Price(
     assetKey = "gold_gram",

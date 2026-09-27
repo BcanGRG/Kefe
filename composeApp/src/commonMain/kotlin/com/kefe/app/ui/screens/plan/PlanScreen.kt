@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -244,6 +246,7 @@ private fun InvestmentPlanCard(card: InvestmentCard, onIntent: (PlanIntent) -> U
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PlanRow(row: PlanRowUi, onIntent: (PlanIntent) -> Unit) {
     val c = KefeTheme.colors
@@ -275,17 +278,22 @@ private fun PlanRow(row: PlanRowUi, onIntent: (PlanIntent) -> Unit) {
         Spacer(Modifier.width(Space.x12))
 
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Akan satir: hedef cipi sigmazsa alt satira iner. NEDEN: ayni satirda
+            // once olculen cip, "Al" gorunen dar telefonda varligin adini tek harfe
+            // indiriyordu; varligin adi once gelir, cip kalan yere ya da alta.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(Space.x8),
+                verticalArrangement = Arrangement.spacedBy(Space.x4),
+            ) {
                 Text(
                     text = row.name,
                     style = t.bodyStrong,
                     color = c.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.align(Alignment.CenterVertically),
                 )
                 row.goalName?.let { goal ->
-                    Spacer(Modifier.width(Space.x8))
                     KefeBadge(
                         text = goal,
                         background = c.surfaceSunken,
@@ -293,17 +301,18 @@ private fun PlanRow(row: PlanRowUi, onIntent: (PlanIntent) -> Unit) {
                         leadingIcon = KefeIcons.Target,
                         uppercase = false,
                         iconSize = 10.dp,
-                        modifier = Modifier.widthIn(max = GoalBadgeMaxWidth),
+                        modifier = Modifier.align(Alignment.CenterVertically),
                     )
                 }
             }
             Spacer(Modifier.height(Space.x4))
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Tek satira zorlanmaz: dar ekranda "₺12.500 /" diye kesilip hedef
+                // tutari sessizce kayboluyordu; sarilan metin iki sayiyi da gosterir.
                 Text(
                     text = row.progressText,
                     style = t.caption.tabular(),
                     color = c.onSurfaceMuted,
-                    maxLines = 1,
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(Space.x8))
@@ -726,7 +735,11 @@ private fun StreakCardView(card: StreakCard) {
     val cells = remember(card.cells) { card.cells.map { it.toGridCell() } }
 
     KefeCard(Modifier.fillMaxWidth()) {
-        Text(card.headline, style = t.bodyStrong, color = c.onSurface)
+        // Diger kartlar gibi basligi var: seri 0 cumlesi tek basina kartin ne
+        // oldugunu soylemiyordu.
+        Text("Seri", style = t.bodyStrong, color = c.onSurface)
+        Spacer(Modifier.height(Space.x4))
+        Text(card.headline, style = t.body, color = c.onSurface)
         Spacer(Modifier.height(2.dp))
         Text(card.detail, style = t.caption.tabular(), color = c.onSurfaceMuted)
         Spacer(Modifier.height(Space.x12))
@@ -775,9 +788,6 @@ private val MonthTitleMinWidth = 132.dp
 
 /** Satirin varlik/hedef ikon kutusu. */
 private val AssetBoxSize = 36.dp
-
-/** Uzun bir hedef adi varligin adini satirdan itmesin. */
-private val GoalBadgeMaxWidth = 140.dp
 
 /** Para akisi tablosunun Plan ve Gerçekleşen sutunlari - "₺185.000" sigar. */
 private val FlowColumnWidth = 104.dp

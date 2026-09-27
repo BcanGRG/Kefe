@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kefe.app.ui.format.Money
@@ -128,6 +129,8 @@ fun KefeBadge(
             style = textStyle ?: if (uppercase) badgeTextStyle() else plainBadgeTextStyle(),
             color = contentColor,
             maxLines = 1,
+            // Genislik sinirina takilan rozet kelime yutmasin, "…" ile bitsin.
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

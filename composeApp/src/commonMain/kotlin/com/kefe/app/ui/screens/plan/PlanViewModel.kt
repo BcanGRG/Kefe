@@ -230,8 +230,14 @@ class PlanViewModel(
         val inputs = latest ?: return
         val draft = (current.sheet as? PlanSheet.Copy)?.draft ?: return
         // Birim fiyat kopya aninda yeniden okunur: yeni ayin agirligi bugunku alis
-        // fiyatiyla sabitlenir (fiyat yoksa kaynaktaki anlik goruntu).
-        val items = draft.rows.toItems(draft.target, draft.carry) { buyPriceOf(it, inputs.board, inputs.positions) }
+        // fiyatiyla sabitlenir (fiyat yoksa kaynaktaki anlik goruntu). Gecmis ayda
+        // ZATEN planli kalem ise kayitli fiyatini korur - saveItem'daki kuralin aynisi:
+        // eksigi devretmek o ayin TL agirligini ve skorunu bugunku fiyatla yazmamali.
+        val past = draft.target < inputs.current
+        val existing = inputs.items.filter { it.month == draft.target }.associateBy { it.assetKey }
+        val items = draft.rows.toItems(draft.target, draft.carry) { key ->
+            existing[key]?.unitPriceAtPlan?.takeIf { past } ?: buyPriceOf(key, inputs.board, inputs.positions)
+        }
         if (items.isEmpty()) return
         reduce { copy(sheet = null) }
         write {
@@ -536,7 +542,12 @@ class PlanViewModel(
                     // yedekten donus) sayfa kullanici bir sey yapmadan o aya atlardi.
                     // Yalniz secim hala buysa: arada secilen yeni bir aya dokunulmaz.
                     // Durumdan ONCE: bu durumu goren her okuyucu secimi de bos gorur.
-                    if (inputs.selectionClamped) selection.compareAndSet(inputs.selection, null)
+                    // Gun donumuyle bu aya donusen secim (31 Ekim'de secilen Kasim) de
+                    // birakilir: bos secim "bu ay" demek, Aralik'ta kendiliginden
+                    // ilerlemeli; tutulsaydi sayfa Kasim'da gecmis ay olarak kalirdi.
+                    if (inputs.selectionClamped || inputs.selection == inputs.current) {
+                        selection.compareAndSet(inputs.selection, null)
+                    }
                     latest = inputs
                     // Durum YALNIZ burada, indirgeme icinde birlesir: o anda acik olan sheet
                     // okunur, yazilan alanlari yerinde kalir, yalniz baglami (fiyat,
