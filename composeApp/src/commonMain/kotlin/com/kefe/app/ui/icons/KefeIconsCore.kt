@@ -238,6 +238,33 @@ internal object KefeIconsCore {
 
     // --- Durum ---
 
+    /**
+     * Tek telefon: "Bu cihazda" modu. Hesapsiz kullanimin isareti - bulut
+     * ikonunun ustu cizilmis hali DEGIL; hesapsiz kullanim bir ariza degil.
+     */
+    private var _device: ImageVector? = null
+    val Device: ImageVector
+        get() = _device ?: kefeIcon("KefeDevice") {
+            roundedRect(6.5f, 2.5f, 17.5f, 21.5f, 2.5f)
+            moveTo(10.5f, 18f); lineTo(13.5f, 18f)
+        }.also { _device = it }
+
+    /**
+     * Yan yana iki telefon: "Hesapla, iki telefonda". [Device]'in ikizi - ayni
+     * govde, ayni hoparlor cizgisi. Bulut ikonu DEGIL: kullanicinin istedigi
+     * "bulut" degil, esiyle ayni birikimi iki telefonda gormek.
+     */
+    private var _twoPhones: ImageVector? = null
+    val TwoPhones: ImageVector
+        get() = _twoPhones ?: kefeIcon("KefeTwoPhones") {
+            // Govdeler arasinda 2 birim bosluk: 2px cizgiyle birbirine
+            // yapismasinlar, kucuk boyutta tek bir kutu gibi okunmasinlar.
+            roundedRect(2.5f, 3.5f, 10f, 20.5f, 2f)
+            moveTo(5.3f, 17f); lineTo(7.2f, 17f)
+            roundedRect(14f, 3.5f, 21.5f, 20.5f, 2f)
+            moveTo(16.8f, 17f); lineTo(18.7f, 17f)
+        }.also { _twoPhones = it }
+
     private var _cloudOff: ImageVector? = null
     val CloudOff: ImageVector
         get() = _cloudOff ?: kefeIcon("KefeCloudOff") {

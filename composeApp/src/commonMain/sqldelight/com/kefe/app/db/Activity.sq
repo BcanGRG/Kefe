@@ -93,5 +93,11 @@ UPDATE activity_events
 SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE id = :id;
 
+-- Islem defterindeki aktarimin akistaki karsiligi (bkz. remapTransactionAuthor).
+remapActivityMember:
+UPDATE activity_events
+SET memberId = :memberId, updatedAt = :updatedAt
+WHERE id = :id;
+
 deleteAllActivity:
 DELETE FROM activity_events;

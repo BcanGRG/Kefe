@@ -132,6 +132,20 @@ clearMainGoalFlag:
 UPDATE goals
 SET isMain = 0;
 
+-- "Birleştir": ana hedef TEK kalir, hesabinki. Cihazdaki diger ana hedefler
+-- isaretini birakir; damga yenilenir ki degisiklik hesaba da gitsin.
+clearMainGoalExcept:
+UPDATE goals
+SET isMain = 0, updatedAt = :updatedAt
+WHERE isMain = 1 AND id != :keepId AND deletedAt IS NULL;
+
+-- Hesabin ana hedefi yerelde (LWW'de yerel kopya daha yeni kaldiysa)
+-- isaretsizse isaretlenir; zaten isaretliyse satira dokunulmaz.
+markMainGoal:
+UPDATE goals
+SET isMain = 1, updatedAt = :updatedAt
+WHERE id = :id AND isMain = 0 AND deletedAt IS NULL;
+
 updateGoalStatus:
 UPDATE goals
 SET status = :status

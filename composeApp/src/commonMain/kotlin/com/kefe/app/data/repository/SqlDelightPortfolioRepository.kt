@@ -6,6 +6,8 @@ import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.kefe.app.data.db.DefaultCurrency
 import com.kefe.app.data.db.DefaultPortfolioName
 import com.kefe.app.data.db.LocalPortfolioId
+import com.kefe.app.data.db.bootstrapIfNeeded
+import com.kefe.app.data.db.resetMembersToDefaults
 import com.kefe.app.data.db.toDomain
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.db.Positions
@@ -538,7 +540,12 @@ class SqlDelightPortfolioRepository(
                         principal = it.principal,
                     )
                 },
+                // Cihaza ait tercihler yedege HIC YAZILMAZ. Geri yukleme onlari
+                // zaten atliyor; ama dosyada durmalari, baska bir telefonun
+                // kilidini ya da "bu telefon kimin" secimini WhatsApp'tan
+                // gezdirmek demekti ve eski bir surum onlari okuyup uygulardi.
                 settings = settingQueries.selectAllSettings().executeAsList()
+                    .filter { it.settingKey !in DeviceOnlySettings }
                     .associate { it.settingKey to it.settingValue },
                 // Satirlar HAM tasinir (metin kolonlar oldugu gibi): bu surumun
                 // tanimadigi bir kategori bile yedekte kaybolmamali.
@@ -625,6 +632,19 @@ class SqlDelightPortfolioRepository(
                         settingQueries.upsertSetting(settingKey = key, settingValue = value)
                     }
                 }
+
+                // Geri yukleme AYNI islemde isaretlenir. Yuklenen her satir
+                // "simdi" damgalanir; cihaz sonra bir hesaba baglanirsa bu
+                // satirlar hesaptakilerden YENI gorunur ve LWW'de onlarin
+                // ustune yazardi. Isaret baglanti adimini soru sormaya zorlar
+                // (bkz. classifyLink). Ayri bir yazmada kalsaydi, geri yukleme
+                // ile isaret arasinda kapanan uygulama bu korumayi kaybederdi.
+                // Hesaba bagliyken geri yukleme kapali (bkz. restoreLocked);
+                // buraya yalniz hesapsiz ya da baglantisi yarim cihaz gelir.
+                settingQueries.upsertSetting(
+                    settingKey = PreferenceKeys.LocalRestoredAt,
+                    settingValue = clock.nowEpochMillis().toString(),
+                )
 
                 portfolioQueries.updatePortfolio(
                     name = file.portfolioName,
@@ -840,15 +860,48 @@ class SqlDelightPortfolioRepository(
                 priceQueries.deleteAllPriceHistory()
                 deleteAllPlanData()
 
-                // Portfoy ve uye BIRAKILIR: onlar kullanici verisi degil kimlik.
-                // Silinirse islem eklerken "kim ekledi" bagi kopardi.
-                //
+                // Portfoy ve uye SATIRLARI BIRAKILIR: onlar kimlik; silinirse
+                // islem eklerken "kim ekledi" bagi kopardi. Ama ADLARI kurulumun
+                // adsiz haline doner (damga 0). NEYDI: adlar damgali kaliyordu;
+                // sifirlanan cihaz baska bir hesaba baglaninca eski adlar yeni
+                // hesaba itiliyor, kurulum da eski kisilerin adlarini "Bu
+                // cihazda iki profil var" diye soruyordu.
+                database.resetMembersToDefaults()
+
                 // Ayarlar tumden silinir - tercihler de kullanicinin verisi.
                 // Icindeki acilis bayraklari da gittigi icin uygulama sifirdan
                 // acilmis gibi baslar: bu, "her seyi sil" dedikten sonra
-                // beklenen davranis. Portfoy satirlari INSERT OR IGNORE ile
-                // kuruldugu icin acilis kurulumunun tekrar calismasi zararsiz.
+                // beklenen davranis. Hesap baglantisi (CloudLinkUserId/Email)
+                // da burada gider: silinen cihaz hicbir hesaba bagli degildir.
                 settingQueries.deleteAllSettings()
+
+                // Silinen veritabani YENI bir veritabanidir: kurulum AYNI
+                // transaction'da (ic ice transaction distakine katilir) yeniden
+                // calisir ve bayragi, cihaz varsayilanlarini geri yazar. NEYDI:
+                // yalniz silinince kilit anahtari eksik kaliyordu; eksik anahtar
+                // "eski kurulum, kilit acik" okundugu icin (bkz. lockEnabled)
+                // kilidi hic acmamis biri bile surecin geri kalaninda ve sonraki
+                // acilista kilitli sayiliyordu.
+                //
+                // Bayragi elle yazmak YETMEZ: kurulum portfoyu ve IKI uyeyi
+                // INSERT OR IGNORE ile kurar. Es profilini kurmayan eski bir
+                // surumden kalan tek profilli veritabani, silme sonrasi tekrar
+                // calisan kurulumla onariliyordu; bayrak elle yazilsa bu onarim
+                // kaybolur ve "bu telefon kimin" adimi olmayan bir profili
+                // adlandirmaya calisirdi. Var olan uyelerin adlarina dokunulmaz.
+                database.bootstrapIfNeeded()
+
+                // Sifirlanmis veritabani baglanti gocunu GECMIS sayilir: gocun
+                // tamamlayacagi eski bir baglanti artik yok. NEYDI: isaret de
+                // siliniyordu. Silme aninda yoldaki bir push bitince watermark'i
+                // (LastPushedAt) yeniden yaziyor, oturum da duruyordu; bir sonraki
+                // acilista goc "oturum + watermark" gorup baglantiyi yeniden
+                // yaziyor, hesap silinen veritabanina geri iniyordu - "bu telefon
+                // kimin" sorulmadan.
+                settingQueries.upsertSetting(
+                    settingKey = PreferenceKeys.CloudLinkMigrated,
+                    settingValue = "1",
+                )
             }
         }
     }
@@ -1192,7 +1245,7 @@ class SqlDelightPortfolioRepository(
 private const val OnboardedKey = "onboarded"
 
 /**
- * Geri yuklemede ATLANACAK tercihler.
+ * Yedege YAZILMAYAN ve geri yuklemede ATLANAN tercihler.
  *
  * Bunlar veriye degil CIHAZA aittir: yedek dosyasi tercihler tablosunu oldugu
  * gibi tasidigi icin, atlanmasalar Volkan'in yedegini yukleyen Ayse'nin telefonu
@@ -1203,4 +1256,20 @@ private val DeviceOnlySettings = setOf(
     // Push watermark'i cihaza ait: geri yukleme onu sifirlamamali, yoksa restore
     // sonrasi butun defter yeniden itilir (zararsiz ama gereksiz trafik).
     PreferenceKeys.LastPushedAt,
+    // Acilis kilidi bu telefonun parmak izine/ekran kilidine baglidir. NEYDI:
+    // kilidi acik bir telefonun yedegi, kilidi hic istememis ya da kilit
+    // donanimi olmayan bir cihaza yuklenince kilidi de acip getiriyordu.
+    PreferenceKeys.BiometricLock,
+    // Bakiyeyi gizlemek de bu cihazin ortamina gore verilen bir karar.
+    PreferenceKeys.HideBalanceOnStart,
+    // Hesap baglantisi bu cihazin karari. NEDEN: yedekle gelselerdi, hesapli
+    // telefonun yedegini yukleyen hesapsiz cihaz kendini o hesaba bagli sanir
+    // ve oturumu yokken "Oturum kapandı" derdi; ya da ters yonde, bagli bir
+    // cihazin baglantisi eski bir yedekle silinirdi.
+    PreferenceKeys.CloudLinkUserId,
+    PreferenceKeys.CloudLinkEmail,
+    // Esitleme ani ve goc isareti de bu cihazin gecmisi, verinin degil.
+    PreferenceKeys.LastSyncedAt,
+    PreferenceKeys.CloudLinkMigrated,
+    PreferenceKeys.LocalRestoredAt,
 )

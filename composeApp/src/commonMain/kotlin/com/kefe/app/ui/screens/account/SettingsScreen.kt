@@ -36,6 +36,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.kefe.app.data.sync.CloudMode
+import com.kefe.app.ui.components.KefeCloudMark
 import com.kefe.app.ui.components.KefeConfirmDialog
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeSwitch
@@ -49,17 +51,25 @@ import com.kefe.app.ui.theme.Space
 import com.kefe.app.ui.theme.tabular
 
 /**
- * Ayarlar: yedi bolum, tek kaydirma. Yikici olan tek eylem en altta ve
- * negative renkte durur - yanlislikla dokunulacak yerde degil.
+ * Ayarlar: tek kaydirma. Sira: Profiller, Hesap ve eşitleme, Görünüm, Gizlilik,
+ * Fiyatlar, Veri. Yikici olan tek eylem en altta ve negative renkte durur -
+ * yanlislikla dokunulacak yerde degil.
  */
 @Composable
 fun SettingsScreen(
     state: SettingsUiState,
     onIntent: (SettingsIntent) -> Unit,
     onOpenShare: () -> Unit,
-    /** Bulut bolumundeki "Giriş yap" - giris ekranina goturur. */
-    onOpenLogin: () -> Unit,
+    /** Hesap bolumundeki "Hesaba bağla" - giris ekranini baglama amaciyla acar. */
+    onLink: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Dusen oturumda "Yeniden giriş yap" - giris ekranini bagli hesabin
+     * e-postasiyla acar. Baglamadan AYRI: basligi ve notu farkli (bkz. signInCopy).
+     */
+    onRelogin: () -> Unit = onLink,
+    /** Yarim baglantida "Tamamla" - hesabi indirip "bu telefon kimin"i soran adima. */
+    onCompleteLink: () -> Unit = {},
     /** Surum satirina basinca acilan bilesen katalogu - gelistirme araci. */
     onOpenGallery: () -> Unit = {},
 ) {
@@ -83,6 +93,28 @@ fun SettingsScreen(
                 .padding(start = Space.x16, end = Space.x16, bottom = Space.x24),
         ) {
             ShareCard(state = state, onClick = onOpenShare)
+
+            // Hesap ve esitleme profillerin HEMEN ALTINDA. NEYDI: en altta "Bulut"
+            // adiyla duruyordu; kayitlarin yalniz bu telefonda mi yoksa hesapta da
+            // mi oldugu - uygulamanin en onemli sorusu - Veri'nin bile altindaydi.
+            // Ozet cipi, ray ve yan navigasyon buraya getirir: tek hedef.
+            accountSection(state.cloudMode, state.cloudConfigured, state.lastSyncedLabel)?.let { section ->
+                SectionLabel("Hesap ve eşitleme")
+                AccountSectionCard(
+                    section = section,
+                    mode = state.cloudMode,
+                    onAction = { action ->
+                        when (action) {
+                            AccountAction.Link -> onLink()
+                            AccountAction.Relogin -> onRelogin()
+                            AccountAction.CompleteLink -> onCompleteLink()
+                            AccountAction.DropLink -> onIntent(SettingsIntent.DropLink)
+                            AccountAction.SyncNow -> onIntent(SettingsIntent.SyncNow)
+                            AccountAction.SignOut -> onIntent(SettingsIntent.SignOut)
+                        }
+                    },
+                )
+            }
 
             SectionLabel("Görünüm")
             AccountGroupCard {
@@ -112,14 +144,20 @@ fun SettingsScreen(
                     checked = state.hideBalanceOnStart,
                     onCheckedChange = { onIntent(SettingsIntent.SetHideBalanceOnStart(it)) },
                 )
-                KefeHairline()
-                SettingsSwitchRow(
-                    title = "Biyometrik kilit",
-                    subtitle = "Parmak izi veya yüz ile aç",
-                    checked = state.biometricLock,
-                    onCheckedChange = { onIntent(SettingsIntent.SetBiometricLock(it)) },
-                    leadingIcon = KefeIcons.Fingerprint,
-                )
+                // Kilidin karsiligi olmayan cihazda (masaustu, donanimsiz
+                // telefon) satir cizilmez; acilamayacak anahtar bozuk gorunur.
+                // Alt satir "parmak izi" ile sinirli degil: Android istemi cihaz
+                // PIN'ini de kabul ediyor, iOS da parolaya dusuyor.
+                if (state.lockAvailable) {
+                    KefeHairline()
+                    SettingsSwitchRow(
+                        title = "Açılış kilidi",
+                        subtitle = "Kefe açılırken parmak izi, yüz ya da ekran kilidi sorulur",
+                        checked = state.biometricLock,
+                        onCheckedChange = { onIntent(SettingsIntent.SetBiometricLock(it)) },
+                        leadingIcon = KefeIcons.Fingerprint,
+                    )
+                }
             }
 
             // Fiyat satirlari SALT OKUNUR: ayarlanabilir bir aralik ya da
@@ -143,10 +181,14 @@ fun SettingsScreen(
                     )
                 }
                 KefeHairline()
+                // Bagliyken KAPALI (bkz. restoreLocked): baslik soluk, degeri
+                // nedenini soyler; dokunmak yine calisir ve cikis yolunu anlatir.
+                val restoreLocked = restoreLocked(state.cloudMode)
                 SettingsValueRow(
                     title = "Geri yükle",
-                    value = null,
+                    value = if (restoreLocked) RestoreLockedValue else null,
                     onClick = { onIntent(SettingsIntent.Restore) },
+                    titleColor = if (restoreLocked) c.onSurfaceMuted else c.onSurface,
                 )
                 KefeHairline()
                 SettingsRow(onClick = { onIntent(SettingsIntent.ExportCsv) }) {
@@ -163,48 +205,25 @@ fun SettingsScreen(
                     onClick = { onIntent(SettingsIntent.DeleteAllData) },
                     hoverBackground = c.negative.copy(alpha = 0.10f),
                 ) {
+                    // Hesap isin icindeyse "Bu cihazı sıfırla": silme hesabi
+                    // degil yalniz bu cihazi etkiler, once hesaptan cikilir.
                     Text(
-                        "Tüm verileri sil",
+                        deleteRowLabel(state.cloudMode),
                         style = t.body,
                         color = c.negative,
                         modifier = Modifier.weight(1f),
                     )
                 }
             }
-
-            // Bulut: senkron ve hesap. Iki hali de var - once "Hesap" bolumu
-            // YALNIZ girisliyken ciziliyordu, yani onboarding'i gecmis ve oturumu
-            // kapanmis bir kullanicinin (ozellikle ikinci telefonun) GIRIS yolu
-            // hic yoktu. Senkron o giristen sonra baslar.
-            SectionLabel("Bulut")
-            AccountGroupCard {
-                if (state.signedIn) {
-                    SettingsRow(onClick = null) {
-                        Text("E-posta", style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
-                        Text(state.email, style = t.caption, color = c.onSurfaceMuted)
-                    }
-                    KefeHairline()
-                    // Push watermark'i son ne zaman ilerledi. "En son ne zaman
-                    // sunucuya ulastik" - senkron acikliginin kanit satiri.
-                    SettingsValueRow(title = "Son senkron", value = state.syncStatusLabel)
-                    KefeHairline()
-                    SettingsRow(onClick = { onIntent(SettingsIntent.SignOut) }) {
-                        Text("Çıkış yap", style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
-                    }
-                } else {
-                    SettingsRow(onClick = onOpenLogin) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Giriş yap ve senkronu aç", style = t.body, color = c.onSurface)
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                "Aynı hesap, iki telefon — birikim iki cihazda aynı",
-                                style = t.micro,
-                                color = c.onSurfaceMuted,
-                            )
-                        }
-                        KefeIcon(KefeIcons.ChevronRight, null, size = 20.dp, tint = c.onSurfaceMuted)
-                    }
-                }
+            // Kayitlarin kac kopyasi var: hesapsizken tek kopya bu cihazda.
+            dataFootnote(state.cloudMode, state.cloudConfigured)?.let { note ->
+                Spacer(Modifier.height(Space.x8))
+                Text(
+                    note,
+                    style = t.micro,
+                    color = c.onSurfaceMuted,
+                    modifier = Modifier.padding(horizontal = Space.x4),
+                )
             }
 
             Row(
@@ -234,14 +253,28 @@ fun SettingsScreen(
 
         // Gorunurluk `if` ile DEGIL parametreyle verilir: kutunun geri
         // isleyicisi kosulsuz bestelenmeli (bkz. KefeBackHandler).
+        // Metin moda gore (bkz. deleteDialog): hesapsizken tek kopya burada,
+        // hesapliyken hesaptakiler ve esin telefonu etkilenmez.
+        val delete = deleteDialog(state.cloudMode, state.partnerName)
         KefeConfirmDialog(
             visible = state.confirmDelete,
-            title = "Tüm verileri sil",
-            message = "Varlıklarınız, işlem geçmişiniz, hedefleriniz ve tercihleriniz " +
-                "silinecek. Bu işlem geri alınamaz.",
-            confirmLabel = "Sil",
+            title = delete.title,
+            message = delete.message,
+            confirmLabel = delete.confirmLabel,
             onConfirm = { onIntent(SettingsIntent.ConfirmDeleteAllData) },
             onDismiss = { onIntent(SettingsIntent.DismissDeleteConfirm) },
+        )
+
+        // Hesaptan cikis: kayitlar kalir, esin telefonu etkilenmez; gitmemis
+        // degisiklik varsa yalniz bu cihazda kalir (bkz. signOutDialog).
+        val signOut = signOutDialog(state.partnerName, state.unsentChanges)
+        KefeConfirmDialog(
+            visible = state.confirmSignOut,
+            title = signOut.title,
+            message = signOut.message,
+            confirmLabel = signOut.confirmLabel,
+            onConfirm = { onIntent(SettingsIntent.ConfirmSignOut) },
+            onDismiss = { onIntent(SettingsIntent.DismissSignOutConfirm) },
         )
 
         // Geri yukleme de yikicidir: yedek mevcut verinin USTUNE degil YERINE
@@ -305,6 +338,63 @@ private fun ShareCard(state: SettingsUiState, onClick: () -> Unit) {
     }
 }
 
+// --- Hesap ve esitleme ------------------------------------------------------
+
+/**
+ * Hesap bolumu: durum satiri (isaretli, dokunulmaz), bagliyken "Son eşitleme",
+ * sonra moda gore eylemler. Icerik [accountSection]'dan gelir; bu fonksiyon
+ * yalniz cizer.
+ */
+@Composable
+private fun AccountSectionCard(
+    section: AccountSection,
+    mode: CloudMode?,
+    onAction: (AccountAction) -> Unit,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    AccountGroupCard {
+        SettingsRow(onClick = null) {
+            if (mode != null) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(KefeShapes.boxSmall)
+                        .background(c.surfaceSunken),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    KefeCloudMark(mode)
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(section.statusTitle, style = t.body, color = c.onSurface)
+                section.statusSubtitle?.let {
+                    Spacer(Modifier.height(2.dp))
+                    Text(it, style = t.micro, color = c.onSurfaceMuted)
+                }
+            }
+        }
+        section.lastSynced?.let { label ->
+            KefeHairline()
+            SettingsValueRow(title = "Son eşitleme", value = label)
+        }
+        section.actions.forEach { row ->
+            KefeHairline()
+            SettingsRow(onClick = { onAction(row.action) }) {
+                Column(Modifier.weight(1f)) {
+                    Text(row.title, style = t.body, color = c.onSurface)
+                    row.subtitle?.let {
+                        Spacer(Modifier.height(2.dp))
+                        Text(it, style = t.micro, color = c.onSurfaceMuted)
+                    }
+                }
+                KefeIcon(KefeIcons.ChevronRight, null, size = 18.dp, tint = c.onSurfaceMuted)
+            }
+        }
+    }
+}
+
 // --- Satirlar --------------------------------------------------------------
 
 @Composable
@@ -355,12 +445,17 @@ private fun SettingsRow(
 }
 
 @Composable
-private fun SettingsValueRow(title: String, value: String?, onClick: (() -> Unit)? = null) {
+private fun SettingsValueRow(
+    title: String,
+    value: String?,
+    onClick: (() -> Unit)? = null,
+    titleColor: Color = KefeTheme.colors.onSurface,
+) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
     SettingsRow(onClick = onClick) {
-        Text(title, style = t.body, color = c.onSurface, modifier = Modifier.weight(1f))
+        Text(title, style = t.body, color = titleColor, modifier = Modifier.weight(1f))
         if (value != null) {
             Text(value, style = t.caption, color = c.onSurfaceMuted)
         }

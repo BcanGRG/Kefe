@@ -6,7 +6,9 @@ package com.kefe.app.security
  * Windows Hello / Touch ID'ye JVM'den guvenilir bir kopru yok; olsa bile
  * masaustu surumu evdeki ortak bilgisayarda calisiyor ve orada omuz ustunden
  * bakis riski telefondakinden farkli. [BiometricAvailability.Unsupported]
- * donmek yeterli - Ayarlar satiri bu platformda hic cizilmez.
+ * donmek yeterli: Ayarlar'daki "Açılış kilidi" satiri bu platformda hic
+ * cizilmez (SettingsUiState.lockAvailable) ve eski bir kurulumdan kalan acik
+ * kilit de uygulanmaz (isLaunchLocked'in gateAvailable kosulu).
  */
 actual class BiometricGate actual constructor() {
 

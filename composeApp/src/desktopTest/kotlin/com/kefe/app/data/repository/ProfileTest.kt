@@ -7,11 +7,13 @@ import com.kefe.app.data.db.bootstrapIfNeeded
 import com.kefe.app.data.db.createKefeDatabase
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.domain.FixedKefeClock
+import com.kefe.app.domain.backup.BackupFile
 import com.kefe.app.domain.repository.PreferenceKeys
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -33,6 +35,17 @@ private fun newDatabase(): KefeDatabase {
 
 private fun newRepository(database: KefeDatabase) =
     SqlDelightPortfolioRepository(database, FixedKefeClock(), NoPrices())
+
+/**
+ * Eski surumun yedegi: cihaza ait tercihler o zaman dosyaya yaziliyordu. Bugunku
+ * disa aktarma "bu telefon kimin"i artik hic yazmadigi icin, geri yuklemedeki
+ * atlama ancak bu bicim elle kurulursa sinanir - yoksa test atlama bozulsa da
+ * yesil kalirdi.
+ */
+private fun BackupFile.inOldFormat(activeMemberId: String): BackupFile {
+    check(PreferenceKeys.ActiveMemberId !in settings) { "yeni yedek bu tercihi tasimamali" }
+    return copy(settings = settings + (PreferenceKeys.ActiveMemberId to activeMemberId))
+}
 
 class ProfileTest {
 
@@ -75,9 +88,10 @@ class ProfileTest {
         )
         val backup = newRepository(database).exportBackup(takenOn = "2026-07-30")
 
-        // Yedek tercihi TASIR (ayni tercih tablosundan gelir) - bu beklenen.
-        // Kritik olan: geri yuklerken ATLANMASI.
-        assertTrue(PreferenceKeys.ActiveMemberId in backup.settings)
+        // Yedek bu tercihi artik HIC TASIMAZ (cihaza ait tercihler disarida
+        // birakilir). Eski surumlerin yedeklerinde durdugu icin geri yukleme onu
+        // yine atlamali - asagidaki testler o ESKI bicimi elle kurar.
+        assertFalse(PreferenceKeys.ActiveMemberId in backup.settings)
     }
 
     @Test
@@ -89,6 +103,7 @@ class ProfileTest {
             settingValue = LocalOwnerMemberId,
         )
         val volkanBackup = newRepository(volkanDb).exportBackup(takenOn = "2026-07-30")
+            .inOldFormat(activeMemberId = LocalOwnerMemberId)
 
         // Ayse'nin telefonu: aktif profil = es.
         val ayseDb = newDatabase()
@@ -117,6 +132,7 @@ class ProfileTest {
             settingValue = LocalOwnerMemberId,
         )
         val backup = newRepository(volkanDb).exportBackup(takenOn = "2026-07-30")
+            .inOldFormat(activeMemberId = LocalOwnerMemberId)
 
         newRepository(freshDb).restoreBackup(backup)
 

@@ -111,6 +111,16 @@ UPDATE members
 SET name = :name, initials = :initials, updatedAt = :updatedAt
 WHERE id = :id;
 
+-- Profili kurulumun adsiz haline dondurur: ad varsayilana, damga 0'a.
+-- "Bu cihazı sıfırla" ve "Hesaptakileri kullan" icin. Damga 0 "hic
+-- adlandirilmadi" demek (bkz. Member.isNamed): sonraki baglanti hesabin
+-- adlarini devralir, cihazda kalmis eski adlar hesaba gitmez. Satir SILINMEZ -
+-- kimlik sabit, "kim ekledi" baglari kopmasin.
+resetMember:
+UPDATE members
+SET name = :name, initials = :initials, updatedAt = 0
+WHERE id = :id;
+
 deleteMemberById:
 DELETE FROM members
 WHERE id = :id;

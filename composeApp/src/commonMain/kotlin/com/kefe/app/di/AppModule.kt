@@ -25,6 +25,7 @@ import com.kefe.app.data.repository.SqlDelightPlanRepository
 import com.kefe.app.data.repository.SqlDelightPortfolioRepository
 import com.kefe.app.data.repository.SqlDelightPreferencesRepository
 import com.kefe.app.data.repository.SqlDelightPriceRepository
+import com.kefe.app.data.sync.AccountLinker
 import com.kefe.app.data.sync.PullEngine
 import com.kefe.app.data.sync.PushEngine
 import com.kefe.app.data.sync.SyncCoordinator
@@ -40,6 +41,7 @@ import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.security.BiometricGate
 import com.kefe.app.security.SecureStore
 import com.kefe.app.ui.screens.account.ActivityViewModel
+import com.kefe.app.ui.screens.account.LockViewModel
 import com.kefe.app.ui.screens.account.LoginViewModel
 import com.kefe.app.ui.screens.account.ProfileSetupViewModel
 import com.kefe.app.ui.screens.account.SettingsViewModel
@@ -118,7 +120,12 @@ val appModule = module {
     single { SyncLocalSink(get()) }
     single { PushEngine(get(), get(), get(), get(), get()) }
     single { PullEngine(get(), get(), get()) }
-    single { SyncCoordinator(get(), get(), get(), get(), get()) }
+    // Hesaba baglanma: once bakar (hicbir sey yazmadan), karar verilince tek
+    // islemde yazar. Baglanti anahtarini yalniz o yazar.
+    single { AccountLinker(get(), get(), get(), get()) }
+    // Kordinator surec-omurlu durumunu (SyncRuntime.Process) kendisi tasir;
+    // Koin grafigi yeniden kurulsa da yeni ornek ayni durumu gorur.
+    single { SyncCoordinator(get(), get(), get(), get(), get(), get(), get()) }
 
     // Dosya paylasimi/secimi platforma iner; Android tarafi Activity ister.
     single { FileTransfer() }
@@ -126,8 +133,9 @@ val appModule = module {
     // Cihaz kilidi. Masaustunde karsiligi yok; oradaki actual Unsupported doner.
     single { BiometricGate() }
 
-    // SummaryViewModel ve AddTransactionViewModel BULUT durumunu okur (senkron
-    // cipi ve kaydin "Bekliyor" damgasi) - o yuzden kordinatoru de alirlar.
+    // Ozet, Ayarlar, Profiller ve ekleme sayfasi HESAP modunu okur (cip, hesap
+    // bolumu, profil notu, "Hesaba ulaşılamıyor" seridi) - o yuzden
+    // kordinatoru de alirlar. Mod tek yerden turetilir: CloudMode.
     viewModelOf(::SummaryViewModel)
     viewModelOf(::AssetsViewModel)
     viewModelOf(::GoalsViewModel)
@@ -136,7 +144,9 @@ val appModule = module {
     viewModelOf(::ActivityViewModel)
     viewModelOf(::ProfilesViewModel)
     viewModelOf(::SettingsViewModel)
+    // Giris ve acilis kilidi AYRI: kilit yalniz acilista kok, giris hep itilir.
     viewModelOf(::LoginViewModel)
+    viewModelOf(::LockViewModel)
     viewModelOf(::ProfileSetupViewModel)
 
     // Detay ekranlari hedef/pozisyon kimligini calisma aninda alir.

@@ -35,6 +35,8 @@ object KefeIcons {
     val MoreVertical: ImageVector get() = KefeIconsCore.MoreVertical
     val PlusSmall: ImageVector get() = KefeIconsCore.PlusSmall
     val MinusSmall: ImageVector get() = KefeIconsCore.MinusSmall
+    val Device: ImageVector get() = KefeIconsCore.Device
+    val TwoPhones: ImageVector get() = KefeIconsCore.TwoPhones
     val CloudOff: ImageVector get() = KefeIconsCore.CloudOff
     val Clock: ImageVector get() = KefeIconsCore.Clock
     val Info: ImageVector get() = KefeIconsCore.Info

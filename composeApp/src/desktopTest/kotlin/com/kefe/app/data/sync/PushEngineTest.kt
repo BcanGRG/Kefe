@@ -74,6 +74,9 @@ private class FakePreferences : PreferencesRepository {
     override fun observeAll(): Flow<Map<String, String>> = flowOf(map.toMap())
     override suspend fun put(key: String, value: String) { map[key] = value }
     override suspend fun get(key: String): String? = map[key]
+    override suspend fun putAll(changes: Map<String, String?>) {
+        changes.forEach { (key, value) -> if (value == null) map.remove(key) else map[key] = value }
+    }
 }
 
 private class Harness(val token: String? = "tok") {

@@ -36,7 +36,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kefe.app.data.sync.CloudState
+import com.kefe.app.data.sync.CloudMode
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.AllocationSlice
 import com.kefe.app.domain.model.AssetClass
@@ -66,8 +66,6 @@ import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefeMainGoalBadge
 import com.kefe.app.ui.components.KefeManualBadge
-import com.kefe.app.ui.components.KefeOfflineBanner
-import com.kefe.app.ui.components.KefePendingBadge
 import com.kefe.app.ui.components.KefePeriodChips
 import com.kefe.app.ui.components.KefeProgressBar
 import com.kefe.app.ui.components.KefeProgressBarThin
@@ -75,7 +73,8 @@ import com.kefe.app.ui.components.KefePullToRefresh
 import com.kefe.app.ui.components.KefeSkeletonBlock
 import com.kefe.app.ui.components.KefeStaleBanner
 import com.kefe.app.ui.components.KefeSyncChip
-import com.kefe.app.ui.components.SyncStatus
+import com.kefe.app.ui.components.KefeTwoLineBanner
+import com.kefe.app.ui.components.accountBannerCopy
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
@@ -111,35 +110,28 @@ fun SummaryScreen(
     onOpenMarket: () -> Unit = {},
     onAddAsset: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onOpenAccount: () -> Unit = {},
+    onCompleteLink: () -> Unit = {},
+    onRelogin: () -> Unit = {},
 ) {
     Column(modifier.fillMaxWidth()) {
-        SummaryTopBar(state, onIntent, onOpenMarket)
+        SummaryTopBar(state, onIntent, onOpenMarket, onOpenAccount)
 
-        // Seritler kaydirma alaninin DISINDA kalir - fiyat guveni her zaman gorunur.
-        when (state.freshness) {
-            // Ilk fiyatlar yolday iken serit cizilmez: uyaracak bir sey yok.
-            PriceFreshness.Loading -> Unit
-            PriceFreshness.Stale -> KefeStaleBanner(
-                text = "Fiyatlar 2 saatten eski",
-                actionText = "Yenile",
-                onAction = { onIntent(SummaryIntent.Refresh) },
-                clockIcon = KefeIcons.Clock,
-                strip = true,
-            )
-
-            PriceFreshness.Offline -> KefeOfflineBanner(
-                line1 = "Çevrimdışı · Son bilinen fiyatlarla",
-                line2 = if (state.pendingSyncCount > 0) {
-                    "${state.pendingSyncCount} kayıt eşitlenmeyi bekliyor"
-                } else {
-                    "Bağlanınca fiyatlar güncellenecek"
-                },
-                cloudOffIcon = KefeIcons.CloudOff,
-                strip = true,
-            )
-
-            PriceFreshness.Fresh -> Unit
-        }
+        // Seritler kaydirma alaninin DISINDA kalir - hesap ve fiyat guveni her
+        // zaman gorunur. Hesap seridi ONCE: yarim kalan baglanti kayitlarin
+        // hesaba HIC gitmedigi demek, fiyatin eskiligi ise bekleyebilir.
+        SummaryAccountBanner(
+            mode = state.cloudMode,
+            onCompleteLink = onCompleteLink,
+            onRelogin = onRelogin,
+            onDropLink = { onIntent(SummaryIntent.DropLink) },
+            strip = true,
+        )
+        SummaryPriceBanner(
+            freshness = state.freshness,
+            onRefresh = { onIntent(SummaryIntent.Refresh) },
+            strip = true,
+        )
 
         // Bos durumda cekip-yenileme YOK: tazelenecek fiyat yok, jest anlamsiz.
         // Ilk kayittan sonra (Loading/Ready) devreye girer.
@@ -170,6 +162,73 @@ fun SummaryScreen(
     }
 }
 
+// --- Seritler (uc yerlesim ortak) -------------------------------------------
+
+/**
+ * Hesap bagi yarim ya da oturum dustu: Ozet'in en ustunde, uc yerlesimde de.
+ * Diger modlarda hicbir sey cizmez. Metin Banners.kt'deki tek kaynaktan
+ * ([accountBannerCopy]); eylemler moda gore baglanir.
+ */
+@Composable
+internal fun SummaryAccountBanner(
+    mode: CloudMode?,
+    onCompleteLink: () -> Unit,
+    onRelogin: () -> Unit,
+    onDropLink: () -> Unit,
+    strip: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val copy = accountBannerCopy(mode) ?: return
+    val c = KefeTheme.colors
+    KefeTwoLineBanner(
+        line1 = copy.line1,
+        line2 = copy.line2,
+        icon = KefeIcons.Info,
+        iconTint = if (mode is CloudMode.LinkPending) c.syncPending else c.syncOffline,
+        actionText = copy.primary,
+        onAction = if (mode is CloudMode.SessionLost) onRelogin else onCompleteLink,
+        secondaryActionText = copy.secondary,
+        onSecondaryAction = onDropLink,
+        strip = strip,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Fiyat seridi: eski fiyat (sari, tek satir) ya da alinamayan fiyat (notr, iki
+ * satir). Ikisinde de saat ikonu ve "Yenile"; ustu cizili bulut YOK - fiyatin
+ * gelmemesi hesabin ya da internetin koptugu anlamina gelmiyor.
+ */
+@Composable
+internal fun SummaryPriceBanner(
+    freshness: PriceFreshness,
+    onRefresh: () -> Unit,
+    strip: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val lines = priceBannerLines(freshness) ?: return
+    if (lines.line2 == null) {
+        KefeStaleBanner(
+            text = lines.line1,
+            actionText = "Yenile",
+            onAction = onRefresh,
+            clockIcon = KefeIcons.Clock,
+            strip = strip,
+            modifier = modifier,
+        )
+    } else {
+        KefeTwoLineBanner(
+            line1 = lines.line1,
+            line2 = lines.line2,
+            icon = KefeIcons.Clock,
+            actionText = "Yenile",
+            onAction = onRefresh,
+            strip = strip,
+            modifier = modifier,
+        )
+    }
+}
+
 // --- Ust bar ---------------------------------------------------------------
 
 /**
@@ -184,6 +243,7 @@ private fun SummaryTopBar(
     state: SummaryUiState,
     onIntent: (SummaryIntent) -> Unit,
     onOpenMarket: () -> Unit,
+    onOpenAccount: () -> Unit,
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
@@ -221,27 +281,22 @@ private fun SummaryTopBar(
                 }
             }
 
-            // Bos durumda (ilk kayittan once) senkron cipi, gizle ve yenile
-            // CIZILMEZ: eslenecek veri, gizlenecek bakiye, tazeleyip
-            // gorunur kilacak fiyat yok. Ilk varlik eklenince hepsi gelir.
-            if (state.stage != SummaryStage.Empty) {
+            // Cip HESAP modunu gosterir ve HER ZAMAN cizilir - bos durumda da.
+            // Once fiyat tazeligini gosteriyordu: ucretsiz fiyat ucu tokezleyince
+            // "Çevrimdışı" yaziyor, bulut senkronu ise gayet calisiyordu (9b'nin
+            // acik notu). Sonra hesapsizken ve bos durumda hic cizilmedi (#17);
+            // kullanici kayitlarinin yalniz bu telefonda oldugunu hicbir yerde
+            // goremiyordu. Hesapsiz kullanim bir ariza degil: notr "Bu cihazda".
+            // Dokununca Ayarlar'in ilk bolumune, hesaba gidilir.
+            state.cloudMode?.let { mode ->
                 Spacer(Modifier.width(Space.x8))
-                // Cip ESITLEMEYI gosterir. Once fiyat tazeligini gosteriyordu:
-                // ucretsiz fiyat ucu tokezleyince "Çevrimdışı" yaziyor, bulut
-                // senkronu ise gayet calisiyordu (9b'nin acik notu). Fiyatin
-                // eskiligi zaten kendi seridinde ("Son bilinen fiyatlar · ...").
-                //
-                // Bulut KAPALIYKEN cip hic cizilmez: giris yapmamis kullaniciya
-                // her acilista bozuk bir sey varmis gibi gostermek yanlis olurdu.
-                if (state.cloudState != CloudState.Off) {
-                    KefeSyncChip(
-                        state = when (state.cloudState) {
-                            CloudState.Unreachable -> SyncStatus.Offline
-                            else -> SyncStatus.Synced
-                        },
-                    )
-                }
+                KefeSyncChip(mode = mode, onClick = onOpenAccount)
+            }
 
+            // Bos durumda (ilk kayittan once) gizle ve yenile CIZILMEZ:
+            // gizlenecek bakiye, tazeleyip gorunur kilacak fiyat yok. Ilk varlik
+            // eklenince ikisi de gelir.
+            if (state.stage != SummaryStage.Empty) {
                 Spacer(Modifier.width(Space.x8))
                 KefeIconButton(
                     icon = if (state.masked) KefeIcons.EyeOff else KefeIcons.Eye,
@@ -289,26 +344,6 @@ private fun SummaryUiState.priceLine(): String? = when {
     pricesUpdatedAt.isBlank() -> null
     freshness == PriceFreshness.Offline -> "Son bilinen fiyatlar · $pricesUpdatedAt"
     else -> "Fiyatlar $pricesUpdatedAt${timeLocative(pricesUpdatedAt)} güncellendi"
-}
-
-/**
- * "14:32'de" / "12:05'te" - saat metnine Turkce bulunma eki.
- *
- * Ek son SAYININ OKUNUSUNA gore secilir (otuz iki -> "de", beş -> "te");
- * tek bir sabit ek her saatte yanlis okunur.
- */
-private fun timeLocative(time: String): String {
-    val minute = time.trim().substringAfterLast(':').takeLast(2).toIntOrNull() ?: return "'de"
-    return when (minute % 10) {
-        1, 2, 7, 8 -> "'de"
-        3, 4, 5 -> "'te"
-        6, 9 -> "'da"
-        else -> when (minute / 10) {
-            2, 5 -> "'de"   // yirmi, elli
-            4 -> "'ta"      // kirk
-            else -> "'da"   // sifir, on, otuz
-        }
-    }
 }
 
 // --- Icerik ----------------------------------------------------------------
@@ -401,11 +436,6 @@ private fun SummaryContent(
                 ActivityCard(
                     activity = state.activity,
                     members = state.members,
-                    pendingCount = if (state.freshness == PriceFreshness.Offline) {
-                        state.pendingSyncCount
-                    } else {
-                        0
-                    },
                     onOpen = onOpenActivity,
                     modifier = Modifier.padding(horizontal = Space.x16),
                 )
@@ -993,7 +1023,6 @@ private fun MarketCard(
 private fun ActivityCard(
     activity: List<ActivityEvent>,
     members: List<Member>,
-    pendingCount: Int,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1037,11 +1066,11 @@ private fun ActivityCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    // Bekleyen kayit rozeti satirin ICINDE, metnin hemen ardinda durur.
-                    if (index < pendingCount) {
-                        Spacer(Modifier.width(DeltaGap))
-                        KefePendingBadge()
-                    }
+                    // "Bekliyor" rozeti KALDIRILDI: sayisi (pendingSyncCount) hicbir
+                    // yerde doldurulmuyordu ve rozet fiyat tazeligine bagliydi -
+                    // fiyat alinamayinca kayitlar eşitlenmemis gibi gorunebilirdi.
+                    // Kayit bazinda bekleyen bilgisi gelince moddan (Eşitlenemiyor)
+                    // surulerek geri gelir.
                 }
                 Spacer(Modifier.width(Space.x10))
                 Text(event.timeLabel, style = t.micro, color = c.onSurfaceMuted, maxLines = 1)

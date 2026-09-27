@@ -168,6 +168,27 @@ class SyncLocalSource(
         }
 
     /**
+     * Hesaba henuz gonderilmemis bir yazma var mi: [since] (push watermark'i)
+     * ve sonrasinda degismis satir. [since] null = hic push olmadi; o zaman
+     * GERCEK bir yazma (damgasi > 0) aranir - kurulumun adsiz profilleri
+     * (damga 0) "gonderilmemis degisiklik" sayilmaz.
+     *
+     * Yaklasiktir: karsi telefondan cekilmis ve watermark'tan yeni damgali bir
+     * satir da sayilir (bir sonraki push onu da yeniden gonderir). "Hesaptan
+     * çık" uyarisi icin fazla temkinli olmak, eksik uyarmaktan iyidir.
+     */
+    suspend fun hasChangesSince(since: Long?): Boolean = withContext(dispatcher) {
+        val from = since ?: 1L
+        database.portfolioQueries.selectMembersChangedSince(from).executeAsList().isNotEmpty() ||
+            database.positionQueries.selectPositionsChangedSince(from).executeAsList().isNotEmpty() ||
+            database.transactionQueries.selectTransactionsChangedSince(from).executeAsList().isNotEmpty() ||
+            database.goalQueries.selectGoalsChangedSince(from).executeAsList().isNotEmpty() ||
+            database.goalAssetQueries.selectGoalAssetsChangedSince(from).executeAsList().isNotEmpty() ||
+            database.snapshotQueries.selectSnapshotsChangedSince(from).executeAsList().isNotEmpty() ||
+            database.activityQueries.selectActivityChangedSince(from).executeAsList().isNotEmpty()
+    }
+
+    /**
      * Yerelde herhangi bir senkron tablosuna yazildiginda emit eder. SQLDelight
      * bildirim TABLO duzeyinde: sayac degismese de (guncelleme, silme) akis
      * yeniden verir, yani ekleme kadar duzenleme ve silme de yakalanir.

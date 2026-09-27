@@ -146,6 +146,10 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
             )
         }
 
+        // Tohum da YENI bir veritabanidir: kilit kurulumdakiyle ayni sekilde
+        // kapali baslar. Aksi halde gelistirme surumu anahtari eksik birakir ve
+        // eski kurulum sanilip kilitli acilirdi.
+        writeNewDatabaseDefaults()
         settingQueries.upsertSetting(
             settingKey = BootstrapKey,
             settingValue = BootstrapValue,

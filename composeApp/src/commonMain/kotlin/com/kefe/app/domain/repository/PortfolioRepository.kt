@@ -136,8 +136,12 @@ interface PortfolioRepository {
     /**
      * Kullanicinin girdigi HER SEYI siler: pozisyonlar, islem defteri, hedefler,
      * aktivite, gunluk fotograflar, elle girilen fiyatlar ve tercihler.
+     * Profiller adsiz haline doner ("Ben"/"Eşim", damga 0) ve hesap baglantisi
+     * da gider: silinen cihaz yeni bir kurulumdur.
      *
-     * Geri alinamaz. Cagiran taraf ONAY ALMADAN cagirmamali.
+     * Geri alinamaz. Cagiran taraf ONAY ALMADAN cagirmamali. Cihaz bir hesaba
+     * bagliysa ONCE baglanti birakilmali (bkz. SettingsViewModel): yoksa bir
+     * sonraki pull hesabi silinen veritabanina geri indirir.
      */
     suspend fun deleteAllData()
 
@@ -174,6 +178,10 @@ interface PortfolioRepository {
      * TAMAMEN DEGISTIRIR: mevcut veri silinir, yedektekiler yazilir. Birlestirme
      * yapilmaz - hangi kaydin daha yeni oldugunu soyleyecek bir zaman damgasi
      * yok ve yanlis tahmin sessizce cift kayit uretirdi.
+     *
+     * Geri yuklemenin ani [PreferenceKeys.LocalRestoredAt]'e AYNI islemde
+     * yazilir: yuklenen satirlar "simdi" damgalanir, sonraki hesap baglantisi
+     * bunu gorup soru sorar (bkz. classifyLink).
      */
     suspend fun restoreBackup(file: BackupFile)
 

@@ -54,7 +54,6 @@ import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.formatMonthYear
 import com.kefe.app.domain.model.label
 import com.kefe.app.domain.model.progress
-import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.ui.charts.DonutSlice
 import com.kefe.app.ui.charts.collapseDonutSlices
 import com.kefe.app.ui.charts.KefeDonutChart
@@ -65,13 +64,11 @@ import com.kefe.app.ui.components.KefeAvatar
 import com.kefe.app.ui.components.KefeCard
 import com.kefe.app.ui.components.KefeChip
 import com.kefe.app.ui.components.KefeHairline
-import com.kefe.app.ui.components.KefeOfflineBanner
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeProgressBar
 import com.kefe.app.ui.components.KefeProgressBarThin
 import com.kefe.app.ui.components.KefeSecondaryButton
 import com.kefe.app.ui.components.KefeSkeletonBlock
-import com.kefe.app.ui.components.KefeStaleBanner
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
@@ -104,34 +101,28 @@ fun SummaryScreenTablet(
     onOpenMarket: () -> Unit = {},
     onAddAsset: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onCompleteLink: () -> Unit = {},
+    onRelogin: () -> Unit = {},
 ) {
     Column(modifier.fillMaxSize()) {
         TabletTopBar(state = state, onIntent = onIntent, onOpenMarket = onOpenMarket)
 
-        when (state.freshness) {
-            // Ilk fiyatlar yolday iken serit cizilmez: uyaracak bir sey yok.
-            PriceFreshness.Loading -> Unit
-            PriceFreshness.Stale -> KefeStaleBanner(
-                text = "Fiyatlar 2 saatten eski",
-                actionText = "Yenile",
-                onAction = { onIntent(SummaryIntent.Refresh) },
-                clockIcon = KefeIcons.Clock,
-                modifier = Modifier.padding(horizontal = PagePad, vertical = Space.x12),
-            )
-
-            PriceFreshness.Offline -> KefeOfflineBanner(
-                line1 = "Çevrimdışı · Son bilinen fiyatlarla",
-                line2 = if (state.pendingSyncCount > 0) {
-                    "${state.pendingSyncCount} kayıt eşitlenmeyi bekliyor"
-                } else {
-                    "Bağlanınca fiyatlar güncellenecek"
-                },
-                cloudOffIcon = KefeIcons.CloudOff,
-                modifier = Modifier.padding(horizontal = PagePad, vertical = Space.x12),
-            )
-
-            PriceFreshness.Fresh -> Unit
-        }
+        // Hesap seridi fiyattan ONCE (bkz. SummaryScreen). Hesap durumunun kendisi
+        // rayda; burada yalniz eylem isteyen iki mod.
+        SummaryAccountBanner(
+            mode = state.cloudMode,
+            onCompleteLink = onCompleteLink,
+            onRelogin = onRelogin,
+            onDropLink = { onIntent(SummaryIntent.DropLink) },
+            strip = false,
+            modifier = Modifier.padding(start = PagePad, end = PagePad, top = Space.x12),
+        )
+        SummaryPriceBanner(
+            freshness = state.freshness,
+            onRefresh = { onIntent(SummaryIntent.Refresh) },
+            strip = false,
+            modifier = Modifier.padding(horizontal = PagePad, vertical = Space.x12),
+        )
 
         val totals = state.totals
         when {

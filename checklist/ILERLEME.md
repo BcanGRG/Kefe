@@ -1573,3 +1573,391 @@ getiri" satırı çok kısa elde tutma süresinde anlamsız bir rakam üretiyor
 (gümüşte `+14.213.458.746.011.397,12%`). Yıllıklandırma matematiksel olarak
 doğru çalışıyor — sekiz günde %90 kazanç yıla çevrilince gerçekten bu mertebeye
 çıkıyor — ama ekranda gösterilecek bir sayı değil. Ayrıca ele alınmalı.
+
+---
+
+## 42 · Hesapsız ve hesaplı kullanım ayrıldı; açılış kilidi isteğe bağlı 🟡
+
+**Neydi.** Sıfırdan kurulan ikinci telefon var olan hesaba hiç ulaşamıyordu.
+İlk ekran "Kefe kilitli" idi: kilidin varsayılanı açıktı ve kurulumun bitip
+bitmediğine bakmıyordu. Kilit açılınca e-posta formu atlanıyor, doğrudan
+"Profiller · İki profil oluşturun" geliyordu. Telefon hiç giriş yapmadığı için
+hiçbir şey çekilmiyor, 0 işlem görünüyordu. Kullanıcının kilit için isteği de
+açıktı: kurulumda dayatılmasın, "içeride kendisi eklesin".
+
+Kök neden tek bir karışıklıktı: uygulama **hesapsız** ve **hesaplı** kullanımı
+birbirinden ayırmıyordu.
+
+- "Girişli" ile "bu cihaz hesaba bağlı" aynı şey sayılıyordu. Giren cihaz,
+  hesabın kayıtları inmeden ve "Bu telefon kimin?" sorulmadan push'a
+  başlıyordu. İlk çekim patlarsa cihazda yazılmış adlar, damgaları daha yeni
+  olduğu için, hesabın gerçek adlarını iki telefonda da eziyordu.
+- Ekranlar üç ayrı sinyal okuyordu. Çip girişli mi diye bakıyor, tablet rayı ve
+  masaüstü yan navigasyonu fiyat tazeliğini gösteriyordu. Aynı anda rayda
+  "Bekliyor", çipte "Eşitleniyor", şeritte "Çevrimdışı" yazabiliyordu.
+- Tek `LoginKey` üç iş görüyordu: kökteyken açılış kilidi, kökteyken ilk
+  açılış, Ayarlar'dan itilince giriş formu. Üçü aynı `LoginViewModel`'i
+  paylaşıyor, kilitten kalan durum 9b ve 29'daki `asRoot` / `vmState.copy`
+  yamalarıyla gizleniyordu.
+- Verinin akıbetini söyleyen yoktu. "Çıkış yap" ne olacağını söylemiyordu ve
+  çıkış ucuna kapsam vermiyordu. Supabase belgesine göre varsayılan kapsam
+  global; bu, eşin telefonunun yenileme jetonunu da iptal eder (cihazda
+  doğrulanmadı, bkz. cihaz tablosu 8). Bağlı cihazda "Tüm verileri sil"
+  oturumu açık bıraktığı için tetiklediği push ve pull hesabı saniyeler içinde
+  geri getiriyordu. Bağlıyken geri yüklenen yedek her satırı "şimdi"
+  damgalayıp eski kopyayı iki telefona da yazıyordu. Cihazda kayıt varken
+  hesaba girmek iki portföyü sormadan birleştiriyordu.
+
+Dosyanın başındaki karar (tek hesap, iki cihaz aynı e-postayla girer, her cihaz
+bir profile sabitlenir) hesaplı kullanım için aynen geçerli. Hesap önceden de
+şart değildi (9b: "giriş isteğe bağlı"). Değişen şu: hesapsız kullanım artık
+giriş formunun altındaki küçük bir yan yol ("Hesabınız yok mu? Yeni portföy
+oluştur") değil; ilk ekranda eşit bir seçenek ve adı konmuş bir mod ("Bu
+cihazda"). Kullanıcı "üyelik" dedi; arayüz her yerde "hesap" der.
+
+**Ne yapıldı — beş parça.**
+
+**1. Kilit isteğe bağlı.**
+
+- Yeni veritabanı `biometricLock = "false"` yazar, yalnız anahtar yoksa
+  (bootstrap ve örnek veri yolu). Eski kurulumlarda `bootstrapVersion` zaten
+  var, bootstrap yeniden koşmaz, anahtar yok kalır. Anahtarı okuyan tek yer
+  `lockEnabled()` ve eksik anahtarı **açık** okur. Kullanıcının kararıyla iki
+  mevcut telefon kilitli kalır; yalnız yeni kurulumlar kapalı başlar.
+- Kilit ancak üçü birden doğruysa uygulanır (`isLaunchLocked`): kilit açık,
+  kurulum bitmiş (tanıtım geçilmiş **ve** bu telefonun profili seçilmiş), cihaz
+  kimliği gerçekten sorabiliyor (`Available`, açılışta bir kez bakılır). Profil
+  yokken kilit gelmiyor. Masaüstünde ve hiçbir kimliği tanımlı olmayan telefonda
+  kilit ekranı bir an parlayıp açılmıyor.
+- Açmak önce sistem istemini açar ("Açılış kilidini etkinleştir"). Değer yalnız
+  başarıda yazılır ve "Açılış kilidi açık. Kefe her açılışta kimliğinizi
+  soracak." denir. İptal: kapalı kalır, mesaj yok. Başarısız: "Doğrulanamadı;
+  kilit açılmadı." Kimlik tanımlı değilse: "Bu cihazda parmak izi, yüz ya da
+  ekran kilidi tanımlı değil. Önce cihaz ayarlarından ekleyin." Donanım yoksa
+  satır hiç çizilmez; masaüstünde hep böyle. Kapatmak bir şey sormaz.
+- Anahtar diskteki değeri değil, kapının gerçekten yapacağını gösterir.
+  Anahtarsız eski kurulum, kimliği tanımsız bir telefonda **kapalı** görünür;
+  hiçbir şey sormayan açık bir anahtar olarak değil.
+- Satır "Açılış kilidi" / "Kefe açılırken parmak izi, yüz ya da ekran kilidi
+  sorulur"; kilit ekranı "Kilidi aç". İstem yüzü ve cihaz PIN'ini de kabul
+  ediyor, "Parmak izi" tek başına yanlıştı.
+- `BiometricLock` ve `HideBalanceOnStart` artık cihaza ait: yedeğe yazılmaz,
+  eski bir yedekte gelirse geri yüklemede atlanır.
+- Oturum ortasında açılan kilit bir sonraki soğuk açılışta devreye girer.
+
+**2. Tek hesap modu, diske yazılmaz.** Mod her an oturumdan ve cihaza ait bağdan
+(`CloudLinkUserId`, `CloudLinkEmail`) saf `deriveCloudMode()` ile türetilir.
+Ayrı bir "mod" kaydı olsaydı oturumla ayrışabilirdi. Push, pull ve gerçek
+zamanlı soket **yalnız bağlı cihazda** çalışır. Bağı (açılıştaki geçiş dışında)
+yalnız bağlanma adımı yazar. Hesap indirilemezse bağ yazılmaz ve hiçbir şey
+eşitlenmez.
+
+Sabit sözlük. Etiketlerin ve renklerin tek kaynağı `Banners.kt`:
+
+| Durum | Çip / ray | Uzun biçim (yan nav; Ayarlar farkı aşağıda) | Renk, ikon |
+|---|---|---|---|
+| Hesapsız | Bu cihazda | Yalnız bu cihazda | nötr, telefon ikonu |
+| Oturum var, cihaz bağlanmadı | Bağlantı yarım | Hesap bağlantısı tamamlanmadı | bekliyor |
+| Bağlı, ilk tur sürüyor | Eşitleniyor | Hesapla eşitleniyor… | bekliyor |
+| Bağlı, son tur başarılı | Eşitlendi | Hesapla eşitlendi · az önce | yeşil |
+| Bağlı, hesaba ulaşılamıyor | Eşitlenemiyor | Hesaba ulaşılamıyor · kayıtlar bu cihazda bekliyor | kopuk, üstü çizili bulut |
+| Bağ var, oturum düştü | Oturum kapandı | Oturum kapandı · yeniden giriş yapın | kopuk |
+| Fiyat çekilemedi | (çip yok) | Fiyatlar alınamadı · son bilinen fiyatlar | saat ikonu |
+
+- **İki yüzey aynı değil.** Uzun biçim sütunu yan navigasyonun yazdığıdır.
+  Ayarlar'da "Eşitlendi"ye zaman eklenmez (onu ayrı "Son eşitleme" satırı
+  söyler) ve oturumu düşmüş cihaz yalnız "Oturum kapandı" yazar. Yan nav
+  hesapsızken "· Hesaba bağla" ekler. Fiyat satırında saat ikonu ve
+  "…son bilinen fiyatlarla" Özet'teki fiyat şeridine aittir; yan navın fiyat
+  satırı işaretsiz ve "…son bilinen fiyatlar" der.
+- **"Çevrimdışı" sözlükte yok.** Hesapsız kullanım bir arıza değil. Üstü çizili
+  bulut yalnız "Eşitlenemiyor"da kullanılır, fiyat şeridi saat ikonunu alır.
+- Eylem sözcükleri de sabit: "Hesaba bağla", "Hesaptan çık", "Bu cihazı
+  sıfırla", "Kod gönder", "Doğrula".
+- "Eşitlendi" ilk turun sonucu gelmeden yazılmaz. Önce giriş anında, tek istek
+  gitmeden "Eşit" deniyordu. RLS reddi ayrı bir durum değil, "Eşitlenemiyor"
+  görünür; sebebi logda.
+- "Son eşitleme" push watermark'ını değil, yeni `LastSyncedAt`'i (son başarılı
+  tur) okur ve dakikada bir tazelenir.
+- Açılışta bir kerelik geçiş: oturumu **ve** push watermark'ı olan cihaz bağlı
+  sayılır, yani eşitleyen telefonlar hiçbir fark görmez. Watermark'sız oturum
+  "Bağlantı yarım", oturum yoksa "Bu cihazda".
+
+Yüzeyler:
+
+- Telefon: çip **her zaman** çizilir, boş durumda da. Dokununca Ayarlar açılır;
+  hesap bölümü orada ikinci sırada.
+- Tablet rayı modu gösterir. Masaüstü yan navigasyonu iki satır: mod ve ayrı,
+  soluk bir fiyat satırı.
+- Özet (üç düzen): "Bağlantı yarım"da "Hesap bağlantısı tamamlanmadı · Kayıtlar
+  henüz hesaba gönderilmiyor." + "Tamamla" / "Vazgeç". "Oturum kapandı"da
+  "Oturumunuz kapandı · Eşitleme durdu, kayıtlarınız bu cihazda." + "Yeniden
+  giriş yap" / "Hesapsız devam et". Fiyat şeridi: "Fiyatlar alınamadı · son
+  bilinen fiyatlarla" / "Bağlantı gelince fiyatlar güncellenir" / "Yenile".
+- İşlem ekle: şerit yalnız hesaba ulaşılamıyorken çıkar ("Hesaba ulaşılamıyor ·
+  Kayıt bu cihazda tutulur, bağlantı gelince gönderilir."), düğme "Cihaza
+  kaydet" olur. Hesapsızken ek bir şey yok; çip yetiyor.
+- Ayarlar: "Hesap ve eşitleme" Profiller'in hemen altına taşındı ve moda göre
+  satır çiziyor. "Şimdi eşitle" yalnız hesaba ulaşılamıyorken görünür. Profiller
+  ekranının notu da moda göre.
+
+**3. İlk açılış: "Nasıl kullanmak istersiniz?"**
+
+- Kök tek bir saf fonksiyondan seçilir, `rootFor(locked, onboarded,
+  activeMemberId, signedIn)`. Kilitliyse kilit; kurulum bittiyse Özet; tanıtım
+  geçildiyse ya da girişliyse ProfileSetup (kurulumun ya da bağlanmanın
+  ortasında kapatılan uygulama buraya döner); gerisi Hoş geldin. Açılış ekranı
+  oturum durumunu da bekler, seçim gerçek oturumu görsün diye. "Tüm verileri
+  sil" sonrası kök de buradan gelir.
+- Hoş geldin, kullanıcının kararıyla **iki eşit kart, hiçbiri seçili değil**:
+  - "Bu cihazda kullan": "Hesap gerekmez. Kayıtlarınız yalnız bu cihazda
+    saklanır. İsterseniz sonra Ayarlar'dan hesaba bağlarsınız." Tanıtım, sonra
+    profiller.
+  - "Hesapla, iki telefonda": "Eşinizle aynı birikimi iki telefonda görün.
+    E-postanıza gelen kodla girersiniz; bu e-postayla hesap yoksa açılır."
+    Giriş ekranına gider.
+  - Alt not: "Daha önce Kefe kullandınız mı? 'Hesapla, iki telefonda'yı seçip
+    aynı e-postayla girin — kayıtlarınız bu cihaza gelir." Bulut
+    yapılandırılmamışsa yalnız ilk kart çizilir, not da yok.
+- Kilit ve giriş ayrı ekranlar. `LockKey` yalnız kök olur ve kendi
+  `LockViewModel`'i var. `SignInKey(FirstRun | Link | Relogin)` hep itilir, geri
+  oku var, açılmadan sıfırlanır. Kod doğrulanırken geri tuşu bir şey yapmaz;
+  yarım bırakılan deneme `signedIn`'i takılı bırakamaz. 9b ve 29'daki yamalar
+  kalktı.
+- **Giriş ile kayıt tek akış** (kullanıcının kararı): "Şifre yok: e-postanıza
+  tek kullanımlık bir kod gelir. Bu e-postayla hesap yoksa açılır, varsa
+  hesabınıza girersiniz." Altında uyarı: "İki telefonda da aynı e-postayı
+  kullanın. Farklı bir e-posta ayrı ve boş bir hesap açar." Düğmeler "Kod
+  gönder" / "Doğrula"; "Hesapsız başla" gitti.
+- Kod doğrulanınca, cihaz zaten **o** hesaba bağlı ve profili seçiliyse giriş
+  yalnız kapanır; aksi hâlde ProfileSetup açılır. Ayarlar'dan giriş artık "Bu
+  telefon kimin?"i atlamıyor. Hesapsız kullanılmış bir telefon, hesabın adları
+  gelince sessizce öteki kişiye dönüşemiyor.
+- ProfileSetup girişliyken hangi e-postayla girildiğini ve "Farklı e-postayla
+  gir"i gösterir. "Hesabınızda" ancak hesap gerçekten indirilip adları verdiyse
+  denir. Tanıtımın son düğmesi "Profilleri oluştur".
+
+**4. Bağlanma önce bakar, sonra yazar.** `PullEngine` `fetch()` ve `apply()`
+olarak ikiye ayrıldı. `AccountLinker.preview()` hiçbir şey yazmaz; iki taraftaki
+canlı işlem ve hedefleri ve ortak kayıtları sayar. Karar saf `classifyLink()`'te:
+
+| Cihaz | Hesap | Ortak kayıt / geri yükleme | Karar | Sorulur mu |
+|---|---|---|---|---|
+| 0 | her | – | Hesaptakiler iner | hayır |
+| >0 | 0 | – | Cihazdakiler hesaba gider | hayır, giriş ekranı zaten söyledi |
+| >0 | >0 | ortak ≥ 1, geri yükleme yok | Aynı hesaba dönüş | hayır, profil de sorulmaz |
+| >0 | >0 | ortak 0 ya da hesapsız geri yükleme | Çakışma | evet |
+
+- Ortak sayılan yalnız rastgele (UUID) kimlikler. `pos_*`, `member_*` ve eski,
+  içerikten türeyen kimlikler her portföyde aynıdır; onları saymak her
+  bağlanmayı "aynı hesap" yapardı.
+- Çakışmada, kullanıcının kararıyla **sorulur**: "Bu cihazda da, hesabınızda da
+  kayıt var" / "Bu cihaz: n kayıt · Hesap: m kayıt".
+  - "Hesaptakileri kullan": "Bu cihazdaki kayıtlar silinir." Yanında "Önce
+    yedek al". Eşitlenen tablolar silinir (plan, gelir ve gider tablolarına
+    dokunulmaz), push watermark'ı şimdiye çekilir, hiçbir şey geri gitmez.
+  - "Birleştir": "Aynı alımı iki cihaza da girdiyseniz iki kez sayılır; sonra
+    Aktivite'den silebilirsiniz." İki yanda da olan kayıtta, damgası ne olursa
+    olsun hesabın sürümü kazanır. Aynı günün anlık görüntüsü ve ana hedef de
+    hesaptan gelir.
+  - "Vazgeç": yalnız bu cihazın oturumu kapanır, akışın başladığı yere dönülür.
+    Hiçbir şey yazılmamıştır.
+- "Devam" hepsini **tek transaction**'da yazar: hesabın satırları, adlar, bu
+  cihazın kayıtlarının yeni seçilen profile aktarımı ("Bu cihazda daha önce
+  girilen n kayıt da X adına aktarılır."), `ActiveMemberId` ve bağ. Önizleme ya
+  da yazma patlarsa bağ yok, push yok. Yerel yazma hatası ağ mesajını değil
+  kendi mesajını alır: "Bağlantı kaydedilemedi; bu cihazda hiçbir şey
+  değişmedi. Tekrar deneyin." Başarıda: "Hesaba bağlandı — eşitleme açık."
+- Başka hesap koruması: bağlı bir cihazda farklı e-postayla girilince yeni
+  oturum kapanır. Ekran "Bu cihaz başka bir hesaba bağlı · Bu cihazdaki
+  kayıtlar {e-posta} hesabına ait. Farklı bir hesapla kullanmak için önce
+  Ayarlar › Bu cihazı sıfırla." der. Bağ ve kayıtlar yerinde kalır.
+
+**5. Çıkış, sıfırlama ve geri yükleme ne olacağını söyler, sonra onu yapar.**
+
+- "Hesaptan çık" önce sorar: "Hesaptan çıkılsın mı? · Eşitleme bu cihazda
+  durur. Kayıtlarınız bu cihazda kalır, hesapsız kullanmaya devam edersiniz;
+  Merve'nin telefonu hesapla eşitlenmeye devam eder." Gönderilmemiş değişiklik
+  varsa ayrıca uyarır. Çıkış artık `/auth/v1/logout?scope=local`, yani yalnız
+  bu cihaz. Ardından: "Hesaptan çıkıldı. Kayıtlarınız bu cihazda duruyor."
+- Hesapla ilişkili her cihazda (bağlı, bağlantı yarım ya da oturum düşmüş)
+  silme satırı "Bu cihazı sıfırla" olur: "Hesaptan çıkılır ve bu cihazdaki
+  kayıtlar ile tercihler silinir. Hesabınızdaki kayıtlar ve Merve'nin telefonu
+  etkilenmez; aynı e-postayla girdiğinizde geri gelir." Önce çıkılır, sonra
+  pull kilidi tutularak silinir. "Geri gelir" plan, gelir ve gider tabloları
+  için doğru değil (bkz. Sonraya › Bilinen bedeller).
+- Hesapsız "Tüm verileri sil" başka kopya olmadığını söyler: "… Hesap
+  kullanmadığınız için başka bir kopyası yok — önce yedek almak
+  isteyebilirsiniz. Bu işlem geri alınamaz."
+- Silmenin kendisi (iki yolda da): profiller "Ben"/"Eşim"e ve damga 0'a döner,
+  bağ silinir. Kilit varsayılanı, bootstrap bayrağı ve geçiş işareti aynı
+  transaction'da geri yazılır. Önce bootstrap bayrağı da siliniyordu; eksik
+  kilit anahtarı sürecin geri kalanında **açık** okunuyordu.
+- Geri yükleme bağlıyken ve oturum düşmüşken kapalı ("Hesaba bağlıyken
+  kapalı"). Yedek her satırı "şimdi" damgaladığı için hesaptaki kayıtların
+  yerine geçemez, onlarla karışır. Hesapsız geri yükleme aynı transaction'da
+  `LocalRestoredAt` yazar; sonraki bağlanma, hesapta da kayıt varsa, bu
+  yüzden mutlaka sorar. Hesap boşsa (ör. yeni bir e-posta) cihazdakiler
+  sorusuz hesaba gider, karar tablosundaki gibi.
+- Veri bölümünün dipnotu: hesapsızken "Hesap kullanmadığınız için kayıtların
+  tek kopyası bu cihazda. Ara sıra yedek alın.", bağlıyken "Kayıtlarınız
+  hesabınızda da saklanıyor."
+- **Plan, gelir ve giderin "yalnız bu cihazda" olduğunu söyleyen metin bilerek
+  yok.** Bu tablolar bir sonraki özellik PR'ında eşitlenecek; bugün doğru olan
+  cümle o gün yalan olurdu. `DataFateCopyTest` hiçbir metnin bunu iddia
+  etmediğini kilitliyor.
+
+**Geri alınan kararlar.**
+
+| Nerede | Eski karar | Şimdi |
+|---|---|---|
+| #17 | "Bulut KAPALIYKEN çip hiç çizilmiyor" | Çip her zaman çizilir, hesapsızken nötr "Bu cihazda". Kullanıcı kayıtlarının yalnız bu telefonda olduğunu hiçbir yerde göremiyordu; hesapsız kullanım bir arıza değil, bir kullanım biçimi. |
+| 9b | Boş durumda senkron çipi çizilmez | Çip boş durumda da var. Göz ve yenile ilk kayda kadar yine gizli. |
+| #2 | `prefsLoaded`: "kilit varsayılanı açık" | Yeni kurulumda kapalı; kullanıcı Ayarlar'dan, istemle doğrulayarak açar. Anahtarı olmayan eski kurulum açık okunur. |
+| #2 | Kimlik tanımsızsa kilit ekranı gelir, kullanıcıyı içeri alır | Kilit ekranı hiç gelmez. "Kilit kapı değil, perdedir" ilkesi aynen geçerli; yalnız bir an parlaması bitti. |
+| 9b, #29 | Tek `LoginKey`; itilmişte `SignIn`'e, kökte `Locked`'a zorlama | Ayrı `LockKey` ve `SignInKey`. #29'un sözü (kilitli açılışta hiçbir karede giriş ekranı yok) korunmalı; cihaz tablosunda 4. |
+| #17 | `CloudState` (Off / Synced / Unreachable); girişli = eşitle | `CloudMode`; eşitleme yalnız bağlı cihazda. |
+| 9b | "Çıkış": onaysız, varsayılan (global) kapsam | "Hesaptan çık": onaylı, `scope=local`. |
+
+**Yol boyunca çıkanlar.** Dalın ilk commit'i yalnız asıl hatayı düzeltiyordu;
+incelemesi 16 bulgu çıkardı, bir kısmı aynı kusurun farklı anlatımıydı. En
+ağırı asıl hatanın kendisiydi: ilk çekim
+patlayınca push yine gidiyor, cihazda yazılmış adlar hesabınkileri eziyordu.
+Yeniden deneme ya da bekletme gibi bir yama yerine yapı değişti: bağ yazılmadan
+hiçbir şey gitmiyor. Sonraki adımlarda çıkanlar:
+
+1. **Katlama kilidi deliyordu.** "Açıldı" bayrağı etkinlik ömürlü bir
+   ViewModel'deydi. Katlama, bölünmüş ekran ya da dil değişimi etkinliği yeniden
+   yaratıp ViewModel'i koruyor. Kök yeniden kilit oluyor, korunan bayrak
+   kullanıcıyı içeri alıyor ve aynı karede kilit ekranı görünür bakiyenin
+   üstüne ikinci bir sistem istemi açıyordu. Kabuk bayrağı başlarken okuyor,
+   açılmış kilit bir daha istem açmıyor. `LockFlowTest` düzeltme olmadan düşüyor.
+2. **Sıfırlanan cihaz hesabı geri çekiyordu, iki yoldan.** Önce çıkıp sonra
+   silmek yeni pull'ları durdurdu, ama zaten inmekte olanı durdurmadı; o pull
+   hesabı silinmiş veritabanına yazıyordu. Silme artık pull kilidini tutarak
+   yapılıyor. Ayrıca uçuştaki bir push silmeden sonra watermark'ı yeniden
+   yazıyordu; sonraki açılışın geçişi cihazı yeniden bağlayıp hesabı "Bu telefon
+   kimin?" sormadan indiriyordu. Silme geçiş işaretini kendi transaction'ında
+   geri yazıyor.
+3. **Hesaptaki eski bir mezar taşı cihazın çeyreğini siliyordu.** Pozisyon
+   kimlikleri her portföyde aynı (`pos_gold_quarter`). Hesapta çoktan silinmiş
+   bir çeyrek pozisyonu, bağlanır bağlanmaz cihazın canlı çeyreğini toplamdan
+   düşürüyordu. Bağlanırken canlı işlemi olan pozisyon diriltilip şimdi
+   damgalanıyor; cihaz hedefinin canlı ataması ölü bir hesap satırıyla ezilmiyor.
+4. **Geri yüklenen yedek birleştirmede kazanıyordu.** Yedek her satırı "şimdi"
+   damgaladığı için son-yazan-kazanır yedeğin kopyalarını seçiyor, hesabın
+   düzenlemelerini eziyor ve hesabın sildiklerini diriltiyordu. Birleştirmede
+   ortak kayıtta hesap kazanıyor, damgaya bakılmıyor.
+5. **Başka hesaba bağlanınca eski watermark kalıyordu.** O damgadan önce
+   kurulmuş pozisyon, hedef ve profiller yeni hesaba hiç gitmiyordu. Başka bir
+   hesaba bağlanırken (açık çıkıştan sonra aynı hesaba dönüş dahil)
+   `LastPushedAt` ve `LastSyncedAt` sıfırlanıyor. Aynı hesaba tam yeniden
+   gönderim zararsız: sunucunun LWW koruması eşit damgayı yok sayar.
+6. **"Vazgeç" eşin telefonunu da çıkarabilirdi.** Supabase belgesine göre
+   GoTrue'nun çıkış kapsamı varsayılan olarak global (cihazda doğrulanmadı,
+   bkz. cihaz tablosu 8). Öyleyse Özet'te tek dokunuş uzaklıktaki "Vazgeç"
+   öteki telefonun yenileme jetonunu iptal eder, o telefon jetonu dolunca
+   "Oturum kapandı"ya düşerdi. Çözüm `scope=local`.
+7. **Jetonsuz tur başarı sayılıyordu.** Geçerli jeton alınamayan pull 0 satır
+   döndürüp başarılı sayılıyordu. Artık başarısızlık.
+8. **Tek bir NULL bütün çekimi durduruyordu.** Sonradan eklenen kolonlarda
+   (`goal_delta`, `created_at`) açık NULL gelince çözümleme patlıyordu.
+   `coerceInputValues` ile DTO'nun varsayılanına düşülüyor.
+9. **Yer tutucu adlar seçenek olarak sunuluyordu.** Hesap indirilemeden
+   geçilince "Bu telefon kimin?" kurulumun "Ben"/"Eşim"ini soruyordu. Eşin
+   telefonu doğal olarak "Ben"e, yani sahibin profiline basıyordu; "Ben" yazan
+   kullanıcının adı ise sessizce düşüyordu. Yer tutucular artık hiçbir yerde ad
+   sayılmıyor, seçenekler "1. profil" / "2. profil".
+10. **"Son eşitleme" saatlerce "az önce" diyordu.** Eşitleme olay güdümlü;
+    boştaki ya da ulaşılamayan cihazda etiket donuyordu. Dakikada bir
+    tazeleniyor.
+
+**Doğrulama.** **680 masaüstü testi** (193 yeni, 20 yeni test sınıfı), hepsi
+geçiyor; Android derleniyor. iOS bu makinede derlenmiyor. `expect` imzalarına
+dokunulmadı; platform tarafındaki tek değişiklik `BiometricGate.desktop.kt`'nin
+yorumu.
+
+| Konu | Testler |
+|---|---|
+| Kilit | `LaunchLockTest` (14), `LockEnableStepTest` (11), `LockDefaultTest` (10, bellek içi SQLite), `LockFlowTest` (2) |
+| Hesap modu | `CloudModeTest` (20), `PriceBannerTest` (5), `CloudGateTest` (9), `CloudLinkMigrationTest` (8), `LogoutUrlTest` (1) |
+| İlk açılış | `RootRouteTest` (9), `SignInCopyTest` (12), `SignInFlowTest` (4), `ProfileSetupCopyTest` (10), `ProfileSetupFlowTest` (26), `FirstLinkPullTest` (5) |
+| Bağlanma, verinin akıbeti | `LinkDecisionTest` (12), `AccountLinkTest` (12), `AccountGuardTest` (5), `DataFateCopyTest` (11), `SettingsDeleteSignedInTest` (6) |
+
+En önemlileri: bağ yazılmadan tek upsert gitmiyor (`CloudGateTest`); önizleme
+patlarsa sıfır upsert (`AccountLinkTest`); sıfırlanan cihaz, uçuştaki pull
+bittikten sonra da boş kalıyor (`SettingsDeleteSignedInTest`); hiçbir etikette
+"Çevrimdışı" yok (`CloudModeTest`); anahtarsız eski kurulum kilitli okunuyor,
+yeni kurulum kilitsiz başlıyor (`LockDefaultTest`).
+
+**Cihazda henüz doğrulanmadı.** Dosyanın kuralı gereği başlık ✅ değil 🟡.
+Aşağıdaki tablo iki Android telefonda (R58N81SAZ1Y ve eşinin telefonu) ve
+masaüstünde geçince işaretlenir.
+
+| # | Senaryo | Beklenen | Durum |
+|---|---|---|---|
+| 1 | Mevcut sürümün üstüne kurulum | Kilit açık kalır; çip "Eşitlendi"; bağlanma sorusu yok (geçiş bağı yazar) | 🟡 |
+| 2 | Temiz kurulum → "Bu cihazda kullan" → kurulum → uygulamayı kapat → aç | Kilit ekranı ve sistem istemi yok; çip "Bu cihazda", boş durumda da | 🟡 |
+| 3 | Ayarlar › "Açılış kilidi"ni aç | İstem gelir. İptal → kapalı kalır. Başarı → açık, sonraki soğuk açılışta uygulanır. Ekran kilidi olmayan cihazda uyarı çıkar, anahtar kapalı kalır | 🟡 |
+| 4 | Kilitli açılış; kilit açıkken katla, döndür, bölünmüş ekrana al | Hiçbir karede giriş ekranı yok (#29); açılmış kilit ikinci istem açmaz | 🟡 |
+| 5 | Hesapsız masaüstü, Wi-Fi kapalı | Kilit satırı yok; yan nav "Yalnız bu cihazda · Hesaba bağla" ve altında işaretsiz "Fiyatlar alınamadı · son bilinen fiyatlar"; Özet'teki fiyat şeridi saat ikonlu "Fiyatlar alınamadı · son bilinen fiyatlarla"; hiçbir yerde "Çevrimdışı" yok | 🟡 |
+| 6 | Hesapsız, kayıtlı bir cihaz (ör. 2'deki temiz kurulum + birkaç kayıt): Ayarlar › Hesaba bağla. Telefon 1 olmaz: 1'den sonra bağlı, "Hesaba bağla" satırı yok; çıkıp yeniden bağlanırsa 9'daki aynı hesaba dönüş olur | Giriş ekranında geri oku ve aynı e-posta uyarısı. "Hesabınız kontrol ediliyor…" → hesapta da kayıt olduğu için üç seçenek (gerçek hesapta "Birleştir" deneme kayıtlarını hesaba da gönderir) → "Bu telefon kimin?" → Ayarlar'a dönüş, "Hesaba bağlandı — eşitleme açık." Çip "Eşitleniyor" → "Eşitlendi", uçak modunda "Eşitlenemiyor" | 🟡 |
+| 7 | Telefon 2: temiz kurulum → "Hesapla, iki telefonda" | Hesaptakiler iner, öteki profil seçilir; kayıtlar iki telefonda da görünür | 🟡 |
+| 8 | Telefon 1: "Hesaptan çık" | Onay metni çıkar, veri yerinde kalır, çip "Bu cihazda". `auth.sessions`'ta o kullanıcının oturum sayısı bir düşer, sıfıra inmez; telefon 2 bir saat sonra hâlâ eşitliyor | 🟡 |
+| 9 | Telefon 1: aynı e-postayla yeniden giriş | Aynı hesaba dönüş: çakışma sorusu yok, profil seçimi yok | 🟡 |
+| 10 | Telefon 1: "Bu cihazı sıfırla" | Hoş geldin gelir; 10 sn sonra veri geri gelmemiş; telefon 2 etkilenmemiş | 🟡 |
+| 11 | Bağlıyken "Geri yükle" | Satır kapalı, "Hesaba bağlıyken kapalı" | 🟡 |
+| 12 | 14'teki gibi oturumu düşmüş cihaz › "Yeniden giriş yap" › dolu gelen e-postayı başka bir adresle değiştir, kodu doğrula. Bağlı cihazda başka yoldan olmaz: "Hesaptan çık" bağı da siler, ondan sonra yeni e-posta bu korumaya değil 13'e gider | "Bu cihaz başka bir hesaba bağlı"; yeni oturum kapanır, çip "Oturum kapandı" kalır, bağ ve kayıtlar yerinde | 🟡 |
+| 13 | Hesapsız kullanılmış, kayıtlı bir cihazda yeni bir e-postayla "Hesaba bağla" | E-postaya **kod** gelir; hesap boş olduğu için cihazdakiler hesaba gider; sunucu geçişinden sonra push başarılı, çip "Eşitlendi" | 🟡 |
+| 14 | Oturum düşer: bağlı bir telefonun satırı Supabase'de `auth.sessions`'tan silinir; erişim jetonu dolunca (en geç bir saat) uygulama açılır | Çip "Oturum kapandı"; Özet'te "Oturumunuz kapandı · Eşitleme durdu, kayıtlarınız bu cihazda." + "Yeniden giriş yap" / "Hesapsız devam et". Aynı e-postayla yeniden giriş: soru ve profil seçimi yok, çip "Eşitlendi". Ayrı bir denemede "Hesapsız devam et": çip "Bu cihazda", kayıtlar yerinde | 🟡 |
+| 15 | Bağlantı yarım: hesapsız, kurulumu bitmiş cihazda Ayarlar › Hesaba bağla › kodu doğrula › "Devam"a basmadan uygulamayı kapat (ya da hesap indirilemeyince "Şimdilik hesapsız devam et") › aç | Çip "Bağlantı yarım"; Özet'te "Hesap bağlantısı tamamlanmadı · Kayıtlar henüz hesaba gönderilmiyor." + "Tamamla" / "Vazgeç"; hesaba hiçbir şey gitmemiş. "Tamamla" hesabı indirip "Bu telefon kimin?"i yeniden sorar, sonra "Eşitlendi". Ayrı bir denemede "Vazgeç": çip "Bu cihazda", kayıtlar yerinde, eşin telefonu etkilenmez | 🟡 |
+
+**Sunucu tarafı.**
+
+- Yeni `supabase/migrations/20260926_composite_keys.sql`: `members`,
+  `positions` ve `goal_assets`'in birincil anahtarı `(user_id, id)` /
+  `(user_id, position_id)` olur. Neden: istemci bu kimlikleri her cihazda aynı
+  üretiyor (`member_owner`, `pos_<varlık>`). İkinci bir hesabın (eşin kendi
+  e-postasıyla açtığı dahil) upsert'i birinci hesabın satırıyla birincil
+  anahtardan çakışıyor, RLS de güncellemeyi reddediyordu: ikinci hesabın her
+  push'u patlar, çip sonsuza dek "Eşitlenemiyor" derdi. "Giriş ile kayıt tek
+  akış" kararı bu yolu gerçek kıldı. İstemci değişmedi; her satır `user_id`'yi
+  zaten açıkça gönderiyor.
+- Dosya tekrar çalıştırılabilir: anahtar zaten `user_id` içeriyorsa tabloya
+  dokunmaz, kısıt adını varsaymaz, katalogdan okur. `schema.sql` aynı hâle
+  getirildi.
+- **Canlı DDL.** Veri taşıyan tablolarda anahtar değişimi; önce yedek alınır.
+  Canlıya uygulanması bu dosyadan ayrı bir adım, uygulandığında buraya tarihiyle
+  yazılır. 🟡
+- Test edilmemiş GoTrue varsayımları: `scope=local`'in kabul edildiği,
+  varsayılan kapsamın global olduğu (Supabase belgesinden) ve yeni bir
+  e-postaya giden "Confirm signup" şablonunda `{{ .Token }}` bulunduğu. Şablonda
+  yoksa yeni hesap kod yerine yalnız bir bağlantı alır ve giriş ekranı
+  işe yaramaz. Cihaz tablosunda 8 ve 13.
+
+**Sonraya.**
+
+- **Plan, gelir ve gider tablolarının eşitlenmesi**: bir sonraki özellik PR'ı.
+  O zamana dek "Hesaptakileri kullan" bu tablolara dokunmuyor, "Bu cihazı
+  sıfırla" onları da siliyor.
+- Hesaptaki verileri de silme ("Hesaptaki verileri de sil"). Mezar taşı ve
+  `daily_snapshots.deleted_at` ister.
+- `SyncState` ve bekleyen kayıt sayısı temizliği.
+- `PostgrestApi.selectAll` sayfalama. Supabase'in varsayılan 1000 satır
+  sınırında önizleme sessizce kırpılır; bağlanma yanlış sınıflanabilir,
+  "Hesaptakileri kullan" satır kaybedebilir. `activity_events`'in bu sınıra ne
+  kadar yakın olduğuna SQL ile bakılmalı.
+- Ayrı bir "reddedildi" durumu (`CloudStatus.Rejected`). RLS reddi şimdilik
+  "Eşitlenemiyor" görünüyor.
+- Kilit önerisi kartı. Kurulumda önerilmiyor; kullanıcı Ayarlar'da kendisi
+  açıyor.
+- Aktivite ekranındaki "kim ekledi" ifadesi.
+- **Bilinen bedeller.**
+  - "Birleştir" aynı alımı iki kez sayabilir, tek önlem uyarı metni.
+    Birleştirmeden sonra anlık görüntü geçmişi gün bazında hesaptan gelir,
+    yalnız cihazda olan günler boşluğu doldurur; grafik yamalı görünebilir.
+  - "Bu cihazı sıfırla" plan, gelir ve gider tablolarını da siler. Bunlar
+    henüz eşitlenmediği için hesapta kopyaları yok ve geri gelmez; onay metni
+    ise "geri gelir" diyor. Bugün hiçbir ekran bu tablolara yazmadığı için
+    kimse etkilenmiyor. Plan arayüzü plan eşitlemesinden önce yayına
+    çıkmamalı; çıkarsa o gün bu metin güncellenmeli.
