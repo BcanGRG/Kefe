@@ -86,8 +86,10 @@ class DataFateCopyTest {
     }
 
     /**
-     * Plan tablolari bir sonraki adimda esitlenecek: "yalnız bu cihazda" diyen
-     * bir metin o gun yalan olurdu. Hicbir metin bunu soylememeli.
+     * Plan, gelir, gider ve butce artik hesapla esitleniyor: "yalnız bu cihazda"
+     * diyen bir metin yalan olur. Bagli cihazin "Bu cihazı sıfırla" metnindeki
+     * "aynı e-postayla girdiğinizde geri gelir" onlar icin de dogru (bkz.
+     * AccountLinkTest). Hicbir metin plani cihaza bagli saymamali.
      */
     @Test
     fun `hicbir metin plan tablolarini cihaza bagli saymaz`() {
@@ -162,7 +164,8 @@ class DataFateCopyTest {
         assertEquals("Bu cihazdaki kayıtlar silinir.", c.useAccountNote)
         assertEquals("Birleştir", c.mergeTitle)
         assertEquals(
-            "Aynı alımı iki cihaza da girdiyseniz iki kez sayılır; sonra Aktivite'den silebilirsiniz.",
+            "Aynı alımı iki cihaza da girdiyseniz iki kez sayılır; sonra Aktivite'den silebilirsiniz. " +
+                "Aynı ayın planı, geliri ya da bütçesi hem cihazda hem hesapta varsa hesaptaki kalır.",
             c.mergeNote,
         )
     }

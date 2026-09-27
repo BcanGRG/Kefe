@@ -3,6 +3,8 @@ package com.kefe.app.data.sync
 import com.kefe.app.data.db.LocalOwnerMemberId
 import com.kefe.app.data.db.LocalPartnerMemberId
 import com.kefe.app.domain.KefeClock
+import com.kefe.app.domain.model.YearMonth
+import com.kefe.app.domain.model.incomeIdOf
 import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.domain.repository.PreferencesRepository
 
@@ -15,17 +17,21 @@ import com.kefe.app.domain.repository.PreferencesRepository
  * karisiyordu; kullanici bunu ancak Ozet'teki rakamlar tutmayinca fark ediyordu.
  * Artik once bakilir, gerekiyorsa sorulur, sonra uygulanir.
  *
- * "Kayit" = CANLI islem ve hedef: kullanicinin elle girdigi, sayilabilen seyler.
+ * "Kayit" = CANLI islem, hedef ve plan tablolarinin satirlari (plan, gelir,
+ * harcama, butce): kullanicinin elle girdigi, sayilabilen seyler. Planin neden
+ * sayildigi: bkz. [buildLinkPreview].
  */
 data class LinkPreview(
-    /** Cihazdaki canli islem + hedef sayisi. */
+    /** Cihazdaki canli islem + hedef + plan/gelir/harcama/butce sayisi. */
     val localRecords: Int,
-    /** Hesaptaki canli islem + hedef sayisi. */
+    /** Hesaptaki ayni sayim. */
     val serverRecords: Int,
     /**
      * Iki tarafta da bulunan kayit kimligi sayisi (mezar taslari dahil).
-     * YALNIZ rastgele (UUID) kimlikler sayilir: `pos_*` ve `member_*` her
-     * cihazda ayni turetilir, iki yabanci portfoyde de "ortak" gorunurdu.
+     * YALNIZ rastgele (UUID) kimlikler sayilir - islem, hedef, harcama:
+     * `pos_*` ve `member_*` her cihazda ayni turetilir, iki yabanci portfoyde
+     * de "ortak" gorunurdu. Plan, gelir ve butce kimlikleri de icerikten
+     * turer (`pi_2026_10_gold_gram`); ayni nedenle sayilmaz.
      */
     val shared: Int,
     /** Hesapta adlandirilmis (damgali) bir profil var mi. */
@@ -105,14 +111,34 @@ fun applyModeFor(decision: LinkDecision, choice: ConflictChoice?): ApplyMode = w
 
 /**
  * Onizlemeyi kurar. SAF: yerel kayitlar ve hesabin satirlari verilir.
+ *
+ * PLAN, GELIR, HARCAMA VE BUTCE DE "KAYIT" SAYILIR - iki yanda da.
+ *
+ * NEDEN. Sayilmasalar yalniz plan girilmis bir cihaz "bos" gorunurdu: dolu bir
+ * hesaba baglaninca soru sorulmadan indirme (Birleştir kurallari) calisir,
+ * cihazin Ekim maasi hesabin Ekim maasiyla ayni kimlikte bulusup sessizce
+ * hesabinkine doner, cihazdaki harcamalar da sorulmadan hesaba eklenirdi. Tersi
+ * de: yalniz plani olan bir hesap "bos" sayilir, cihazdakiler sorusuz ona
+ * akardi. En az sasirtan kural en basiti: kullanicinin elle girdigi her satir
+ * bir kayittir; iki yanda da kayit varsa ve ortak gecmis yoksa SORULUR. Ekrandaki
+ * "Bu cihaz: n kayıt · Hesap: m kayıt" da boylece dogru olur.
+ *
+ * Ortaklik yalniz UUID kimliklerden (islem, hedef, harcama): plan, gelir ve
+ * butce kimlikleri icerikten turer, iki yabanci portfoyde de ayni cikar (bkz.
+ * [sharedRecordCount]).
  */
 fun buildLinkPreview(local: LocalRecords, batch: PullBatch, localRestored: Boolean): LinkPreview {
     val serverLive = batch.transactions.count { it.deletedAt == null } +
-        batch.goals.count { it.deletedAt == null }
+        batch.goals.count { it.deletedAt == null } +
+        batch.planItems.count { it.deletedAt == null } +
+        batch.incomes.count { it.deletedAt == null } +
+        batch.expenses.count { it.deletedAt == null } +
+        batch.budgets.count { it.deletedAt == null }
     val serverIds = batch.transactions.mapTo(mutableSetOf()) { it.id } +
-        batch.goals.map { it.id }
+        batch.goals.map { it.id } +
+        batch.expenses.map { it.id }
     return LinkPreview(
-        localRecords = local.liveTransactions.size + local.liveGoals.size,
+        localRecords = local.liveCount,
         serverRecords = serverLive,
         shared = sharedRecordCount(local.allRecordIds, serverIds),
         serverNamed = batch.members.any { it.updatedAt > 0L },
@@ -142,16 +168,106 @@ internal fun String.isRandomRecordId(): Boolean {
 private fun Char.isHexDigitChar(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
 /**
- * Bu cihazda girilmis ve hesapta OLMAYAN canli islemlerin ekleyene gore sayisi.
- * Profil secimi degisirse bunlar yeni profile aktarilir; ekran sayisini soyler.
+ * Profil secimi degisirse YENI profile aktarilacak kayitlarin, eski profile
+ * gore sayisi. Ekran bunu "n kayıt da ... adına aktarılır" diye soyler (bkz.
+ * SyncLocalSink.commitLink, remapNote).
+ *
+ * Islem ve harcamada: bu cihazda girilmis, hesapta OLMAYAN canli satirlar
+ * (ekleyene gore). Ekleyeni bos eski bir harcama sayilmaz: o aktarilmaz da.
+ *
+ * Gelirde: yalniz GERCEKTEN tasinacak satirlar, aktarimin kendi kurali ile
+ * (bkz. [planIncomeRemap]; iki profil var, hedef hep otekisi). NEYDI: hesapta
+ * olmayan her canli gelir sayiliyordu. Oysa hedefi hesapta dolu olan satir
+ * hesabinkine birakilip siliniyor, hedefi bu cihazda dolu olan yerinde
+ * kaliyordu: ekran "5 kayıt aktarılır" deyip 3'unu tasiyordu.
  */
 internal fun localOnlyByAuthor(local: LocalRecords, batch: PullBatch): Map<String, Int> {
     val serverTx = batch.transactions.mapTo(mutableSetOf()) { it.id }
-    return local.liveTransactions
-        .filterKeys { it !in serverTx }
-        .values
-        .groupingBy { it }
-        .eachCount()
+    val serverExpenses = batch.expenses.mapTo(mutableSetOf()) { it.id }
+    val authors = local.liveTransactions.filterKeys { it !in serverTx }.values +
+        local.liveExpenses.filterKeys { it !in serverExpenses }.values.filterNotNull()
+    val counts = authors.groupingBy { it }.eachCount().toMutableMap()
+    val profiles = listOf(LocalOwnerMemberId to LocalPartnerMemberId, LocalPartnerMemberId to LocalOwnerMemberId)
+    for ((from, to) in profiles) {
+        val moved = planIncomeRemap(local.liveIncomes, batch.incomes, AuthorRemap(from, to))
+            .count { it is IncomeMove.Move }
+        if (moved > 0) counts[from] = (counts[from] ?: 0) + moved
+    }
+    return counts
+}
+
+/** Bu cihazin bir gelir satirinin aktarimdaki akibeti (bkz. [planIncomeRemap]). */
+internal sealed interface IncomeMove {
+    /** Yeni profile YENI kimlikle yazilir, eski kimlik mezar taslanir. */
+    data class Move(val source: LocalIncome, val targetId: String) : IncomeMove
+
+    /** Hedefte hesabin canli satiri var: hesabinki kalir, cihazinki mezar taslanir. */
+    data class YieldToAccount(val sourceId: String) : IncomeMove
+}
+
+/**
+ * Profil degisince bu cihazin gelirlerine ne olacagi. SAF: hem baglanti
+ * (SyncLocalSink.commitLink) hem onizlemedeki sayi ([localOnlyByAuthor]) bunu
+ * kullanir; ikisi ayri kural isletseydi ekran bir sey soyleyip baska bir sey
+ * yapardi.
+ *
+ * [device]: cihazin CANLI gelirleri, hesabin satirlari UYGULANMADAN ONCEKI
+ * hali. [account]: hesabin gelirleri (mezar taslari dahil). Listede olmayan
+ * satir yerinde kalir.
+ *
+ * GELIRIN KIMLIGI KISIYI TASIR (inc_<yyyy>_<mm>_<uye>_<tur>) ve ayni uye
+ * kimligi iki yanda FARKLI kisileri adlandirabilir - aktarimin var olma
+ * nedeni bu (cihazda Merve ilk profil, hesapta ilk profil Burak). Bu yuzden
+ * "kimlik hesapta da var" burada "hesabin kaydi" DEMEK DEGIL (UUID
+ * tablolarinda oyle): Merve'nin Ekim maasi Burak'in Ekim maasiyla ayni
+ * kimlikte durabilir. NEYDI: kimligi hesapta olan satir aktarilmiyordu;
+ * "Birleştir"de Merve'nin maasi Burak'inkiyle ezilip sessizce kayboluyor,
+ * hesapta orada yalniz mezar tasi varsa Burak'in adina hesaba gidiyordu.
+ *
+ * Satir yalniz hesapta AYNI kimlik ve AYNI tutarla duruyorsa hesabin kendi
+ * satiri sayilir ve tasinmaz: ayni hesabin yedeginden geri yuklenmis ortak
+ * gecmis (mezar tasi da olsa - hesap onu sonradan silmis). Bedeli: iki ayri
+ * kisinin ayni ay ayni turden geliri kurus kurusuna esitse cihazinki
+ * tasinmaz, hesabinkiyle ayni tutar olarak kalir.
+ *
+ * HEDEF KIMLIK DOLUYSA (orada canli bir satir var):
+ *  - Hesapta canliysa hesabinki kalir, cihazinki mezar taslanir. Ayni kisinin
+ *    ayni ayki ayni turden geliri TEK bir bilgidir; "Birleştir"de iki
+ *    tarafta da olan satirda oldugu gibi hesabin degeri gecerli. Ikisini de
+ *    tutmak ayni maasi iki profile yazip haneyi iki kez sayardi.
+ *  - Yalniz bu cihazda canliysa (cihaz iki profilin gelirini de girmis)
+ *    satir TASINMAZ, eski profilde kalir. Toplamak iki ayri maasi tek satira
+ *    gomerdi, daha yeniyi secmek otekini sessizce silerdi. Yanlis adda duran
+ *    bir tutar gorunur ve duzeltilebilir; silinen geri gelmez.
+ *
+ * Donemi gecersiz bir satir yeniden kimliklenemez; baglantiyi dusurmek
+ * yerine oldugu yerde kalir. Tur METIN olarak tasinir (bkz. incomeIdOf).
+ */
+internal fun planIncomeRemap(
+    device: List<LocalIncome>,
+    account: List<IncomeEntryDto>,
+    remap: AuthorRemap,
+): List<IncomeMove> {
+    val accountById = account.associateBy { it.id }
+    val accountLive = account.filter { it.deletedAt == null }.mapTo(mutableSetOf()) { it.id }
+    val deviceLive = device.mapTo(mutableSetOf()) { it.id }
+    val moves = mutableListOf<IncomeMove>()
+    for (row in device) {
+        if (row.memberId != remap.from) continue
+        if (accountById[row.id]?.amount == row.amount) continue
+        val month = runCatching { YearMonth(row.periodYear.toInt(), row.periodMonth.toInt()) }.getOrNull() ?: continue
+        val target = incomeIdOf(month, remap.to, row.kind)
+        when {
+            target in accountLive -> moves += IncomeMove.YieldToAccount(row.id)
+            target in deviceLive -> Unit
+            else -> {
+                moves += IncomeMove.Move(row, target)
+                deviceLive += target
+                deviceLive -= row.id
+            }
+        }
+    }
+    return moves
 }
 
 /**
@@ -165,7 +281,7 @@ class PreparedLink(
     /** Hesabin ilk profilinin adi - yalniz adlandirilmissa. */
     val serverOwnerName: String?,
     val serverPartnerName: String?,
-    /** Bu cihazda girilip hesapta olmayan canli islemler, ekleyene gore. */
+    /** Profil degisirse yeni profile aktarilacak islem, harcama ve gelirler, eski profile gore. */
     val localOnlyByAuthor: Map<String, Int>,
 ) {
     val serverNamed: Boolean get() = serverOwnerName != null || serverPartnerName != null

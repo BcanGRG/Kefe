@@ -35,7 +35,17 @@ fun newId(): String = Uuid.random().toString()
 fun planItemId(month: YearMonth, assetKey: String): String = "pi_${month.idPart()}_$assetKey"
 
 fun incomeId(month: YearMonth, memberId: String, kind: IncomeKind): String =
-    "inc_${month.idPart()}_${memberId}_${kind.name}"
+    incomeIdOf(month, memberId, kind.name)
+
+/**
+ * [incomeId]'nin ham hali: tur METIN olarak gelir. Tablo turu duz metin tutar
+ * (bkz. 12.sqm); hesaba baglanirken gelir baska profile aktarilinca (bkz.
+ * data/sync/CloudLink.kt, planIncomeRemap) bu telefonun tanimadigi bir tur de ("Bonus",
+ * daha yeni bir surumden) AYNI kurala gore yeniden kimliklenmeli. Enum'a
+ * cevrilseydi o satir "Extra"nin kimligine kayar, oradaki geliri ezerdi.
+ */
+fun incomeIdOf(month: YearMonth, memberId: String, kindName: String): String =
+    "inc_${month.idPart()}_${memberId}_$kindName"
 
 fun budgetId(month: YearMonth, category: ExpenseCategory): String = "eb_${month.idPart()}_${category.name}"
 

@@ -246,6 +246,12 @@ data class ConflictCopy(
  * Iki yolun notu NE KAYBEDILECEGINI soyler: "Hesaptakileri kullan" cihazdakini
  * siler (yanindaki "Önce yedek al" bunun icin), "Birleştir" ayni alimi iki kez
  * sayabilir. Kullanici sonucu secmeden once gormeli.
+ *
+ * Plan, gelir ve butce esitlenmeye baslayinca "Birleştir"in notu bir cumle
+ * aldi: bu satirlarin kimligi aydan ve varliktan/kisiden/kategoriden turer,
+ * iki yandaki "Ekim maasi" ayni satirdir ve hesabinki kalir (bkz.
+ * SyncLocalSink.applyPlanItems). Soylenmeseydi cihazdaki tutar sorusuz
+ * degisirdi.
  */
 fun conflictCopy(localRecords: Int, serverRecords: Int): ConflictCopy = ConflictCopy(
     title = "Bu cihazda da, hesabınızda da kayıt var",
@@ -253,7 +259,8 @@ fun conflictCopy(localRecords: Int, serverRecords: Int): ConflictCopy = Conflict
     useAccountTitle = "Hesaptakileri kullan",
     useAccountNote = "Bu cihazdaki kayıtlar silinir.",
     mergeTitle = "Birleştir",
-    mergeNote = "Aynı alımı iki cihaza da girdiyseniz iki kez sayılır; sonra Aktivite'den silebilirsiniz.",
+    mergeNote = "Aynı alımı iki cihaza da girdiyseniz iki kez sayılır; sonra Aktivite'den silebilirsiniz. " +
+        "Aynı ayın planı, geliri ya da bütçesi hem cihazda hem hesapta varsa hesaptaki kalır.",
 )
 
 /**

@@ -42,7 +42,7 @@ class PullEngine(
      * yolundan gecer (bkz. AccountLinker).
      *
      * [stillWanted]: indirme BITTIKTEN sonra, uygulamadan hemen once sorulur;
-     * false ise hicbir sey yazilmaz. NEDEN: indirme yedi ardisik istek, saniyeler
+     * false ise hicbir sey yazilmaz. NEDEN: indirme on bir ardisik istek, saniyeler
      * surebilir. O arada cihaz hesaptan cikip sifirlanirsa, eski jetonla
      * baslamis bu tur hesabin butun satirlarini silinmis veritabanina geri
      * yaziyordu - sifirlama kendiliginden geri aliniyordu.
@@ -87,6 +87,10 @@ class PullEngine(
             goalAssets = decode(postgrest.selectAll("goal_assets", token)),
             snapshots = decode(postgrest.selectAll("daily_snapshots", token)),
             activity = decode(postgrest.selectAll("activity_events", token)),
+            planItems = decode(postgrest.selectAll("plan_items", token)),
+            incomes = decode(postgrest.selectAll("income_entries", token)),
+            expenses = decode(postgrest.selectAll("expense_entries", token)),
+            budgets = decode(postgrest.selectAll("expense_budgets", token)),
         )
     }
 

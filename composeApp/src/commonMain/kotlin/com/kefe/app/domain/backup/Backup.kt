@@ -5,8 +5,11 @@ import kotlinx.serialization.Serializable
 /**
  * Yedek dosyasinin bicimi.
  *
- * Veri YALNIZ cihazda duruyor: telefon kaybolursa ya da uygulama silinirse
- * birikim gecmisi de gider. Sunucu esitlemesi gelene kadar tek guvence bu.
+ * Hesapsiz kullanimda veri YALNIZ cihazda duruyor: telefon kaybolursa ya da
+ * uygulama silinirse birikim gecmisi de gider; tek guvence bu dosya. Hesaba
+ * bagli cihazda kayitlar - plan, gelir, gider ve butce dahil - hesapta da
+ * durur; yedek orada hesaptan bagimsiz ikinci bir kopyadir. (NEYDI: bu not
+ * esitlemeden once yazilmisti ve "sunucu gelene kadar" diyordu.)
  *
  * [version] okurken kontrol edilir. Ileride alan eklenirse eski yedek yine
  * okunabilmeli; okunamayacak kadar yeni bir yedek ise sessizce yarim
@@ -15,7 +18,7 @@ import kotlinx.serialization.Serializable
  * FIYATLAR YEDEKLENMEZ. Onbellek ve gunluk fiyat gecmisi kaynaktan yeniden
  * gelir; yedege konsaydi geri yukleyen kullanici eski fiyatlarla acilirdi.
  * Yedek kullanicinin GIRDIGI seylerdir: varliklar, defter, hedefler, atamalar,
- * tercihler.
+ * aylik plan, gelir, gider, butce, tercihler.
  */
 @Serializable
 data class BackupFile(

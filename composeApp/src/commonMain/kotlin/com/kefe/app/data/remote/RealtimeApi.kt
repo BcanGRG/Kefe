@@ -54,7 +54,15 @@ interface RealtimeApi {
     fun serverChanges(): Flow<Unit>
 }
 
-/** Sunucuya tasidigimiz yedi tablo (bkz. supabase/schema.sql). */
+/**
+ * Sunucuya tasidigimiz on bir tablo (bkz. supabase/schema.sql). Son dordu
+ * aylik plan, gelir, gider ve butce (bkz. migrations/20260927_plan_tables.sql).
+ *
+ * Buradaki her tablo sunucuda "supabase_realtime" yayininda da olmali: yayinda
+ * olmayan bir tablo istenince sunucu aboneligi reddeder (bkz. [realtimeProblem];
+ * 31 Temmuz'da activity_events eksikken boyle oldu). Plan tablolari sunucuya
+ * eklenmeden bu liste yayina cikmamali.
+ */
 internal val RealtimeTables: List<String> = listOf(
     "members",
     "positions",
@@ -63,6 +71,10 @@ internal val RealtimeTables: List<String> = listOf(
     "goal_assets",
     "daily_snapshots",
     "activity_events",
+    "plan_items",
+    "income_entries",
+    "expense_entries",
+    "expense_budgets",
 )
 
 class SupabaseRealtimeApi(
@@ -177,7 +189,7 @@ class SupabaseRealtimeApi(
 
 private val realtimeJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
-/** Tek topic yeter: yedi tablo ayni kanalda dinlenir. */
+/** Tek topic yeter: butun tablolar ayni kanalda dinlenir. */
 internal const val RealtimeTopic: String = "realtime:kefe"
 
 internal const val HeartbeatMillis: Long = 25_000
@@ -248,9 +260,9 @@ internal fun isPostgresChange(text: String): Boolean = runCatching {
  * Join cevabinda yansitilan tablo sayisi; join cevabi degilse null.
  *
  * KABUL KANITI DEGIL: Supabase istedigimiz yapilandirmayi tablo yayinda olmasa
- * da oldugu gibi geri yansitir (emulatorde dogrulandi: "7/7" der, hemen ardindan
- * system/error ile aboneligi reddeder). Cerceve gidip geldi demenin olcusu;
- * kabul/red icin [realtimeProblem]'e bakilir.
+ * da oldugu gibi geri yansitir (emulatorde dogrulandi: o gunku yedi tabloyla
+ * "7/7" dedi, hemen ardindan system/error ile aboneligi reddetti). Cerceve
+ * gidip geldi demenin olcusu; kabul/red icin [realtimeProblem]'e bakilir.
  */
 internal fun joinReplyTableCount(text: String): Int? = runCatching {
     val root = realtimeJson.parseToJsonElement(text).jsonObject
