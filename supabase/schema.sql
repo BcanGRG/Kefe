@@ -248,6 +248,118 @@ create index if not exists activity_events_user_updated on public.activity_event
 grant select, insert, update, delete on public.activity_events to authenticated;
 
 -- =========================================================================
+-- 8-11. AYLIK PLAN, GELIR, GIDER, BUTCE (yerelde 12.sqm). Sonradan geldiler;
+--    ayni bloklar migrations/20260927_plan_tables.sql'de de durur.
+--
+--    ANAHTAR (user_id, id): plan satiri, gelir ve butce kimlikleri ICERIKTEN
+--    turer (pi_2026_10_gold_gram, inc_2026_10_member_owner_Salary,
+--    eb_2026_10_Groceries) ve her hesapta ayni cikar (bkz. members). Harcama
+--    kimligi UUID; ayni bicim tutarlilik icin.
+--
+--    mode / kind / category DUZ METIN, CHECK YOK: daha yeni bir surumun
+--    ekledigi bir deger eski bir telefonun push'unu reddettirmemeli; esleme
+--    istemcide, savunmaci.
+-- =========================================================================
+
+-- 8. plan_items - aylik yatirim plani. Yalniz NIYET: "Ekim'de 10 gr gram
+--    altin". Yapilip yapilmadigi islem defterinden turetilir, tasinmaz.
+create table if not exists public.plan_items (
+    id                 text   not null,
+    user_id            uuid   not null default auth.uid() references auth.users (id) on delete cascade,
+    period_year        bigint not null,
+    period_month       bigint not null,
+    asset_key          text   not null,
+    asset_name         text   not null,
+    mode               text   not null,
+    target             double precision not null,
+    goal_id            text,
+    unit_price_at_plan double precision,
+    updated_at         bigint not null default 0,
+    deleted_at         bigint,
+    primary key (user_id, id)
+);
+
+alter table public.plan_items enable row level security;
+drop policy if exists plan_items_own on public.plan_items;
+create policy plan_items_own on public.plan_items
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create index if not exists plan_items_user_updated on public.plan_items (user_id, updated_at);
+grant select, insert, update, delete on public.plan_items to authenticated;
+
+-- 9. income_entries - aylik gelir, KISI bazli (maas kimin). member_id duz
+--    metin (member_owner / member_partner).
+create table if not exists public.income_entries (
+    id           text   not null,
+    user_id      uuid   not null default auth.uid() references auth.users (id) on delete cascade,
+    period_year  bigint not null,
+    period_month bigint not null,
+    member_id    text   not null,
+    kind         text   not null,
+    amount       double precision not null,
+    updated_at   bigint not null default 0,
+    deleted_at   bigint,
+    primary key (user_id, id)
+);
+
+alter table public.income_entries enable row level security;
+drop policy if exists income_entries_own on public.income_entries;
+create policy income_entries_own on public.income_entries
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create index if not exists income_entries_user_updated on public.income_entries (user_id, updated_at);
+grant select, insert, update, delete on public.income_entries to authenticated;
+
+-- 10. expense_entries - tek tek harcamalar, HANENIN. Kimlik UUID: ayni gun
+--     ayni tutarda iki market alisverisi iki satirdir. created_at ayni gun
+--     icindeki sira (islemlerdeki gibi).
+create table if not exists public.expense_entries (
+    id                 text   not null,
+    user_id            uuid   not null default auth.uid() references auth.users (id) on delete cascade,
+    date_year          bigint not null,
+    date_month         bigint not null,
+    date_day           bigint not null,
+    category           text   not null,
+    amount             double precision not null,
+    note               text,
+    added_by_member_id text,
+    created_at         bigint not null default 0,
+    updated_at         bigint not null default 0,
+    deleted_at         bigint,
+    primary key (user_id, id)
+);
+
+alter table public.expense_entries enable row level security;
+drop policy if exists expense_entries_own on public.expense_entries;
+create policy expense_entries_own on public.expense_entries
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create index if not exists expense_entries_user_updated on public.expense_entries (user_id, updated_at);
+grant select, insert, update, delete on public.expense_entries to authenticated;
+
+-- 11. expense_budgets - ay basina kategori butcesi, HANENIN. "Ekim'in market
+--     butcesi" tektir: kimlik icerikten (eb_<yyyy>_<mm>_<kategori>).
+create table if not exists public.expense_budgets (
+    id           text   not null,
+    user_id      uuid   not null default auth.uid() references auth.users (id) on delete cascade,
+    period_year  bigint not null,
+    period_month bigint not null,
+    category     text   not null,
+    amount       double precision not null,
+    updated_at   bigint not null default 0,
+    deleted_at   bigint,
+    primary key (user_id, id)
+);
+
+alter table public.expense_budgets enable row level security;
+drop policy if exists expense_budgets_own on public.expense_budgets;
+create policy expense_budgets_own on public.expense_budgets
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create index if not exists expense_budgets_user_updated on public.expense_budgets (user_id, updated_at);
+grant select, insert, update, delete on public.expense_budgets to authenticated;
+
+-- =========================================================================
 -- BILESIK ANAHTARLAR - tablolari eski anahtarla (yalniz id) kurulmus projeler
 -- icin. Yukaridaki create table if not exists var olan tabloya dokunmaz; bu
 -- blok anahtari (user_id, kimlik) yapar. Tekrar calistirilabilir: anahtar
@@ -348,6 +460,22 @@ drop trigger if exists activity_events_lww on public.activity_events;
 create trigger activity_events_lww before update on public.activity_events
     for each row execute function public.kefe_lww_guard();
 
+drop trigger if exists plan_items_lww on public.plan_items;
+create trigger plan_items_lww before update on public.plan_items
+    for each row execute function public.kefe_lww_guard();
+
+drop trigger if exists income_entries_lww on public.income_entries;
+create trigger income_entries_lww before update on public.income_entries
+    for each row execute function public.kefe_lww_guard();
+
+drop trigger if exists expense_entries_lww on public.expense_entries;
+create trigger expense_entries_lww before update on public.expense_entries
+    for each row execute function public.kefe_lww_guard();
+
+drop trigger if exists expense_budgets_lww on public.expense_budgets;
+create trigger expense_budgets_lww before update on public.expense_budgets
+    for each row execute function public.kefe_lww_guard();
+
 -- =========================================================================
 -- GERCEK ZAMANLI (adim 11). Realtime, degisiklikleri mantiksal cogaltmadan
 -- okur: bir tablo "supabase_realtime" yayinina EKLENMEDEN o tablonun olaylari
@@ -364,7 +492,9 @@ do $$
 declare t text;
 begin
     foreach t in array array['members', 'positions', 'transactions', 'goals',
-                             'goal_assets', 'daily_snapshots', 'activity_events'] loop
+                             'goal_assets', 'daily_snapshots', 'activity_events',
+                             'plan_items', 'income_entries', 'expense_entries',
+                             'expense_budgets'] loop
         if not exists (
             select 1 from pg_publication_tables
             where pubname = 'supabase_realtime'
