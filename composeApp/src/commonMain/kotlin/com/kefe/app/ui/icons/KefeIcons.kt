@@ -43,6 +43,8 @@ object KefeIcons {
     val Clock: ImageVector get() = KefeIconsCore.Clock
     val Info: ImageVector get() = KefeIconsCore.Info
     val Calendar: ImageVector get() = KefeIconsCore.Calendar
+    val Cart: ImageVector get() = KefeIconsCore.Cart
+    val HalfCircle: ImageVector get() = KefeIconsCore.HalfCircle
     val Lock: ImageVector get() = KefeIconsCore.Lock
     val Fingerprint: ImageVector get() = KefeIconsCore.Fingerprint
     val ArrowUpRight: ImageVector get() = KefeIconsCore.ArrowUpRight

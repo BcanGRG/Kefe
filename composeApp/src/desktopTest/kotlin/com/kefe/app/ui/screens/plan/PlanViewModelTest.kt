@@ -11,14 +11,22 @@ import com.kefe.app.domain.FixedKefeClock
 import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.ExpenseCategory
 import com.kefe.app.domain.model.ExpenseEntry
+import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.PlanItem
+import com.kefe.app.domain.model.PlanItemStatus
+import com.kefe.app.domain.model.PlanTargetMode
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.PricePoint
+import com.kefe.app.domain.model.PriceSource
 import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
+import com.kefe.app.domain.model.YearMonth
+import com.kefe.app.domain.model.planItemId
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.domain.repository.PriceRepository
@@ -40,6 +48,8 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -49,6 +59,12 @@ import kotlin.test.assertTrue
  * geri getirir; gun donunce "bu ay" kendiliginden ilerler ama SECILMIS gecmis ay
  * yerinde kalir; sinirlar daralinca (ilk islem silindi) secim bu aya kirpilir ve
  * birakilir - ay sinira donunce sayfa oraya kendiliginden atlamaz.
+ *
+ * Kalem editoru: kayit guncel ALIS fiyatini saklar (gecmis ayin ayni varligi
+ * kayitli fiyatini korur), sheet ilk dokunusta kapanir; bu ay planli bir varlik
+ * secilince ya da kodu yazilinca o kaleme gecilir, hicbir sey ezilmez; yazilan
+ * hedef veri emisyonlarinda yerinde kalir. Devir varsayilan "Bırak"tir ve tasinan
+ * eksik yalniz bir kez eklenir.
  *
  * "Bugun" YALNIZ gun akisindan gelir: saat 22 Ekim'de sabit kalirken gun akisi
  * 1 Kasim'a ilerletilir - saatten okuyan tek satir burada yakalanir.
@@ -96,7 +112,7 @@ class PlanViewModelTest {
         /** Veri once tohumlanir, VM sonra kurulur: ilk Ready durumu veriyi gorur. */
         fun vm() = PlanViewModel(plan, portfolio, prices, prefs, clock, dayTicks = days)
 
-        suspend fun buyGram(id: String, date: KefeDate) {
+        suspend fun buyGram(id: String, date: KefeDate, quantity: Double = 1.0) {
             portfolio.upsertPosition(gram())
             portfolio.addTransaction(
                 Transaction(
@@ -104,12 +120,49 @@ class PlanViewModelTest {
                     positionId = GramId,
                     date = date,
                     side = TradeSide.Buy,
-                    quantity = 1.0,
+                    quantity = quantity,
                     unitPrice = 6_700.0,
                     addedByMemberId = "member_owner",
                 ),
             )
         }
+
+        suspend fun planItem(
+            month: YearMonth,
+            key: String,
+            target: Double,
+            mode: PlanTargetMode = PlanTargetMode.Quantity,
+            goalId: String? = null,
+            price: Double? = null,
+            name: String = key,
+        ): PlanItem = PlanItem(
+            id = planItemId(month, key),
+            month = month,
+            assetKey = key,
+            assetName = name,
+            mode = mode,
+            target = target,
+            goalId = goalId,
+            unitPriceAtPlan = price,
+        ).also { plan.upsertPlanItem(it) }
+
+        suspend fun goal(id: String, name: String) = portfolio.upsertGoal(
+            Goal(
+                id = id,
+                name = name,
+                iconKey = "car",
+                amount = 500_000.0,
+                unit = GoalUnit.Try,
+                targetDate = KefeDate(2027, 10, 1),
+                monthlyContribution = 50_000.0,
+            ),
+        )
+
+        /** Depodaki (silinmemis) plan satirlari - [predicate] saglanana kadar beklenir. */
+        suspend fun awaitItems(predicate: (List<PlanItem>) -> Boolean): List<PlanItem> =
+            realTime { plan.observePlanItems().first(predicate) }
+
+        suspend fun items(): List<PlanItem> = plan.observePlanItems().first()
     }
 
     // --- Acilis ve ay gecisi -------------------------------------------------
@@ -292,7 +345,345 @@ class PlanViewModelTest {
         val aug = vm.awaitHeader { it.title == "Ağustos 2026" }
         assertFalse(aug.canGoBack)
     }
+
+    // --- Kalem editoru -------------------------------------------------------
+
+    @Test
+    fun `kaydet guncel alis fiyatiyla yazar ve sheet'i kapatir`() = runTest {
+        val env = Env()
+        // Satis (bid) 6.700, alis (ask) 6.800: kalem ALIS fiyatini saklar.
+        env.prices.board.value = PriceBoard(listOf(gramPrice(bid = 6_700.0, ask = 6_800.0)), "", PriceFreshness.Fresh)
+        val vm = env.vm()
+        vm.awaitState { it.content.emptyPlan != null }
+
+        vm.onIntent(PlanIntent.AddItem)
+        vm.onIntent(PlanIntent.ItemSelectAsset("gold_gram"))
+        assertEquals(PlanTargetMode.Quantity, vm.itemEditor()?.mode)
+        vm.onIntent(PlanIntent.ItemTarget("10"))
+        assertEquals("≈ ₺68.000 (güncel fiyatla)", vm.itemEditor()?.estimateText())
+        vm.onIntent(PlanIntent.SaveItem)
+        // Sheet yazma bitmeden, ayni dokunusta kapanir: ikinci dokunus yazacak bir sey bulamaz.
+        assertNull(vm.state.value.sheet)
+
+        val saved = env.awaitItems { it.isNotEmpty() }.single()
+        assertEquals(planItemId(October, "gold_gram"), saved.id)
+        assertEquals(PlanTargetMode.Quantity, saved.mode)
+        assertEquals(10.0, saved.target)
+        assertEquals(6_800.0, saved.unitPriceAtPlan)
+        assertEquals("Gram Altın", saved.assetName)
+
+        val card = vm.awaitState { it.content.investment != null }.content.investment!!
+        assertEquals("0/1 kalem · ₺68.000 planlandı", card.summary)
+    }
+
+    @Test
+    fun `varligi degisen kalemin eski kimligi silinir`() = runTest {
+        val env = Env()
+        env.planItem(October, "gold_gram", 10.0)
+        val vm = env.vm()
+        vm.awaitState { it.content.investment != null }
+
+        vm.onIntent(PlanIntent.EditItem(planItemId(October, "gold_gram")))
+        vm.onIntent(PlanIntent.ItemSelectAsset("gold_k22"))
+        vm.onIntent(PlanIntent.SaveItem)
+
+        val items = env.awaitItems { list -> list.any { it.assetKey == "gold_k22" } }
+        assertEquals(listOf(planItemId(October, "gold_k22")), items.map { it.id })
+        assertEquals(10.0, items.single().target)
+    }
+
+    @Test
+    fun `bu ay planli varlik secilince o kaleme gecilir`() = runTest {
+        val env = Env()
+        env.planItem(October, "gold_quarter", 3.0)
+        val vm = env.vm()
+        vm.awaitState { it.content.investment != null }
+
+        vm.onIntent(PlanIntent.AddItem)
+        vm.onIntent(PlanIntent.ItemTarget("5"))
+        vm.onIntent(PlanIntent.ItemSelectAsset("gold_quarter"))
+        val editor = assertNotNull(vm.itemEditor())
+        assertEquals(planItemId(October, "gold_quarter"), editor.editingId)
+        assertEquals("3", editor.targetText)
+        assertTrue(editor.switchedToExisting)
+    }
+
+    @Test
+    fun `ceyrekte kesirli hedef kaydedilmez`() = runTest {
+        val env = Env()
+        val vm = env.vm()
+        vm.awaitState { it.content.emptyPlan != null }
+
+        vm.onIntent(PlanIntent.AddItem)
+        vm.onIntent(PlanIntent.ItemSelectAsset("gold_quarter"))
+        vm.onIntent(PlanIntent.ItemTarget("2,5"))
+        vm.onIntent(PlanIntent.SaveItem)
+
+        val editor = assertNotNull(vm.itemEditor())
+        assertEquals("Adetle alınan altında tam sayı girin.", editor.targetError)
+        // Yazma hic baslamadi: depo bos.
+        assertTrue(env.items().isEmpty())
+
+        // Bos hedef ve secilmemis varlik da soylenir.
+        vm.onIntent(PlanIntent.DismissSheet)
+        vm.onIntent(PlanIntent.AddItem)
+        vm.onIntent(PlanIntent.SaveItem)
+        val empty = assertNotNull(vm.itemEditor())
+        assertEquals("Bir varlık seçin.", empty.assetError)
+        assertEquals("Miktar girin.", empty.targetError)
+    }
+
+    @Test
+    fun `yazilan hedef ilgisiz bir veri emisyonunda yerinde kalir`() = runTest {
+        val env = Env()
+        val vm = env.vm()
+        vm.awaitState { it.content.emptyPlan != null }
+
+        vm.onIntent(PlanIntent.AddItem)
+        vm.onIntent(PlanIntent.ItemSelectAsset("gold_gram"))
+        vm.onIntent(PlanIntent.ItemTarget("10"))
+
+        // Arada bir alim: pozisyonlar yeniden yayilir, editorun baglami tazelenir.
+        env.buyGram("tx_ara", KefeDate(2026, 10, 20))
+        val after = vm.awaitState { state ->
+            state.itemEditor?.options?.firstOrNull { it.assetKey == "gold_gram" }?.held == true
+        }
+        val editor = assertNotNull(after.itemEditor)
+        assertEquals("10", editor.targetText)
+        assertEquals("gold_gram", editor.assetKey)
+    }
+
+    @Test
+    fun `secili cipe yeniden dokunmak hedefi korur, birimi ayni varlik da`() = runTest {
+        val env = Env()
+        val vm = env.vm()
+        vm.awaitState { it.content.emptyPlan != null }
+
+        vm.onIntent(PlanIntent.AddItem)
+        vm.onIntent(PlanIntent.ItemSelectAsset("gold_gram"))
+        vm.onIntent(PlanIntent.ItemTarget("10"))
+        vm.onIntent(PlanIntent.ItemSelectAsset("gold_gram"))
+        assertEquals("10", vm.itemEditor()?.targetText)
+        assertEquals(PlanTargetMode.Quantity, vm.itemEditor()?.mode)
+
+        // gram -> 22 ayar gram: ikisi de gr, "10" ayni seyi ifade eder.
+        vm.onIntent(PlanIntent.ItemSelectAsset("gold_k22"))
+        assertEquals("10", vm.itemEditor()?.targetText)
+
+        // gram -> ceyrek: gr -> adet, sayi tasinmaz.
+        vm.onIntent(PlanIntent.ItemSelectAsset("gold_quarter"))
+        assertEquals("", vm.itemEditor()?.targetText)
+        assertEquals(PlanTargetMode.Quantity, vm.itemEditor()?.mode)
+
+        // Tutar yazilmissa her varlikta ayni anlami tasir.
+        vm.onIntent(PlanIntent.ItemMode(PlanTargetMode.Amount))
+        vm.onIntent(PlanIntent.ItemTarget("3000"))
+        vm.onIntent(PlanIntent.ItemSelectAsset("cash"))
+        assertEquals("3000", vm.itemEditor()?.targetText)
+        assertEquals(PlanTargetMode.Amount, vm.itemEditor()?.mode)
+    }
+
+    @Test
+    fun `bu ay planli fon kodu yazilinca kayit o kaleme gecer, hicbir sey yazilmaz`() = runTest {
+        val env = Env()
+        env.goal("g_car", "Araba")
+        env.planItem(October, "fund_afa", 1_000.0, mode = PlanTargetMode.Amount, goalId = "g_car", name = "AFA")
+        val vm = env.vm()
+        vm.awaitState { it.content.investment != null }
+
+        vm.onIntent(PlanIntent.AddItem)
+        vm.onIntent(PlanIntent.ItemOpenCode(AssetClass.Fund))
+        vm.onIntent(PlanIntent.ItemCode("afa"))
+        vm.onIntent(PlanIntent.ItemTarget("5000"))
+        vm.onIntent(PlanIntent.SaveItem)
+
+        val editor = assertNotNull(vm.itemEditor())
+        assertEquals(planItemId(October, "fund_afa"), editor.editingId)
+        assertTrue(editor.switchedToExisting)
+        assertEquals("g_car", editor.goalId)
+        assertEquals("1000", editor.targetText)
+        val stored = env.items().single()
+        assertEquals(1_000.0, stored.target)
+    }
+
+    @Test
+    fun `elde olmayan fon kalemi cipi secili acilir`() = runTest {
+        val env = Env()
+        env.planItem(October, "fund_afa", 1_000.0, mode = PlanTargetMode.Amount, name = "AFA")
+        val vm = env.vm()
+        vm.awaitState { it.content.investment != null }
+
+        vm.onIntent(PlanIntent.EditItem(planItemId(October, "fund_afa")))
+        val editor = assertNotNull(vm.itemEditor())
+        assertEquals("fund_afa", editor.assetKey)
+        assertNull(editor.codeClass)
+        assertTrue(editor.options.any { it.assetKey == "fund_afa" && !it.held })
+        assertFalse(editor.isNew)
+    }
+
+    @Test
+    fun `gecmis ayin kalemi kayitli fiyatini korur, bu ayinki guncel fiyati alir`() = runTest {
+        val env = Env()
+        env.prices.board.value = PriceBoard(listOf(gramPrice(bid = 6_700.0, ask = 6_800.0)), "", PriceFreshness.Fresh)
+        env.goal("g_car", "Araba")
+        env.planItem(September, "gold_gram", 10.0, price = 6_000.0)
+        env.planItem(October, "gold_gram", 10.0, price = 6_000.0)
+        val vm = env.vm()
+        vm.awaitState { it.content.investment != null }
+
+        // Ekim: yalniz hedef degisir ama bu ayin kalemi bugunku alis fiyatini alir.
+        vm.onIntent(PlanIntent.EditItem(planItemId(October, "gold_gram")))
+        vm.onIntent(PlanIntent.ItemGoal("g_car"))
+        vm.onIntent(PlanIntent.SaveItem)
+        val octSaved = env.awaitItems { list -> list.any { it.month == October && it.goalId == "g_car" } }
+            .first { it.month == October }
+        assertEquals(6_800.0, octSaved.unitPriceAtPlan)
+
+        // Eylul: ayni degisiklik anlik goruntuyu KORUR - gecmis ayin skoru oynamasin.
+        vm.onIntent(PlanIntent.PreviousMonth)
+        vm.awaitState { it.content.header.title == "Eylül 2026" && it.content.investment != null }
+        vm.onIntent(PlanIntent.EditItem(planItemId(September, "gold_gram")))
+        vm.onIntent(PlanIntent.ItemGoal("g_car"))
+        vm.onIntent(PlanIntent.SaveItem)
+        val sepSaved = env.awaitItems { list -> list.any { it.month == September && it.goalId == "g_car" } }
+            .first { it.month == September }
+        assertEquals(6_000.0, sepSaved.unitPriceAtPlan)
+    }
+
+    @Test
+    fun `silinmis hedef editorde Hedefsiz olur`() = runTest {
+        val env = Env()
+        env.goal("g_car", "Araba")
+        env.planItem(October, "gold_gram", 10.0, goalId = "g_car")
+        val vm = env.vm()
+        vm.awaitState { it.content.investment?.rows?.single()?.goalName == "Araba" }
+
+        env.portfolio.deleteGoal("g_car")
+        vm.awaitState { state -> state.content.investment?.rows?.single()?.goalName == null }
+
+        vm.onIntent(PlanIntent.EditItem(planItemId(October, "gold_gram")))
+        val editor = assertNotNull(vm.itemEditor())
+        assertNull(editor.goalId)
+        assertTrue(editor.goalChips.none { it.goalId == "g_car" })
+    }
+
+    // --- Al ------------------------------------------------------------------
+
+    @Test
+    fun `Al eldeki pozisyonla, elde yoksa varlik secimiyle acar`() = runTest {
+        val env = Env()
+        env.buyGram("tx_ekim", KefeDate(2026, 10, 5))
+        env.planItem(October, "gold_gram", 10.0)
+        env.planItem(October, "fund_afa", 1_000.0, mode = PlanTargetMode.Amount, name = "AFA")
+        val vm = env.vm()
+        val rows = vm.awaitState { it.content.investment?.rows?.size == 2 }.content.investment!!.rows
+        assertTrue(rows.all { it.canBuy })
+
+        vm.onIntent(PlanIntent.Buy(planItemId(October, "gold_gram")))
+        assertEquals(PlanEffect.OpenAddTransaction(GramId), realTime { vm.effects.first() })
+        vm.onIntent(PlanIntent.Buy(planItemId(October, "fund_afa")))
+        assertEquals(PlanEffect.OpenAddTransaction(null), realTime { vm.effects.first() })
+    }
+
+    @Test
+    fun `Al yalniz bu ayda ve tamamlanmamis kalemde`() = runTest {
+        val env = Env()
+        env.buyGram("tx_ekim", KefeDate(2026, 10, 5))
+        env.planItem(September, "gold_gram", 10.0)
+        env.planItem(October, "gold_gram", 1.0)
+        env.planItem(October, "silver_gram", 5.0)
+        env.planItem(November, "gold_gram", 10.0)
+        val vm = env.vm()
+
+        val octRows = vm.awaitState { it.content.investment?.rows?.size == 2 }.content.investment!!.rows
+        assertFalse(octRows.first { it.assetKey == "gold_gram" }.canBuy) // tamam
+        assertTrue(octRows.first { it.assetKey == "silver_gram" }.canBuy)
+
+        vm.onIntent(PlanIntent.PreviousMonth)
+        val sepRows = vm.awaitState { it.content.header.title == "Eylül 2026" }.content.investment!!.rows
+        assertFalse(sepRows.single().canBuy)
+
+        vm.onIntent(PlanIntent.ThisMonth)
+        vm.awaitState { it.content.header.title == "Ekim 2026" }
+        vm.onIntent(PlanIntent.NextMonth)
+        val novRows = vm.awaitState { it.content.header.title == "Kasım 2026" }.content.investment!!.rows
+        assertEquals(PlanItemStatus.Upcoming, novRows.single().status)
+        assertFalse(novRows.single().canBuy)
+    }
+
+    // --- Kopyala/Devir -------------------------------------------------------
+
+    @Test
+    fun `kopya varsayilan birakir`() = runTest {
+        val env = Env()
+        // Eylul 10 gr planlandi, 6 gr alindi.
+        env.planItem(September, "gold_gram", 10.0)
+        env.buyGram("tx_eylul", KefeDate(2026, 9, 10), quantity = 6.0)
+        val vm = env.vm()
+        val empty = vm.awaitState { it.content.emptyPlan != null }.content.emptyPlan!!
+        assertEquals("Geçen ayı kopyala (Eylül)", empty.copyLabel)
+
+        vm.onIntent(PlanIntent.OpenCopy)
+        val draft = assertNotNull((vm.state.value.sheet as? PlanSheet.Copy)?.draft)
+        assertTrue(draft.carry.isEmpty())
+        assertEquals(4.0, draft.rows.single().shortfall)
+
+        vm.onIntent(PlanIntent.ConfirmCopy)
+        assertNull(vm.state.value.sheet)
+        val copied = env.awaitItems { list -> list.any { it.month == October } }.first { it.month == October }
+        assertEquals(10.0, copied.target)
+        assertEquals(PlanEffect.Message("1 kalem kopyalandı."), realTime { vm.effects.first() })
+    }
+
+    @Test
+    fun `tasinan eksik bir kez eklenir - ikinci dokunus ve ikinci kopya yok`() = runTest {
+        val env = Env()
+        env.planItem(September, "gold_gram", 10.0)
+        env.buyGram("tx_eylul", KefeDate(2026, 9, 10), quantity = 6.0)
+        val vm = env.vm()
+        vm.awaitState { it.content.emptyPlan != null }
+
+        vm.onIntent(PlanIntent.OpenCopy)
+        vm.onIntent(PlanIntent.CopyCarry("gold_gram", carry = true))
+        vm.onIntent(PlanIntent.ConfirmCopy)
+        // Cift dokunus: sheet zaten kapali, ikinci onay hicbir sey yazmaz.
+        vm.onIntent(PlanIntent.ConfirmCopy)
+
+        val copied = env.awaitItems { list -> list.any { it.month == October } }.first { it.month == October }
+        assertEquals(14.0, copied.target)
+
+        // Kaynagin her varligi artik Ekim'de: giris kapanir, sayfa da acilmaz.
+        val card = vm.awaitState { it.content.investment != null }.content.investment!!
+        assertNull(card.copyLabel)
+        vm.onIntent(PlanIntent.OpenCopy)
+        assertNull(vm.state.value.sheet)
+        assertEquals(14.0, env.items().first { it.month == October }.target)
+    }
 }
+
+private val October = YearMonth(2026, 10)
+private val September = YearMonth(2026, 9)
+private val November = YearMonth(2026, 11)
+
+private fun gramPrice(bid: Double, ask: Double) = Price(
+    assetKey = "gold_gram",
+    label = "Gram Altın",
+    bid = bid,
+    ask = ask,
+    changePercent = null,
+    timestamp = "",
+    source = PriceSource.FreeMarket,
+    assetClass = AssetClass.Gold,
+)
+
+/** Acik kalem editoru; baska sheet ya da hic sheet yoksa null. */
+private val PlanUiState.itemEditor: PlanItemEditor? get() = (sheet as? PlanSheet.Item)?.editor
+
+private fun PlanViewModel.itemEditor(): PlanItemEditor? = state.value.itemEditor
+
+/** Ready durumunda ve [predicate]'i saglayan ilk durum. */
+private suspend fun PlanViewModel.awaitState(predicate: (PlanUiState) -> Boolean): PlanUiState =
+    realTime { state.first { it.stage == PlanStage.Ready && predicate(it) } }
 
 private const val GramId = "pos_gold_gram"
 

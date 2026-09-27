@@ -123,6 +123,7 @@ import com.kefe.app.ui.screens.market.MarketViewModel
 import com.kefe.app.ui.screens.plan.PlanEffect
 import com.kefe.app.ui.screens.plan.PlanIntent
 import com.kefe.app.ui.screens.plan.PlanScreen
+import com.kefe.app.ui.screens.plan.PlanSheets
 import com.kefe.app.ui.screens.plan.PlanViewModel
 import com.kefe.app.ui.screens.summary.SummaryIntent
 import com.kefe.app.ui.screens.summary.SummaryScreenAdaptive
@@ -953,7 +954,11 @@ private fun KefeApp(
 
                         entry<PlanKey> {
                             ContentWidth {
-                                PlanScreen(state = planState, onIntent = planVm::onIntent)
+                                PlanScreen(
+                                    state = planState,
+                                    onIntent = planVm::onIntent,
+                                    onOpenGoal = { goTo(GoalDetailKey(it)) },
+                                )
                             }
                         }
 
@@ -1041,6 +1046,14 @@ private fun KefeApp(
 
         // Hedef duzenleme sheet'i her ekranin ustunde cizilir.
         GoalEditSheet(state = goalsState.editor, onIntent = goalsVm::onIntent)
+
+        // Plan sheet'leri: tek yer, her ekranin ustunde. Masaustunde icerik genisligiyle
+        // sinirli; scrim sheet'in kendi tam ekran kutusunda, panel daralip ortalanir.
+        PlanSheets(
+            sheet = planState.sheet,
+            onIntent = planVm::onIntent,
+            modifier = Modifier.widthIn(max = Sizes.contentMaxWidth),
+        )
 
         // Ekleme sheet'inin ViewModel'i de KABUKTA yasar - GoalsViewModel ile ayni
         // gerekce, bir tane daha eklenerek: sheet'in geri isleyicisi KOSULSUZ

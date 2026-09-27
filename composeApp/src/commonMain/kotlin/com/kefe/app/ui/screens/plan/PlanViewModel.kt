@@ -2,20 +2,30 @@ package com.kefe.app.ui.screens.plan
 
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.domain.KefeClock
+import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.PlanItem
+import com.kefe.app.domain.model.PlanTargetMode
 import com.kefe.app.domain.model.Position
+import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.YearMonth
+import com.kefe.app.domain.model.catalogName
+import com.kefe.app.domain.model.defaultPlanMode
+import com.kefe.app.domain.model.parseAssetKey
+import com.kefe.app.domain.model.planItemId
+import com.kefe.app.domain.model.toItems
 import com.kefe.app.domain.repository.PlanRepository
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceRepository
+import com.kefe.app.ui.format.parseTrAmountOrNull
+import com.kefe.app.ui.format.rawAmount
 import com.kefe.app.ui.mvi.MviViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -30,6 +40,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -47,6 +58,14 @@ import kotlinx.coroutines.launch
  * akisini tohumlamak icin okunur. NEDEN: testler gun akisini elle ilerletir
  * (sabit saat 22 Ekim'de kalir); saatten okuyan tek bir satir gece yarisi
  * donumunde ve gun donumu testlerinde sayfayla farkli bir "bugun" gorurdu.
+ *
+ * YAZMA KURALI (her Kaydet / Sil / Kopyala): dogrulama ESZAMANLI yapilir, gecerliyse
+ * sheet HEMEN kapanir ve yazma ancak ondan sonra baslar. NEDEN: sheet yazma bitince
+ * kapansaydi cift dokunus ikinci kez yazardi - Kopyala'da ilk yazmanin emisyonu
+ * taslagi tazeleyip "Taşı"yi korudugu icin ikinci dokunus eksigi bir daha ekler
+ * (14 -> 18). Her kayit niyeti acik sheet'i okuyarak baslar; ikinci dokunus sheet
+ * bulamaz ve hicbir sey yapmaz. Bedeli: yazma basarisiz olursa girilenler kaybolur
+ * (serit soyler) - Hedefler ile ayni.
  */
 class PlanViewModel(
     private val planRepository: PlanRepository,
@@ -92,6 +111,46 @@ class PlanViewModel(
             PlanIntent.NextMonth -> latest?.let { inputs ->
                 if (current.content.header.canGoForward) selectMonth(inputs.month.next(), inputs)
             }
+
+            PlanIntent.DismissSheet -> reduce { copy(sheet = null) }
+
+            PlanIntent.AddItem -> latest?.let { inputs ->
+                reduce { copy(sheet = PlanSheet.Item(newItemEditor(inputs))) }
+            }
+            is PlanIntent.EditItem -> latest?.let { inputs ->
+                val item = inputs.items.firstOrNull { it.id == intent.itemId } ?: return
+                reduce { copy(sheet = PlanSheet.Item(itemEditorOf(inputs, item))) }
+            }
+            is PlanIntent.Buy -> buy(intent.itemId)
+            PlanIntent.OpenCopy -> openCopy()
+
+            is PlanIntent.ItemSelectAsset -> selectAsset(intent.assetKey)
+            is PlanIntent.ItemOpenCode -> openCode(intent.assetClass)
+            is PlanIntent.ItemCode -> withItemContext {
+                it.copy(codeText = intent.value.trim().uppercase(), assetError = null, switchedToExisting = false)
+            }
+            is PlanIntent.ItemMode -> updateItem {
+                // Birim degisir; sayiyi tasimak yaniltirdi ("10" gr -> "10" TL).
+                if (it.mode == intent.mode || !it.showModeSwitch()) it
+                else it.copy(mode = intent.mode, targetText = "", targetError = null)
+            }
+            is PlanIntent.ItemTarget -> updateItem { it.copy(targetText = intent.value, targetError = null) }
+            is PlanIntent.ItemStep -> updateItem { editor ->
+                val step = planTargetStep(editor.mode, editor.selectedUnit())
+                val now = editor.targetText.parseTrAmountOrNull() ?: 0.0
+                val next = (if (intent.up) now + step else now - step).coerceAtLeast(0.0)
+                editor.copy(targetText = rawAmount(next), targetError = null)
+            }
+            is PlanIntent.ItemGoal -> withItemContext { it.copy(goalId = intent.goalId) }
+            PlanIntent.SaveItem -> saveItem()
+            PlanIntent.DeleteItem -> deleteItem()
+
+            is PlanIntent.CopyCarry -> reduce {
+                val open = sheet as? PlanSheet.Copy ?: return@reduce this
+                val carry = if (intent.carry) open.draft.carry + intent.assetKey else open.draft.carry - intent.assetKey
+                copy(sheet = PlanSheet.Copy(open.draft.copy(carry = carry)))
+            }
+            PlanIntent.ConfirmCopy -> confirmCopy()
         }
     }
 
@@ -103,6 +162,220 @@ class PlanViewModel(
      */
     private fun selectMonth(target: YearMonth, inputs: PlanInputs) {
         selection.value = target.takeIf { it != inputs.current }
+    }
+
+    // --- Yatirim plani -------------------------------------------------------
+
+    /**
+     * "Al": ekleme sayfasi, varligin eldeki EN BUYUK pozisyonuyla; elde yoksa varlik
+     * secimiyle acilir. Miktar ve hedef onsecimi 5/5'te.
+     */
+    private fun buy(itemId: String) {
+        val inputs = latest ?: return
+        val item = inputs.items.firstOrNull { it.id == itemId } ?: return
+        emitEffect(PlanEffect.OpenAddTransaction(heldPositionOf(inputs.held, item.assetKey)?.id))
+    }
+
+    /** Taslak yalniz kaynakta bu ayda olmayan bir varlik varken acilir (bkz. planContent). */
+    private fun openCopy() {
+        val inputs = latest ?: return
+        val draft = copyDraftOf(inputs, emptySet())?.takeIf { it.hasNewRows } ?: return
+        reduce { copy(sheet = PlanSheet.Copy(draft)) }
+    }
+
+    private fun confirmCopy() {
+        val inputs = latest ?: return
+        val draft = (current.sheet as? PlanSheet.Copy)?.draft ?: return
+        // Birim fiyat kopya aninda yeniden okunur: yeni ayin agirligi bugunku alis
+        // fiyatiyla sabitlenir (fiyat yoksa kaynaktaki anlik goruntu).
+        val items = draft.rows.toItems(draft.target, draft.carry) { buyPriceOf(it, inputs.board, inputs.positions) }
+        if (items.isEmpty()) return
+        reduce { copy(sheet = null) }
+        write {
+            planRepository.upsertPlanItems(items)
+            emitEffect(PlanEffect.Message("${items.size} kalem kopyalandı."))
+        }
+    }
+
+    // --- Kalem editoru -------------------------------------------------------
+
+    /**
+     * Cip secimi.
+     *
+     * 1. Secili cipe yeniden dokunmak HICBIR SEY yapmaz (hedef, birim, hedef cipi kalir).
+     * 2. Varlik bu ay zaten planliysa editor O KALEME gecer (onayli kural): ayni ayda
+     *    bir varlik icin tek satir vardir, ikinci bir satir birincisini ezerdi.
+     * 3. Degilse varlik degisir; yazilan hedef AYNI SEYI ifade ediyorsa korunur
+     *    (tutarda hep ₺; miktarda birim ayniysa - gram -> 22 ayar gram). Aksi halde
+     *    sinifin varsayilan birimine gecilir ve hedef bosaltilir (gram -> ceyrek).
+     */
+    private fun selectAsset(key: String) {
+        val inputs = latest ?: return
+        val editor = (current.sheet as? PlanSheet.Item)?.editor ?: return
+        if (key == editor.assetKey && editor.codeClass == null) return
+
+        val other = inputs.items.firstOrNull {
+            it.month == editor.month && it.assetKey == key && it.id != editor.editingId
+        }
+        if (other != null) {
+            reduce { copy(sheet = PlanSheet.Item(itemEditorOf(inputs, other).copy(switchedToExisting = true))) }
+            return
+        }
+
+        val newClass = parseAssetKey(key)?.assetClass
+        val oldKey = editor.resolvedKey()
+        val sameMeaning = editor.targetText.isNotBlank() && when (editor.mode) {
+            PlanTargetMode.Amount -> true
+            PlanTargetMode.Quantity -> oldKey != null && planUnitLabel(oldKey) == planUnitLabel(key)
+        }
+        val (mode, target) = when {
+            // Nakitte miktar TL'dir: hep tutar. Tutar yazilmissa anlami ayni kalir.
+            newClass == AssetClass.Cash ->
+                PlanTargetMode.Amount to editor.targetText.takeIf { editor.mode == PlanTargetMode.Amount }.orEmpty()
+            sameMeaning -> editor.mode to editor.targetText
+            else -> (newClass?.let(::defaultPlanMode) ?: editor.mode) to ""
+        }
+        val next = editor.copy(
+            assetKey = key,
+            codeClass = null,
+            codeText = "",
+            mode = mode,
+            targetText = target,
+            switchedToExisting = false,
+            assetError = null,
+            targetError = null,
+        ).withContext(inputs)
+        reduce { copy(sheet = PlanSheet.Item(next)) }
+    }
+
+    /** "+ Fon kodu" / "+ Hisse sembolü": fon ve hisse tutarla planlanir (pay adedi anlamsiz). */
+    private fun openCode(assetClass: AssetClass) = withItemContext { editor ->
+        if (editor.codeClass == assetClass) {
+            editor
+        } else {
+            editor.copy(
+                codeClass = assetClass,
+                assetKey = null,
+                codeText = "",
+                mode = PlanTargetMode.Amount,
+                targetText = editor.targetText.takeIf { editor.mode == PlanTargetMode.Amount }.orEmpty(),
+                switchedToExisting = false,
+                assetError = null,
+                targetError = null,
+            )
+        }
+    }
+
+    private fun saveItem() {
+        val inputs = latest ?: return
+        val editor = (current.sheet as? PlanSheet.Item)?.editor ?: return
+
+        val key = editor.resolvedKey()
+        val target = editor.targetText.parseTrAmountOrNull()?.takeIf { it > 0.0 }
+        val pieceFraction = key != null && target != null &&
+            editor.mode == PlanTargetMode.Quantity &&
+            parseAssetKey(key)?.unit == QuantityUnit.Piece && target % 1.0 != 0.0
+        if (key == null || target == null || pieceFraction) {
+            updateItem {
+                it.copy(
+                    assetError = when {
+                        key != null -> null
+                        it.codeClass != null -> "Geçerli bir kod girin."
+                        else -> "Bir varlık seçin."
+                    },
+                    targetError = when {
+                        target == null -> "${it.targetLabel()} girin."
+                        pieceFraction -> "Adetle alınan altında tam sayı girin."
+                        else -> null
+                    },
+                )
+            }
+            return
+        }
+
+        // Elle yazilan ve bu ay ZATEN planli bir kod: hicbir sey yazilmaz, editor o
+        // kaleme gecer. NEDEN: ayni kimlikle upsert o kalemi sessizce ezerdi, baska bir
+        // kalemden replace de ustune yazardi. Kayitta bakilir, tus tus degil: "AFA"
+        // yazilirken gecilen "AF" baska bir kaleme atlatmamali.
+        val other = inputs.items.firstOrNull {
+            it.month == editor.month && it.assetKey == key && it.id != editor.editingId
+        }
+        if (other != null) {
+            reduce { copy(sheet = PlanSheet.Item(itemEditorOf(inputs, other).copy(switchedToExisting = true))) }
+            return
+        }
+
+        val existing = inputs.items.firstOrNull { it.id == editor.editingId }
+        // Fiyat anlik goruntusu: yeni kalem, degisen varlik, bu ay ya da gelecek ay ->
+        // guncel ALIS fiyati (onayli kural). Gecmis aydaki AYNI varlik ise kayitli
+        // fiyatini korur. NEDEN: gecmis bir kalemin yalniz hedefini ya da hedef cipini
+        // degistirmek, ayin TL agirligini ve skorunu bugunku fiyatla yeniden yazardi.
+        val keepSnapshot = existing != null && existing.assetKey == key &&
+            editor.month < inputs.current && existing.unitPriceAtPlan != null
+        val item = PlanItem(
+            id = planItemId(editor.month, key),
+            month = editor.month,
+            assetKey = key,
+            assetName = heldPositionOf(inputs.held, key)?.name
+                ?: editor.options.firstOrNull { it.assetKey == key }?.name
+                ?: catalogName(key),
+            mode = editor.mode,
+            target = target,
+            goalId = editor.goalId,
+            unitPriceAtPlan = if (keepSnapshot) existing?.unitPriceAtPlan else buyPriceOf(key, inputs.board, inputs.positions),
+        )
+        val replacing = editor.editingId?.takeIf { it != item.id }
+
+        reduce { copy(sheet = null) }
+        write {
+            // Varlik degistiyse kimlik de degisti (varliktan turer): eskisi mezar
+            // taslanir, yenisi yazilir - tek islemde.
+            if (replacing != null) {
+                planRepository.replacePlanItem(replacing, item)
+            } else {
+                planRepository.upsertPlanItem(item)
+            }
+        }
+    }
+
+    private fun deleteItem() {
+        val editor = (current.sheet as? PlanSheet.Item)?.editor ?: return
+        val id = editor.editingId ?: return
+        reduce { copy(sheet = null) }
+        write { planRepository.deletePlanItem(id) }
+    }
+
+    // --- Yardimci ------------------------------------------------------------
+
+    /**
+     * Durum ATOMIK indirgenir (karsilastir-yaz). NEDEN: testte ana dagitici
+     * Unconfined'dir ve toplayici turetimden sonra Default is parcaciginda devam
+     * eder; bir niyetle ayni anda yazabilir. Oku-yaz (setState) arasinda digerinin
+     * yazdigi kaybolurdu. Uygulamada ikisi de Main'de; orada fark yok.
+     */
+    private fun reduce(block: PlanUiState.() -> PlanUiState) = _state.update { it.block() }
+
+    /** Acik kalem editorunu donusturur; kalem editoru acik degilse dokunmaz. */
+    private fun updateItem(block: (PlanItemEditor) -> PlanItemEditor) = reduce {
+        val open = sheet as? PlanSheet.Item ?: return@reduce this
+        copy(sheet = PlanSheet.Item(block(open.editor)))
+    }
+
+    /** [updateItem] + baglam: secilen varlik ya da hedef degisince fiyat ve cakisma yeniden hesaplanir. */
+    private fun withItemContext(block: (PlanItemEditor) -> PlanItemEditor) {
+        val inputs = latest ?: return
+        updateItem { block(it).withContext(inputs) }
+    }
+
+    /** Yazma arka planda; hata seritte soylenir (yerel SQLite'ta pratikte olmaz). */
+    private fun write(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (error: Exception) {
+                emitEffect(PlanEffect.Message("Plan kaydedilemedi."))
+            }
+        }
     }
 
     private fun observe() {
@@ -155,9 +428,11 @@ class PlanViewModel(
                     // Durumdan ONCE: bu durumu goren her okuyucu secimi de bos gorur.
                     if (inputs.selectionClamped) selection.compareAndSet(inputs.selection, null)
                     latest = inputs
-                    // Durum YALNIZ burada indirgenir; donusum (map) icinde durum okunmaz -
-                    // Default'ta calisir ve arada yapilan bir degisikligi ezerdi.
-                    setState { copy(stage = PlanStage.Ready, content = content) }
+                    // Durum YALNIZ burada, indirgeme icinde birlesir: o anda acik olan sheet
+                    // okunur, yazilan alanlari yerinde kalir, yalniz baglami (fiyat,
+                    // secenekler) tazelenir. Donusum (map) icinde durum okunmaz - Default'ta
+                    // calisir ve arada acilan bir editoru ezerdi.
+                    reduce { copy(stage = PlanStage.Ready, content = content, sheet = sheet?.refreshed(inputs)) }
                 }
         }
     }

@@ -323,6 +323,30 @@ internal object KefeIconsCore {
             moveTo(16f, 3f); lineTo(16f, 7.5f)
         }.also { _calendar = it }
 
+    /** Sepet - plan satirindaki "Al": o kalem icin ekleme sayfasini acar. */
+    private var _cart: ImageVector? = null
+    val Cart: ImageVector
+        get() = _cart ?: kefeIcon("KefeCart") {
+            moveTo(2.5f, 4f); lineTo(5.2f, 4f); lineTo(7.4f, 15f); lineTo(18f, 15f)
+            lineTo(20.5f, 7.5f); lineTo(6f, 7.5f)
+            circle(9f, 19.5f, 1.3f)
+            circle(17f, 19.5f, 1.3f)
+        }.also { _cart = it }
+
+    /**
+     * Yarim dolu daire - plan kaleminin "Kısmen" durumu. Sol yari tarali: rozet
+     * rengi tek sinyal kalmasin, bos (Bekliyor) ve tam (Tamam) ikonlardan sekliyle ayrilsin.
+     */
+    private var _halfCircle: ImageVector? = null
+    val HalfCircle: ImageVector
+        get() = _halfCircle ?: kefeIcon("KefeHalfCircle") {
+            circle(12f, 12f, 8f)
+            moveTo(12f, 4f); lineTo(12f, 20f)
+            moveTo(5.2f, 9f); lineTo(12f, 9f)
+            moveTo(4.8f, 12f); lineTo(12f, 12f)
+            moveTo(5.2f, 15f); lineTo(12f, 15f)
+        }.also { _halfCircle = it }
+
     private var _lock: ImageVector? = null
     val Lock: ImageVector
         get() = _lock ?: kefeIcon("KefeLock") {
