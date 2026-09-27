@@ -18,7 +18,8 @@ import kotlinx.serialization.Serializable
  *
  * Sunucuya YAZILMAYAN alanlar (turetilir / cihaz-yerel) DTO'da da yok: pozisyonun
  * miktar/maliyet/degeri, gunluk degisim, hedefin tahmini tarihi, islemin
- * syncState'i.
+ * syncState'i. Planin yapilip yapilmadigi, seri ve ayin skoru da yok: onlar
+ * islem defterinden turetilir (bkz. domain/model/MonthlyPlan.kt).
  */
 
 @Serializable
@@ -146,4 +147,75 @@ data class ActivityDto(
     @SerialName("time_label") val timeLabel: String?,
     @SerialName("updated_at") val updatedAt: Long,
     @SerialName("deleted_at") val deletedAt: Long?,
+)
+
+// --- Aylik plan, gelir, gider, butce (bkz. 12.sqm) -----------------------------
+//
+// Enum benzeri alanlar (mode, kind, category) DUZ METIN ve ESLENMEDEN tasinir:
+// tabloda da oyle duruyorlar (bkz. 12.sqm). Daha yeni bir surumun yazdigi
+// "Bonus" gibi bir deger bu cihazda okunurken savunmaci eslenir (bkz.
+// PlanMappers), ama sunucuya AYNEN geri gider. Burada enum'a cevrilseydi bu
+// telefon bilmedigi degeri "Ek gelir"e ceviriyor ve o duzeltmeyi iki telefona
+// birden itiyordu.
+//
+// Bos gelebilecek ya da sonradan gelecek alanlarin hepsi varsayilanli:
+// kolonu tasimayan (ya da acik NULL donen) bir yanit butun pull'u dusurmesin
+// (bkz. PullEngine'deki coerceInputValues).
+
+@Serializable
+data class PlanItemDto(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("period_year") val periodYear: Long,
+    @SerialName("period_month") val periodMonth: Long,
+    @SerialName("asset_key") val assetKey: String,
+    @SerialName("asset_name") val assetName: String,
+    val mode: String,
+    val target: Double,
+    @SerialName("goal_id") val goalId: String? = null,
+    @SerialName("unit_price_at_plan") val unitPriceAtPlan: Double? = null,
+    @SerialName("updated_at") val updatedAt: Long,
+    @SerialName("deleted_at") val deletedAt: Long? = null,
+)
+
+@Serializable
+data class IncomeEntryDto(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("period_year") val periodYear: Long,
+    @SerialName("period_month") val periodMonth: Long,
+    @SerialName("member_id") val memberId: String,
+    val kind: String,
+    val amount: Double,
+    @SerialName("updated_at") val updatedAt: Long,
+    @SerialName("deleted_at") val deletedAt: Long? = null,
+)
+
+@Serializable
+data class ExpenseEntryDto(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("date_year") val dateYear: Long,
+    @SerialName("date_month") val dateMonth: Long,
+    @SerialName("date_day") val dateDay: Long,
+    val category: String,
+    val amount: Double,
+    val note: String? = null,
+    @SerialName("added_by_member_id") val addedByMemberId: String? = null,
+    /** Ayni gun icindeki sira; kolonu tasimayan yanitta 0 (bkz. TransactionDto). */
+    @SerialName("created_at") val createdAt: Long = 0L,
+    @SerialName("updated_at") val updatedAt: Long,
+    @SerialName("deleted_at") val deletedAt: Long? = null,
+)
+
+@Serializable
+data class ExpenseBudgetDto(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("period_year") val periodYear: Long,
+    @SerialName("period_month") val periodMonth: Long,
+    val category: String,
+    val amount: Double,
+    @SerialName("updated_at") val updatedAt: Long,
+    @SerialName("deleted_at") val deletedAt: Long? = null,
 )

@@ -46,5 +46,11 @@ UPDATE income_entries
 SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE id = :id AND deletedAt IS NULL;
 
+-- Baglanirken hesabin mezar tasina karsi korunan satir (bkz. touchPlanItem).
+touchIncome:
+UPDATE income_entries
+SET updatedAt = :updatedAt
+WHERE id = :id;
+
 deleteAllIncome:
 DELETE FROM income_entries;

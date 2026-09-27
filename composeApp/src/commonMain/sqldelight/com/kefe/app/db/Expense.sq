@@ -65,6 +65,14 @@ UPDATE expense_entries
 SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE id = :id AND deletedAt IS NULL;
 
+-- Hesaba baglanirken bu telefon BASKA bir profil oldu: bu cihazda girilmis ve
+-- hesapta olmayan harcama yeni profile aktarilir (bkz. remapTransactionAuthor,
+-- SyncLocalSink.remapLedgerAuthors). Damga yenilenir - aktarim da bir yazmadir.
+remapExpenseAuthor:
+UPDATE expense_entries
+SET addedByMemberId = :memberId, updatedAt = :updatedAt
+WHERE id = :id;
+
 deleteAllExpenses:
 DELETE FROM expense_entries;
 
@@ -96,6 +104,12 @@ deleteBudgetById:
 UPDATE expense_budgets
 SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE id = :id AND deletedAt IS NULL;
+
+-- Baglanirken hesabin mezar tasina karsi korunan satir (bkz. touchPlanItem).
+touchBudget:
+UPDATE expense_budgets
+SET updatedAt = :updatedAt
+WHERE id = :id;
 
 deleteAllBudgets:
 DELETE FROM expense_budgets;

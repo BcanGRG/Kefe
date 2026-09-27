@@ -1,5 +1,7 @@
 package com.kefe.app.data.sync
 
+import com.kefe.app.domain.model.YearMonth
+import com.kefe.app.domain.model.incomeIdOf
 import com.kefe.app.domain.repository.PreferenceKeys
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -144,6 +146,115 @@ class LinkDecisionTest {
         assertEquals(mapOf("member_owner" to 1, "member_partner" to 1), prepared.localOnlyByAuthor)
     }
 
+    // --- Plan, gelir, harcama ve butce ------------------------------------------
+
+    /**
+     * Yalniz plan girilmis cihaz BOS sayilsaydi dolu bir hesaba sorusuz
+     * inerdi: cihazin Ekim maasi hesabinkiyle ayni kimlikte bulusup sessizce
+     * hesabinkine donerdi. Plan satirlari da kayittir; iki yanda da kayit
+     * varsa sorulur.
+     */
+    @Test
+    fun `yalniz plani olan cihaz dolu hesapta sorulur`() {
+        val local = LocalRecords(
+            liveIncomes = listOf(localIncome("member_owner", month = 10)),
+            liveExpenses = mapOf(UuidA to "member_owner"),
+            livePlanRows = 2,
+        )
+        val batch = PullBatch(transactions = listOf(tx(UuidB)))
+        val p = buildLinkPreview(local, batch, localRestored = false)
+        assertEquals(4, p.localRecords, "gelir + harcama + plan satiri ve butce")
+        assertEquals(1, p.serverRecords)
+        assertEquals(0, p.shared)
+        assertEquals(LinkDecision.Conflict, classifyLink(p))
+    }
+
+    @Test
+    fun `yalniz plani olan cihaz bos hesaba yukler, bos cihaz yalniz plani olan hesabi indirir`() {
+        val planOnly = LocalRecords(livePlanRows = 1)
+        assertEquals(LinkDecision.Upload, prepareLink(PullBatch(), planOnly, localRestored = false).decision)
+
+        val accountPlanOnly = PullBatch(
+            planItems = listOf(planItem("pi_2026_10_gold_gram")),
+            budgets = listOf(budget("eb_2026_10_Groceries", deletedAt = 7_000L)),
+        )
+        val download = prepareLink(accountPlanOnly, LocalRecords(), localRestored = false)
+        assertEquals(LinkDecision.Download, download.decision)
+        assertEquals(1, download.preview.serverRecords, "hesabin mezar tasi sayilmaz")
+
+        // Hesapta yalniz plan var, cihazda islem: ikisi de kayit - sorulur.
+        val deviceTx = LocalRecords(liveTransactions = mapOf(UuidA to "member_owner"), allRecordIds = setOf(UuidA))
+        assertEquals(LinkDecision.Conflict, prepareLink(accountPlanOnly, deviceTx, localRestored = false).decision)
+    }
+
+    /**
+     * Plan, gelir ve butce kimlikleri icerikten turer: iki yabanci portfoy de
+     * "pi_2026_10_gold_gram" tasiyabilir. Ortak sayilsalardi baska bir hesaba
+     * giris sorusuz birlesirdi. Harcama kimligi UUID - o ortak gecmisi soyler.
+     */
+    @Test
+    fun `plan kimlikleri ortaklik saymaz, harcama UUID sayar`() {
+        val contentIds = setOf("pi_2026_10_gold_gram", "inc_2026_10_member_owner_Salary", "eb_2026_10_Groceries")
+        assertEquals(0, sharedRecordCount(contentIds, contentIds))
+
+        val local = LocalRecords(
+            liveExpenses = mapOf(UuidA to "member_owner"),
+            allRecordIds = setOf(UuidA),
+            livePlanRows = 1,
+        )
+        val sameAccount = PullBatch(expenses = listOf(expense(UuidA)), planItems = listOf(planItem("pi_2026_10_gold_gram")))
+        val p = buildLinkPreview(local, sameAccount, localRestored = false)
+        assertEquals(1, p.shared)
+        assertEquals(LinkDecision.Relink, classifyLink(p))
+    }
+
+    /**
+     * Ekrandaki "n kayıt aktarılır"in n'i aktarimin YAPACAGI seyi sayar.
+     * NEYDI: hesapta olmayan her canli gelir sayiliyordu; hedefi hesapta dolu
+     * olan (hesabinki kalir) ve bu cihazda dolu olan (yerinde kalir) satirlar
+     * da "aktarılır" deniyordu.
+     */
+    @Test
+    fun `aktarim sayisi harcamayi ve yalniz gercekten tasinacak geliri sayar`() {
+        val local = LocalRecords(
+            liveTransactions = mapOf(UuidA to "member_owner"),
+            liveExpenses = mapOf(UuidB to "member_owner", UuidC to null, UuidD to "member_owner"),
+            liveIncomes = listOf(
+                // Hesapta ayni kimlik, ayni tutar: hesabin kendi satiri (geri yukleme).
+                localIncome("member_owner", month = 9, amount = 75_000.0),
+                // Hesapta ayni kimlik, BASKA tutar: baska kisinin maasi - tasinir.
+                localIncome("member_owner", month = 10, amount = 60_000.0),
+                // Hedef hesapta canli: hesabinki kalir, tasinmaz.
+                localIncome("member_owner", month = 11, amount = 61_000.0),
+                // Hedef bu cihazda canli: iki satir da yerinde kalir.
+                localIncome("member_owner", month = 12, amount = 62_000.0),
+                localIncome("member_partner", month = 12, amount = 40_000.0),
+                // Ikinci profilden ilkine: hedef bos, tasinir.
+                localIncome("member_partner", month = 10, amount = 5_000.0, kind = "Bonus"),
+            ),
+        )
+        val batch = PullBatch(
+            expenses = listOf(expense(UuidD)),
+            incomes = listOf(
+                income(incomeIdOf(YearMonth(2026, 9), "member_owner", "Salary"), "member_owner", month = 9, amount = 75_000.0),
+                income(incomeIdOf(YearMonth(2026, 10), "member_owner", "Salary"), "member_owner", amount = 90_000.0),
+                income(incomeIdOf(YearMonth(2026, 11), "member_partner", "Salary"), "member_partner", month = 11),
+            ),
+        )
+        // Ekleyeni bos eski harcama (UuidC) hic kimseye sayilmaz; UuidD hesapta.
+        // Ilk profil: islem + harcama + Ekim maasi. Ikinci: Ekim bonusu.
+        assertEquals(mapOf("member_owner" to 3, "member_partner" to 1), localOnlyByAuthor(local, batch))
+
+        val moves = planIncomeRemap(local.liveIncomes, batch.incomes, AuthorRemap("member_owner", "member_partner"))
+        assertEquals(
+            listOf(
+                IncomeMove.Move(local.liveIncomes[1], "inc_2026_10_member_partner_Salary"),
+                IncomeMove.YieldToAccount("inc_2026_11_member_owner_Salary"),
+            ),
+            moves,
+        )
+    }
+
     // --- Uygulama bicimi ve tercihler -----------------------------------------
 
     @Test
@@ -197,6 +308,31 @@ class LinkDecisionTest {
             id = id, userId = "u1", name = "Ev", iconKey = "home", amount = 1.0, unit = "Money",
             targetYear = 2030, targetMonth = 1, targetDay = 1, monthlyContribution = 0.0,
             isMain = true, status = "Active", sortOrder = 0, updatedAt = 5_000L, deletedAt = null,
+        )
+
+        fun planItem(id: String) = PlanItemDto(
+            id = id, userId = "u1", periodYear = 2026, periodMonth = 10, assetKey = "gold_gram",
+            assetName = "Gram Altın", mode = "Quantity", target = 10.0, updatedAt = 5_000L,
+        )
+
+        fun income(id: String, member: String, month: Int = 10, amount: Double = 80_000.0) = IncomeEntryDto(
+            id = id, userId = "u1", periodYear = 2026, periodMonth = month.toLong(), memberId = member,
+            kind = "Salary", amount = amount, updatedAt = 5_000L,
+        )
+
+        fun localIncome(member: String, month: Int, amount: Double = 80_000.0, kind: String = "Salary") = LocalIncome(
+            id = incomeIdOf(YearMonth(2026, month), member, kind), periodYear = 2026, periodMonth = month.toLong(),
+            memberId = member, kind = kind, amount = amount,
+        )
+
+        fun expense(id: String) = ExpenseEntryDto(
+            id = id, userId = "u1", dateYear = 2026, dateMonth = 10, dateDay = 3, category = "Groceries",
+            amount = 1_500.0, addedByMemberId = "member_owner", updatedAt = 5_000L,
+        )
+
+        fun budget(id: String, deletedAt: Long? = null) = ExpenseBudgetDto(
+            id = id, userId = "u1", periodYear = 2026, periodMonth = 10, category = "Groceries",
+            amount = 12_000.0, updatedAt = 5_000L, deletedAt = deletedAt,
         )
     }
 }

@@ -38,17 +38,21 @@ class RealtimeProtocolTest {
     }
 
     @Test
-    fun `join cercevesi yedi tabloyu da abone eder`() {
+    fun `join cercevesi on bir tablonun hepsini abone eder`() {
         val frame = json.parseToJsonElement(joinFrame(RealtimeTables, "jwt", ref = 1))
             .jsonObject
 
         val changes = frame["payload"]!!.jsonObject["config"]!!
             .jsonObject["postgres_changes"]!!.jsonArray
 
-        assertEquals(7, changes.size)
-        assertEquals(
-            RealtimeTables.toSet(),
-            changes.map { it.jsonObject["table"]!!.jsonPrimitive.content }.toSet(),
+        assertEquals(11, changes.size)
+        val tables = changes.map { it.jsonObject["table"]!!.jsonPrimitive.content }.toSet()
+        assertEquals(RealtimeTables.toSet(), tables)
+        // Plan tablolari: karsi telefonun plani, geliri, harcamasi ve butcesi
+        // de aninda gelmeli - yalniz sonraki push'ta degil.
+        assertTrue(
+            tables.containsAll(listOf("plan_items", "income_entries", "expense_entries", "expense_budgets")),
+            "$tables",
         )
         // "*": ekleme kadar guncelleme ve silme (mezar tasi) de degisikliktir.
         assertTrue(changes.all { it.jsonObject["event"]!!.jsonPrimitive.content == "*" })

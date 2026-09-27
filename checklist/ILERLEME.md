@@ -1756,10 +1756,22 @@ canlı işlem ve hedefleri ve ortak kayıtları sayar. Karar saf `classifyLink()
   - "Hesaptakileri kullan": "Bu cihazdaki kayıtlar silinir." Yanında "Önce
     yedek al". Eşitlenen tablolar silinir (plan, gelir ve gider tablolarına
     dokunulmaz), push watermark'ı şimdiye çekilir, hiçbir şey geri gitmez.
+    *Düzeltildi (27 Eyl 2026, plan eşitlemesi):* plan, gelir, gider ve bütçe
+    artık eşitleniyor; bu seçim onları da siler ve yerlerine hesabınkiler
+    gelir. Kalsalardı cihazın planı hesabınkiyle karışıp ilk push'la hesaba
+    giderdi (`AccountLinkTest`).
   - "Birleştir": "Aynı alımı iki cihaza da girdiyseniz iki kez sayılır; sonra
     Aktivite'den silebilirsiniz." İki yanda da olan kayıtta, damgası ne olursa
     olsun hesabın sürümü kazanır. Aynı günün anlık görüntüsü ve ana hedef de
-    hesaptan gelir.
+    hesaptan gelir. *Plan eşitlemesiyle eklendi:* notun sonuna "Aynı ayın
+    planı, geliri ya da bütçesi hem cihazda hem hesapta varsa hesaptaki
+    kalır." Bu satırların kimliği içerikten türer; iki yandaki "Ekim maaşı"
+    aynı satırdır.
+  - *Plan eşitlemesiyle eklendi:* plan, gelir, harcama ve bütçe satırları da
+    "kayıt" sayılır (iki yanda da). Yalnız planı olan bir cihaz dolu bir
+    hesaba bağlanınca sorulur; sayılmasalardı sorusuz iner, cihazın Ekim
+    maaşı hesabınkine dönerdi. Ortaklıkta yalnız harcamanın UUID'si sayılır;
+    plan, gelir ve bütçe kimlikleri `pos_*` gibi her portföyde aynı çıkar.
   - "Vazgeç": yalnız bu cihazın oturumu kapanır, akışın başladığı yere dönülür.
     Hiçbir şey yazılmamıştır.
 - "Devam" hepsini **tek transaction**'da yazar: hesabın satırları, adlar, bu
@@ -1768,6 +1780,15 @@ canlı işlem ve hedefleri ve ortak kayıtları sayar. Karar saf `classifyLink()
   da yazma patlarsa bağ yok, push yok. Yerel yazma hatası ağ mesajını değil
   kendi mesajını alır: "Bağlantı kaydedilemedi; bu cihazda hiçbir şey
   değişmedi. Tekrar deneyin." Başarıda: "Hesaba bağlandı — eşitleme açık."
+  *Plan eşitlemesiyle eklendi:* aktarım harcamanın ekleyenini ve gelirin
+  sahibini de taşır. Gelirin kimliği kişiyi içerdiği için satır yeni kimlikle
+  yazılır, eskisi mezar taşı olur. Gelir, hesabın satırları uygulanmadan
+  **önce** taşınır: aynı üye kimliği iki yanda başka kişi olabilir (cihazda
+  Merve ilk profil, hesapta Burak) ve sonra taşınsaydı "Birleştir" Merve'nin
+  Ekim maaşını Burak'ınkiyle ezerdi. Hesapta aynı kimlik ve aynı tutarla
+  duran gelir hesabın kendi satırıdır, taşınmaz. Hedefte hesabın canlı satırı
+  varsa hesabınki kalır; hedef yalnız bu cihazda doluysa satır yerinde kalır
+  (toplanmaz). Ekrandaki "n kayıt" yalnız gerçekten taşınanları sayar.
 - Başka hesap koruması: bağlı bir cihazda farklı e-postayla girilince yeni
   oturum kapanır. Ekran "Bu cihaz başka bir hesaba bağlı · Bu cihazdaki
   kayıtlar {e-posta} hesabına ait. Farklı bir hesapla kullanmak için önce
@@ -1785,7 +1806,11 @@ canlı işlem ve hedefleri ve ortak kayıtları sayar. Karar saf `classifyLink()
   kayıtlar ile tercihler silinir. Hesabınızdaki kayıtlar ve Merve'nin telefonu
   etkilenmez; aynı e-postayla girdiğinizde geri gelir." Önce çıkılır, sonra
   pull kilidi tutularak silinir. "Geri gelir" plan, gelir ve gider tabloları
-  için doğru değil (bkz. Sonraya › Bilinen bedeller).
+  için doğru değil (bkz. Sonraya › Bilinen bedeller). *Düzeltildi (27 Eyl
+  2026):* bu tablolar artık eşitleniyor; sıfırlanan cihaz aynı e-postayla
+  girince onlar da hesaptan geri gelir. Metin değişmedi, artık onlar için de
+  doğru (`AccountLinkTest`: sıfırlanan cihaz aynı hesaba dönünce plan da geri
+  gelir).
 - Hesapsız "Tüm verileri sil" başka kopya olmadığını söyler: "… Hesap
   kullanmadığınız için başka bir kopyası yok — önce yedek almak
   isteyebilirsiniz. Bu işlem geri alınamaz."
@@ -1805,7 +1830,9 @@ canlı işlem ve hedefleri ve ortak kayıtları sayar. Karar saf `classifyLink()
 - **Plan, gelir ve giderin "yalnız bu cihazda" olduğunu söyleyen metin bilerek
   yok.** Bu tablolar bir sonraki özellik PR'ında eşitlenecek; bugün doğru olan
   cümle o gün yalan olurdu. `DataFateCopyTest` hiçbir metnin bunu iddia
-  etmediğini kilitliyor.
+  etmediğini kilitliyor. *Düzeltildi (27 Eyl 2026):* o PR geldi, dört tablo
+  (`plan_items`, `income_entries`, `expense_entries`, `expense_budgets`)
+  hesapla eşitleniyor; test aynen duruyor ve artık doğru olanı kilitliyor.
 
 **Geri alınan kararlar.**
 
@@ -1904,13 +1931,14 @@ masaüstünde geçince işaretlenir.
 | 6 | Hesapsız, kayıtlı bir cihaz (ör. 2'deki temiz kurulum + birkaç kayıt): Ayarlar › Hesaba bağla. Telefon 1 olmaz: 1'den sonra bağlı, "Hesaba bağla" satırı yok; çıkıp yeniden bağlanırsa 9'daki aynı hesaba dönüş olur | Giriş ekranında geri oku ve aynı e-posta uyarısı. "Hesabınız kontrol ediliyor…" → hesapta da kayıt olduğu için üç seçenek (gerçek hesapta "Birleştir" deneme kayıtlarını hesaba da gönderir) → "Bu telefon kimin?" → Ayarlar'a dönüş, "Hesaba bağlandı — eşitleme açık." Çip "Eşitleniyor" → "Eşitlendi", uçak modunda "Eşitlenemiyor" | 🟡 |
 | 7 | Telefon 2: temiz kurulum → "Hesapla, iki telefonda" | Hesaptakiler iner, öteki profil seçilir; kayıtlar iki telefonda da görünür | 🟡 |
 | 8 | Telefon 1: "Hesaptan çık" | Onay metni çıkar, veri yerinde kalır, çip "Bu cihazda". `auth.sessions`'ta o kullanıcının oturum sayısı bir düşer, sıfıra inmez; telefon 2 bir saat sonra hâlâ eşitliyor | 🟡 |
-| 9 | Telefon 1: aynı e-postayla yeniden giriş | Aynı hesaba dönüş: çakışma sorusu yok, profil seçimi yok | 🟡 |
-| 10 | Telefon 1: "Bu cihazı sıfırla" | Hoş geldin gelir; 10 sn sonra veri geri gelmemiş; telefon 2 etkilenmemiş | 🟡 |
+| 9 | Telefon 1: aynı e-postayla yeniden giriş | Aynı hesaba dönüş: çakışma sorusu yok, profil seçimi yok | 🟡 (8'deki çıkıştan sonraki dönüş henüz denenmedi; sıfırlamadan sonraki yeniden giriş ayrı senaryo, bkz. 16) |
+| 10 | Telefon 1: "Bu cihazı sıfırla" | Hoş geldin gelir; 10 sn sonra veri geri gelmemiş; telefon 2 etkilenmemiş | ✅ 27 Eyl 2026, gerçek telefon (Redmi, `q4wgbeeanjfqnbuc`): Hoş geldin geldi, 0 kayıt; oturum ve bağ silindi; profiller "Ben"/"Eşim"e döndü (`updatedAt` 0); ~1 dk beklendi, hiçbir şey geri gelmedi. Hesap etkilenmedi: aynı e-postayla girişte hepsi geri indi (16). İkinci telefona dair gözlem bu kayıtta yok |
 | 11 | Bağlıyken "Geri yükle" | Satır kapalı, "Hesaba bağlıyken kapalı" | 🟡 |
 | 12 | 14'teki gibi oturumu düşmüş cihaz › "Yeniden giriş yap" › dolu gelen e-postayı başka bir adresle değiştir, kodu doğrula. Bağlı cihazda başka yoldan olmaz: "Hesaptan çık" bağı da siler, ondan sonra yeni e-posta bu korumaya değil 13'e gider | "Bu cihaz başka bir hesaba bağlı"; yeni oturum kapanır, çip "Oturum kapandı" kalır, bağ ve kayıtlar yerinde | 🟡 |
 | 13 | Hesapsız kullanılmış, kayıtlı bir cihazda yeni bir e-postayla "Hesaba bağla" | E-postaya **kod** gelir; hesap boş olduğu için cihazdakiler hesaba gider; sunucu geçişinden sonra push başarılı, çip "Eşitlendi" | 🟡 |
 | 14 | Oturum düşer: bağlı bir telefonun satırı Supabase'de `auth.sessions`'tan silinir; erişim jetonu dolunca (en geç bir saat) uygulama açılır | Çip "Oturum kapandı"; Özet'te "Oturumunuz kapandı · Eşitleme durdu, kayıtlarınız bu cihazda." + "Yeniden giriş yap" / "Hesapsız devam et". Aynı e-postayla yeniden giriş: soru ve profil seçimi yok, çip "Eşitlendi". Ayrı bir denemede "Hesapsız devam et": çip "Bu cihazda", kayıtlar yerinde | 🟡 |
 | 15 | Bağlantı yarım: hesapsız, kurulumu bitmiş cihazda Ayarlar › Hesaba bağla › kodu doğrula › "Devam"a basmadan uygulamayı kapat (ya da hesap indirilemeyince "Şimdilik hesapsız devam et") › aç | Çip "Bağlantı yarım"; Özet'te "Hesap bağlantısı tamamlanmadı · Kayıtlar henüz hesaba gönderilmiyor." + "Tamamla" / "Vazgeç"; hesaba hiçbir şey gitmemiş. "Tamamla" hesabı indirip "Bu telefon kimin?"i yeniden sorar, sonra "Eşitlendi". Ayrı bir denemede "Vazgeç": çip "Bu cihazda", kayıtlar yerinde, eşin telefonu etkilenmez | 🟡 |
+| 16 | Telefon 1: 10'daki sıfırlamadan sonra aynı e-postayla yeniden giriş | Cihaz boş: hesaptakiler sorusuz iner ("Bu telefon kimin?" sorulur); adlar ve damgalar hesaptaki gibi; bağ yeniden kurulur | ✅ 27 Eyl 2026, gerçek telefon (Redmi, `q4wgbeeanjfqnbuc`): 15 işlem, 12 pozisyon ve 1 hedef geri geldi; profil adları ve damgaları değişmedi; bağ yeniden kuruldu |
 
 **Sunucu tarafı.**
 
@@ -1939,7 +1967,13 @@ masaüstünde geçince işaretlenir.
 
 - **Plan, gelir ve gider tablolarının eşitlenmesi**: bir sonraki özellik PR'ı.
   O zamana dek "Hesaptakileri kullan" bu tablolara dokunmuyor, "Bu cihazı
-  sıfırla" onları da siliyor.
+  sıfırla" onları da siliyor. *Düzeltildi (27 Eyl 2026, aylık plan 3/5):*
+  `plan_items`, `income_entries`, `expense_entries` ve `expense_budgets`
+  öteki tablolar gibi push, pull ve gerçek zamanlı sinyalle eşitleniyor
+  (sunucu tarafı `supabase/migrations/20260927_plan_tables.sql`; canlıya
+  uygulanması istemciden önce, ayrı bir adım). "Hesaptakileri kullan" onları
+  da hesabınkiyle değiştiriyor; sıfırlanan cihaz yeniden girince onlar da
+  geri geliyor.
 - Hesaptaki verileri de silme ("Hesaptaki verileri de sil"). Mezar taşı ve
   `daily_snapshots.deleted_at` ister.
 - `SyncState` ve bekleyen kayıt sayısı temizliği.
@@ -1960,4 +1994,7 @@ masaüstünde geçince işaretlenir.
     henüz eşitlenmediği için hesapta kopyaları yok ve geri gelmez; onay metni
     ise "geri gelir" diyor. Bugün hiçbir ekran bu tablolara yazmadığı için
     kimse etkilenmiyor. Plan arayüzü plan eşitlemesinden önce yayına
-    çıkmamalı; çıkarsa o gün bu metin güncellenmeli.
+    çıkmamalı; çıkarsa o gün bu metin güncellenmeli. *Düzeltildi (27 Eyl
+    2026):* plan eşitlemesi plan arayüzünden önce geldi; tablolar hesapta da
+    duruyor ve sıfırlamadan sonra geri geliyor, onay metni onlar için de
+    doğru. Metin değişmedi.

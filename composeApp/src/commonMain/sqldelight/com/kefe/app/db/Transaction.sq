@@ -179,7 +179,7 @@ SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE id = :id;
 
 -- Hesaba baglanirken bu telefon BASKA bir profil oldu: bu cihazda girilmis ve
--- hesapta olmayan kayit yeni profile aktarilir (bkz. SyncLocalSink.remapAuthor).
+-- hesapta olmayan kayit yeni profile aktarilir (bkz. SyncLocalSink.remapLedgerAuthors).
 -- Damga yenilenir - aktarim da bir yazmadir ve hesaba gitmeli.
 remapTransactionAuthor:
 UPDATE transactions

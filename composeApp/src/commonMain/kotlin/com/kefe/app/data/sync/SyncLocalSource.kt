@@ -34,8 +34,9 @@ class SyncLocalSource(
      * [since]'ten beri degisen her satiri tablo tablo toplar. Bos tablo atlanir.
      * deletedAt FILTRELENMEZ - mezar taslari da gider.
      *
-     * Sira: ust once (members, positions) alt sonra. Sunucuda tablolar arasi
-     * yabanci anahtar yok, yani sira zorunlu degil; yalniz okunurluk icin.
+     * Sira: ust once (members, positions) alt sonra, plan tablolari en sonda.
+     * Sunucuda tablolar arasi yabanci anahtar yok, yani sira zorunlu degil;
+     * yalniz okunurluk icin.
      */
     suspend fun changesSince(since: Long, userId: String): List<TableBatch> =
         withContext(dispatcher) {
@@ -164,6 +165,77 @@ class SyncLocalSource(
                         )
                     }
                     .let { batch("activity_events", it) }
+
+                // Plan tablolari. mode/kind/category DUZ METIN aynen gider -
+                // bu telefonun tanimadigi bir deger de (bkz. SyncDtos).
+                database.planItemQueries.selectPlanItemsChangedSince(since).executeAsList()
+                    .map { r ->
+                        PlanItemDto(
+                            id = r.id,
+                            userId = userId,
+                            periodYear = r.periodYear,
+                            periodMonth = r.periodMonth,
+                            assetKey = r.assetKey,
+                            assetName = r.assetName,
+                            mode = r.mode,
+                            target = r.target,
+                            goalId = r.goalId,
+                            unitPriceAtPlan = r.unitPriceAtPlan,
+                            updatedAt = r.updatedAt,
+                            deletedAt = r.deletedAt,
+                        )
+                    }
+                    .let { batch("plan_items", it) }
+
+                database.incomeQueries.selectIncomeChangedSince(since).executeAsList()
+                    .map { r ->
+                        IncomeEntryDto(
+                            id = r.id,
+                            userId = userId,
+                            periodYear = r.periodYear,
+                            periodMonth = r.periodMonth,
+                            memberId = r.memberId,
+                            kind = r.kind,
+                            amount = r.amount,
+                            updatedAt = r.updatedAt,
+                            deletedAt = r.deletedAt,
+                        )
+                    }
+                    .let { batch("income_entries", it) }
+
+                database.expenseQueries.selectExpensesChangedSince(since).executeAsList()
+                    .map { r ->
+                        ExpenseEntryDto(
+                            id = r.id,
+                            userId = userId,
+                            dateYear = r.dateYear,
+                            dateMonth = r.dateMonth,
+                            dateDay = r.dateDay,
+                            category = r.category,
+                            amount = r.amount,
+                            note = r.note,
+                            addedByMemberId = r.addedByMemberId,
+                            createdAt = r.createdAt,
+                            updatedAt = r.updatedAt,
+                            deletedAt = r.deletedAt,
+                        )
+                    }
+                    .let { batch("expense_entries", it) }
+
+                database.expenseQueries.selectBudgetsChangedSince(since).executeAsList()
+                    .map { r ->
+                        ExpenseBudgetDto(
+                            id = r.id,
+                            userId = userId,
+                            periodYear = r.periodYear,
+                            periodMonth = r.periodMonth,
+                            category = r.category,
+                            amount = r.amount,
+                            updatedAt = r.updatedAt,
+                            deletedAt = r.deletedAt,
+                        )
+                    }
+                    .let { batch("expense_budgets", it) }
             }
         }
 
@@ -176,6 +248,9 @@ class SyncLocalSource(
      * Yaklasiktir: karsi telefondan cekilmis ve watermark'tan yeni damgali bir
      * satir da sayilir (bir sonraki push onu da yeniden gonderir). "Hesaptan
      * çık" uyarisi icin fazla temkinli olmak, eksik uyarmaktan iyidir.
+     *
+     * Plan, gelir, gider ve butce de bakilir: esitlenen her tablo burada da
+     * olmali, yoksa yalniz butcenin degistigi bir gunde cikis uyarmazdi.
      */
     suspend fun hasChangesSince(since: Long?): Boolean = withContext(dispatcher) {
         val from = since ?: 1L
@@ -185,7 +260,11 @@ class SyncLocalSource(
             database.goalQueries.selectGoalsChangedSince(from).executeAsList().isNotEmpty() ||
             database.goalAssetQueries.selectGoalAssetsChangedSince(from).executeAsList().isNotEmpty() ||
             database.snapshotQueries.selectSnapshotsChangedSince(from).executeAsList().isNotEmpty() ||
-            database.activityQueries.selectActivityChangedSince(from).executeAsList().isNotEmpty()
+            database.activityQueries.selectActivityChangedSince(from).executeAsList().isNotEmpty() ||
+            database.planItemQueries.selectPlanItemsChangedSince(from).executeAsList().isNotEmpty() ||
+            database.incomeQueries.selectIncomeChangedSince(from).executeAsList().isNotEmpty() ||
+            database.expenseQueries.selectExpensesChangedSince(from).executeAsList().isNotEmpty() ||
+            database.expenseQueries.selectBudgetsChangedSince(from).executeAsList().isNotEmpty()
     }
 
     /**
@@ -194,6 +273,9 @@ class SyncLocalSource(
      * yeniden verir, yani ekleme kadar duzenleme ve silme de yakalanir.
      *
      * POLL YOK: bu tamamen olay-guduml u - yazma olmadan hicbir sey emit etmez.
+     *
+     * Plan tablolari da dinlenir: dinlenmeseler yalniz plan degisen bir yazma
+     * push'u hic tetiklemez, bir sonraki baska yazmaya kadar beklerdi.
      */
     fun localChanges(): Flow<Unit> = combine(
         database.transactionQueries.countTransactions().asFlow().mapToOne(dispatcher),
@@ -203,6 +285,10 @@ class SyncLocalSource(
         database.portfolioQueries.countMembers().asFlow().mapToOne(dispatcher),
         database.snapshotQueries.countSnapshots().asFlow().mapToOne(dispatcher),
         database.activityQueries.countActivity().asFlow().mapToOne(dispatcher),
+        database.planItemQueries.countPlanItems().asFlow().mapToOne(dispatcher),
+        database.incomeQueries.countIncome().asFlow().mapToOne(dispatcher),
+        database.expenseQueries.countExpenses().asFlow().mapToOne(dispatcher),
+        database.expenseQueries.countBudgets().asFlow().mapToOne(dispatcher),
     ) { _ -> }
 
     private inline fun <reified T> MutableList<TableBatch>.batch(table: String, rows: List<T>) {

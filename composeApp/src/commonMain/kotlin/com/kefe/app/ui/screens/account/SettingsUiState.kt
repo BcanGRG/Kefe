@@ -245,6 +245,10 @@ fun deleteRowLabel(mode: CloudMode?): String =
  * girilince kayitlar geri gelir. NEYDI: iki durumda da ayni "Tüm verileri sil"
  * vardi ve hesapli cihazda silinenler bir sonraki pull'la ~1,5 sn icinde geri
  * iniyordu - kullanici silmenin calismadigini saniyordu.
+ *
+ * "Geri gelir" plan, gelir, gider ve butce icin de dogru: onlar da hesapla
+ * esitleniyor. Esitlenmedikleri gunlerde bu cumle onlar icin yanlisti (bkz.
+ * ILERLEME §42, Bilinen bedeller).
  */
 fun deleteDialog(mode: CloudMode?, partnerName: String?): DialogCopy =
     if (resetsAccount(mode)) {

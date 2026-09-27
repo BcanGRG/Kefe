@@ -62,5 +62,14 @@ UPDATE plan_items
 SET deletedAt = :deletedAt, updatedAt = :deletedAt
 WHERE id = :id AND deletedAt IS NULL;
 
+-- Hesaba baglanirken hesabin MEZAR TASINA karsi korunan cihaz satiri yeniden
+-- damgalanir: yoksa push'ta sunucunun LWW korumasi (daha yeni damgali mezar
+-- tasi) onu reddeder ve sonraki pull satiri yine silerdi (bkz.
+-- SyncLocalSink.applyPlanItems).
+touchPlanItem:
+UPDATE plan_items
+SET updatedAt = :updatedAt
+WHERE id = :id;
+
 deleteAllPlanItems:
 DELETE FROM plan_items;
