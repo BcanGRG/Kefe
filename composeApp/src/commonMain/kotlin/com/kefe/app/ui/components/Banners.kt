@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,8 +32,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -413,15 +418,55 @@ fun KefeSyncChip(
         Spacer(Modifier.width(SyncChipGap))
         Text(
             text = mode.shortLabel(),
-            style = KefeTheme.type.micro.copy(
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-            ),
+            style = syncChipTextStyle(),
             color = colors.onSurfaceMuted,
             maxLines = 1,
         )
     }
 }
+
+/**
+ * Cipin [this] moddan KULLANICI BIR SEY YAPMADAN gecebilecegi etiketler (kendi
+ * etiketi dahil). Bagli cihaz Eşitleniyor / Eşitlendi / Eşitlenemiyor arasinda
+ * kendiliginden gezer; sunucu oturumu reddederse "Oturum kapandı" da kendiliginden
+ * gelir. Hesapsiz ve yarim baglanti modlari ancak kullanici bir sey yapinca degisir.
+ */
+fun CloudMode.unattendedLabels(): List<String> = when (this) {
+    CloudMode.Local, is CloudMode.LinkPending -> listOf(shortLabel())
+    // Kisa etiket e-postaya bakmaz; kardes modlar bos e-postayla kurulur.
+    is CloudMode.Cloud, is CloudMode.SessionLost ->
+        CloudStatus.entries.map { CloudMode.Cloud(email = "", status = it).shortLabel() } +
+            CloudMode.SessionLost(email = "").shortLabel()
+}
+
+/**
+ * [KefeSyncChip]'in, [mode]'un kendiliginden gecebilecegi EN GENIS etiketle
+ * (bkz. [unattendedLabels]) kaplayacagi genislik. Yanindakiler cipin yerini buna
+ * gore ayirirsa etiket kendiliginden degisince (baglanti koptu, acilis esitlemesi
+ * bitti) yerlesim oynamaz. Olculer cipin kendisiyle ayni sabitlerden ve ayni
+ * yazi stilinden gelir; piksel piksel toplanir ki cipin olculen boyuyla ortussun.
+ */
+@Composable
+fun rememberSyncChipWidth(mode: CloudMode): Dp {
+    val measurer = rememberTextMeasurer()
+    val style = syncChipTextStyle()
+    val density = LocalDensity.current
+    val labels = mode.unattendedLabels()
+    return remember(labels, style, density, measurer) {
+        with(density) {
+            val widestText = labels.maxOf { label ->
+                measurer.measure(label, style, maxLines = 1, softWrap = false).size.width
+            }
+            val chrome = Space.x10.roundToPx() * 2 + CloudMarkIconSize.roundToPx() + SyncChipGap.roundToPx()
+            (widestText + chrome).toDp()
+        }
+    }
+}
+
+/** Cip yazisi - cip ve genislik olcumu AYNI stili kullansin diye tek yerde. */
+@Composable
+private fun syncChipTextStyle(): TextStyle =
+    KefeTheme.type.micro.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
 
 /** Esitleme cipi olculeri - handoff: 7px nokta, 5px bosluk. */
 private val SyncDotSize = 7.dp

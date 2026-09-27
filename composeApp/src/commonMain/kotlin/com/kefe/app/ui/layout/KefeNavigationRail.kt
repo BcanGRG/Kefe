@@ -9,17 +9,21 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -75,6 +79,17 @@ data class KefeNavItem(
  * Orta aksiyon sekme DEGILDIR: [selectedIndex] degerini degistirmez, secili
  * duruma girmez. Tasarimda Varliklar ile Hedefler arasinda durur -
  * [addAfterIndex] bunu tasir.
+ *
+ * Ayarlar tablette SEKME DEGILDIR: alt kumenin basindaki dislidir
+ * ([onOpenSettings]) ve itilen bir ekran acar; acikken disli secili cizilir
+ * ([settingsSelected]), sekmelerin hicbiri secili olmaz. NEDEN: dort sekmenin
+ * sonuncusu artik Plan.
+ *
+ * Pencere icerikten kisaysa ray KAYAR - alt kume dahil. NEDEN: Medium her
+ * 600..1239dp genisligi kapsar, yani her YATAY TELEFON (360-430dp boy) rayi
+ * alir. Disliyle ray ~590dp ister; kaymasaydi disli ve hesap durumu ekranin
+ * altinda kalir, Ayarlar'a baska yoldan ulasilamazdi (tablet Ozet'inde cip ve
+ * disli yok). Yer varken alt kume yine en altta durur.
  */
 @Composable
 fun KefeNavigationRail(
@@ -87,10 +102,13 @@ fun KefeNavigationRail(
     modifier: Modifier = Modifier,
     addAfterIndex: Int = 1,
     onStatusClick: () -> Unit = {},
+    onOpenSettings: (() -> Unit)? = null,
+    settingsSelected: Boolean = false,
 ) {
     val c = KefeTheme.colors
 
-    Column(
+    // Zemin ve sag kenar cizgisi DIS kutuda: ray kaysa da hep tam boyu doldururlar.
+    BoxWithConstraints(
         modifier = modifier
             .width(Sizes.railWidth)
             .fillMaxHeight()
@@ -102,90 +120,121 @@ fun KefeNavigationRail(
                     topLeft = Offset(size.width - stroke, 0f),
                     size = Size(stroke, size.height),
                 )
-            }
-            .padding(top = Space.x20, bottom = Space.x16),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            },
     ) {
-        Box(
-            modifier = Modifier
-                .size(RailBrandBox)
-                .clip(RoundedCornerShape(RailBrandRadius))
-                .background(c.accentMuted),
-            contentAlignment = Alignment.Center,
-        ) {
-            KefeIcon(
-                icon = KefeIcons.Balance,
-                contentDescription = null,
-                size = RailBrandIcon,
-                tint = c.accent,
-            )
-        }
-
         Column(
             modifier = Modifier
-                .padding(top = Space.x28)
                 .fillMaxWidth()
-                .padding(horizontal = Space.x10),
-            verticalArrangement = Arrangement.spacedBy(RailTabGap),
+                .verticalScroll(rememberScrollState())
+                // Yer varken alt kume YINE en altta durur: kolon en az ekran boyu,
+                // SpaceBetween ust ve alt grubu iki uca iter. Yer yoksa (yatay telefon)
+                // ray kayar ve disli/durum/avatarlar kaydirilarak her zaman erisilir.
+                // Kayan kolonda agirlik (Spacer.weight) olamaz; bu yuzden SpaceBetween.
+                .heightIn(min = maxHeight)
+                .padding(top = Space.x20, bottom = Space.x16),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            items.forEachIndexed { index, item ->
-                RailTab(
-                    item = item,
-                    selected = index == selectedIndex,
-                    onClick = { onSelect(index) },
-                )
-                if (index == addAfterIndex) {
-                    // Tasarimda butonun kendi 6px dis boslugu var; kolonun 6px
-                    // araligiyla toplanip 12px'e cikar.
-                    Box(Modifier.padding(vertical = RailAddMargin)) {
-                        RailAddAction(onClick = onAdd)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(RailBrandBox)
+                        .clip(RoundedCornerShape(RailBrandRadius))
+                        .background(c.accentMuted),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    KefeIcon(
+                        icon = KefeIcons.Balance,
+                        contentDescription = null,
+                        size = RailBrandIcon,
+                        tint = c.accent,
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .padding(top = Space.x28)
+                        .fillMaxWidth()
+                        .padding(horizontal = Space.x10),
+                    verticalArrangement = Arrangement.spacedBy(RailTabGap),
+                ) {
+                    items.forEachIndexed { index, item ->
+                        RailTab(
+                            item = item,
+                            selected = index == selectedIndex,
+                            onClick = { onSelect(index) },
+                        )
+                        if (index == addAfterIndex) {
+                            // Tasarimda butonun kendi 6px dis boslugu var; kolonun 6px
+                            // araligiyla toplanip 12px'e cikar.
+                            Box(Modifier.padding(vertical = RailAddMargin)) {
+                                RailAddAction(onClick = onAdd)
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        Spacer(Modifier.weight(1f))
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Space.x10),
-        ) {
-            // Oturum henuz okunmadiysa bos: "Bu cihazda" deyip bir kare sonra
-            // "Eşitlendi"ye atlamasin.
-            if (cloudMode != null) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(RailStatusRadius))
-                        .clickable(
-                            indication = null,
-                            interactionSource = null,
+            Column(
+                // Iki grup ust uste geldiginde (yatay telefon) de arada bosluk kalsin.
+                modifier = Modifier.fillMaxWidth().padding(top = Space.x16),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Space.x10),
+            ) {
+                // Ayarlar'in tabletteki kapisi: sekmeyle ayni 60dp gorunum, bulut
+                // durumunun ustunde. Ekran okuyucuya SEKME degil dugme: sekmelerin
+                // secimini degistirmez, geri oklu bir ekran iter.
+                if (onOpenSettings != null) {
+                    Box(Modifier.fillMaxWidth().padding(horizontal = Space.x10)) {
+                        RailTab(
+                            item = KefeNavItem("Ayarlar", KefeIcons.Settings),
+                            selected = settingsSelected,
+                            onClick = onOpenSettings,
                             role = Role.Button,
-                            onClick = onStatusClick,
                         )
-                        .padding(horizontal = Space.x4, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    KefeCloudMark(cloudMode)
-                    Text(
-                        text = cloudMode.shortLabel(),
-                        style = KefeTheme.type.nano.copy(fontWeight = FontWeight.SemiBold),
-                        color = c.onSurfaceMuted,
-                        maxLines = 1,
-                    )
+                    }
                 }
-            }
 
-            // Rayda avatarlar yan yana degil, ALT ALTA bindirilir.
-            Column(verticalArrangement = Arrangement.spacedBy(-RailAvatarOverlap)) {
-                members.forEach { (initials, index) ->
-                    RailAvatar(
-                        initials = initials,
-                        index = index,
-                        size = RailAvatarSize,
-                        fontSize = 11,
-                        ringColor = c.surfaceElevated,
-                    )
+                // Oturum henuz okunmadiysa bos: "Bu cihazda" deyip bir kare sonra
+                // "Eşitlendi"ye atlamasin.
+                if (cloudMode != null) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(RailStatusRadius))
+                            .clickable(
+                                indication = null,
+                                interactionSource = null,
+                                role = Role.Button,
+                                onClick = onStatusClick,
+                            )
+                            .padding(horizontal = Space.x4, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        KefeCloudMark(cloudMode)
+                        Text(
+                            text = cloudMode.shortLabel(),
+                            style = KefeTheme.type.nano.copy(fontWeight = FontWeight.SemiBold),
+                            color = c.onSurfaceMuted,
+                            maxLines = 1,
+                        )
+                    }
+                }
+
+                // Rayda avatarlar yan yana degil, ALT ALTA bindirilir.
+                Column(verticalArrangement = Arrangement.spacedBy(-RailAvatarOverlap)) {
+                    members.forEach { (initials, index) ->
+                        RailAvatar(
+                            initials = initials,
+                            index = index,
+                            size = RailAvatarSize,
+                            fontSize = 11,
+                            ringColor = c.surfaceElevated,
+                        )
+                    }
                 }
             }
         }
@@ -199,6 +248,8 @@ private fun RailTab(
     item: KefeNavItem,
     selected: Boolean,
     onClick: () -> Unit,
+    /** Sekmeler Tab; ayni gorunumdeki Ayarlar dislisi Button (bkz. alt kume). */
+    role: Role = Role.Tab,
 ) {
     val c = KefeTheme.colors
     val interaction = remember { MutableInteractionSource() }
@@ -221,7 +272,7 @@ private fun RailTab(
             .clickable(
                 interactionSource = interaction,
                 indication = null,
-                role = Role.Tab,
+                role = role,
                 onClick = onClick,
             ),
         horizontalAlignment = Alignment.CenterHorizontally,

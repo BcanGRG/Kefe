@@ -51,7 +51,7 @@ import com.kefe.app.ui.theme.tabular
  *
  * Rayin genisletilmis hali degildir; farkli bir yerlesimdir: marka kutusu ad ve
  * portfoy adiyla birlikte gelir, "Ekle" ortadan cikip en uste TAM GENISLIKTE bir
- * butona donusur, sekmeler ikon+etiket satirlarina iner ve ALTI ust duzey hedef
+ * butona donusur, sekmeler ikon+etiket satirlarina iner ve YEDI ust duzey hedef
  * birden gorunur (rayda dort tane vardi). En altta uyeler ve durum kutusu.
  *
  * Durum kutusu IKI SATIRDIR ve ikisi ayri seyler soyler: ust satir HESAP modu

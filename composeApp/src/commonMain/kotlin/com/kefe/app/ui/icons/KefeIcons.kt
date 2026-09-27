@@ -14,8 +14,10 @@ object KefeIcons {
     val Wallet: ImageVector get() = KefeIconsCore.Wallet
     val Target: ImageVector get() = KefeIconsCore.Target
     val ListMenu: ImageVector get() = KefeIconsCore.ListMenu
+    val Settings: ImageVector get() = KefeIconsCore.Settings
     val Plus: ImageVector get() = KefeIconsCore.Plus
     val ChevronRight: ImageVector get() = KefeIconsCore.ChevronRight
+    val ChevronLeft: ImageVector get() = KefeIconsCore.ChevronLeft
     val ChevronDown: ImageVector get() = KefeIconsCore.ChevronDown
     val ChevronUp: ImageVector get() = KefeIconsCore.ChevronUp
     val ArrowBack: ImageVector get() = KefeIconsCore.ArrowBack
@@ -41,6 +43,9 @@ object KefeIcons {
     val Clock: ImageVector get() = KefeIconsCore.Clock
     val Info: ImageVector get() = KefeIconsCore.Info
     val Calendar: ImageVector get() = KefeIconsCore.Calendar
+    val Cart: ImageVector get() = KefeIconsCore.Cart
+    val HalfCircle: ImageVector get() = KefeIconsCore.HalfCircle
+    val Receipt: ImageVector get() = KefeIconsCore.Receipt
     val Lock: ImageVector get() = KefeIconsCore.Lock
     val Fingerprint: ImageVector get() = KefeIconsCore.Fingerprint
     val ArrowUpRight: ImageVector get() = KefeIconsCore.ArrowUpRight

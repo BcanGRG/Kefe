@@ -62,6 +62,26 @@ internal object KefeIconsCore {
             dot(4f, 17f); moveTo(8f, 17f); lineTo(20f, 17f)
         }.also { _listMenu = it }
 
+    /**
+     * Disli. Ayarlar alt bardan cikti (yerini Plan aldi); Ozet'in ust cubugunda,
+     * raydaki alt kumede ve yan menude bu ikonla acilir.
+     */
+    private var _settings: ImageVector? = null
+    val Settings: ImageVector
+        get() = _settings ?: kefeIcon("KefeSettings") {
+            circle(12f, 12f, 3f)
+            circle(12f, 12f, 7f)
+            // sekiz dis: r7'den r9.5'e
+            moveTo(12f, 2.5f); lineTo(12f, 5f)
+            moveTo(12f, 19f); lineTo(12f, 21.5f)
+            moveTo(2.5f, 12f); lineTo(5f, 12f)
+            moveTo(19f, 12f); lineTo(21.5f, 12f)
+            moveTo(5.3f, 5.3f); lineTo(7.05f, 7.05f)
+            moveTo(16.95f, 16.95f); lineTo(18.7f, 18.7f)
+            moveTo(5.3f, 18.7f); lineTo(7.05f, 16.95f)
+            moveTo(16.95f, 7.05f); lineTo(18.7f, 5.3f)
+        }.also { _settings = it }
+
     private var _plus: ImageVector? = null
     val Plus: ImageVector
         get() = _plus ?: kefeIcon("KefePlus") {
@@ -74,6 +94,13 @@ internal object KefeIconsCore {
         get() = _chevronRight ?: kefeIcon("KefeChevronRight") {
             moveTo(9f, 5f); lineTo(16f, 12f); lineTo(9f, 19f)
         }.also { _chevronRight = it }
+
+    /** Plan sekmesindeki ay gecisinin "onceki ay" oku; ChevronRight'in aynasi. */
+    private var _chevronLeft: ImageVector? = null
+    val ChevronLeft: ImageVector
+        get() = _chevronLeft ?: kefeIcon("KefeChevronLeft") {
+            moveTo(15f, 5f); lineTo(8f, 12f); lineTo(15f, 19f)
+        }.also { _chevronLeft = it }
 
     private var _chevronDown: ImageVector? = null
     val ChevronDown: ImageVector
@@ -295,6 +322,41 @@ internal object KefeIconsCore {
             moveTo(8f, 3f); lineTo(8f, 7.5f)
             moveTo(16f, 3f); lineTo(16f, 7.5f)
         }.also { _calendar = it }
+
+    /** Sepet - plan satirindaki "Al": o kalem icin ekleme sayfasini acar. */
+    private var _cart: ImageVector? = null
+    val Cart: ImageVector
+        get() = _cart ?: kefeIcon("KefeCart") {
+            moveTo(2.5f, 4f); lineTo(5.2f, 4f); lineTo(7.4f, 15f); lineTo(18f, 15f)
+            lineTo(20.5f, 7.5f); lineTo(6f, 7.5f)
+            circle(9f, 19.5f, 1.3f)
+            circle(17f, 19.5f, 1.3f)
+        }.also { _cart = it }
+
+    /**
+     * Yarim dolu daire - plan kaleminin "Kısmen" durumu. Sol yari tarali: rozet
+     * rengi tek sinyal kalmasin, bos (Bekliyor) ve tam (Tamam) ikonlardan sekliyle ayrilsin.
+     */
+    private var _halfCircle: ImageVector? = null
+    val HalfCircle: ImageVector
+        get() = _halfCircle ?: kefeIcon("KefeHalfCircle") {
+            circle(12f, 12f, 8f)
+            moveTo(12f, 4f); lineTo(12f, 20f)
+            moveTo(5.2f, 9f); lineTo(12f, 9f)
+            moveTo(4.8f, 12f); lineTo(12f, 12f)
+            moveTo(5.2f, 15f); lineTo(12f, 15f)
+        }.also { _halfCircle = it }
+
+    /** Fis - Plan'daki "Son girişler" satiri: elle girilen tek bir harcama. */
+    private var _receipt: ImageVector? = null
+    val Receipt: ImageVector
+        get() = _receipt ?: kefeIcon("KefeReceipt") {
+            moveTo(6f, 3f); lineTo(18f, 3f); lineTo(18f, 21f); lineTo(15.6f, 19.5f)
+            lineTo(13.2f, 21f); lineTo(10.8f, 19.5f); lineTo(8.4f, 21f); lineTo(6f, 19.5f); close()
+            moveTo(9f, 8f); lineTo(15f, 8f)
+            moveTo(9f, 12f); lineTo(15f, 12f)
+            moveTo(9f, 16f); lineTo(12.5f, 16f)
+        }.also { _receipt = it }
 
     private var _lock: ImageVector? = null
     val Lock: ImageVector

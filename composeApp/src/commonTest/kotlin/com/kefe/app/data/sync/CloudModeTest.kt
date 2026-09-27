@@ -9,6 +9,7 @@ import com.kefe.app.ui.components.accountBannerCopy
 import com.kefe.app.ui.components.longLabel
 import com.kefe.app.ui.components.shortLabel
 import com.kefe.app.ui.components.tone
+import com.kefe.app.ui.components.unattendedLabels
 import com.kefe.app.ui.screens.account.AccountAction
 import com.kefe.app.ui.screens.account.accountSection
 import com.kefe.app.ui.screens.account.profileSetupAfterSignIn
@@ -165,6 +166,22 @@ class CloudModeTest {
             "Hesaba ulaşılamıyor · kayıtlar bu cihazda bekliyor",
             CloudMode.Cloud("e", CloudStatus.Unreachable).longLabel(),
         )
+    }
+
+    /**
+     * Ozet ust cubugu cipin yerini bu kumenin en genisine gore ayirir: bagli
+     * cihazda etiket kendiliginden degisince avatarlar gidip gelmesin.
+     */
+    @Test
+    fun `cipin kendiliginden gecebilecegi etiketler`() {
+        val linked = setOf("Eşitleniyor", "Eşitlendi", "Eşitlenemiyor", "Oturum kapandı")
+        for (status in CloudStatus.entries) {
+            assertEquals(linked, CloudMode.Cloud("e", status).unattendedLabels().toSet(), "durum $status")
+        }
+        assertEquals(linked, CloudMode.SessionLost("e").unattendedLabels().toSet())
+        // Hesapsiz ve yarim baglanti ancak kullanici bir sey yapinca degisir.
+        assertEquals(listOf("Bu cihazda"), CloudMode.Local.unattendedLabels())
+        assertEquals(listOf("Bağlantı yarım"), CloudMode.LinkPending("e").unattendedLabels())
     }
 
     /** Hesapsiz kullanim ne "eşit" ne "kopuk": notr, esitleme kelimesi yok. */

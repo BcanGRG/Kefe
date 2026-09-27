@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -75,6 +77,7 @@ import com.kefe.app.ui.components.KefeStaleBanner
 import com.kefe.app.ui.components.KefeSyncChip
 import com.kefe.app.ui.components.KefeTwoLineBanner
 import com.kefe.app.ui.components.accountBannerCopy
+import com.kefe.app.ui.components.rememberSyncChipWidth
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
@@ -113,9 +116,11 @@ fun SummaryScreen(
     onOpenAccount: () -> Unit = {},
     onCompleteLink: () -> Unit = {},
     onRelogin: () -> Unit = {},
+    /** Ust cubuktaki disli: telefonda Ayarlar'in kapisi (alt barda yerini Plan aldi). */
+    onOpenSettings: () -> Unit = {},
 ) {
     Column(modifier.fillMaxWidth()) {
-        SummaryTopBar(state, onIntent, onOpenMarket, onOpenAccount)
+        SummaryTopBar(state, onIntent, onOpenMarket, onOpenAccount, onOpenSettings)
 
         // Seritler kaydirma alaninin DISINDA kalir - hesap ve fiyat guveni her
         // zaman gorunur. Hesap seridi ONCE: yarim kalan baglanti kayitlarin
@@ -244,6 +249,7 @@ private fun SummaryTopBar(
     onIntent: (SummaryIntent) -> Unit,
     onOpenMarket: () -> Unit,
     onOpenAccount: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
@@ -261,23 +267,32 @@ private fun SummaryTopBar(
             modifier = Modifier.fillMaxWidth().height(TopBarRowHeight),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
+            // Avatarlar yalniz ad icin yer kaldiginda cizilir: dar telefonda (360dp)
+            // disliyle birlikte ad icin ~28dp kalirdi. Ad kimligin kendisi,
+            // avatarlar Ayarlar > Profiller'de de var. Kural GERCEK artan genisligi
+            // olcer - genis telefonda ya da kisa etiketli modda ("Bu cihazda")
+            // avatarlar kalir. Cipin yeri sabit ayrilir (asagida), karar esitleme
+            // durumuyla degismez.
+            BoxWithConstraints(
                 modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
+                contentAlignment = Alignment.CenterStart,
             ) {
-                Text(
-                    text = state.portfolioName,
-                    style = t.bodyStrong,
-                    color = c.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (state.members.isNotEmpty()) {
-                    Spacer(Modifier.width(Space.x8))
-                    KefeAvatarStack(
-                        members = state.members.mapIndexed { index, m -> m.initials to index },
+                val showAvatars = state.members.isNotEmpty() && maxWidth >= AvatarStackMinGroup
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = state.portfolioName,
+                        style = t.bodyStrong,
+                        color = c.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (showAvatars) {
+                        Spacer(Modifier.width(Space.x8))
+                        KefeAvatarStack(
+                            members = state.members.mapIndexed { index, m -> m.initials to index },
+                        )
+                    }
                 }
             }
 
@@ -288,9 +303,20 @@ private fun SummaryTopBar(
             // kullanici kayitlarinin yalniz bu telefonda oldugunu hicbir yerde
             // goremiyordu. Hesapsiz kullanim bir ariza degil: notr "Bu cihazda".
             // Dokununca Ayarlar'in ilk bolumune, hesaba gidilir.
+            //
+            // Cipin YERI, kendiliginden gecebilecegi en genis etikete gore ayrilir; cip
+            // o yerin saginda kendi boyunda cizilir. NEDEN: avatar kurali cipten artan
+            // genisligi olcer. Yer etiketle degisseydi (Eşitleniyor -> Eşitlendi ->
+            // Eşitlenemiyor) 384-400dp telefonlarda avatarlar baglanti kopunca ya da
+            // acilis esitlemesi bitince kendiliginden gidip gelir, ad kaymasi oynardi.
             state.cloudMode?.let { mode ->
                 Spacer(Modifier.width(Space.x8))
-                KefeSyncChip(mode = mode, onClick = onOpenAccount)
+                Box(
+                    modifier = Modifier.widthIn(min = rememberSyncChipWidth(mode)),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    KefeSyncChip(mode = mode, onClick = onOpenAccount)
+                }
             }
 
             // Bos durumda (ilk kayittan once) gizle ve yenile CIZILMEZ:
@@ -313,6 +339,17 @@ private fun SummaryTopBar(
                     modifier = Modifier.requiredSize(Sizes.touchTarget),
                 )
             }
+
+            // Ayarlar'in telefondaki kapisi: alt barda Plan sekmesi onun yerini aldi. BOS
+            // DURUMDA DA cizilir - giris ve yedekten geri yukleme ilk kayittan ONCE de
+            // erisilebilir kalmali. Son ikon oldugu icin satirin saga tasmasini devralir.
+            Spacer(Modifier.width(if (state.stage == SummaryStage.Empty) Space.x8 else Space.x4))
+            KefeIconButton(
+                icon = KefeIcons.Settings,
+                contentDescription = "Ayarlar",
+                onClick = onOpenSettings,
+                modifier = Modifier.requiredSize(Sizes.touchTarget),
+            )
         }
 
         state.priceLine()?.let { line ->
@@ -1451,6 +1488,12 @@ private fun Modifier.cardOutline(shape: Shape = KefeShapes.card): Modifier =
 
 /** Ust bar satiri: ikon butonlari tasar, satir esitleme cipiyle ayni yukseklikte. */
 private val TopBarRowHeight: Dp = 32.dp
+
+/**
+ * Ad + avatar grubunun avatar cizmek icin en az genisligi: avatar yigini
+ * (2 x 24dp - 8dp bindirme = 40dp) ve 8dp araliktan sonra ada ~72dp kalir.
+ */
+private val AvatarStackMinGroup: Dp = 120.dp
 
 /** Hero: etiket -> rakam 6dp, blogun alt dolgusu 18dp. */
 private val HeroLabelGap: Dp = 6.dp

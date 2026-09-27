@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -142,6 +143,11 @@ fun KefeTextField(
      * "İleri" bir sonraki alana gecer, "Tamam" klavyeyi kapatir.
      */
     keyboardActions: KeyboardActions? = null,
+    /**
+     * Cizim donusumu - tutar alanlarinda binlik ayrac ([ThousandsSeparatorTransformation]).
+     * Deger HAM kalir. Varsayilan yok: mevcut metin alanlari degismez.
+     */
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     val colors = KefeTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
@@ -199,6 +205,7 @@ fun KefeTextField(
                     keyboardOptions = keyboardOptions,
                     keyboardActions = actions,
                     interactionSource = interactionSource,
+                    visualTransformation = visualTransformation,
                     decorationBox = { innerTextField ->
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (value.isEmpty() && placeholder != null) {
@@ -253,6 +260,12 @@ fun KefeAmountField(
      */
     keyboardOptions: KeyboardOptions = AmountKeyboard,
     keyboardActions: KeyboardActions? = null,
+    /**
+     * Cizim donusumu - ornegin binlik ayrac ([ThousandsSeparatorTransformation]).
+     * Deger HAM kalir; imlec ortadaki rakamda da yerinde durur. Varsayilan yok:
+     * mevcut miktar alanlari degismez.
+     */
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     val colors = KefeTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
@@ -297,6 +310,7 @@ fun KefeAmountField(
                 keyboardOptions = keyboardOptions,
                 keyboardActions = actions,
                 interactionSource = interactionSource,
+                visualTransformation = visualTransformation,
             )
 
             Spacer(Modifier.width(Space.x8))

@@ -36,6 +36,11 @@ fun SummaryScreenAdaptive(
     onCompleteLink: () -> Unit = {},
     /** "Yeniden giriş yap": oturumu dusen hesaba giris. */
     onRelogin: () -> Unit = {},
+    /**
+     * Ayarlar disli - YALNIZ telefonda: tablette raydaki disli, masaustunde yan
+     * menudeki satir ayni isi gorur.
+     */
+    onOpenSettings: () -> Unit = {},
 ) {
     when (LocalWindowSize.current) {
         WindowSize.Compact -> SummaryScreen(
@@ -50,6 +55,7 @@ fun SummaryScreenAdaptive(
             onOpenAccount = onOpenAccount,
             onCompleteLink = onCompleteLink,
             onRelogin = onRelogin,
+            onOpenSettings = onOpenSettings,
         )
 
         WindowSize.Medium -> SummaryScreenTablet(

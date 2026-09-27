@@ -119,5 +119,6 @@ class RootRouteTest {
         assertFalse(SettingsKey.isAccountFlow())
         assertFalse(AssetsKey.isAccountFlow())
         assertFalse(GoalsKey.isAccountFlow())
+        assertFalse(PlanKey.isAccountFlow())
     }
 }

@@ -63,6 +63,8 @@ fun SettingsScreen(
     /** Hesap bolumundeki "Hesaba bağla" - giris ekranini baglama amaciyla acar. */
     onLink: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Ust cubuktaki geri oku; null ise ok cizilmez (Ayarlar kokken). */
+    onBack: (() -> Unit)? = null,
     /**
      * Dusen oturumda "Yeniden giriş yap" - giris ekranini bagli hesabin
      * e-postasiyla acar. Baglamadan AYRI: basligi ve notu farkli (bkz. signInCopy).
@@ -82,8 +84,11 @@ fun SettingsScreen(
     Box(modifier.fillMaxSize()) {
 
     Column(Modifier.fillMaxSize()) {
-        // Ayarlar bir ALT NAVIGASYON sekmesi: geri gidilecek bir yer yok.
-        AccountTopBar(title = "Ayarlar", onBack = null)
+        // Telefonda ve tablette Ayarlar ITILIR (Ozet'teki disli / raydaki disli),
+        // geri oku acildigi yere doner. Masaustunde yan menu satiri kok oldugu
+        // icin null: geri gidilecek bir yer yok. NEYDI: Ayarlar alt barin bir
+        // sekmesiydi; yerini Plan aldi.
+        AccountTopBar(title = "Ayarlar", onBack = onBack)
 
         Column(
             Modifier
