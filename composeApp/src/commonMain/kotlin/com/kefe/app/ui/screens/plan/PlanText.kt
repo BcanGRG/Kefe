@@ -4,8 +4,10 @@ import com.kefe.app.domain.model.AssetClass
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.PlanItemProgress
 import com.kefe.app.domain.model.PlanItemStatus
+import com.kefe.app.domain.model.PlanStreak
 import com.kefe.app.domain.model.PlanTargetMode
 import com.kefe.app.domain.model.QuantityUnit
+import com.kefe.app.domain.model.StreakCell
 import com.kefe.app.domain.model.YearMonth
 import com.kefe.app.domain.model.daysInMonth
 import com.kefe.app.domain.model.monthName
@@ -142,6 +144,44 @@ internal fun copyButtonLabel(source: YearMonth, target: YearMonth): String =
 /** Bos plan kartinin dugmesi: "Geçen ayı kopyala (Eylül)" | "Ağustos planını kopyala". */
 internal fun emptyCopyLabel(source: YearMonth, target: YearMonth): String =
     if (source == target.previous()) "Geçen ayı kopyala (${source.monthName()})" else "${source.monthName()} planını kopyala"
+
+// --- Seri --------------------------------------------------------------------
+
+/**
+ * Seri kartinin basligi. Seri 1 iken hangi ayin sayildigi soylenir: bu ay henuz
+ * %80'in altindaysa seri GECEN aydan sayilir (ici bulunulan ay seriyi bozmaz, bkz.
+ * planStreak) - "Bu ay düzenli" o zaman yanlis olurdu. "1 ay üst üste" kotu okunur.
+ */
+internal fun streakHeadline(streak: PlanStreak): String = when {
+    streak.current >= 2 -> "${streak.current} ay üst üste düzenli"
+    streak.current == 1 -> if (streak.grid.lastOrNull()?.second.isRegular()) "Bu ay düzenli" else "Geçen ay düzenli"
+    else -> "Bu ay planın %80'i yapılınca seri başlar."
+}
+
+/** "En uzun 6 · Son 12 ayda 9/12". */
+internal fun streakDetail(streak: PlanStreak): String {
+    val window = streak.grid.size
+    return "En uzun ${streak.longest} · Son $window ayda ${streak.regularInWindow}/$window"
+}
+
+/** Hucrenin ekran okuyucu metni; aciklamadaki kelimeyle ayni ("sürüyor" - "Sürüyor"). */
+internal fun StreakCell.spoken(): String = when (this) {
+    StreakCell.Full -> "tamamı yapıldı"
+    StreakCell.Partial -> "düzenli (%80 ve üstü)"
+    StreakCell.Missed -> "kaçtı"
+    StreakCell.NoPlan -> "plan yok"
+    StreakCell.BeforeStart -> "plan başlamadan önce"
+    StreakCell.InProgress -> "sürüyor"
+}
+
+/**
+ * Plan kartindaki "Seri 4 ay": yalniz bu ayin sayfasinda ve seri >= 2 iken. Seri
+ * bugune gore sayilir; baska bir ayin kartinda o ayin serisi gibi okunurdu.
+ */
+internal fun streakBadgeText(streak: PlanStreak?, relation: MonthRelation): String? =
+    streak?.current?.takeIf { relation == MonthRelation.Current && it >= 2 }?.let { "Seri $it ay" }
+
+private fun StreakCell?.isRegular(): Boolean = this == StreakCell.Full || this == StreakCell.Partial
 
 // --- Para akisi --------------------------------------------------------------
 

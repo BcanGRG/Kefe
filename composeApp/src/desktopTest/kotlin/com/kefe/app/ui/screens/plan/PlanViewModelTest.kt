@@ -823,6 +823,44 @@ class PlanViewModelTest {
         assertEquals("₺85.000", table.first { it.label == "Gelir" }.planned)
         assertNull(november.content.flow?.savingsLine)
     }
+
+    // --- Seri ve rozet -------------------------------------------------------
+
+    @Test
+    fun `hic plan yoksa seri karti yok`() = runTest {
+        val env = Env()
+        env.buyGram("tx_ekim", KefeDate(2026, 10, 5))
+        val vm = env.vm()
+        // Plan disi alim gorundu: defter yuklendi, yine de plan yok.
+        val unplanned = vm.awaitState { it.content.extras != null }
+        assertNull(unplanned.content.streak)
+
+        env.planItem(October, "gold_gram", 1.0)
+        val planned = vm.awaitState { it.content.streak != null }
+        assertEquals("Bu ay düzenli", planned.content.streak?.headline)
+        // Seri 1: plan kartinda "Seri N ay" yalniz 2'den itibaren.
+        assertNull(planned.content.investment?.streakText)
+    }
+
+    @Test
+    fun `rozet bu ayin acik kalemlerini sayar, secili ayi degil`() = runTest {
+        val env = Env()
+        env.buyGram("tx_ekim", KefeDate(2026, 10, 5))
+        env.planItem(October, "gold_gram", 1.0) // tamam
+        env.planItem(October, "silver_gram", 5.0) // acik
+        env.planItem(September, "gold_gram", 10.0)
+        env.planItem(September, "silver_gram", 10.0)
+        env.planItem(September, "fund_afa", 1_000.0, mode = PlanTargetMode.Amount)
+        val vm = env.vm()
+        val october = vm.awaitState { it.content.investment?.rows?.size == 2 }
+        assertEquals(1, october.content.currentMonthOpenCount)
+
+        // Eylul'un uc acik kalemi rozete girmez.
+        vm.onIntent(PlanIntent.PreviousMonth)
+        val september = vm.awaitState { it.content.header.title == "Eylül 2026" }
+        assertEquals(3, september.content.investment?.rows?.size)
+        assertEquals(1, september.content.currentMonthOpenCount)
+    }
 }
 
 /** Acik harcama editoru; baska sheet ya da hic sheet yoksa null. */

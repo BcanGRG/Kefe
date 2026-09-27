@@ -17,6 +17,7 @@ import com.kefe.app.domain.model.PlanAssetOption
 import com.kefe.app.domain.model.PlanItem
 import com.kefe.app.domain.model.PlanItemProgress
 import com.kefe.app.domain.model.PlanItemStatus
+import com.kefe.app.domain.model.PlanStreak
 import com.kefe.app.domain.model.PlanTargetMode
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.QuantityUnit
@@ -36,6 +37,7 @@ import com.kefe.app.domain.model.otherGoalOf
 import com.kefe.app.domain.model.parseAssetKey
 import com.kefe.app.domain.model.planAssetOptions
 import com.kefe.app.domain.model.planCopyDraft
+import com.kefe.app.domain.model.planStreak
 import com.kefe.app.domain.model.priceKeyOfAsset
 import com.kefe.app.domain.model.requiredMonthly
 import com.kefe.app.domain.model.sellPrice
@@ -149,16 +151,41 @@ internal fun planContent(inputs: PlanInputs): PlanContent {
     // yeniden acmak ayni eksik icin "Taşı"yi tekrar sunardi (planCopyDraft hedefte
     // olan satirda da eksigi tutar) ve toItems onu IKINCI kez eklerdi (14 -> 18).
     val copy = copyDraftOf(inputs, emptySet())?.takeIf { it.hasNewRows }
+    // Seri gosterilen aydan bagimsiz, bugune gore sayilir (ilk plandan bu aya).
+    val streak = planStreak(inputs.items, inputs.transactions, inputs.positions, inputs.today)
+    // Rozet BU AYIN acik kalemlerini sayar; bu ay gosteriliyorsa ayni ilerleme kullanilir.
+    val currentProgress = if (month == inputs.current) {
+        progress
+    } else {
+        monthPlanProgress(inputs.current, inputs.items, inputs.transactions, inputs.positions, inputs.today)
+    }
     return PlanContent(
         header = planHeader(month, inputs.today, inputs.bounds),
-        investment = investmentCard(inputs, progress, relation, copy),
+        investment = investmentCard(inputs, progress, relation, copy)
+            ?.copy(streakText = streakBadgeText(streak, relation)),
         emptyPlan = if (progress.items.isEmpty()) emptyPlanCard(month, copy) else null,
         extras = extrasCard(progress),
         goalContributions = goalContributionRows(inputs, progress, relation),
         flow = moneyFlowCard(inputs, progress, relation),
         expenses = expensesCard(inputs.book),
+        streak = streak?.let(::streakCard),
+        currentMonthOpenCount = currentProgress.items.count { !it.isDone },
     )
 }
+
+/** "Seri" karti; hucreler eskiden yeniye, son hucre bu ay. */
+internal fun streakCard(streak: PlanStreak): StreakCard = StreakCard(
+    headline = streakHeadline(streak),
+    detail = streakDetail(streak),
+    cells = streak.grid.mapIndexed { index, (month, cell) ->
+        StreakCellUi(
+            label = month.firstDay().monthLabel(),
+            cell = cell,
+            description = "${month.label()}: ${cell.spoken()}",
+            isCurrent = index == streak.grid.lastIndex,
+        )
+    },
+)
 
 // --- Kartlar -----------------------------------------------------------------
 

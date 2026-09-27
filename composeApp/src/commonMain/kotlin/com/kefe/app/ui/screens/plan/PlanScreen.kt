@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,7 +35,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kefe.app.domain.model.PlanItemStatus
+import com.kefe.app.domain.model.StreakCell
 import com.kefe.app.domain.model.color
+import com.kefe.app.ui.charts.KefeStreakGrid
+import com.kefe.app.ui.charts.KefeStreakLegend
+import com.kefe.app.ui.charts.StreakGridCell
+import com.kefe.app.ui.charts.StreakMark
 import com.kefe.app.ui.components.KefeAvatar
 import com.kefe.app.ui.components.KefeBadge
 import com.kefe.app.ui.components.KefeCard
@@ -110,6 +116,7 @@ private fun PlanBody(
         }
         content.flow?.let { MoneyFlowCardView(it, onIntent) }
         content.expenses?.let { ExpensesCardView(it, onIntent) }
+        content.streak?.let { StreakCardView(it) }
     }
 }
 
@@ -195,6 +202,15 @@ private fun InvestmentPlanCard(card: InvestmentCard, onIntent: (PlanIntent) -> U
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Yatırım planı", style = t.bodyStrong, color = c.onSurface)
             Spacer(Modifier.weight(1f))
+            card.streakText?.let { streak ->
+                KefeBadge(
+                    text = streak,
+                    background = c.accentMuted,
+                    contentColor = c.accent,
+                    uppercase = false,
+                )
+                Spacer(Modifier.width(Space.x8))
+            }
             Text(card.scoreText, style = t.h2.tabular(), color = c.onSurface)
         }
         card.score?.let { score ->
@@ -696,6 +712,46 @@ private fun CategoryRow(row: CategoryRowUi) {
         }
     }
 }
+
+// --- Seri ------------------------------------------------------------------------
+
+/**
+ * "Seri": kac ay ust uste duzenli, son 12 ayin izgarasi ve %80 kurali. Kural
+ * yazili durur: "düzenli"nin ne demek oldugu baska hicbir yerde soylenmez.
+ */
+@Composable
+private fun StreakCardView(card: StreakCard) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    val cells = remember(card.cells) { card.cells.map { it.toGridCell() } }
+
+    KefeCard(Modifier.fillMaxWidth()) {
+        Text(card.headline, style = t.bodyStrong, color = c.onSurface)
+        Spacer(Modifier.height(2.dp))
+        Text(card.detail, style = t.caption.tabular(), color = c.onSurfaceMuted)
+        Spacer(Modifier.height(Space.x12))
+        KefeStreakGrid(cells = cells)
+        Spacer(Modifier.height(Space.x12))
+        KefeStreakLegend()
+        Spacer(Modifier.height(Space.x8))
+        Text(card.rule, style = t.micro, color = c.onSurfaceMuted)
+    }
+}
+
+/** Grafik alan tipini bilmez (charts `domain` import etmez); esleme 1:1 burada. */
+private fun StreakCellUi.toGridCell(): StreakGridCell = StreakGridCell(
+    label = label,
+    mark = when (cell) {
+        StreakCell.Full -> StreakMark.Full
+        StreakCell.Partial -> StreakMark.Partial
+        StreakCell.Missed -> StreakMark.Missed
+        StreakCell.NoPlan -> StreakMark.NoPlan
+        StreakCell.BeforeStart -> StreakMark.BeforeStart
+        StreakCell.InProgress -> StreakMark.InProgress
+    },
+    description = description,
+    current = isCurrent,
+)
 
 // --- Yuklenme --------------------------------------------------------------
 

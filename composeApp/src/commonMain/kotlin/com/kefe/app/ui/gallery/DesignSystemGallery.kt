@@ -59,8 +59,12 @@ import com.kefe.app.ui.charts.KefeNetWorthChart
 import com.kefe.app.ui.charts.KefePriceChart
 import com.kefe.app.ui.charts.KefeProjectionChart
 import com.kefe.app.ui.charts.KefeStackedBarChart
+import com.kefe.app.ui.charts.KefeStreakGrid
+import com.kefe.app.ui.charts.KefeStreakLegend
 import com.kefe.app.ui.charts.MonthBar
 import com.kefe.app.ui.charts.Point
+import com.kefe.app.ui.charts.StreakGridCell
+import com.kefe.app.ui.charts.StreakMark
 import com.kefe.app.ui.charts.TradeMarker
 import com.kefe.app.ui.components.KefeAmountField
 import com.kefe.app.ui.components.KefeAvatar
@@ -753,6 +757,11 @@ fun DesignSystemGallery(
                             KefeStackedBarChart(months = contributionMonths)
 
                             KefeHairline()
+                            Caption("Seri: dolu tamamı, yarım %80+, çarpı kaçtı, nokta plan yok, kesikli sürüyor - renkten bağımsız.")
+                            KefeStreakGrid(cells = SampleStreakCells)
+                            KefeStreakLegend()
+
+                            KefeHairline()
                             Caption("Fiyat: alım dolu elmas, satım içi boş elmas - ayrım renkten bağımsız.")
                             KefePriceChart(
                                 points = pricePoints,
@@ -1013,6 +1022,25 @@ private fun TypeSpecimen(
 }
 
 // --- Yardimcilar -------------------------------------------------------------
+
+/**
+ * Seri ornegi: Kasim 2025 - Ekim 2026. Her isaret en az bir kez gorunsun diye
+ * ilk plan Ocak'tan once, Ocak plansiz ve bu ay (Ekim) suruyor.
+ */
+private val SampleStreakCells = listOf(
+    StreakGridCell("Kas", StreakMark.BeforeStart, "Kasım 2025: plan başlamadan önce"),
+    StreakGridCell("Ara", StreakMark.Full, "Aralık 2025: tamamı yapıldı"),
+    StreakGridCell("Oca", StreakMark.NoPlan, "Ocak 2026: plan yok"),
+    StreakGridCell("Şub", StreakMark.Full, "Şubat 2026: tamamı yapıldı"),
+    StreakGridCell("Mar", StreakMark.Partial, "Mart 2026: düzenli (%80 ve üstü)"),
+    StreakGridCell("Nis", StreakMark.Missed, "Nisan 2026: kaçtı"),
+    StreakGridCell("May", StreakMark.Full, "Mayıs 2026: tamamı yapıldı"),
+    StreakGridCell("Haz", StreakMark.Full, "Haziran 2026: tamamı yapıldı"),
+    StreakGridCell("Tem", StreakMark.Partial, "Temmuz 2026: düzenli (%80 ve üstü)"),
+    StreakGridCell("Ağu", StreakMark.Full, "Ağustos 2026: tamamı yapıldı"),
+    StreakGridCell("Eyl", StreakMark.Full, "Eylül 2026: tamamı yapıldı"),
+    StreakGridCell("Eki", StreakMark.InProgress, "Ekim 2026: sürüyor", current = true),
+)
 
 /** Tema jetonlarinin adli listesi - degerler o an aktif paletten okunur. */
 @Composable

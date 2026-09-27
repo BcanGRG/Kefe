@@ -10,6 +10,7 @@ import com.kefe.app.domain.model.PlanItemStatus
 import com.kefe.app.domain.model.PlanTargetMode
 import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.StockKeyPrefix
+import com.kefe.app.domain.model.StreakCell
 import com.kefe.app.domain.model.YearMonth
 import com.kefe.app.domain.model.parseAssetKey
 import com.kefe.app.domain.model.toItems
@@ -45,6 +46,13 @@ data class PlanContent(
     val flow: MoneyFlowCard? = null,
     /** "Giderler": bos ayda da cizilir - harcama ve butcenin giris noktasi. */
     val expenses: ExpensesCard? = null,
+    /** Kac aydir duzenli; hic plan yoksa null (kart gizli). Gosterilen aydan bagimsiz, bugune gore. */
+    val streak: StreakCard? = null,
+    /**
+     * Yan menudeki Plan rozeti: BU AYIN tamamlanmamis kalemleri - secili ayin degil.
+     * Rozet her ekranda gorunur; gecmis bir aya bakmak onu degistirmemeli.
+     */
+    val currentMonthOpenCount: Int = 0,
 )
 
 /**
@@ -74,6 +82,11 @@ data class InvestmentCard(
     val scoreText: String,
     /** 0..1; null -> cubuk cizilmez (gelecek ay). */
     val score: Float?,
+    /**
+     * "Seri 4 ay" - YALNIZ bu ayin sayfasinda ve seri >= 2 iken. Seri bugune gore
+     * sayilir; gecmis ya da gelecek ayin kartinda o ayin serisi gibi okunurdu.
+     */
+    val streakText: String? = null,
     /** "3/5 kalem · ₺70.330 planlandı". */
     val summary: String,
     val rows: List<PlanRowUi>,
@@ -199,6 +212,28 @@ data class ExpenseRowUi(
     /** "14 Eki · market" - gun, kisa ay ve varsa not. */
     val subtitle: String,
     val amount: String,
+)
+
+// --- Seri ----------------------------------------------------------------------
+
+/** "Seri" karti: kac ay ust uste duzenli ve son 12 ayin izgarasi. */
+data class StreakCard(
+    /** "4 ay üst üste düzenli" | "Bu ay düzenli" | "Geçen ay düzenli" | seri 0 metni. */
+    val headline: String,
+    /** "En uzun 6 · Son 12 ayda 9/12". */
+    val detail: String,
+    /** Eskiden yeniye; son hucre bu ay. */
+    val cells: List<StreakCellUi>,
+    val rule: String = "Planın en az %80'i yapılan ay düzenli sayılır.",
+)
+
+data class StreakCellUi(
+    /** "Eki" - kisa ay adi. */
+    val label: String,
+    val cell: StreakCell,
+    /** Ekran okuyucu: "Ekim 2026: sürüyor". */
+    val description: String,
+    val isCurrent: Boolean,
 )
 
 // --- Sheet'ler (ayni anda en fazla bir tane) ------------------------------------

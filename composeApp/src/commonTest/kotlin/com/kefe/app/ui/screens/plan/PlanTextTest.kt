@@ -8,11 +8,13 @@ import com.kefe.app.domain.model.MonthBook
 import com.kefe.app.domain.model.PlanItem
 import com.kefe.app.domain.model.PlanItemProgress
 import com.kefe.app.domain.model.PlanItemStatus
+import com.kefe.app.domain.model.PlanStreak
 import com.kefe.app.domain.model.PlanTargetMode
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.Price
 import com.kefe.app.domain.model.PriceSource
 import com.kefe.app.domain.model.QuantityUnit
+import com.kefe.app.domain.model.StreakCell
 import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.YearMonth
@@ -21,6 +23,8 @@ import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Plan sekmesinin basligi, ay gecisinin sinirlari ve kalem metinleri - saf metin
@@ -332,7 +336,66 @@ class PlanTextTest {
         assertEquals("Toplam ₺25.000", editor.copy(income = null).totalLine())
     }
 
+    // --- Seri ----------------------------------------------------------------
+
+    @Test
+    fun `seri basligi ust uste ay sayisini soyler`() {
+        assertEquals("4 ay üst üste düzenli", streakHeadline(streak(current = 4, thisMonth = StreakCell.InProgress)))
+        assertEquals("2 ay üst üste düzenli", streakHeadline(streak(current = 2, thisMonth = StreakCell.Full)))
+    }
+
+    @Test
+    fun `seri bir - bu ay sayildiysa bu ay, sayilmadiysa gecen ay`() {
+        assertEquals("Bu ay düzenli", streakHeadline(streak(current = 1, thisMonth = StreakCell.Full)))
+        assertEquals("Bu ay düzenli", streakHeadline(streak(current = 1, thisMonth = StreakCell.Partial)))
+        // Bu ay %80'in altinda: seri gecen aydan sayilir, "Bu ay düzenli" yanlis olurdu.
+        assertEquals("Geçen ay düzenli", streakHeadline(streak(current = 1, thisMonth = StreakCell.InProgress)))
+    }
+
+    @Test
+    fun `seri sifir kurali soyler`() {
+        assertEquals(
+            "Bu ay planın %80'i yapılınca seri başlar.",
+            streakHeadline(streak(current = 0, thisMonth = StreakCell.InProgress)),
+        )
+    }
+
+    @Test
+    fun `seri ayrintisi en uzun ve pencere`() {
+        assertEquals("En uzun 6 · Son 12 ayda 9/12", streakDetail(streak(current = 4, thisMonth = StreakCell.InProgress)))
+    }
+
+    @Test
+    fun `seri hucreleri ay etiketi ve okunan cumle`() {
+        val card = streakCard(streak(current = 4, thisMonth = StreakCell.InProgress))
+        assertEquals(12, card.cells.size)
+        val last = card.cells.last()
+        assertEquals("Eki", last.label)
+        assertEquals("Ekim 2026: sürüyor", last.description)
+        assertTrue(last.isCurrent)
+        assertEquals("Kasım 2025: tamamı yapıldı", card.cells.first().description)
+        assertTrue(card.cells.dropLast(1).none { it.isCurrent })
+    }
+
+    @Test
+    fun `plan kartindaki seri yalniz bu ayda ve ikiden itibaren`() {
+        val four = streak(current = 4, thisMonth = StreakCell.InProgress)
+        assertEquals("Seri 4 ay", streakBadgeText(four, MonthRelation.Current))
+        assertNull(streakBadgeText(four, MonthRelation.Past))
+        assertNull(streakBadgeText(four, MonthRelation.Future))
+        assertNull(streakBadgeText(streak(current = 1, thisMonth = StreakCell.Full), MonthRelation.Current))
+        assertNull(streakBadgeText(null, MonthRelation.Current))
+    }
+
     // --- Yardimcilar ---------------------------------------------------------
+
+    /** Son 12 ay: bu ay [thisMonth], oncekiler tamam. Sayilar basliga ve ayrintiya aynen gecer. */
+    private fun streak(current: Int, thisMonth: StreakCell) = PlanStreak(
+        current = current,
+        longest = 6,
+        grid = (11 downTo 0).map { back -> (oct - back) to (if (back == 0) thisMonth else StreakCell.Full) },
+        regularInWindow = 9,
+    )
 
     private fun progress(
         key: String,

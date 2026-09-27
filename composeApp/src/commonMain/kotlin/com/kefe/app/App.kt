@@ -618,6 +618,9 @@ private fun KefeApp(
                             badgeCount = when (destination.key) {
                                 AssetsKey -> summary.positionCount.takeIf { it > 0 }
                                 GoalsKey -> summary.openGoalCount.takeIf { it > 0 }
+                                // Bu ayin tamamlanmamis kalemleri - Plan'da gecmis bir aya
+                                // bakmak rozeti degistirmez.
+                                PlanKey -> planState.content.currentMonthOpenCount.takeIf { it > 0 }
                                 else -> null
                             },
                         )
