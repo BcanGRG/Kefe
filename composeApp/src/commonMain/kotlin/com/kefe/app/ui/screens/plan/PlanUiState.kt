@@ -16,6 +16,7 @@ import com.kefe.app.domain.model.parseAssetKey
 import com.kefe.app.domain.model.toItems
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.parseTrAmountOrNull
+import com.kefe.app.ui.screens.transaction.AddTransactionPrefill
 
 // Bu dosya Compose'a BAGLI DEGIL: durum, niyet ve etki saf Kotlin; turetim ve
 // metinler commonTest'te ekransiz sinanir (bkz. PlanTextTest, PlanViewModelTest).
@@ -430,8 +431,12 @@ sealed interface PlanIntent {
 
 /** Kabukta karsilanir (bkz. App.kt): ekleme sayfasi ve serit kabugun. */
 sealed interface PlanEffect {
-    /** "Al": 4/5'te mevcut ekleme sayfasi; varlik eldeyse onunla, degilse varlik secimiyle. */
-    data class OpenAddTransaction(val positionId: String?) : PlanEffect
+    /**
+     * "Al": ekleme sayfasi satirin varligi ve kalan miktariyla acilir; varlik
+     * eldeyse en buyuk pozisyonuyla. Hedef onsecimi sayfanin kendi isi (plan
+     * mevcut atamayi ezmez, bkz. planGoalSelection).
+     */
+    data class OpenAddTransaction(val prefill: AddTransactionPrefill) : PlanEffect
 
     /** Kabugun saveError seridi. */
     data class Message(val text: String) : PlanEffect

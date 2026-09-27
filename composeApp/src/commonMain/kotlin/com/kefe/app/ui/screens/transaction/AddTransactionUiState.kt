@@ -176,6 +176,40 @@ data class AddTransactionUiState(
      * Secilirse kayit sonrasi varlik o hedefe atanir ve "karsilayanlar"a duser.
      */
     val selectedGoalId: String? = null,
+    /**
+     * Kullanici hedefi ELLE secti. Taraf degisince hedef onsecimi yeniden yapilir
+     * (plan hedefi yalniz alimda onerilir); elle secilen ezilmez.
+     */
+    val goalPicked: Boolean = false,
+    /** Alimin ayin planindaki yeri; null = ayin plani yok, satis ya da duzenleme. */
+    val planHint: PlanHint? = null,
+)
+
+/**
+ * Islem sayfasindaki plan satiri: "Eylül planında: 10 gr · Ev · kalan 4 gr".
+ *
+ * YALNIZ YENI BIR ALIMDA. Satis planin yapilma oranini dusurmez (bkz.
+ * monthPlanProgress) ve duzenlenen kayit zaten sayiliyor; ikisinde de "kalan"
+ * yaniltirdi.
+ */
+data class PlanHint(
+    val text: String,
+    /** false ise [text] "plan dışı sayılır" notudur. */
+    val inPlan: Boolean,
+    /** Plan baska hedef diyor ama varlik su hedefte; onsecim atamayi EZMEDI. */
+    val conflict: String? = null,
+)
+
+/**
+ * Plandan "Al": varlik ve satirin kalan miktari.
+ *
+ * Varlik KIMLIK ANAHTARIYLA gelir, pozisyonla degil: plandaki bir fon henuz hic
+ * alinmamis olabilir. Elde varsa sayfa o pozisyonla acilir.
+ */
+data class AddTransactionPrefill(
+    val assetKey: String,
+    /** null = miktar kullaniciya birakilir (tutar satirinda fon/hisse). */
+    val quantityText: String? = null,
 )
 
 /**
@@ -248,6 +282,8 @@ sealed interface AddTransactionIntent {
          * oldugunu ZATEN soylemis oluyor; onu bir kez daha secmek gereksiz.
          */
         val positionId: String? = null,
+        /** Plandan "Al"; [positionId] verildiyse o kazanir. */
+        val prefill: AddTransactionPrefill? = null,
     ) : AddTransactionIntent
 }
 

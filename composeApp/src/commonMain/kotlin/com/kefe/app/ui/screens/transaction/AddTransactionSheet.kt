@@ -1149,6 +1149,13 @@ private fun StepAmount(
     Spacer(Modifier.height(6.dp))
     DateField(state.date, state.isToday)
 
+    // Planin hedefi seciciyi onden doldurdugu icin satir seciciden ONCE durur:
+    // kullanici neden "Ev" secili geldigini burada okur.
+    state.planHint?.let { hint ->
+        Spacer(Modifier.height(Space.x12))
+        PlanHintNote(hint)
+    }
+
     // Hedef secici YALNIZ hedef varken cizilir. Secilirse varlik o hedefe atanir;
     // secilmezse dogrudan toplam birikime eklenir.
     if (state.availableGoals.isNotEmpty()) {
@@ -1159,6 +1166,33 @@ private fun StepAmount(
     Spacer(Modifier.height(18.dp))
     ExtraFields(state, onIntent)
     Spacer(Modifier.height(Space.x16))
+}
+
+/** "Eylül planında: 10 gr · Ev · kalan 4 gr"; cakismada altinda uyari. */
+@Composable
+private fun PlanHintNote(hint: PlanHint) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    Row(verticalAlignment = Alignment.Top) {
+        KefeIcon(
+            icon = KefeIcons.Calendar,
+            contentDescription = null,
+            size = IconSize.tiny,
+            tint = if (hint.inPlan) c.accent else c.onSurfaceMuted,
+        )
+        Spacer(Modifier.width(Space.x8))
+        Column {
+            Text(
+                text = hint.text,
+                style = t.caption.tabular(),
+                color = if (hint.inPlan) c.onSurface else c.onSurfaceMuted,
+            )
+            hint.conflict?.let {
+                Spacer(Modifier.height(2.dp))
+                Text(text = it, style = t.micro, color = c.warning)
+            }
+        }
+    }
 }
 
 /**

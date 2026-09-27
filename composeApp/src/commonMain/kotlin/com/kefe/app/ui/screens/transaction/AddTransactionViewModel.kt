@@ -18,6 +18,9 @@ import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.Karat
 import com.kefe.app.domain.model.Member
+import com.kefe.app.domain.model.MonthPlanProgress
+import com.kefe.app.domain.model.PlanItem
+import com.kefe.app.domain.model.PlanItemProgress
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.PositionIdPrefix
 import com.kefe.app.domain.model.Price
@@ -25,11 +28,17 @@ import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.SyncState
 import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
+import com.kefe.app.domain.model.YearMonth
+import com.kefe.app.domain.model.assetKey
+import com.kefe.app.domain.model.monthPlanProgress
+import com.kefe.app.domain.model.parseAssetKey
+import com.kefe.app.domain.model.planGoalSelection
 import com.kefe.app.domain.model.buyPrice
 import com.kefe.app.domain.model.newId
 import com.kefe.app.domain.model.priceKey
 import com.kefe.app.domain.model.goldAssetKey
 import com.kefe.app.domain.model.sellPrice
+import com.kefe.app.domain.repository.PlanRepository
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.domain.repository.PreferencesRepository
@@ -65,6 +74,8 @@ class AddTransactionViewModel(
     private val stocks: StockApi,
     // Kaydin "Bekliyor" damgasi BULUT durumundan gelir, fiyat tazeliginden degil.
     private val syncCoordinator: SyncCoordinator,
+    // Ayin plani: hedef onsecimi ve "Eylül planında: ..." satiri icin.
+    private val planRepository: PlanRepository,
 ) : MviViewModel<AddTransactionUiState, AddTransactionIntent, AddTransactionEffect>(
     // Tarih varsayilani sabit YAZILAMAZ: kayit artik diske gidiyor, yanlis tarih
     // kalici olur ve duzeltme ekrani yok.
@@ -97,11 +108,21 @@ class AddTransactionViewModel(
      */
     private var activeMemberId: String = ""
 
+    // Plan satiri defterden TURETILIR (bkz. monthPlanProgress): satirlar, butun
+    // islemler ve silinmemis butun pozisyonlar - satilip sifirlananlar dahil.
+    private var planItems: List<PlanItem> = emptyList()
+    private var ledger: List<Transaction> = emptyList()
+    private var everyPosition: List<Position> = emptyList()
+
+    // Fiyat tiki her seferinde yeniden hesaplatmasin; veri gelince bosaltilir.
+    private var planCache: MonthPlanProgress? = null
+
     init {
         observePortfolio()
         observePrices()
         observeAssignments()
         observeCloud()
+        observePlan()
     }
 
     override fun onIntent(intent: AddTransactionIntent) {
@@ -133,7 +154,7 @@ class AddTransactionViewModel(
 
             // Ayni hedefe tekrar dokunmak secimi KALDIRIR (hedefsiz'e doner).
             is AddTransactionIntent.SelectGoal -> update(
-                s.copy(selectedGoalId = intent.goalId.takeIf { it != s.selectedGoalId }),
+                s.copy(selectedGoalId = intent.goalId.takeIf { it != s.selectedGoalId }, goalPicked = true),
             )
 
             is AddTransactionIntent.SelectKarat -> update(s.copy(karat = intent.karat))
@@ -195,7 +216,14 @@ class AddTransactionViewModel(
 
             // Fiyat tarafa bagli (alirken satis fiyati, satarken alis fiyati),
             // bu yuzden dogrudan durum yazmak yetmez - fiyatlar yeniden uygulanir.
-            is AddTransactionIntent.SelectSide -> update(s.copy(side = intent.side))
+            //
+            // Hedef onsecimi de tarafa bagli: plan hedefi yalniz ALIMDA onerilir.
+            // Satisa gecince varligin kendi atamasina donulur; elle secilen kalir.
+            is AddTransactionIntent.SelectSide -> update(
+                s.copy(side = intent.side).let {
+                    if (it.step == AddTransactionStep.Amount && !it.isEditing && !it.goalPicked) it.withCurrentGoal() else it
+                },
+            )
 
             is AddTransactionIntent.ChangeQuantity ->
                 _state.value = s.copy(quantityText = intent.text)
@@ -239,10 +267,25 @@ class AddTransactionViewModel(
                     lastAdded = s.lastAdded,
                     partnerName = s.partnerName,
                 )
-                val position = intent.positionId?.let { id ->
-                    positions.firstOrNull { it.id == id }
+                val prefill = intent.prefill
+                // Plandan gelen varlik eldeyse EN BUYUK pozisyonuyla acilir (Plan
+                // sekmesindeki "Al" ile ayni secim).
+                val position = intent.positionId?.let { id -> positions.firstOrNull { it.id == id } }
+                    ?: prefill?.let { p -> positions.filter { it.assetKey() == p.assetKey }.maxByOrNull { it.value } }
+                val quantity = prefill?.quantityText
+                update(
+                    when {
+                        position != null -> fresh.forPosition(position, quantity)
+                        prefill != null -> fresh.forAssetKey(prefill.assetKey, quantity)
+                        else -> fresh
+                    },
+                )
+                // Tutulmayan fon: kodu TEFAS'ta hemen ara (hisse aramasi alan
+                // dolunca sayfada kendiliginden baslar).
+                val opened = _state.value
+                if (position == null && opened.assetClass == AssetClass.Fund && opened.fundQuery.isNotBlank()) {
+                    searchFundOnline()
                 }
-                update(if (position == null) fresh else fresh.forPosition(position))
             }
         }
     }
@@ -313,7 +356,10 @@ class AddTransactionViewModel(
      * Alanlar [loadForEdit] ile ayni yoldan cozulur - fon ve doviz kimligi
      * pozisyon kimliginden turer, yoksa kayit yeni bir pozisyona yazilir.
      */
-    private fun AddTransactionUiState.forPosition(position: Position): AddTransactionUiState =
+    private fun AddTransactionUiState.forPosition(
+        position: Position,
+        quantityText: String? = null,
+    ): AddTransactionUiState =
         copy(
             assetClass = position.assetClass,
             selectedSubtype = position.subtype ?: selectedSubtype,
@@ -326,7 +372,34 @@ class AddTransactionViewModel(
             selectedStockKey = position.id.removePrefix("pos_")
                 .takeIf { position.assetClass == AssetClass.Stock },
             currency = Currency.fromPriceKey(position.id.removePrefix("pos_")) ?: currency,
-        ).toAmountStep().withCurrentGoal()
+        ).toAmountStep(quantityText).withCurrentGoal()
+
+    /**
+     * Elde OLMAYAN bir plan varligi icin formu hazirlar.
+     *
+     * Altin, gumus, doviz ve nakitte secim anahtardan tam cozulur, sayfa dogrudan
+     * 2. adimda acilir. Fon ve hissede ad ve fiyat ancak aramayla gelir: 1. adimda
+     * kalinir, arama kodla doldurulur.
+     */
+    private fun AddTransactionUiState.forAssetKey(key: String, quantityText: String?): AddTransactionUiState {
+        val info = parseAssetKey(key) ?: return this
+        return when (info.assetClass) {
+            AssetClass.Gold -> {
+                val subtype = info.goldSubtype ?: selectedSubtype
+                copy(
+                    assetClass = AssetClass.Gold,
+                    selectedSubtype = subtype,
+                    karat = info.karat ?: subtype.defaultKarat(),
+                ).toAmountStep(quantityText).withCurrentGoal()
+            }
+            AssetClass.Fx -> copy(assetClass = AssetClass.Fx, currency = info.currency ?: currency)
+                .toAmountStep(quantityText).withCurrentGoal()
+            AssetClass.Silver, AssetClass.Cash -> copy(assetClass = info.assetClass)
+                .toAmountStep(quantityText).withCurrentGoal()
+            AssetClass.Fund -> copy(assetClass = AssetClass.Fund, fundQuery = info.code.orEmpty())
+            AssetClass.Stock -> copy(assetClass = AssetClass.Stock, stockQuery = info.code.orEmpty())
+        }
+    }
 
     /**
      * Varlik bir pozisyonla eslesiyorsa hedef seciciyi o pozisyonun MEVCUT
@@ -334,9 +407,57 @@ class AddTransactionViewModel(
      * varliga daha ekleyen kullanici seciciyi "Ev" gorur; dokunmadan kaydederse
      * atama korunur, "Hedefsiz"e alirsa kaldirilir.
      */
-    private fun AddTransactionUiState.withCurrentGoal(): AddTransactionUiState {
-        val matched = positions.firstOrNull { it.matches(this) }
-        return copy(selectedGoalId = matched?.let { assignments[it.id]?.goalId })
+    private fun AddTransactionUiState.withCurrentGoal(): AddTransactionUiState =
+        copy(selectedGoalId = goalSelection(this).selectedGoalId)
+
+    /**
+     * Varligin mevcut atamasi ile planin hedefi. Plan onsecimi YALNIZ varligin
+     * atamasi yoksa yapar; atanmis varlikta cakisma olarak soylenir (bkz.
+     * planGoalSelection - tasimak eski hedefin butun atamasini dusururdu).
+     */
+    private fun goalSelection(s: AddTransactionUiState) = planGoalSelection(
+        currentGoalId = positions.firstOrNull { it.matches(s) }?.let { assignments[it.id]?.goalId },
+        planGoalId = planLineOf(s)?.item?.goalId,
+        isBuy = s.side == TradeSide.Buy,
+        isEditing = s.isEditing,
+        knownGoalIds = s.availableGoals.mapTo(HashSet()) { it.id },
+    )
+
+    // --- Plan ----------------------------------------------------------------
+
+    private fun observePlan() {
+        viewModelScope.launch {
+            combine(
+                planRepository.observePlanItems(),
+                portfolioRepository.observeAllTransactions(),
+                portfolioRepository.observeAllPositions(),
+            ) { items, transactions, all ->
+                planItems = items
+                ledger = transactions
+                everyPosition = all
+                planCache = null
+            }.collect { _state.value = withPrices(_state.value) }
+        }
+    }
+
+    /** Kaydin ayinin plan ilerlemesi; o ayin plani yoksa null. */
+    private fun planProgressOf(month: YearMonth): MonthPlanProgress? {
+        planCache?.takeIf { it.month == month }?.let { return it }
+        if (planItems.none { it.month == month }) return null
+        return monthPlanProgress(month, planItems, ledger, everyPosition, clock.today())
+            .also { planCache = it }
+    }
+
+    private fun planLineOf(s: AddTransactionUiState): PlanItemProgress? {
+        val key = assetKeyOf(s).ifEmpty { return null }
+        return planProgressOf(YearMonth.of(s.date))?.items?.firstOrNull { it.item.assetKey == key }
+    }
+
+    private fun planHintFor(s: AddTransactionUiState): PlanHint? {
+        if (s.step != AddTransactionStep.Amount || s.side != TradeSide.Buy || s.isEditing) return null
+        val key = assetKeyOf(s).ifEmpty { return null }
+        val progress = planProgressOf(YearMonth.of(s.date)) ?: return null
+        return planHintOf(progress, key, s.availableGoals, goalSelection(s).conflictGoalId)
     }
 
     /** Secimi degistiren her intent fiyat tablosunu yeniden uygular. */
@@ -348,7 +469,9 @@ class AddTransactionViewModel(
      * Fiyata bagli tum alanlari tek yerden doldurur: alt tur satirlari, ayar
      * fiyatlari, fon sonuclari ve secime karsilik gelen birim fiyat.
      */
-    private fun withPrices(s: AddTransactionUiState): AddTransactionUiState {
+    private fun withPrices(next: AddTransactionUiState): AddTransactionUiState {
+        // Plan satiri da secime bagli; her secim buradan gectigi icin burada kurulur.
+        val s = next.copy(planHint = planHintFor(next))
         // "current" DEGIL: taban sinifin ayni adli durum ozelligini golgeler.
         val prices = board ?: return s
         val market = marketPriceOf(s, prices)

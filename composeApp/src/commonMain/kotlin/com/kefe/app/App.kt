@@ -130,6 +130,7 @@ import com.kefe.app.ui.screens.summary.SummaryScreenAdaptive
 import com.kefe.app.ui.screens.summary.SummaryViewModel
 import com.kefe.app.ui.screens.transaction.AddTransactionEffect
 import com.kefe.app.ui.screens.transaction.AddTransactionIntent
+import com.kefe.app.ui.screens.transaction.AddTransactionPrefill
 import com.kefe.app.ui.screens.transaction.AddTransactionSheet
 import com.kefe.app.ui.screens.transaction.AddTransactionViewModel
 import com.kefe.app.ui.screens.transaction.isFirstStep
@@ -329,9 +330,17 @@ private fun KefeApp(
     // Sheet HANGI VARLIK icin aciliyor; null ise varlik secimiyle baslar.
     var addSheetPositionId by remember { mutableStateOf<String?>(null) }
 
-    fun openAddSheet(side: TradeSide = TradeSide.Buy, positionId: String? = null) {
+    // Plandan "Al": varlik anahtari ve kalan miktar (varlik elde olmayabilir).
+    var addSheetPrefill by remember { mutableStateOf<AddTransactionPrefill?>(null) }
+
+    fun openAddSheet(
+        side: TradeSide = TradeSide.Buy,
+        positionId: String? = null,
+        prefill: AddTransactionPrefill? = null,
+    ) {
         addSheetSide = side
         addSheetPositionId = positionId
+        addSheetPrefill = prefill
         addSheetEditId = null
         addSheetVisible = true
     }
@@ -505,8 +514,7 @@ private fun KefeApp(
     val planState by planVm.state.collectAsState()
     CollectEffects(planVm.effects) { effect ->
         when (effect) {
-            // 4/5: yalniz mevcut ekleme sayfasi; on doldurma 5/5'te.
-            is PlanEffect.OpenAddTransaction -> openAddSheet(TradeSide.Buy, effect.positionId)
+            is PlanEffect.OpenAddTransaction -> openAddSheet(TradeSide.Buy, prefill = effect.prefill)
             is PlanEffect.Message -> saveError = effect.text
         }
     }
@@ -1081,13 +1089,13 @@ private fun KefeApp(
             // Duzenlemede alan degerleri kayittan gelir - alis/satis dahil.
             // Yeni kayitta form sifirlanir: ViewModel sheet kapaninca olmedigi
             // icin bir onceki acilisin alanlari duruyordu.
-            LaunchedEffect(addSheetSide, addSheetEditId, addSheetPositionId) {
+            LaunchedEffect(addSheetSide, addSheetEditId, addSheetPositionId, addSheetPrefill) {
                 val editId = addSheetEditId
                 if (editId != null) {
                     addVm.onIntent(AddTransactionIntent.EditTransaction(editId))
                 } else {
                     addVm.onIntent(
-                        AddTransactionIntent.StartNew(addSheetSide, addSheetPositionId),
+                        AddTransactionIntent.StartNew(addSheetSide, addSheetPositionId, addSheetPrefill),
                     )
                 }
             }
