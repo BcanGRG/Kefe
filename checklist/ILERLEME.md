@@ -2196,3 +2196,56 @@ koyu tema düzeltmesi uygulamanın genelinde yapılacak.
   kalan %98", plan cümlesi "…ay sonunda ₺10.851 kalacak." Koyu temada Plan,
   Özet ve Ayarlar'ın ikon kutuları, rozetleri ve çubuk izleri artık kara
   delik gibi görünmüyor.
+
+## 45 · Giderlere kendi kalemin eklenebiliyor ✅
+
+**Neydi.** Giderlerde yalnız 9 hazır kategori vardı. Kullanıcı: "giderler
+kısmına ben farklı şeyler de ekleyebilmeliyim her aya değişik şeylere para
+verebiliyoruz". "Diğer"e yazılan her şey tek bir satırda toplanıyordu.
+
+**Alınan kararlar.** İkisi de önerilen seçenek.
+
+- Serbest açıklama yerine kendi kategorin: yeni kalem kendi satırında toplanır
+  ve sonraki aylarda çip olarak hazır gelir.
+- Kendi kalemlerine de bütçe konabilir.
+
+**Ne yapıldı.**
+
+- **Kategori tipi.** `ExpenseCategory` enum'dan sınıfa çevrildi: dokuz hazır
+  kategori ya da adlandırılmış bir kalem.
+  - Kendi kalemin aynı metin kolonunda `c:Tatil` olarak saklanır. Sunucu
+    şeması, senkron ve yedek değişmedi; bu kolonu zaten düz metin olarak
+    taşıyorlar. Kalemi tanımayan eski bir kopya onu "Diğer" sayar, tutar
+    toplamdan kaybolmaz.
+  - Eşitlik büyük/küçük harfe bakmaz: iki telefonda "Tatil" ve "tatil" yazılsa
+    da tek kalem olur. Bütçe kimliği `eb_2026_10_c_tatil` biçiminde; hazır
+    kategorilerin kimlikleri değişmedi.
+  - Hazır bir kategorinin adı yazılırsa ("market") o kategori kullanılır.
+  - Ad en fazla 32 karakter olabilir, fazla boşluklar temizlenir.
+- **Harcama sayfası.** Hazır dokuzun yanında daha önce kullanılan kalemler çip
+  olarak gelir (en yeni önce), sonunda "+ Yeni" çipi var. "+ Yeni" "Kalemin adı"
+  alanını açar; ad yazılmadan kaydedilirse "Kalemin adını yazın." uyarısı
+  çıkar.
+- **Giderler kartı.** Önce hazır kategoriler ekrandaki sırayla, ardından kendi
+  kalemlerin harcanan tutara göre gelir.
+- **Bütçe sayfası.** Hazır dokuzun altında bu ay ve geçen ay kullanılan kendi
+  kalemlerin de listelenir. Kaydet yalnız listedekileri yazar; "Geçen aydan
+  kopyala" onları da taşır.
+
+**Doğrulama.**
+
+- **816 masaüstü testi**, hepsi yeşil. Yeni testler:
+  - `BudgetTest`: saklama biçimi, harf büyüklüğü, kimlik, hazır ad, boş ve
+    uzun ad, bilinmeyen metin.
+  - `PlanRepositoryTest`: kendi kalemin harcaması ve bütçesi diske yazılıp
+    okunuyor; farklı yazım aynı bütçe satırına düşüyor.
+  - `PlanDeriveTest`: kart sırası, çip sırası, bütçe alanları.
+  - `PlanViewModelTest`: yazılıp kaydedilen kalem kartta ayrı satır oluyor,
+    sonraki harcamada çip olarak geliyor, farklı yazımla birleşiyor, bütçesi
+    kalemin kimliğiyle yazılıyor.
+- **Cihazda**, 27 Eylül 2026, R58N81SAZ1Y (hesaba bağlı):
+  - "+ Yeni" ile "Test kalemi · ₺100" kaydedildi. Kartta ayrı satır oldu, para
+    akışında "Giderler ₺100" göründü.
+  - Sonraki "Harcama ekle"de "Test kalemi" çip olarak geldi. Bütçe sayfası
+    "TEST KALEMİ" alanını listeledi.
+  - Test harcaması sonra silindi.

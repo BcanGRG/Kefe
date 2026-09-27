@@ -182,9 +182,17 @@ class PlanViewModel(
             is PlanIntent.EditExpense -> latest?.let { inputs ->
                 val entry = inputs.books.firstNotNullOfOrNull { book -> book.expenses.firstOrNull { it.id == intent.id } }
                     ?: return
-                reduce { copy(sheet = PlanSheet.Expense(expenseEditorOf(entry))) }
+                reduce { copy(sheet = PlanSheet.Expense(expenseEditorOf(entry, inputs.books))) }
             }
-            is PlanIntent.ExpenseSelectCategory -> updateExpense { it.copy(category = intent.category, categoryError = false) }
+            is PlanIntent.ExpenseSelectCategory -> updateExpense {
+                it.copy(category = intent.category, newCategoryOpen = false, categoryError = false)
+            }
+            PlanIntent.ExpenseOpenNewCategory -> updateExpense {
+                it.copy(category = null, newCategoryOpen = true, categoryError = false)
+            }
+            is PlanIntent.ExpenseNewCategoryText -> updateExpense {
+                it.copy(newCategoryText = intent.value.take(ExpenseCategory.MaxCustomLength), categoryError = false)
+            }
             is PlanIntent.ExpenseAmount -> updateExpense { it.copy(amountText = intent.value, amountError = false) }
             is PlanIntent.ExpenseNote -> updateExpense { it.copy(note = intent.value) }
             PlanIntent.SaveExpense -> saveExpense()
@@ -429,7 +437,9 @@ class PlanViewModel(
 
     private fun saveExpense() {
         val editor = (current.sheet as? PlanSheet.Expense)?.editor ?: return
-        val category = editor.category
+        // Yazilan ad daha once kullanilan bir kalemse (ya da hazir bir kategorinin adi)
+        // o kalem kullanilir - esitlik harf buyuklugune bakmaz (bkz. ExpenseCategory.custom).
+        val category = if (editor.newCategoryOpen) ExpenseCategory.custom(editor.newCategoryText) else editor.category
         val amount = editor.amountText.parseTrAmountOrNull()?.takeIf { it > 0.0 }
         if (category == null || amount == null) {
             updateExpense { it.copy(categoryError = category == null, amountError = amount == null) }
@@ -456,11 +466,11 @@ class PlanViewModel(
         write("Harcama kaydedilemedi.") { planRepository.deleteExpense(editor.id) }
     }
 
-    /** Dokuz kategori tek islemde; bos ya da sifir alan o kategoriyi butceden cikarir. */
+    /** Sayfadaki butun kategoriler tek islemde; bos ya da sifir alan o kategoriyi butceden cikarir. */
     private fun saveBudget() {
         val editor = (current.sheet as? PlanSheet.Budget)?.editor ?: return
         val amounts: Map<ExpenseCategory, Double?> =
-            ExpenseCategory.entries.associateWith { editor.texts[it]?.parseTrAmountOrNull() }
+            editor.categories.associateWith { editor.texts[it]?.parseTrAmountOrNull() }
         reduce { copy(sheet = null) }
         write("Bütçe kaydedilemedi.") { planRepository.setBudgets(editor.month, amounts) }
     }

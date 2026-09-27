@@ -42,6 +42,7 @@ import com.kefe.app.domain.model.planStreak
 import com.kefe.app.domain.model.priceKeyOfAsset
 import com.kefe.app.domain.model.requiredMonthly
 import com.kefe.app.domain.model.sellPrice
+import com.kefe.app.domain.model.toEpochDay
 import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.rawAmount
@@ -559,7 +560,10 @@ internal fun expensesCard(book: MonthBook): ExpensesCard {
     val spent = spentBy.values.sum()
     val budget = budgetBy.takeIf { it.isNotEmpty() }?.values?.sum()
 
-    val categories = ExpenseCategory.entries.mapNotNull { category ->
+    // Hazir kategoriler ekrandaki sirayla, ardindan ozel kalemler harcanana gore.
+    val custom = (spentBy.keys + budgetBy.keys).filter { it.isCustom }.distinct()
+        .sortedByDescending { spentBy[it] ?: 0.0 }
+    val categories = (ExpenseCategory.entries + custom).mapNotNull { category ->
         val categorySpent = spentBy[category] ?: 0.0
         val categoryBudget = budgetBy[category]
         if (categorySpent == 0.0 && categoryBudget == null) return@mapNotNull null
@@ -653,10 +657,11 @@ internal fun newExpenseEditor(inputs: PlanInputs, id: String): ExpenseEditor = E
     note = "",
     date = if (inputs.month == inputs.current) inputs.today else inputs.month.lastDay(),
     addedByMemberId = inputs.activeMemberId ?: inputs.members.firstOrNull()?.id,
+    customCategories = customCategoriesOf(inputs.books),
 )
 
 /** Kayitli harcama: kimligi, tarihi ve giris ani korunur (sira degismez). */
-internal fun expenseEditorOf(entry: ExpenseEntry): ExpenseEditor = ExpenseEditor(
+internal fun expenseEditorOf(entry: ExpenseEntry, books: List<MonthBook>): ExpenseEditor = ExpenseEditor(
     month = entry.month,
     id = entry.id,
     isNew = false,
@@ -666,10 +671,25 @@ internal fun expenseEditorOf(entry: ExpenseEntry): ExpenseEditor = ExpenseEditor
     date = entry.date,
     createdAt = entry.createdAt,
     addedByMemberId = entry.addedByMemberId,
+    customCategories = customCategoriesOf(books),
 )
+
+/**
+ * Daha once kullanilan ozel kalemler, EN YENI once: harcamalar tarihe, butceler
+ * aya gore. Her ay farkli seylere para veren hane gecen ayin kalemini tek
+ * dokunusla bulsun; yazim farki ("Tatil"/"tatil") tek cip olur (bkz. ExpenseCategory).
+ */
+internal fun customCategoriesOf(books: List<MonthBook>): List<ExpenseCategory> {
+    val used = books.flatMap { book ->
+        book.expenses.map { it.category to it.date.toEpochDay() } +
+            book.budgets.map { it.category to book.month.lastDay().toEpochDay() }
+    }
+    return used.filter { it.first.isCustom }.sortedByDescending { it.second }.map { it.first }.distinct()
+}
 
 internal fun budgetEditorOf(inputs: PlanInputs): BudgetEditor = BudgetEditor(
     month = inputs.month,
+    categories = ExpenseCategory.entries + customCategoriesOf(listOf(inputs.book, inputs.previousBook)),
     texts = inputs.book.budgets.groupBy { it.category }
         .mapValues { (_, list) -> rawAmount(list.sumOf { it.amount }) },
     lastSpent = inputs.previousBook.expenses.totalsByCategory(),

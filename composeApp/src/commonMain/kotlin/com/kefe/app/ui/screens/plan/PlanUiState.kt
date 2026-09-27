@@ -426,6 +426,11 @@ data class ExpenseEditor(
     /** 0 = yeni; depo kayitta ani damgalar. Duzenlemede sira (en yeni) degismesin diye korunur. */
     val createdAt: Long = 0L,
     val addedByMemberId: String?,
+    /** Daha once kullanilan ozel kalemler, en yeni once - hazir dokuzun yaninda cip. */
+    val customCategories: List<ExpenseCategory> = emptyList(),
+    /** "+ Yeni" acik: kategori yazilan addan gelir, cip secimi bosalir. */
+    val newCategoryOpen: Boolean = false,
+    val newCategoryText: String = "",
     val categoryError: Boolean = false,
     val amountError: Boolean = false,
 )
@@ -433,6 +438,11 @@ data class ExpenseEditor(
 /** Ayin kategori butceleri. Bos metin o kategoriyi butceden cikarir. */
 data class BudgetEditor(
     val month: YearMonth,
+    /**
+     * Alanlar: hazir dokuz, sonra bu ay ya da gecen ay kullanilan ozel kalemler.
+     * Kaydet YALNIZ bunlari yazar; listede olmayan bir kalemin butcesine dokunmaz.
+     */
+    val categories: List<ExpenseCategory> = ExpenseCategory.entries,
     val texts: Map<ExpenseCategory, String>,
     /** Gecen ay kategoride harcanan - alan ipucu. */
     val lastSpent: Map<ExpenseCategory, Double>,
@@ -491,6 +501,10 @@ sealed interface PlanIntent {
     data object AddExpense : PlanIntent
     data class EditExpense(val id: String) : PlanIntent
     data class ExpenseSelectCategory(val category: ExpenseCategory) : PlanIntent
+
+    /** "+ Yeni": kendi kalemini yazmak icin alan acilir. */
+    data object ExpenseOpenNewCategory : PlanIntent
+    data class ExpenseNewCategoryText(val value: String) : PlanIntent
     data class ExpenseAmount(val value: String) : PlanIntent
     data class ExpenseNote(val value: String) : PlanIntent
     data object SaveExpense : PlanIntent

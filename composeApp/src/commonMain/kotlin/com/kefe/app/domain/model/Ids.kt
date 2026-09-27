@@ -47,6 +47,7 @@ fun incomeId(month: YearMonth, memberId: String, kind: IncomeKind): String =
 fun incomeIdOf(month: YearMonth, memberId: String, kindName: String): String =
     "inc_${month.idPart()}_${memberId}_$kindName"
 
-fun budgetId(month: YearMonth, category: ExpenseCategory): String = "eb_${month.idPart()}_${category.name}"
+/** Hazir kategoride "eb_2026_10_Groceries" (degismedi); ozel kalemde "eb_2026_10_c_tatil". */
+fun budgetId(month: YearMonth, category: ExpenseCategory): String = "eb_${month.idPart()}_${category.idKey}"
 
 private fun YearMonth.idPart(): String = "${year}_${month.toString().padStart(2, '0')}"

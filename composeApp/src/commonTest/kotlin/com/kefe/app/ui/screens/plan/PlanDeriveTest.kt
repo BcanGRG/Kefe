@@ -458,6 +458,30 @@ class PlanDeriveTest {
     // --- Giderler ------------------------------------------------------------
 
     @Test
+    fun `ozel kalemler hazirlarin ardindan harcanana gore, cipler en yeni once`() {
+        val trip = ExpenseCategory.custom("Tatil")!!
+        val gift = ExpenseCategory.custom("Düğün hediyesi")!!
+        val book = MonthBook(
+            oct,
+            expenses = listOf(
+                expense("e1", 3, 1_500.0),
+                expense("e2", 5, 5_000.0, category = gift),
+                expense("e3", 9, 12_000.0, category = trip),
+            ),
+        )
+        val card = assertNotNull(planContent(inputs(books = listOf(book))).expenses)
+        assertEquals(listOf("Market", "Tatil", "Düğün hediyesi"), card.categories.map { it.label })
+
+        val older = MonthBook(sep, expenses = listOf(expense("e0", 20, 800.0, month = sep, category = ExpenseCategory.custom("Kira farkı")!!)))
+        assertEquals(listOf("Tatil", "Düğün hediyesi", "Kira farkı"), customCategoriesOf(listOf(older, book)).map { it.label() })
+
+        // Butce sayfasi: hazir dokuz + bu ay ve gecen ayin kalemleri.
+        val editor = budgetEditorOf(inputs(books = listOf(older, book)))
+        assertEquals(ExpenseCategory.entries, editor.categories.take(9))
+        assertEquals(listOf("Tatil", "Düğün hediyesi", "Kira farkı"), editor.categories.drop(9).map { it.label() })
+    }
+
+    @Test
     fun `bos ayda gider karti harcama girilmedi der`() {
         val card = assertNotNull(planContent(inputs()).expenses)
         assertEquals("Harcama girilmedi.", card.totalLine)

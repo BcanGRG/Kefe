@@ -835,6 +835,48 @@ class PlanViewModelTest {
     }
 
     @Test
+    fun `kendi kalemi yazilir, kartta ayri satir olur ve sonra cip olarak gelir`() = runTest {
+        val env = Env()
+        val vm = env.vm()
+        vm.awaitState { it.content.expenses != null }
+
+        vm.onIntent(PlanIntent.AddExpense)
+        vm.onIntent(PlanIntent.ExpenseOpenNewCategory)
+        vm.onIntent(PlanIntent.ExpenseAmount("12000"))
+        vm.onIntent(PlanIntent.SaveExpense)
+        // Ad yazilmadi: sheet acik, hata gorunur.
+        assertEquals(true, vm.expenseEditor()?.categoryError)
+
+        vm.onIntent(PlanIntent.ExpenseNewCategoryText("Tatil"))
+        vm.onIntent(PlanIntent.SaveExpense)
+        assertNull(vm.state.value.sheet)
+
+        val card = vm.awaitState { state -> state.content.expenses?.categories?.any { it.label == "Tatil" } == true }
+            .content.expenses!!
+        assertEquals("₺12.000", card.categories.single { it.label == "Tatil" }.amounts)
+        assertEquals("c:Tatil", env.plan.observeMonthBook(October).first().expenses.single().category.name)
+
+        // Sonraki harcamada hazir cip; farkli yazim ayni kaleme duser.
+        vm.onIntent(PlanIntent.AddExpense)
+        assertEquals(listOf("Tatil"), vm.expenseEditor()?.customCategories?.map { it.label() })
+        vm.onIntent(PlanIntent.ExpenseOpenNewCategory)
+        vm.onIntent(PlanIntent.ExpenseNewCategoryText("tatil"))
+        vm.onIntent(PlanIntent.ExpenseAmount("3000"))
+        vm.onIntent(PlanIntent.SaveExpense)
+        val merged = vm.awaitState { state -> state.content.expenses?.categories?.any { it.amounts == "₺15.000" } == true }
+        assertEquals(1, merged.content.expenses!!.categories.count { it.label.lowercase() == "tatil" })
+
+        // Butce sayfasi kalemi de listeler; kaydedilen butce kalemin kimligiyle yazilir.
+        vm.onIntent(PlanIntent.EditBudget)
+        val budget = assertNotNull((vm.state.value.sheet as? PlanSheet.Budget)?.editor)
+        val trip = budget.categories.single { it.isCustom }
+        vm.onIntent(PlanIntent.BudgetAmount(trip, "20000"))
+        vm.onIntent(PlanIntent.SaveBudget)
+        vm.awaitState { state -> state.content.expenses?.categories?.any { it.amounts == "₺15.000 / ₺20.000" } == true }
+        assertEquals(listOf("eb_2026_10_c_tatil"), env.plan.observeMonthBook(October).first().budgets.map { it.id })
+    }
+
+    @Test
     fun `butce asimi metinle gorunur`() = runTest {
         val env = Env()
         env.plan.setBudgets(October, mapOf(ExpenseCategory.Groceries to 10_000.0))
