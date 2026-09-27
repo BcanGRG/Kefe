@@ -30,6 +30,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import com.kefe.app.ui.components.KefeHairline
+import com.kefe.app.ui.icons.icon
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,7 +66,6 @@ import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.formatLong
 import com.kefe.app.domain.model.label
 import com.kefe.app.ui.components.AmountKeyboard
-import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeStepDots
@@ -1783,15 +1784,6 @@ private fun PillButton(
 }
 
 // --- Esleme yardimcilari -----------------------------------------------------
-
-private fun AssetClass.icon(): ImageVector = when (this) {
-    AssetClass.Gold -> KefeIcons.Gold
-    AssetClass.Silver -> KefeIcons.Silver
-    AssetClass.Fx -> KefeIcons.Fx
-    AssetClass.Fund -> KefeIcons.Fund
-    AssetClass.Stock -> KefeIcons.Stock
-    AssetClass.Cash -> KefeIcons.Cash
-}
 
 /** Cip uzerinde yalniz sayi durur: "14", "18", "22", "24". */
 private fun Karat.shortLabel(): String = when (this) {

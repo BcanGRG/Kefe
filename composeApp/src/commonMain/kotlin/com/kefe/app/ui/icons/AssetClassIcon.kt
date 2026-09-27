@@ -7,8 +7,8 @@ import com.kefe.app.domain.model.AssetClass
  * Varlik sinifinin ikonu - TEK kaynak.
  *
  * NEYDI: Ozet, Varliklar, ekleme sayfasi ve galeride dort ayri ozel kopyasi
- * vardi; Plan sekmesi besinci olacakti. Plan bunu kullanir; eski kopyalar ayri
- * bir toparlama adiminda buraya baglanir.
+ * vardi; Plan sekmesi besinci olacakti. Hepsi buna baglandi - bir sinifin ikonu
+ * degisince bes ekran birlikte degisir.
  */
 fun AssetClass.icon(): ImageVector = when (this) {
     AssetClass.Gold -> KefeIcons.Gold
