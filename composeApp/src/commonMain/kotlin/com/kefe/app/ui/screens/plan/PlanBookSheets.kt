@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -137,8 +138,8 @@ internal fun PlanExpenseSheet(
                 horizontalArrangement = Arrangement.spacedBy(Space.x8),
                 verticalArrangement = Arrangement.spacedBy(Space.x8),
             ) {
-                ExpenseCategory.entries.forEach { category ->
-                    val isSelected = category == editor.category
+                (ExpenseCategory.entries + editor.customCategories).forEach { category ->
+                    val isSelected = !editor.newCategoryOpen && category == editor.category
                     KefeChip(
                         text = category.label(),
                         selected = isSelected,
@@ -147,6 +148,33 @@ internal fun PlanExpenseSheet(
                         modifier = Modifier.semantics { selected = isSelected },
                     )
                 }
+                KefeChip(
+                    text = "Yeni",
+                    selected = editor.newCategoryOpen,
+                    onClick = { onIntent(PlanIntent.ExpenseOpenNewCategory) },
+                    height = Sizes.chipSmall,
+                    leadingIcon = KefeIcons.Plus,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Yeni kalem ekle"
+                        selected = editor.newCategoryOpen
+                    },
+                )
+            }
+            // Kendi kalemi: adi yazilir, kayitta kategori olur ve sonraki aylarda cip olarak gelir.
+            if (editor.newCategoryOpen) {
+                Spacer(Modifier.height(Space.x12))
+                KefeTextField(
+                    value = editor.newCategoryText,
+                    onValueChange = { onIntent(PlanIntent.ExpenseNewCategoryText(it)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "Kalemin adı",
+                    placeholder = "ör. Tatil, Düğün hediyesi",
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction = ImeAction.Next,
+                    ),
+                )
             }
             // Ekstre ile tek tek girilen kart harcamalari ayni parayi iki kez sayardi.
             if (editor.category == ExpenseCategory.Debt) {
@@ -159,7 +187,11 @@ internal fun PlanExpenseSheet(
             }
             if (editor.categoryError) {
                 Spacer(Modifier.height(Space.x8))
-                Text("Bir kategori seçin.", style = t.caption, color = c.negative)
+                Text(
+                    text = if (editor.newCategoryOpen) "Kalemin adını yazın." else "Bir kategori seçin.",
+                    style = t.caption,
+                    color = c.negative,
+                )
             }
 
             Spacer(Modifier.height(Space.x16))
@@ -230,7 +262,7 @@ internal fun PlanBudgetSheet(
         },
     ) {
         if (editor != null) {
-            ExpenseCategory.entries.forEachIndexed { index, category ->
+            editor.categories.forEachIndexed { index, category ->
                 if (index > 0) Spacer(Modifier.height(Space.x16))
                 AmountTextField(
                     label = category.label(),

@@ -2,7 +2,9 @@ package com.kefe.app.domain.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Ayin para akisi: Gelir - Gider - Yatirim = Kalan.
@@ -85,4 +87,47 @@ class BudgetTest {
         assertEquals("inc_2026_10_member_owner_Salary", incomeId(oct, "member_owner", IncomeKind.Salary))
         assertEquals("eb_2026_10_Groceries", budgetId(oct, ExpenseCategory.Groceries))
     }
+
+    // --- Ozel kalem -------------------------------------------------------------
+
+    @Test
+    fun ozelKalemAyniKolondaSaklanir() {
+        val trip = ExpenseCategory.custom("  Düğün   hediyesi ")!!
+        assertEquals("c:Düğün hediyesi", trip.name)
+        assertEquals("Düğün hediyesi", trip.label())
+        assertTrue(trip.isCustom)
+        // Diskten geri: ayni kalem.
+        assertEquals(trip, ExpenseCategory.fromName("c:Düğün hediyesi"))
+        assertEquals("Düğün hediyesi", ExpenseCategory.fromName("c:Düğün hediyesi").label())
+    }
+
+    @Test
+    fun ozelKalemHarfBuyuklugunaBakmaz() {
+        val a = ExpenseCategory.custom("Tatil")!!
+        val b = ExpenseCategory.custom("tatil")!!
+        assertEquals(a, b)
+        assertEquals(a.hashCode(), b.hashCode())
+        assertEquals(1, mapOf(a to 1.0, b to 2.0).size)
+        assertEquals("eb_2026_10_c_tatil", budgetId(oct, a))
+        assertEquals(budgetId(oct, a), budgetId(oct, b))
+        assertEquals("eb_2026_10_c_düğün-hediyesi", budgetId(oct, ExpenseCategory.custom("Düğün hediyesi")!!))
+    }
+
+    @Test
+    fun hazirKategoriAdiYazilirsaHazirKategori() {
+        assertEquals(ExpenseCategory.Groceries, ExpenseCategory.custom("market"))
+        assertFalse(ExpenseCategory.custom("MARKET")!!.isCustom)
+        assertNull(ExpenseCategory.custom("   "))
+        assertEquals(ExpenseCategory.MaxCustomLength, ExpenseCategory.custom("x".repeat(50))!!.label().length)
+    }
+
+    @Test
+    fun bilinmeyenMetinDigerSayilir() {
+        assertEquals(ExpenseCategory.Other, ExpenseCategory.fromName("Pets"))
+        assertEquals(ExpenseCategory.Other, ExpenseCategory.fromName("c:   "))
+        assertEquals(ExpenseCategory.Groceries, ExpenseCategory.fromName("Groceries"))
+        // Hazir kimlikler degismedi.
+        assertEquals("eb_2026_10_Housing", budgetId(oct, ExpenseCategory.Housing))
+    }
 }
+

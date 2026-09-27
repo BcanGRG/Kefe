@@ -114,6 +114,23 @@ class PlanRepositoryTest {
     }
 
     @Test
+    fun ozelKalemHarcamasiVeButcesiGidipGelir() = runTest {
+        val e = env()
+        val trip = ExpenseCategory.custom("Tatil")!!
+        e.repo.upsertExpense(ExpenseEntry("x_tatil", KefeDate(2026, 10, 12), trip, 12_000.0))
+        e.repo.setBudgets(oct, mapOf(trip to 15_000.0))
+        val book = e.repo.observeMonthBook(oct).first()
+        assertEquals("Tatil", book.expenses.single().category.label())
+        assertTrue(book.expenses.single().category.isCustom)
+        assertEquals(listOf("eb_2026_10_c_tatil"), book.budgets.map { it.id })
+        assertEquals(trip, book.budgets.single().category)
+
+        // Farkli yazimla ayni kalem: ikinci bir butce satiri acilmaz, ayni satir silinir.
+        e.repo.setBudgets(oct, mapOf(ExpenseCategory.custom("tatil")!! to null))
+        assertTrue(e.repo.observeMonthBook(oct).first().budgets.isEmpty())
+    }
+
+    @Test
     fun harcamaAyaTarihindenDuser() = runTest {
         val e = env()
         e.repo.upsertExpense(ExpenseEntry("x1", KefeDate(2026, 10, 31), ExpenseCategory.Groceries, 500.0))
