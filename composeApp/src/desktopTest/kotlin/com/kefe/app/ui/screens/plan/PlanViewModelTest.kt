@@ -877,6 +877,54 @@ class PlanViewModelTest {
     }
 
     @Test
+    fun `butcede harcamasi olmayan kaleme butce konur, eski kalem ciple eklenir`() = runTest {
+        val env = Env()
+        // Agustos'ta kullanilan bir kalem: Ekim'in butce sayfasinda alani yok, cip olarak gelir.
+        env.plan.upsertExpense(ExpenseEntry("e_agu", KefeDate(2026, 8, 10), ExpenseCategory.custom("Düğün hediyesi")!!, 5_000.0))
+        val vm = env.vm()
+        vm.awaitState { it.content.expenses != null }
+
+        vm.onIntent(PlanIntent.EditBudget)
+        fun editor() = assertNotNull((vm.state.value.sheet as? PlanSheet.Budget)?.editor)
+        assertTrue(editor().categories.none { it.isCustom })
+        assertEquals(listOf("Düğün hediyesi"), editor().olderCustom.map { it.label() })
+
+        vm.onIntent(PlanIntent.BudgetOpenAdd)
+        vm.onIntent(PlanIntent.BudgetAddConfirm)
+        // Ad yok: alan acik kalir, hata gorunur.
+        assertTrue(editor().addOpen)
+        assertTrue(editor().addError)
+
+        vm.onIntent(PlanIntent.BudgetAddText("Tatil"))
+        vm.onIntent(PlanIntent.BudgetAddConfirm)
+        assertFalse(editor().addOpen)
+        assertEquals("Tatil", editor().categories.last().label())
+
+        // Ayni kalem baska yazimla: ikinci alan acilmaz. Hazir kategorinin adi da.
+        vm.onIntent(PlanIntent.BudgetOpenAdd)
+        vm.onIntent(PlanIntent.BudgetAddText("tatil"))
+        vm.onIntent(PlanIntent.BudgetAddConfirm)
+        vm.onIntent(PlanIntent.BudgetOpenAdd)
+        vm.onIntent(PlanIntent.BudgetAddText("market"))
+        vm.onIntent(PlanIntent.BudgetAddConfirm)
+        assertEquals(10, editor().categories.size)
+
+        vm.onIntent(PlanIntent.BudgetOpenAdd)
+        vm.onIntent(PlanIntent.BudgetAddExisting(editor().olderCustom.single()))
+        assertTrue(editor().olderCustom.isEmpty())
+        assertEquals(listOf("Tatil", "Düğün hediyesi"), editor().categories.filter { it.isCustom }.map { it.label() })
+
+        val trip = editor().categories.first { it.label() == "Tatil" }
+        vm.onIntent(PlanIntent.BudgetAmount(trip, "20000"))
+        vm.onIntent(PlanIntent.SaveBudget)
+        val card = vm.awaitState { state -> state.content.expenses?.categories?.any { it.label == "Tatil" } == true }
+            .content.expenses!!
+        assertEquals("₺0 / ₺20.000", card.categories.single { it.label == "Tatil" }.amounts)
+        // Tutar yazilmayan kalem butce satiri acmaz.
+        assertEquals(listOf("eb_2026_10_c_tatil"), env.plan.observeMonthBook(October).first().budgets.map { it.id })
+    }
+
+    @Test
     fun `butce asimi metinle gorunur`() = runTest {
         val env = Env()
         env.plan.setBudgets(October, mapOf(ExpenseCategory.Groceries to 10_000.0))

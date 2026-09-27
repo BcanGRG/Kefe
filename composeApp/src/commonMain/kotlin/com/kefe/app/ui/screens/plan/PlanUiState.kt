@@ -443,6 +443,15 @@ data class BudgetEditor(
      * Kaydet YALNIZ bunlari yazar; listede olmayan bir kalemin butcesine dokunmaz.
      */
     val categories: List<ExpenseCategory> = ExpenseCategory.entries,
+    /**
+     * Listede olmayan, daha eski aylarda kullanilmis kalemler: "Kalem ekle"
+     * acilinca tek dokunusla eklenir.
+     */
+    val olderCustom: List<ExpenseCategory> = emptyList(),
+    /** "Kalem ekle" acik: ad alani ve eski kalemler cizilir. */
+    val addOpen: Boolean = false,
+    val addText: String = "",
+    val addError: Boolean = false,
     val texts: Map<ExpenseCategory, String>,
     /** Gecen ay kategoride harcanan - alan ipucu. */
     val lastSpent: Map<ExpenseCategory, Double>,
@@ -514,6 +523,15 @@ sealed interface PlanIntent {
     data object EditBudget : PlanIntent
     data class BudgetAmount(val category: ExpenseCategory, val value: String) : PlanIntent
     data object BudgetCopyLastMonth : PlanIntent
+
+    /**
+     * Butcede kendi kalemi: henuz harcama yokken de ("Tatil icin 20.000 ayir")
+     * bir kaleme butce konabilsin diye. Eklenen kalem listeye bos alanla girer.
+     */
+    data object BudgetOpenAdd : PlanIntent
+    data class BudgetAddText(val value: String) : PlanIntent
+    data object BudgetAddConfirm : PlanIntent
+    data class BudgetAddExisting(val category: ExpenseCategory) : PlanIntent
     data object SaveBudget : PlanIntent
 }
 

@@ -206,6 +206,14 @@ class PlanViewModel(
                 e.copy(texts = e.lastBudgets.mapValues { (_, amount) -> rawAmount(amount) })
             }
             PlanIntent.SaveBudget -> saveBudget()
+            PlanIntent.BudgetOpenAdd -> updateBudget { it.copy(addOpen = true, addError = false) }
+            is PlanIntent.BudgetAddText -> updateBudget {
+                it.copy(addText = intent.value.take(ExpenseCategory.MaxCustomLength), addError = false)
+            }
+            PlanIntent.BudgetAddConfirm -> updateBudget { e ->
+                ExpenseCategory.custom(e.addText)?.let { e.withCategory(it) } ?: e.copy(addError = true)
+            }
+            is PlanIntent.BudgetAddExisting -> updateBudget { it.withCategory(intent.category) }
         }
     }
 
@@ -500,6 +508,19 @@ class PlanViewModel(
         val open = sheet as? PlanSheet.Expense ?: return@reduce this
         copy(sheet = PlanSheet.Expense(block(open.editor)))
     }
+
+    /**
+     * Kalemi butce listesine ekler ve ekleme alanini kapatir. Zaten listedeyse
+     * (hazir bir kategorinin adi ya da ayni kalemin baska yazimi) ikinci bir alan
+     * acilmaz - esitlik harf buyuklugune bakmaz (bkz. ExpenseCategory).
+     */
+    private fun BudgetEditor.withCategory(category: ExpenseCategory): BudgetEditor = copy(
+        categories = if (category in categories) categories else categories + category,
+        olderCustom = olderCustom - category,
+        addOpen = false,
+        addText = "",
+        addError = false,
+    )
 
     private fun updateBudget(block: (BudgetEditor) -> BudgetEditor) = reduce {
         val open = sheet as? PlanSheet.Budget ?: return@reduce this
