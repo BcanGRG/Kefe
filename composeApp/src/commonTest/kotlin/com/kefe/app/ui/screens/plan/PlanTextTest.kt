@@ -358,6 +358,15 @@ class PlanTextTest {
             "Bu ay planın %80'i yapılınca seri başlar.",
             streakHeadline(streak(current = 0, thisMonth = StreakCell.InProgress)),
         )
+        // Bu ayin plani yok: once plan yapmak gerekir.
+        assertEquals(
+            "Bu ay için plan yapıp %80'ini tamamlayınca seri başlar.",
+            streakHeadline(streak(current = 0, thisMonth = StreakCell.NoPlan)),
+        )
+        assertEquals(
+            "Bu ay için plan yapıp %80'ini tamamlayınca seri başlar.",
+            streakHeadline(streak(current = 0, thisMonth = StreakCell.BeforeStart)),
+        )
     }
 
     @Test

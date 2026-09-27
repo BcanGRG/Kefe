@@ -110,6 +110,7 @@ import com.kefe.app.ui.components.KefeTwoLineBanner
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcons
+import com.kefe.app.ui.icons.icon
 import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
@@ -588,7 +589,7 @@ fun DesignSystemGallery(
                                             subtitle = positionSubtitle(position),
                                             value = Money.tl(position.value),
                                             delta = position.dailyChangePercent,
-                                            leadingIcon = assetIcon(position.assetClass),
+                                            leadingIcon = position.assetClass.icon(),
                                             leadingTint = colors.assetClass(position.assetClass.color()),
                                             onClick = {},
                                             badges = {
@@ -1071,15 +1072,6 @@ private fun colorTokens(): List<Pair<String, Color>> {
         "pendingBadgeBg" to c.pendingBadgeBg,
         "scrim" to c.scrim,
     )
-}
-
-private fun assetIcon(assetClass: AssetClass): ImageVector = when (assetClass) {
-    AssetClass.Gold -> KefeIcons.Gold
-    AssetClass.Silver -> KefeIcons.Silver
-    AssetClass.Fx -> KefeIcons.Fx
-    AssetClass.Fund -> KefeIcons.Fund
-    AssetClass.Stock -> KefeIcons.Stock
-    AssetClass.Cash -> KefeIcons.Cash
 }
 
 /** Satir alt metni: miktar + birim. Nakit/dovizde birim yazilmaz. */

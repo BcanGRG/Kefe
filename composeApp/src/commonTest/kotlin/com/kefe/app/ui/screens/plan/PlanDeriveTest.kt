@@ -155,6 +155,41 @@ class PlanDeriveTest {
     }
 
     @Test
+    fun `bu ayin plani secili aydan bagimsiz, hedefe gore gruplanir`() {
+        val inputs = inputs(
+            // Sekme gecen aya bakiyor; Ozet ve hedef detayi yine BU AYI gorur.
+            selection = sep,
+            items = listOf(
+                item(oct, "gold_gram", 10.0, price = 6_733.0, goalId = "g_car"),
+                item(oct, "fund_afa", 1_000.0, mode = PlanTargetMode.Amount),
+                item(sep, "gold_gram", 5.0, price = 6_000.0),
+            ),
+            positions = listOf(gram(quantity = 10.0)),
+            goals = listOf(car()),
+            assignments = mapOf(GramId to GoalAssignment("g_car")),
+        )
+        val month = assertNotNull(planContent(inputs).currentMonth)
+        assertEquals("Ekim planı", month.title)
+        assertEquals("0/2 kalem", month.countText)
+        assertTrue(month.summary.startsWith("0/2 kalem · "))
+
+        val goal = month.goals.single()
+        assertEquals("g_car", goal.goalId)
+        assertEquals(listOf("gold_gram"), goal.rows.map { it.assetKey })
+        assertTrue(goal.rows.single().canBuy)
+        assertNull(goal.rows.single().goalName)
+        assertEquals("Planlanan ₺67.330 · Aylık katkı ₺50.000", goal.summary)
+        // requiredMonthly ile ayni ay sayimi: Ekim 2026 -> Ekim 2027 = 12 ay.
+        assertEquals("Gereken aylık ≈ ₺36.083 (12 ay)", goal.requiredLine)
+    }
+
+    @Test
+    fun `bu ayin plani yoksa ozet satiri yok`() {
+        val inputs = inputs(items = listOf(item(sep, "gold_gram", 5.0, price = 6_000.0)), selection = sep)
+        assertNull(planContent(inputs).currentMonth)
+    }
+
+    @Test
     fun `gecmis ayda gereken yazilmaz`() {
         val inputs = inputs(
             selection = sep,

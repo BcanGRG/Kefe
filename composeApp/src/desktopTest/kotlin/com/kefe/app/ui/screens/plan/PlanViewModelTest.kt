@@ -52,6 +52,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.kefe.app.ui.screens.transaction.AddTransactionPrefill
 
 /**
  * Plan sekmesinin ViewModel'i GERCEK veritabaniyla.
@@ -626,7 +627,7 @@ class PlanViewModelTest {
     // --- Al ------------------------------------------------------------------
 
     @Test
-    fun `Al eldeki pozisyonla, elde yoksa varlik secimiyle acar`() = runTest {
+    fun `Al varligi ve kalan miktari gonderir, tutar satirinda miktar bos`() = runTest {
         val env = Env()
         env.buyGram("tx_ekim", KefeDate(2026, 10, 5))
         env.planItem(October, "gold_gram", 10.0)
@@ -636,9 +637,17 @@ class PlanViewModelTest {
         assertTrue(rows.all { it.canBuy })
 
         vm.onIntent(PlanIntent.Buy(planItemId(October, "gold_gram")))
-        assertEquals(PlanEffect.OpenAddTransaction(GramId), realTime { vm.effects.first() })
+        // 1 / 10 gr alindi: kalan 9 gr.
+        assertEquals(
+            PlanEffect.OpenAddTransaction(AddTransactionPrefill("gold_gram", "9")),
+            realTime { vm.effects.first() },
+        )
+        // Tutar satirinda fonun pay adedi uydurulmaz.
         vm.onIntent(PlanIntent.Buy(planItemId(October, "fund_afa")))
-        assertEquals(PlanEffect.OpenAddTransaction(null), realTime { vm.effects.first() })
+        assertEquals(
+            PlanEffect.OpenAddTransaction(AddTransactionPrefill("fund_afa", null)),
+            realTime { vm.effects.first() },
+        )
     }
 
     @Test

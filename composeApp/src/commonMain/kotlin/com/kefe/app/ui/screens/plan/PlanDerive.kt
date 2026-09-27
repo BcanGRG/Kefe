@@ -170,8 +170,52 @@ internal fun planContent(inputs: PlanInputs): PlanContent {
         expenses = expensesCard(inputs.book),
         streak = streak?.let(::streakCard),
         currentMonthOpenCount = currentProgress.items.count { !it.isDone },
+        currentMonth = currentMonthPlan(inputs, currentProgress),
     )
 }
+
+/**
+ * Bu ayin plani, Plan sekmesinin kartiyla AYNI metinlerle (skor, "3/5 kalem",
+ * satirlar): Ozet'te baska, Plan'da baska bir rakam okunmasin.
+ */
+internal fun currentMonthPlan(inputs: PlanInputs, progress: MonthPlanProgress): CurrentMonthPlan? {
+    val card = investmentCard(inputs, progress, MonthRelation.Current, copy = null) ?: return null
+    val goals = progress.items
+        .groupBy { it.item.goalId }
+        .mapNotNull { (goalId, lines) ->
+            val goal = goalId?.let { id -> inputs.goals.firstOrNull { it.id == id } } ?: return@mapNotNull null
+            val weights = lines.mapNotNull { it.plannedTl }
+            // Hicbir kalemin agirligi bilinmiyorsa "₺0" uydurulmaz.
+            val planned = if (weights.isEmpty()) null else weights.sum()
+            val summary = buildString {
+                append("Planlanan ${planned?.let { Money.tl(it) } ?: "—"}")
+                if (goal.monthlyContribution > 0.0) append(" · Aylık katkı ${Money.tl(goal.monthlyContribution)}")
+            }
+            val required = goal.requiredMonthly(goalWealth(goal, inputs.held, inputs.assignments), inputs.today)
+                ?.takeIf { it > 0.0 }
+                ?.let { "Gereken aylık ≈ ${Money.tl(it)} (${monthsToTarget(goal, inputs.today)} ay)" }
+            GoalMonthPlan(
+                goalId = goal.id,
+                // Hedef cipi yazilmaz: kart zaten o hedefin sayfasinda.
+                rows = lines.map { planRow(inputs, it, MonthRelation.Current).copy(goalName = null) },
+                summary = summary,
+                requiredLine = required,
+            )
+        }
+    val count = progress.items.size
+    return CurrentMonthPlan(
+        title = "${progress.month.monthName()} planı",
+        scoreText = card.scoreText,
+        score = card.score,
+        countText = "${progress.doneCount}/$count kalem",
+        summary = card.summary,
+        goals = goals,
+    )
+}
+
+/** requiredMonthly ile AYNI ay sayimi (ay farki, en az 1). */
+private fun monthsToTarget(goal: Goal, today: KefeDate): Int =
+    ((goal.targetDate.year - today.year) * 12 + (goal.targetDate.month - today.month)).coerceAtLeast(1)
 
 /** "Seri" karti; hucreler eskiden yeniye, son hucre bu ay. */
 internal fun streakCard(streak: PlanStreak): StreakCard = StreakCard(

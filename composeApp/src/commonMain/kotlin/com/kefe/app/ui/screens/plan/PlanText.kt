@@ -155,6 +155,9 @@ internal fun emptyCopyLabel(source: YearMonth, target: YearMonth): String =
 internal fun streakHeadline(streak: PlanStreak): String = when {
     streak.current >= 2 -> "${streak.current} ay üst üste düzenli"
     streak.current == 1 -> if (streak.grid.lastOrNull()?.second.isRegular()) "Bu ay düzenli" else "Geçen ay düzenli"
+    // Ayin plani yokken "planin %80'i" hangi plani soyledigi belli olmayan bir kural olurdu.
+    streak.grid.lastOrNull()?.second.let { it == null || it == StreakCell.NoPlan || it == StreakCell.BeforeStart } ->
+        "Bu ay için plan yapıp %80'ini tamamlayınca seri başlar."
     else -> "Bu ay planın %80'i yapılınca seri başlar."
 }
 

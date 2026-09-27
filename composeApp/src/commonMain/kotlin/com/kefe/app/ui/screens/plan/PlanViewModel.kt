@@ -18,9 +18,11 @@ import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.YearMonth
 import com.kefe.app.domain.model.catalogName
 import com.kefe.app.domain.model.defaultPlanMode
+import com.kefe.app.domain.model.monthPlanProgress
 import com.kefe.app.domain.model.newId
 import com.kefe.app.domain.model.parseAssetKey
 import com.kefe.app.domain.model.planItemId
+import com.kefe.app.domain.model.prefillQuantity
 import com.kefe.app.domain.model.toItems
 import com.kefe.app.domain.repository.PlanRepository
 import com.kefe.app.domain.repository.PortfolioRepository
@@ -31,6 +33,7 @@ import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.ui.format.parseTrAmountOrNull
 import com.kefe.app.ui.format.rawAmount
 import com.kefe.app.ui.mvi.MviViewModel
+import com.kefe.app.ui.screens.transaction.AddTransactionPrefill
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -211,13 +214,23 @@ class PlanViewModel(
     // --- Yatirim plani -------------------------------------------------------
 
     /**
-     * "Al": ekleme sayfasi, varligin eldeki EN BUYUK pozisyonuyla; elde yoksa varlik
-     * secimiyle acilir. Miktar ve hedef onsecimi 5/5'te.
+     * "Al": ekleme sayfasi satirin varligi ve KALAN miktariyla acilir (6 / 10 gr ->
+     * 4 gr). Tutar satirinda fon ve hissede miktar kullaniciya kalir; pay fiyati
+     * islem aninda belli olur (bkz. prefillQuantity).
      */
     private fun buy(itemId: String) {
         val inputs = latest ?: return
         val item = inputs.items.firstOrNull { it.id == itemId } ?: return
-        emitEffect(PlanEffect.OpenAddTransaction(heldPositionOf(inputs.held, item.assetKey)?.id))
+        val line = monthPlanProgress(item.month, inputs.items, inputs.transactions, inputs.positions, inputs.today)
+            .items.firstOrNull { it.item.id == itemId }
+        emitEffect(
+            PlanEffect.OpenAddTransaction(
+                AddTransactionPrefill(
+                    assetKey = item.assetKey,
+                    quantityText = line?.prefillQuantity()?.let { rawAmount(it) },
+                ),
+            ),
+        )
     }
 
     /** Taslak yalniz kaynakta bu ayda olmayan bir varlik varken acilir (bkz. planContent). */

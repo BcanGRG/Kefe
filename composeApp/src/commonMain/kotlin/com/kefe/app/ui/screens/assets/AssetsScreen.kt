@@ -42,6 +42,7 @@ import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.quantityLabel
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcons
+import com.kefe.app.ui.icons.icon
 import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
@@ -317,15 +318,3 @@ private fun AssetsSkeleton() {
         repeat(4) { KefeSkeletonBlock(height = 132.dp, radius = 16.dp) }
     }
 }
-
-// --- Yardimci --------------------------------------------------------------
-
-private fun AssetClass.icon() = when (this) {
-    AssetClass.Gold -> KefeIcons.Gold
-    AssetClass.Silver -> KefeIcons.Silver
-    AssetClass.Fx -> KefeIcons.Fx
-    AssetClass.Fund -> KefeIcons.Fund
-    AssetClass.Stock -> KefeIcons.Stock
-    AssetClass.Cash -> KefeIcons.Cash
-}
-

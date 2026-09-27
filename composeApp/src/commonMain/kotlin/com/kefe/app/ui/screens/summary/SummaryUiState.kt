@@ -14,6 +14,7 @@ import com.kefe.app.ui.layout.KefeMarketRow
 import com.kefe.app.ui.format.UnknownChangeText
 import com.kefe.app.ui.components.longLabel
 import com.kefe.app.ui.components.shortLabel
+import com.kefe.app.ui.screens.plan.CurrentMonthPlan
 
 /**
  * Hero rakaminin gosterim birimi. Turkiye'de "kac gram altin ediyor" sorusu
@@ -103,6 +104,12 @@ enum class NetWorthRange(val label: String, val caption: String, val days: Int?)
 
 data class SummaryUiState(
     val stage: SummaryStage = SummaryStage.Loading,
+    /**
+     * Bu ayin plani; plan yoksa null. Ozet VM'i DOLDURMAZ: kabuk Plan VM'inin
+     * turettigini verir (bkz. App.kt) - ikinci bir defter aboneligi acilmasin ve
+     * Ozet ile Plan ayni rakami yazsin.
+     */
+    val monthPlan: CurrentMonthPlan? = null,
     val portfolioName: String = "",
     val members: List<Member> = emptyList(),
     val totals: PortfolioTotals? = null,

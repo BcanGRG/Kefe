@@ -1998,3 +1998,148 @@ masaüstünde geçince işaretlenir.
     2026):* plan eşitlemesi plan arayüzünden önce geldi; tablolar hesapta da
     duruyor ve sıfırlamadan sonra geri geliyor, onay metni onlar için de
     doğru. Metin değişmedi.
+
+## 43 · Aylık plan: ne alacağım, aldım mı, kaç aydır düzenliyim ✅
+
+**Neydi.** Kefe elde olanı sayıyordu ama "bu ay ne alacağım" sorusuna yer
+yoktu. Kullanıcının istediği: ay ay bir alım planı ("Ekim: 10 gr altın, 5 gr
+gümüş, şu kadar fon"), ay sonunda planın yapılıp yapılmadığı, plan dışı
+alımlar, "Ev" gibi bir hedefe bağlanabilmesi, maaş ve giderlerin girilmesi, bir
+gider bütçesi ve "kaç aydır düzenliyim" serisi.
+
+**Alınan kararlar** (yedisi de önerilen seçenek):
+
+- Hedef bağı yumuşak: bir plan satırı bir hedefe bağlanır ama varlığın hedef
+  atamasını tek başına değiştirmez.
+- Giderler hafif tutuldu: 9 sabit kategori, tutar ve not.
+- Plan sekmesi alt barda Ayarlar'ın yerini aldı; Ayarlar dişliyle açılır.
+- Plan, bütçe ve seri hanenin ortak kaydı; gelir kişi başına.
+- Bir ay TL ağırlıklı skoru %80'i geçince "düzenli" sayılır. İçinde
+  bulunulan ay seriyi bozmaz.
+- Eşleşme tam varlıkla yapılır: 22 ayar gram, 24 ayar gram yerine sayılmaz.
+- Geçen aydan kopyalarken her satır için Taşı/Bırak sorulur; varsayılan Bırak.
+
+**Ne yapıldı — beş PR.**
+
+1. **Hesap (#48).**
+   - Her varlığın tek bir kimlik anahtarı var (`AssetKey.kt`, `goldAssetKey`
+     buraya taşındı).
+   - `YearMonth`.
+   - Ayın ilerlemesi, plan dışı alımlar, skor ve seri **saklanmaz**, işlem
+     defterinden türetilir (`MonthlyPlan.kt`, `PlanStreak.kt`). Saklansaydı
+     düzenlenen, silinen ya da geriye tarihlenen bir işlemle bayatlardı.
+   - `Goal.requiredMonthly`: hedef tarihine yetişmek için gereken aylık tutar.
+2. **Cihazda (#49).**
+   - Üç tablo (`12.sqm`): `plan_items`, `income_entries`,
+     `expense_entries`/`expense_budgets`.
+   - Kimlikler içerikten türer (`pi_<yıl>_<ay>_<varlık>`, `inc_…`, `eb_…`).
+     İki telefon aynı satırı yazarsa iki kopya değil tek satır olur. Gider
+     kayıtları UUID taşır.
+   - Tablolar yedeğe girer.
+3. **Eşitleme (#51).**
+   - Dört tablo push, pull ve gerçek zamanlı sinyalle eşitlenir.
+   - Sunucu tarafı `supabase/migrations/20260927_plan_tables.sql` ile
+     kuruldu: bileşik anahtar `(user_id, id)`, RLS, yayın ve LWW
+     tetikleyicisi.
+   - Bağlanırken gelir satırları hesabın profil kimliklerine yeniden eşlenir.
+4. **Plan sekmesi (#52).**
+   - Ay geçişi bir ay ileriye kadar gider.
+   - Yatırım planı: skor, satırlar, durum rozetleri ve "Al".
+   - Plan dışı alımlar ve hedeflere katkı.
+   - Para akışı: plan ile gerçekleşen yan yana.
+   - Giderler ve bütçe.
+   - 12 hücreli seri ızgarası.
+   - Satır, gelir, gider, bütçe ve kopyalama sayfaları kabukta, tek yerde.
+5. **Plan her yerde (bu PR).**
+   - **"Al" doldurulmuş açılır.**
+     - Satırın varlığıyla açılır: elde varsa en büyük pozisyonu, yoksa
+       anahtardan çözülen seçim.
+     - Eksik miktar dolu gelir: 6 / 10 gr → 4 gr.
+     - Tutar satırında fon ve hissede pay adedi uydurulmaz. Elde olmayan fon
+       kodla TEFAS'ta hemen aranır.
+   - **İşlem sayfasında plan satırı.** Her yeni alımda hedef seçicinin
+     üstünde çıkar:
+     - "Eylül planında: 10 gr · Ev · kalan 4 gr"
+     - satır tamamlandıysa "… · tamamlandı"
+     - ayın planı var ama bu varlık yoksa "Eylül planında yok · plan dışı
+       sayılır"
+     - Satışta, düzenlemede ve planı olmayan ayda gösterilmez.
+   - **Hedef önseçimi.** Planın hedefi yalnız varlığın hiç hedefi yoksa
+     önseçilir. Varlık başka bir hedefteyse o hedef korunur ve durum yazılır.
+     Varlığı taşımak eski hedefin bütün atamasını düşürürdü; bu karar plana
+     bırakılamaz. Önseçim tarafı izler: satışa geçince varlığın kendi hedefine
+     döner, elle seçilen hedef kalır.
+   - **Özet.** "Bu ay" kartında plan satırı: "Eylül planı %34", "1/3 kalem ·
+     ₺67.408 planlandı" ve skor çubuğu. Dokununca Plan bu ayda açılır. Bakiye
+     gizliyken yalnız kalem sayısı yazılır. Telefon, tablet ve masaüstünde
+     aynı.
+   - **Hedef detayı.** Halkanın altında "Eylül planı" kartı:
+     - bu hedefe bağlı satırlar, Plan sekmesindekiyle aynı ("Al" ve
+       düzenleme dahil)
+     - "Planlanan ₺… · Aylık katkı ₺…"
+     - "Gereken aylık ≈ ₺… (N ay)"
+   - Özet ve hedef detayı ikinci bir hesap yapmaz. Kabuktaki Plan
+     ViewModel'inin bir kez türettiği "bu ay" özetini okurlar (yan menü
+     rozetiyle aynı kaynak). Böylece üç ekran farklı rakam yazamaz ve kimse
+     bütün deftere ikinci kez abone olmaz. Özet, sekmede seçili ayı değil
+     bugünü izler.
+
+**Kurallar.**
+
+- Ölçü brüt alımdır. Satış planın yapılma oranını düşürmez; para akışında net
+  yeni parayı azaltır.
+- Miktar satırı miktarla, tutar satırı komisyon dahil TL ile ölçülür.
+- Her satır en fazla %100 sayılır; aşım "plan dışı" bölümünde görünür.
+- Skor TL ağırlıklıdır. Miktar satırının ağırlığı kaydedildiği andaki alış
+  fiyatıyla sabitlenir, geçmiş ayın skoru bugünkü fiyatla oynamaz.
+- Ay, cihazın gününe göre seçilir: piyasa günü ay dönümünde bir katkıyı iki
+  aydan da düşürüyordu.
+
+**Yol boyunca çıkanlar.**
+
+- İşlem sayfası her yeni açılışta formu sıfırlarken hedef listesini ve hesap
+  modunu taşımıyordu. Hedef seçici bir sonraki portföy emisyonuna kadar hiç
+  çizilmiyordu, plan hedefi de "bilinmeyen hedef" sayılıp önseçilmiyordu.
+  Telefonda "Al" denenirken görüldü ve düzeltildi.
+- Tablet kartı ve masaüstü satırı ana hedef yokken "/ ₺0 hedef" yazıyordu.
+  Artık telefondaki gibi yazmıyor.
+- Varlık sınıfı ikonunun dört özel kopyası (Varlıklar, işlem sayfası, Özet,
+  galeri) tek eşlemeye bağlandı.
+- Plan yokken seri kartı "Bu ay planın %80'i yapılınca seri başlar." diyordu
+  ve olmayan bir plana işaret ediyordu. Artık "Bu ay için plan yapıp %80'ini
+  tamamlayınca seri başlar." diyor.
+
+**Doğrulama.**
+
+- **806 masaüstü testi**, hepsi yeşil. Bu PR'da yeniler:
+  - `PlanHintTextTest`
+  - `PlanDeriveTest`: bu ayın özeti seçili aydan bağımsız ve hedefe göre
+    gruplanıyor; ayın planı yoksa özet yok.
+  - `PlanViewModelTest`: "Al" varlığı ve kalanı gönderiyor.
+  - `PlanTextTest`: plansız ayın seri metni.
+- Cihazda, 27 Eylül 2026, R58N81SAZ1Y (S10+, hesapsız mod). Güncelleme 13
+  Ağustos sürümünün (veritabanı 12) üzerine kuruldu ve 12.sqm'i sorunsuz
+  geçti: 57 işlem, 17 varlık ve 6 hedef yerinde. Denenenler:
+  - Plan satırı "Gram (24 ayar) · 10 gr · Ev" kaydedildi; kart "0 / 10 gr ·
+    Bekliyor · Al" gösterdi.
+  - "Al", sayfayı 2. adımda "Gram Altın · 10 gr" ile açtı. "Eylül planında:
+    10 gr · Ev · kalan 10 gr" satırı çıktı, hedef seçicide Ev seçiliydi.
+  - Satış'a geçince satır kayboldu, Alış'a dönünce geri geldi. Kaydedilmedi.
+  - Özet'teki "Bu ay" kartı "Eylül planı %0 · 0/1 kalem · ₺67.408
+    planlandı" gösterdi.
+  - Ev hedef detayında "Eylül planı" kartı çıktı: satır, "Planlanan ₺67.408"
+    ve "Gereken aylık ≈ ₺73.508 (27 ay)".
+  - "Plana git" Plan sekmesini Eylül'de açtı.
+- Eşitleme 3/5'te iki yönlü, 4/5'te Plan sekmesinden sunucuya doğrulandı.
+
+**Sunucu tarafı.** Bu PR sunucuya dokunmaz. Plan tabloları 27 Eylül'de canlıya
+uygulandı (bkz. #51).
+
+**Sonraya.**
+
+- Plan sekmesinin renkleri, özellikle koyu temada, karışık duruyor. Kullanıcı
+  tasarımı birlikte gözden geçirmek istiyor.
+- Para akışı kartı yeterince açıklayıcı değil. Kullanıcı bunu 6. adım olarak
+  istedi.
+- 6 aylık ve 1 yıllık planlar: bir kez kurmak, sonra tek tek ayları
+  değiştirebilmek.

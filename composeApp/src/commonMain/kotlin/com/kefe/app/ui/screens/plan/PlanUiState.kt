@@ -16,6 +16,7 @@ import com.kefe.app.domain.model.parseAssetKey
 import com.kefe.app.domain.model.toItems
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.parseTrAmountOrNull
+import com.kefe.app.ui.screens.transaction.AddTransactionPrefill
 
 // Bu dosya Compose'a BAGLI DEGIL: durum, niyet ve etki saf Kotlin; turetim ve
 // metinler commonTest'te ekransiz sinanir (bkz. PlanTextTest, PlanViewModelTest).
@@ -53,6 +54,38 @@ data class PlanContent(
      * Rozet her ekranda gorunur; gecmis bir aya bakmak onu degistirmemeli.
      */
     val currentMonthOpenCount: Int = 0,
+    /** Bu ayin plani, secili aydan bagimsiz (Ozet ve hedef detayi okur); plan yoksa null. */
+    val currentMonth: CurrentMonthPlan? = null,
+)
+
+/**
+ * BU AYIN plani - Ozet'in "Bu ay" karti ve hedef detayinin "Bu ay planı"
+ * bolumu icin.
+ *
+ * Turetim kabuktaki Plan VM'inde bir kez yapilir (rozet gibi); iki ekran ayni
+ * defter icin ikinci bir abonelik acmaz ve Plan sekmesiyle ayni rakami yazar.
+ */
+data class CurrentMonthPlan(
+    /** "Eylül planı". */
+    val title: String,
+    /** "%72". */
+    val scoreText: String,
+    val score: Float?,
+    /** "3/5 kalem" - bakiye gizliyken yalniz bu yazilir. */
+    val countText: String,
+    /** "3/5 kalem · ₺70.330 planlandı". */
+    val summary: String,
+    val goals: List<GoalMonthPlan>,
+)
+
+/** Hedef detayindaki "Bu ay planı": bu hedefe bagli kalemler. */
+data class GoalMonthPlan(
+    val goalId: String,
+    val rows: List<PlanRowUi>,
+    /** "Planlanan ₺67.408 · Aylık katkı ₺50.000". */
+    val summary: String,
+    /** "Gereken aylık ≈ ₺61.200 (27 ay)"; tamamlanan ya da tarihi gecen hedefte null. */
+    val requiredLine: String?,
 )
 
 /**
@@ -430,8 +463,12 @@ sealed interface PlanIntent {
 
 /** Kabukta karsilanir (bkz. App.kt): ekleme sayfasi ve serit kabugun. */
 sealed interface PlanEffect {
-    /** "Al": 4/5'te mevcut ekleme sayfasi; varlik eldeyse onunla, degilse varlik secimiyle. */
-    data class OpenAddTransaction(val positionId: String?) : PlanEffect
+    /**
+     * "Al": ekleme sayfasi satirin varligi ve kalan miktariyla acilir; varlik
+     * eldeyse en buyuk pozisyonuyla. Hedef onsecimi sayfanin kendi isi (plan
+     * mevcut atamayi ezmez, bkz. planGoalSelection).
+     */
+    data class OpenAddTransaction(val prefill: AddTransactionPrefill) : PlanEffect
 
     /** Kabugun saveError seridi. */
     data class Message(val text: String) : PlanEffect
