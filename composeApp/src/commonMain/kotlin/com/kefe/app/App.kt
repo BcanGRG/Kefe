@@ -50,6 +50,8 @@ import com.kefe.app.navigation.KefeKey
 import com.kefe.app.navigation.LockKey
 import com.kefe.app.navigation.MarketKey
 import com.kefe.app.navigation.OnboardingKey
+import com.kefe.app.navigation.OpenSettingsStep
+import com.kefe.app.navigation.PlanKey
 import com.kefe.app.navigation.ProfileSetupKey
 import com.kefe.app.navigation.SettingsKey
 import com.kefe.app.navigation.ProfilesKey
@@ -58,15 +60,17 @@ import com.kefe.app.navigation.SummaryKey
 import com.kefe.app.navigation.WelcomeKey
 import com.kefe.app.navigation.desktopDestinations
 import com.kefe.app.navigation.isAccountFlow
+import com.kefe.app.navigation.navSelection
+import com.kefe.app.navigation.openSettingsStep
 import com.kefe.app.navigation.restartSignIn
 import com.kefe.app.navigation.rootFor
 import com.kefe.app.navigation.topLevelDestinations
 import com.kefe.app.security.BiometricGate
 import com.kefe.app.ui.brand.KefeSplash
 import com.kefe.app.ui.components.KefeBackHandler
-import com.kefe.app.ui.components.KefeBottomNav
 import com.kefe.app.ui.components.KefeAutoDismissBanner
 import com.kefe.app.ui.gallery.DesignSystemGallery
+import com.kefe.app.ui.layout.KefeBottomNav
 import com.kefe.app.ui.layout.KefeNavItem
 import com.kefe.app.ui.layout.KefeNavigationRail
 import com.kefe.app.ui.layout.KefeSideNavigation
@@ -116,6 +120,10 @@ import com.kefe.app.ui.screens.goals.GoalsScreen
 import com.kefe.app.ui.screens.goals.GoalsViewModel
 import com.kefe.app.ui.screens.market.MarketScreen
 import com.kefe.app.ui.screens.market.MarketViewModel
+import com.kefe.app.ui.screens.plan.PlanEffect
+import com.kefe.app.ui.screens.plan.PlanIntent
+import com.kefe.app.ui.screens.plan.PlanScreen
+import com.kefe.app.ui.screens.plan.PlanViewModel
 import com.kefe.app.ui.screens.summary.SummaryIntent
 import com.kefe.app.ui.screens.summary.SummaryScreenAdaptive
 import com.kefe.app.ui.screens.summary.SummaryViewModel
@@ -348,6 +356,27 @@ private fun KefeApp(
         if (backStack.firstOrNull() != key) backStack[0] = key
     }
 
+    /**
+     * Ayarlar: masaustunde yan menunun ust duzey satiri (kok olur); telefonda ve
+     * tablette ITILEN ikincil ekran - alt barda yerini Plan aldi, geri oku acildigi
+     * yere doner. Yiginda zaten varsa ustundekiler kapanir, ikinci kopya itilmez;
+     * yarim bir giris ya da profil adiminin ustune de itilmez (tablette ray onlarin
+     * yaninda da gorunur). Kural SAF ve testli: openSettingsStep (ShellNavigation.kt).
+     */
+    fun openSettings() {
+        fun popAbove(index: Int) {
+            while (backStack.lastIndex > index) backStack.removeAt(backStack.lastIndex)
+        }
+        when (val step = openSettingsStep(backStack, windowSize.isExpanded)) {
+            OpenSettingsStep.AsRoot -> selectTab(SettingsKey)
+            is OpenSettingsStep.PopTo -> popAbove(step.index)
+            is OpenSettingsStep.Push -> {
+                popAbove(step.popTo)
+                goTo(SettingsKey)
+            }
+        }
+    }
+
     // Kabuk (nav, ust cubuk, piyasa paneli) portfoy ozetinden beslenir.
     val summaryVm = koinViewModel<SummaryViewModel>()
     val summary by summaryVm.state.collectAsState()
@@ -468,6 +497,19 @@ private fun KefeApp(
         }
     }
 
+    // Plan VM'i de KABUKTA: sheet'leri ekranin degil kabugun ustunde, TEK yerde cizilir
+    // (GoalsScreen'deki cift sheet tekrarlanmasin) ve yan menu rozeti de ondan beslenir.
+    // Ayarlar etkilerinden ONCE tanimli: "Tüm verileri sil" secili ayi da sifirlar.
+    val planVm = koinViewModel<PlanViewModel>()
+    val planState by planVm.state.collectAsState()
+    CollectEffects(planVm.effects) { effect ->
+        when (effect) {
+            // 4/5: yalniz mevcut ekleme sayfasi; on doldurma 5/5'te.
+            is PlanEffect.OpenAddTransaction -> openAddSheet(TradeSide.Buy, effect.positionId)
+            is PlanEffect.Message -> saveError = effect.text
+        }
+    }
+
     // Ayarlar etkileri kabukta karsilanir: silme sonrasi yigini sifirlamak ve
     // seride mesaj gostermek ekranin isi degil.
     CollectEffects(settingsVm.effects) { effect ->
@@ -493,6 +535,10 @@ private fun KefeApp(
             SettingsEffect.AllDataDeleted -> {
                 saveError = "Tüm veriler silindi."
                 profileSetupVm.onIntent(ProfileSetupIntent.Reset)
+                // Plan VM'i surec boyunca yasar ve secili ayi tutar. Gecen ay veri
+                // olmadan da sinir icinde kaldigi icin kirpma onu bosaltmaz; yeni
+                // kurulum Plan'i gecmis bir ayda acmasin.
+                planVm.onIntent(PlanIntent.ThisMonth)
                 scope.launch {
                     val auth = authRepository.observeAuthState().first { it !is AuthState.Unknown }
                     while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
@@ -543,7 +589,12 @@ private fun KefeApp(
     // kromu cizilmez.
     val inShell = (current as? KefeKey)?.isAccountFlow() == false
     val navItems = if (windowSize.isExpanded) desktopDestinations else topLevelDestinations
-    val navIndex = navItems.indexOfFirst { it.key == current }.coerceAtLeast(0)
+    // Ayarlar yiginin HERHANGI bir yerindeyse (ustunde Profiller, giris, profil adimi ya da
+    // katalog olsa da) secim Ayarlar'dir: masaustunde "Ayarlar" satiri, telefonda ve
+    // tablette hicbir sekme (-1; raydaki disli secili). NEYDI: coerceAtLeast(0) koke
+    // bakiyordu; kok listede yokken Ozet'i secili gosteriyordu.
+    val settingsOpen = SettingsKey in backStack
+    val navIndex = navSelection(backStack, navItems)
     val members = summary.members.mapIndexed { index, m -> m.initials to index }
     // Ray ve yan navigasyonun durumu HESAP modudur (summary.cloudMode), fiyat
     // tazeligi DEGIL. NEYDI: burada fiyattan turetiliyordu - fiyat ucu
@@ -580,7 +631,7 @@ private fun KefeApp(
                     priceLine = summary.navPriceLine,
                     modifier = Modifier.fillMaxHeight(),
                     // Hesap satirlari Ayarlar'in ilk bolumu: her platformda tek hedef.
-                    onStatusClick = { selectTab(SettingsKey) },
+                    onStatusClick = { openSettings() },
                 )
             } else if (inShell && windowSize.isMedium) {
                 KefeNavigationRail(
@@ -591,7 +642,10 @@ private fun KefeApp(
                     members = members,
                     cloudMode = summary.cloudMode,
                     modifier = Modifier.fillMaxHeight(),
-                    onStatusClick = { selectTab(SettingsKey) },
+                    onStatusClick = { openSettings() },
+                    // Tablette Ayarlar sekme degil, alt kumedeki disli.
+                    onOpenSettings = { openSettings() },
+                    settingsSelected = settingsOpen,
                 )
             }
 
@@ -800,7 +854,10 @@ private fun KefeApp(
                                     onSearchQueryChange = { searchQuery = it },
                                     onOpenMarketRow = { goTo(MarketKey) },
                                     // Cip: Ayarlar'in ilk bolumu hesap.
-                                    onOpenAccount = { selectTab(SettingsKey) },
+                                    onOpenAccount = { openSettings() },
+                                    // Disli: telefonda Ayarlar'in kapisi (alt barda
+                                    // yerini Plan aldi); tablet ve masaustu cizmez.
+                                    onOpenSettings = { openSettings() },
                                     // "Tamamla": hesabi indirip "bu telefon kimin"i
                                     // soran adim; baglantiyi o yazar.
                                     onCompleteLink = { goTo(ProfileSetupKey) },
@@ -894,6 +951,12 @@ private fun KefeApp(
                             }
                         }
 
+                        entry<PlanKey> {
+                            ContentWidth {
+                                PlanScreen(state = planState, onIntent = planVm::onIntent)
+                            }
+                        }
+
                         entry<MarketKey> {
                             val vm = koinViewModel<MarketViewModel>()
                             val state by vm.state.collectAsState()
@@ -936,6 +999,9 @@ private fun KefeApp(
                                 SettingsScreen(
                                     state = settings,
                                     onIntent = settingsVm::onIntent,
+                                    // Itilmisse (telefon/tablet) geri oku; kokse (masaustu
+                                    // ya da pencere daraldiktan sonra) ok yok.
+                                    onBack = if (backStack.size > 1) ({ goBack() }) else null,
                                     onOpenShare = { goTo(ProfilesKey) },
                                     onLink = { openSignIn(SignInPurpose.Link) },
                                     onRelogin = { openSignIn(SignInPurpose.Relogin) },
@@ -964,6 +1030,7 @@ private fun KefeApp(
 
                 if (inShell && windowSize.isCompact) {
                     KefeBottomNav(
+                        items = navItems.map { KefeNavItem(it.label, it.icon) },
                         selected = navIndex,
                         onSelect = { selectTab(navItems[it].key) },
                         onAdd = { openAddSheet() },

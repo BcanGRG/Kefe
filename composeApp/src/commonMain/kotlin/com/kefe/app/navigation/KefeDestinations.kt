@@ -15,9 +15,17 @@ data object AssetsKey : KefeKey
 
 data object GoalsKey : KefeKey
 
-data object SettingsKey : KefeKey
+/** Aylik plan: yatirim plani, gelir-gider, butce ve seri. Alt barda Ayarlar'in yerini aldi. */
+data object PlanKey : KefeKey
 
 // --- Ikincil ekranlar ------------------------------------------------------
+
+/**
+ * Ayarlar. Masaustunde yan menude UST DUZEY satirdir (kok olur); telefonda ve
+ * tablette ITILEN ikincil ekrandir (geri oklu) - Ozet'teki ya da raydaki
+ * disliyle acilir. NEDEN: alt bar dort sekmeyle dolu ve Plan onun yerini aldi.
+ */
+data object SettingsKey : KefeKey
 
 data class AssetDetailKey(val positionId: String) : KefeKey
 
@@ -64,6 +72,7 @@ data object GalleryKey : KefeKey
 /**
  * Alt navigasyondaki sekmeler. Orta slot (Islem Ekle) sekme DEGIL, one cikan
  * aksiyondur - bu yuzden listede yer almaz, ayri ele alinir.
+ * Alt bar ve ray "Ekle"yi ikinci sekmeden (indeks 1) SONRA cizer.
  */
 data class TopLevelDestination(
     val key: KefeKey,
@@ -75,11 +84,11 @@ val topLevelDestinations: List<TopLevelDestination> = listOf(
     TopLevelDestination(SummaryKey, "Özet", KefeIcons.Balance),
     TopLevelDestination(AssetsKey, "Varlıklar", KefeIcons.Wallet),
     TopLevelDestination(GoalsKey, "Hedefler", KefeIcons.Target),
-    TopLevelDestination(SettingsKey, "Ayarlar", KefeIcons.ListMenu),
+    TopLevelDestination(PlanKey, "Plan", KefeIcons.Calendar),
 )
 
 /**
- * Masaustu yan navigasyonu ALTI satirdir - telefon alt navigasyonundan farkli.
+ * Masaustu yan navigasyonu YEDI satirdir - telefon alt navigasyonundan farkli.
  * Piyasa ve Aktivite telefonda ikincil ekranken masaustunde ust duzeydedir;
  * 240dp'lik kolonda yer var ve tasarim bunlari orada gosteriyor.
  */
@@ -87,7 +96,8 @@ val desktopDestinations: List<TopLevelDestination> = listOf(
     TopLevelDestination(SummaryKey, "Özet", KefeIcons.Balance),
     TopLevelDestination(AssetsKey, "Varlıklar", KefeIcons.Wallet),
     TopLevelDestination(GoalsKey, "Hedefler", KefeIcons.Target),
+    TopLevelDestination(PlanKey, "Plan", KefeIcons.Calendar),
     TopLevelDestination(MarketKey, "Piyasa", KefeIcons.Fund),
     TopLevelDestination(ActivityKey, "Aktivite", KefeIcons.Clock),
-    TopLevelDestination(SettingsKey, "Ayarlar", KefeIcons.ListMenu),
+    TopLevelDestination(SettingsKey, "Ayarlar", KefeIcons.Settings),
 )

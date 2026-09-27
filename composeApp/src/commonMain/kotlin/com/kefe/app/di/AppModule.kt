@@ -51,6 +51,7 @@ import com.kefe.app.ui.screens.assets.AssetsViewModel
 import com.kefe.app.ui.screens.goals.GoalDetailViewModel
 import com.kefe.app.ui.screens.goals.GoalsViewModel
 import com.kefe.app.ui.screens.market.MarketViewModel
+import com.kefe.app.ui.screens.plan.PlanViewModel
 import com.kefe.app.ui.screens.summary.SummaryViewModel
 import com.kefe.app.ui.screens.transaction.AddTransactionViewModel
 import org.koin.core.module.dsl.viewModel
@@ -139,6 +140,9 @@ val appModule = module {
     viewModelOf(::SummaryViewModel)
     viewModelOf(::AssetsViewModel)
     viewModelOf(::GoalsViewModel)
+    // Plan VM'i gun akisini varsayilandan alir; viewModelOf kurucu referansiyla varsayilan
+    // parametreyi dolduramadigi icin acik yazilir.
+    viewModel { PlanViewModel(get(), get(), get(), get(), get()) }
     viewModelOf(::MarketViewModel)
     viewModelOf(::AddTransactionViewModel)
     viewModelOf(::ActivityViewModel)

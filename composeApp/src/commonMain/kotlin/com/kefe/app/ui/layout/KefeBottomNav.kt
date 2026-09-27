@@ -1,4 +1,4 @@
-package com.kefe.app.ui.components
+package com.kefe.app.ui.layout
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -51,13 +51,26 @@ import com.kefe.app.ui.theme.Space
  * ONEMLI: orta slot SEKME DEGILDIR - secili duruma girmez, `selected` degerini
  * degistirmez. Ust kenardan tasar ve cevresindeki `surface` halka ile
  * seritten ayrilir; boylece bir sekme gibi okunmaz.
+ *
+ * Sekmeler [items]'tan gelir (ray gibi): etiket ve ikon tek yerde,
+ * KefeDestinations'ta tanimli. NEYDI: dort sekme burada elle yaziliydi; Plan
+ * Ayarlar'in yerini alinca iki liste ayri ayri degismek zorundaydi. Rozet
+ * ([KefeNavItem.badgeCount]) burada cizilmez - serit dar.
+ *
+ * [selected] -1 ise hicbir sekme secili cizilmez (Ayarlar acikken ya da kok
+ * listede yokken). NEYDI: kabuk `coerceAtLeast(0)` ile Ozet'i yanlislikla
+ * secili gosteriyordu.
+ *
+ * Aksiyonun yeri [addAfterIndex]'ten sonraki bosluktur - rayla ayni sozlesme.
  */
 @Composable
 fun KefeBottomNav(
+    items: List<KefeNavItem>,
     selected: Int,
     onSelect: (Int) -> Unit,
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
+    addAfterIndex: Int = 1,
 ) {
     val colors = KefeTheme.colors
 
@@ -87,12 +100,11 @@ fun KefeBottomNav(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Sekmeler 52dp'dir; kalan 8/18dp dolgu seridi 78dp'ye tamamlar.
-            NavTab(KefeIcons.Balance, "Özet", selected == 0) { onSelect(0) }
-            NavTab(KefeIcons.Wallet, "Varlıklar", selected == 1) { onSelect(1) }
-            // Orta aksiyonun yeri - sekme sayilmaz, bos birakilir
-            Spacer(Modifier.weight(1f))
-            NavTab(KefeIcons.Target, "Hedefler", selected == 2) { onSelect(2) }
-            NavTab(KefeIcons.ListMenu, "Ayarlar", selected == 3) { onSelect(3) }
+            items.forEachIndexed { index, item ->
+                NavTab(item.icon, item.label, selected == index) { onSelect(index) }
+                // Orta aksiyonun yeri - sekme sayilmaz, bos birakilir
+                if (index == addAfterIndex) Spacer(Modifier.weight(1f))
+            }
         }
 
         // Aksiyonun ALT kenari sekme alaninin alt kenariyla hizalanir; 62dp'lik
