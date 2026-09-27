@@ -54,6 +54,38 @@ data class PlanContent(
      * Rozet her ekranda gorunur; gecmis bir aya bakmak onu degistirmemeli.
      */
     val currentMonthOpenCount: Int = 0,
+    /** Bu ayin plani, secili aydan bagimsiz (Ozet ve hedef detayi okur); plan yoksa null. */
+    val currentMonth: CurrentMonthPlan? = null,
+)
+
+/**
+ * BU AYIN plani - Ozet'in "Bu ay" karti ve hedef detayinin "Bu ay planı"
+ * bolumu icin.
+ *
+ * Turetim kabuktaki Plan VM'inde bir kez yapilir (rozet gibi); iki ekran ayni
+ * defter icin ikinci bir abonelik acmaz ve Plan sekmesiyle ayni rakami yazar.
+ */
+data class CurrentMonthPlan(
+    /** "Eylül planı". */
+    val title: String,
+    /** "%72". */
+    val scoreText: String,
+    val score: Float?,
+    /** "3/5 kalem" - bakiye gizliyken yalniz bu yazilir. */
+    val countText: String,
+    /** "3/5 kalem · ₺70.330 planlandı". */
+    val summary: String,
+    val goals: List<GoalMonthPlan>,
+)
+
+/** Hedef detayindaki "Bu ay planı": bu hedefe bagli kalemler. */
+data class GoalMonthPlan(
+    val goalId: String,
+    val rows: List<PlanRowUi>,
+    /** "Planlanan ₺67.408 · Aylık katkı ₺50.000". */
+    val summary: String,
+    /** "Gereken aylık ≈ ₺61.200 (27 ay)"; tamamlanan ya da tarihi gecen hedefte null. */
+    val requiredLine: String?,
 )
 
 /**

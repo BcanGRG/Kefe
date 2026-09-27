@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -64,6 +65,7 @@ import com.kefe.app.ui.icons.KefeIcons
 import com.kefe.app.ui.layout.KefeMarketRow
 import com.kefe.app.ui.layout.KefeSidePanel
 import com.kefe.app.ui.layout.KefeTopBar
+import com.kefe.app.ui.screens.plan.MonthPlanSummaryRow
 import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
@@ -100,6 +102,7 @@ fun SummaryScreenDesktop(
     onOpenMarketRow: ((KefeMarketRow) -> Unit)? = null,
     onCompleteLink: () -> Unit = {},
     onRelogin: () -> Unit = {},
+    onOpenPlan: () -> Unit = {},
 ) {
     Column(modifier.fillMaxSize()) {
         KefeTopBar(
@@ -157,6 +160,7 @@ fun SummaryScreenDesktop(
                         onIntent = onIntent,
                         onOpenGoal = onOpenGoal,
                         onOpenGoals = onOpenGoals,
+                        onOpenPlan = onOpenPlan,
                     )
                 }
             }
@@ -182,6 +186,7 @@ private fun ColumnScope.DesktopContent(
     onIntent: (SummaryIntent) -> Unit,
     onOpenGoal: (String) -> Unit,
     onOpenGoals: () -> Unit,
+    onOpenPlan: () -> Unit,
 ) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
@@ -195,6 +200,10 @@ private fun ColumnScope.DesktopContent(
         color = c.onSurfaceMuted,
         maxLines = 1,
     )
+    state.monthPlan?.let { plan ->
+        Spacer(Modifier.height(Space.x8))
+        MonthPlanSummaryRow(plan = plan, masked = state.masked, onOpen = onOpenPlan, modifier = Modifier.widthIn(max = PlanRowMaxWidth))
+    }
 
     Spacer(Modifier.height(Space.x20))
     Row(
@@ -664,8 +673,11 @@ private fun DesktopEmpty(onOpenGoals: () -> Unit, onAddAsset: () -> Unit) {
 private fun monthLine(totals: PortfolioTotals, masked: Boolean): String = buildString {
     append("Bu ay eklenen ")
     append(if (masked) Money.masked(4, false) else Money.tl(totals.monthAdded))
-    append(" / ")
-    append(Money.tl(totals.monthTarget))
+    // Ana hedef yokken aylik katki hedefi de yok: " / ₺0" gurultuydu.
+    if (totals.monthTarget > 0.0) {
+        append(" / ")
+        append(Money.tl(totals.monthTarget))
+    }
 }
 
 /** Ust cubuk baglam satiri: portfoy · uyeler · fiyat saati. */
@@ -708,6 +720,7 @@ private val DonutSize = 118.dp
 private val LegendDot = 8.dp
 private val ChartHeight = 196.dp
 private val EmptyWidth = 420.dp
+private val PlanRowMaxWidth = 420.dp
 
 /** Ornek seride grafik araligi. */
 private const val SeriesRangeLabel = "Ağu 2025 — Tem 2026"

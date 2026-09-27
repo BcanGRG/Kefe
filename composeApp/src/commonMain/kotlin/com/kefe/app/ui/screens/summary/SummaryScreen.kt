@@ -82,7 +82,10 @@ import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
+import com.kefe.app.ui.icons.icon
 import com.kefe.app.ui.layout.KefeMarketRow
+import com.kefe.app.ui.screens.plan.CurrentMonthPlan
+import com.kefe.app.ui.screens.plan.MonthPlanSummaryRow
 import com.kefe.app.ui.theme.IconSize
 import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
@@ -118,6 +121,7 @@ fun SummaryScreen(
     onRelogin: () -> Unit = {},
     /** Ust cubuktaki disli: telefonda Ayarlar'in kapisi (alt barda yerini Plan aldi). */
     onOpenSettings: () -> Unit = {},
+    onOpenPlan: () -> Unit = {},
 ) {
     Column(modifier.fillMaxWidth()) {
         SummaryTopBar(state, onIntent, onOpenMarket, onOpenAccount, onOpenSettings)
@@ -158,6 +162,7 @@ fun SummaryScreen(
                         onOpenGoals = onOpenGoals,
                         onOpenActivity = onOpenActivity,
                         onOpenMarket = onOpenMarket,
+                        onOpenPlan = onOpenPlan,
                     )
                     // Bos durum yukarida ayrildi; buraya dusmez.
                     SummaryStage.Empty -> Unit
@@ -393,6 +398,7 @@ private fun SummaryContent(
     onOpenGoals: () -> Unit,
     onOpenActivity: () -> Unit,
     onOpenMarket: () -> Unit,
+    onOpenPlan: () -> Unit,
 ) {
     val totals = state.totals ?: return
 
@@ -455,6 +461,8 @@ private fun SummaryContent(
             MonthCard(
                 totals = totals,
                 masked = state.masked,
+                plan = state.monthPlan,
+                onOpenPlan = onOpenPlan,
                 // Bu ay karti ile "Son hareketler" basligi arasindaki bosluk
                 // basligin kendi 20dp ust dolgusundan gelir.
                 modifier = Modifier.padding(horizontal = Space.x16),
@@ -929,6 +937,8 @@ private fun List<Double>.toPoints(): List<Point> =
 private fun MonthCard(
     totals: PortfolioTotals,
     masked: Boolean,
+    plan: CurrentMonthPlan?,
+    onOpenPlan: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = KefeTheme.colors
@@ -976,6 +986,13 @@ private fun MonthCard(
         if (totals.monthTarget > 0.0) {
             Spacer(Modifier.height(Space.x12))
             KefeProgressBarThin(progress = progress)
+        }
+        // Ayin plani varsa: "ne kadar eklendi"nin yaninda "plana ne kadar uyuldu".
+        plan?.let {
+            Spacer(Modifier.height(Space.x12))
+            KefeHairline()
+            Spacer(Modifier.height(Space.x4))
+            MonthPlanSummaryRow(plan = it, masked = masked, onOpen = onOpenPlan)
         }
     }
 }
@@ -1173,7 +1190,7 @@ private fun TopMoverCard(
             horizontalArrangement = Arrangement.spacedBy(MoverIconGap),
         ) {
             KefeIcon(
-                icon = assetIcon(mover.position.assetClass),
+                icon = mover.position.assetClass.icon(),
                 contentDescription = null,
                 size = IconSize.medium,
                 tint = c.assetClass(mover.position.assetClass.color()),
@@ -1222,15 +1239,6 @@ private fun TopMoverCard(
             }
         }
     }
-}
-
-private fun assetIcon(assetClass: AssetClass) = when (assetClass) {
-    AssetClass.Gold -> KefeIcons.Gold
-    AssetClass.Silver -> KefeIcons.Silver
-    AssetClass.Fx -> KefeIcons.Fx
-    AssetClass.Fund -> KefeIcons.Fund
-    AssetClass.Stock -> KefeIcons.Stock
-    AssetClass.Cash -> KefeIcons.Cash
 }
 
 // --- Durumlar --------------------------------------------------------------

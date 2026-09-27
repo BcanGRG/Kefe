@@ -41,6 +41,8 @@ fun SummaryScreenAdaptive(
      * menudeki satir ayni isi gorur.
      */
     onOpenSettings: () -> Unit = {},
+    /** "Bu ay" kartindaki plan satiri: Plan sekmesi. */
+    onOpenPlan: () -> Unit = {},
 ) {
     when (LocalWindowSize.current) {
         WindowSize.Compact -> SummaryScreen(
@@ -56,6 +58,7 @@ fun SummaryScreenAdaptive(
             onCompleteLink = onCompleteLink,
             onRelogin = onRelogin,
             onOpenSettings = onOpenSettings,
+            onOpenPlan = onOpenPlan,
         )
 
         WindowSize.Medium -> SummaryScreenTablet(
@@ -69,6 +72,7 @@ fun SummaryScreenAdaptive(
             modifier = modifier,
             onCompleteLink = onCompleteLink,
             onRelogin = onRelogin,
+            onOpenPlan = onOpenPlan,
         )
 
         WindowSize.Expanded -> SummaryScreenDesktop(
@@ -85,6 +89,7 @@ fun SummaryScreenAdaptive(
             onOpenMarketRow = onOpenMarketRow,
             onCompleteLink = onCompleteLink,
             onRelogin = onRelogin,
+            onOpenPlan = onOpenPlan,
         )
     }
 }

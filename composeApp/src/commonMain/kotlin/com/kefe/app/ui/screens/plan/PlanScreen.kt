@@ -798,3 +798,80 @@ private val FlowColumnWidth = 104.dp
 
 /** Bos durum dugmeleri genis ekranda satir boyu uzamasin. */
 private val EmptyActionsMaxWidth = 320.dp
+
+// --- Plan disinda: Ozet ve hedef detayi ------------------------------------------
+
+/**
+ * Ozet'in "Bu ay" kartindaki plan satiri: "Eylül planı %34", "1/3 kalem · ₺…
+ * planlandı" ve skor cubugu. Satirin tamami Plan sekmesini acar. Bakiye gizliyken
+ * tutar yazilmaz, yalniz kalem sayisi.
+ */
+@Composable
+fun MonthPlanSummaryRow(
+    plan: CurrentMonthPlan,
+    masked: Boolean,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clickable(onClickLabel = "Planı aç", role = Role.Button, onClick = onOpen)
+            .padding(vertical = Space.x8),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            KefeIcon(icon = KefeIcons.Calendar, contentDescription = null, size = IconSize.tiny, tint = c.accent)
+            Spacer(Modifier.width(Space.x8))
+            Text(plan.title, style = t.bodyStrong, color = c.onSurface, modifier = Modifier.weight(1f))
+            Text(plan.scoreText, style = t.bodyStrong.tabular(), color = c.onSurface)
+            KefeIcon(icon = KefeIcons.ChevronRight, contentDescription = null, size = IconSize.tiny)
+        }
+        Spacer(Modifier.height(Space.x4))
+        Text(
+            text = if (masked) plan.countText else plan.summary,
+            style = t.caption.tabular(),
+            color = c.onSurfaceMuted,
+        )
+        plan.score?.let { score ->
+            Spacer(Modifier.height(Space.x8))
+            KefeProgressBarThin(progress = score)
+        }
+    }
+}
+
+/**
+ * Hedef detayindaki "Bu ay planı": bu hedefe bagli kalemler, Plan sekmesindeki
+ * satirlarin AYNISI ("Al" ve duzenleme dahil - sheet'ler kabukta). Altinda
+ * planlanan / aylik katki ve tarihe yetismek icin gereken aylik tutar.
+ */
+@Composable
+fun GoalMonthPlanCard(
+    plan: GoalMonthPlan,
+    title: String,
+    onIntent: (PlanIntent) -> Unit,
+    onOpenPlan: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    KefeCard(modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = t.bodyStrong, color = c.onSurface, modifier = Modifier.weight(1f))
+            KefeTextButton(text = "Plana git", onClick = onOpenPlan)
+        }
+        plan.rows.forEachIndexed { index, row ->
+            if (index > 0) KefeHairline()
+            PlanRow(row, onIntent)
+        }
+        Spacer(Modifier.height(Space.x4))
+        Text(plan.summary, style = t.caption.tabular(), color = c.onSurfaceMuted)
+        plan.requiredLine?.let { line ->
+            Spacer(Modifier.height(Space.x4))
+            Text(line, style = t.caption.tabular(), color = c.onSurfaceMuted)
+        }
+    }
+}

@@ -512,6 +512,13 @@ private fun KefeApp(
     // Ayarlar etkilerinden ONCE tanimli: "Tüm verileri sil" secili ayi da sifirlar.
     val planVm = koinViewModel<PlanViewModel>()
     val planState by planVm.state.collectAsState()
+    // Ozet ve hedef detayindaki plan girisleri BU AYI gosterir: sekmede baska bir
+    // ay secili kaldiysa "Eylül planı %34" dokunusu Ağustos'u acmasin.
+    fun openPlanThisMonth() {
+        planVm.onIntent(PlanIntent.ThisMonth)
+        selectTab(PlanKey)
+    }
+
     CollectEffects(planVm.effects) { effect ->
         when (effect) {
             is PlanEffect.OpenAddTransaction -> openAddSheet(TradeSide.Buy, prefill = effect.prefill)
@@ -850,7 +857,8 @@ private fun KefeApp(
                             // duzenini cizer) ama opak zemine yine ihtiyaci var.
                             ScreenSurface {
                                 SummaryScreenAdaptive(
-                                    state = summary,
+                                    // Ayin plani Plan VM'inden: Ozet ayni defteri ikinci kez turetmez.
+                                    state = summary.copy(monthPlan = planState.content.currentMonth),
                                     onIntent = { intent ->
                                         summaryVm.onIntent(intent)
                                         // "Vazgeç" Ayarlar'daki cikisla ayni sonucu soyler.
@@ -874,6 +882,7 @@ private fun KefeApp(
                                     // soran adim; baglantiyi o yazar.
                                     onCompleteLink = { goTo(ProfileSetupKey) },
                                     onRelogin = { openSignIn(SignInPurpose.Relogin) },
+                                    onOpenPlan = { openPlanThisMonth() },
                                 )
                             }
                         }
@@ -959,6 +968,11 @@ private fun KefeApp(
                                     onIntent = vm::onIntent,
                                     onBack = { goBack() },
                                     onEdit = { goalsVm.onIntent(GoalsIntent.EditGoal(key.goalId)) },
+                                    monthPlan = planState.content.currentMonth?.goals
+                                        ?.firstOrNull { it.goalId == key.goalId },
+                                    monthPlanTitle = planState.content.currentMonth?.title.orEmpty(),
+                                    onPlanIntent = planVm::onIntent,
+                                    onOpenPlan = { openPlanThisMonth() },
                                 )
                             }
                         }

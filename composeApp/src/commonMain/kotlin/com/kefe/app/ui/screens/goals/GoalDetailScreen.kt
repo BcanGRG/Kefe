@@ -77,6 +77,9 @@ import com.kefe.app.ui.format.shortQuantityLabel
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
+import com.kefe.app.ui.screens.plan.GoalMonthPlan
+import com.kefe.app.ui.screens.plan.GoalMonthPlanCard
+import com.kefe.app.ui.screens.plan.PlanIntent
 import com.kefe.app.ui.theme.IconSize
 import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
@@ -100,6 +103,12 @@ fun GoalDetailScreen(
     onBack: () -> Unit,
     onEdit: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Bu ayin bu hedefe bagli plan kalemleri (kabuk Plan VM'inden verir); yoksa null. */
+    monthPlan: GoalMonthPlan? = null,
+    monthPlanTitle: String = "",
+    /** Satirlardaki "Al" ve duzenleme: Plan VM'ine gider, sheet'ler kabukta. */
+    onPlanIntent: (PlanIntent) -> Unit = {},
+    onOpenPlan: () -> Unit = {},
 ) {
     val goal = state.goal
 
@@ -143,7 +152,18 @@ fun GoalDetailScreen(
                         .weight(1f)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    DetailBody(goal, state, onIntent, onEdit)
+                    DetailBody(goal, state, onIntent, onEdit) {
+                        monthPlan?.let { plan ->
+                            GoalMonthPlanCard(
+                                plan = plan,
+                                title = monthPlanTitle,
+                                onIntent = onPlanIntent,
+                                onOpenPlan = onOpenPlan,
+                                modifier = Modifier.padding(horizontal = Space.x16),
+                            )
+                            Spacer(Modifier.height(BlockGap))
+                        }
+                    }
                 }
             }
         }
@@ -218,6 +238,8 @@ private fun DetailBody(
     state: GoalDetailUiState,
     onIntent: (GoalDetailIntent) -> Unit,
     onEdit: () -> Unit,
+    /** "Bu ay planı": halkanin HEMEN altinda - hedefe bakanin ilk sorusu "bu ay ne yapacagim". */
+    planCard: @Composable () -> Unit = {},
 ) {
     val c = KefeTheme.colors
 
@@ -245,6 +267,8 @@ private fun DetailBody(
 
     RingCard(goal, state, onIntent, onEdit)
     Spacer(Modifier.height(BlockGap))
+
+    planCard()
 
     AssignedAssetsCard(state, onIntent)
     Spacer(Modifier.height(BlockGap))

@@ -73,6 +73,8 @@ import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.trUpper
 import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
+import com.kefe.app.ui.screens.plan.CurrentMonthPlan
+import com.kefe.app.ui.screens.plan.MonthPlanSummaryRow
 import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
@@ -103,6 +105,7 @@ fun SummaryScreenTablet(
     modifier: Modifier = Modifier,
     onCompleteLink: () -> Unit = {},
     onRelogin: () -> Unit = {},
+    onOpenPlan: () -> Unit = {},
 ) {
     Column(modifier.fillMaxSize()) {
         TabletTopBar(state = state, onIntent = onIntent, onOpenMarket = onOpenMarket)
@@ -135,6 +138,7 @@ fun SummaryScreenTablet(
                 onOpenGoals = onOpenGoals,
                 onOpenActivity = onOpenActivity,
                 onIntent = onIntent,
+                onOpenPlan = onOpenPlan,
             )
         }
     }
@@ -224,6 +228,7 @@ private fun TabletContent(
     onOpenGoals: () -> Unit,
     onOpenActivity: () -> Unit,
     onIntent: (SummaryIntent) -> Unit,
+    onOpenPlan: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -246,7 +251,7 @@ private fun TabletContent(
                     onClick = { onOpenGoal(goal.id) },
                 )
             }
-            MonthCard(totals, state.masked)
+            MonthCard(totals, state.masked, state.monthPlan, onOpenPlan)
         }
 
         Column(
@@ -444,7 +449,7 @@ private fun TabletGoalCard(
 // --- Bu ay -----------------------------------------------------------------
 
 @Composable
-private fun MonthCard(totals: PortfolioTotals, masked: Boolean) {
+private fun MonthCard(totals: PortfolioTotals, masked: Boolean, plan: CurrentMonthPlan?, onOpenPlan: () -> Unit) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
     val progress = if (totals.monthTarget <= 0.0) {
@@ -467,22 +472,36 @@ private fun MonthCard(totals: PortfolioTotals, masked: Boolean) {
                         style = t.h2.tabular(),
                         color = c.onSurface,
                     )
-                    Spacer(Modifier.width(Space.x8))
-                    Text(
-                        text = "/ ${Money.tl(totals.monthTarget)} hedef",
-                        style = t.caption.tabular(),
-                        color = c.onSurfaceMuted,
-                    )
+                    // Hedef kismi YALNIZ ana hedef varken (telefondaki kural): hedef
+                    // yokken "/ ₺0 hedef" ve "%0" gurultuydu.
+                    if (totals.monthTarget > 0.0) {
+                        Spacer(Modifier.width(Space.x8))
+                        Text(
+                            text = "/ ${Money.tl(totals.monthTarget)} hedef",
+                            style = t.caption.tabular(),
+                            color = c.onSurfaceMuted,
+                        )
+                    }
                 }
             }
-            Text(
-                text = Money.ratioOf(progress.toDouble()),
-                style = t.caption.tabular(),
-                color = c.onSurfaceMuted,
-            )
+            if (totals.monthTarget > 0.0) {
+                Text(
+                    text = Money.ratioOf(progress.toDouble()),
+                    style = t.caption.tabular(),
+                    color = c.onSurfaceMuted,
+                )
+            }
         }
-        Spacer(Modifier.height(Space.x14))
-        KefeProgressBarThin(progress = progress)
+        if (totals.monthTarget > 0.0) {
+            Spacer(Modifier.height(Space.x14))
+            KefeProgressBarThin(progress = progress)
+        }
+        plan?.let {
+            Spacer(Modifier.height(Space.x12))
+            KefeHairline()
+            Spacer(Modifier.height(Space.x4))
+            MonthPlanSummaryRow(plan = it, masked = masked, onOpen = onOpenPlan)
+        }
     }
 }
 
