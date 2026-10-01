@@ -106,6 +106,8 @@ data class GoalDetailUiState(
     /** Seciciye dokulen tum varliklar. */
     val assignableAssets: List<AssignableAsset> = emptyList(),
     val assetPickerOpen: Boolean = false,
+    /** "Hedeften harca" sayfasi; kapaliyken null (bkz. GoalSpend.kt). */
+    val spend: SpendSheet? = null,
 
     /** Senaryo kaydiricisi: aylik katki, BIN TL cinsinden (30..120). */
     val scenarioContribution: Float = ScenarioMinThousands,
@@ -167,6 +169,14 @@ sealed interface GoalDetailIntent {
      * Sabit bir miktardan farki, ILERIDE ALINACAKLARI da kapsamasidir.
      */
     data class AssignWholeAsset(val positionId: String) : GoalDetailIntent
+
+    // --- Hedeften harca (bkz. GoalSpend.kt) ---
+    data object OpenSpend : GoalDetailIntent
+    data object CloseSpend : GoalDetailIntent
+    data class SpendQuantity(val positionId: String, val text: String) : GoalDetailIntent
+    data class SpendName(val text: String) : GoalDetailIntent
+    data class SpendCloseGoal(val close: Boolean) : GoalDetailIntent
+    data object ConfirmSpend : GoalDetailIntent
 }
 
 /** Ay sirasi - iki tarih arasindaki ay farkini hesaplamak icin. */
