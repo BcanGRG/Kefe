@@ -152,6 +152,10 @@ data class BackupGoal(
     val isMain: Boolean,
     val status: String,
     val order: Int,
+    // Kura bagli hedef ve harcanan hedef (bkz. 13.sqm). Eski yedekte YOK - null.
+    val anchorUnit: String? = null,
+    val anchorAmount: Double? = null,
+    val spentAt: Long? = null,
 )
 
 @Serializable

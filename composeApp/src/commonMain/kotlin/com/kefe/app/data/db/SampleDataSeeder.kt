@@ -112,6 +112,9 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 sortOrder = goal.order.toLong(),
                 // Ornek veri: zaman damgasi 0, esitlemede en eski sayilir.
                 updatedAt = 0L,
+                anchorUnit = null,
+                anchorAmount = null,
+                spentAt = null,
             )
         }
 

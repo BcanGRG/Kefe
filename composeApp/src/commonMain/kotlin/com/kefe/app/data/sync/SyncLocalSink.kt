@@ -452,6 +452,9 @@ class SyncLocalSink(
                 status = r.status.toGoalStatus(),
                 sortOrder = r.sortOrder,
                 updatedAt = r.updatedAt,
+                anchorUnit = r.anchorUnit,
+                anchorAmount = r.anchorAmount,
+                spentAt = r.spentAt,
             )
             database.goalQueries.applyGoalMetaPull(
                 name = r.name,
@@ -465,6 +468,9 @@ class SyncLocalSink(
                 isMain = r.isMain,
                 status = r.status.toGoalStatus(),
                 sortOrder = r.sortOrder,
+                anchorUnit = r.anchorUnit,
+                anchorAmount = r.anchorAmount,
+                spentAt = r.spentAt,
                 updatedAt = r.updatedAt,
                 deletedAt = r.deletedAt,
                 id = r.id,

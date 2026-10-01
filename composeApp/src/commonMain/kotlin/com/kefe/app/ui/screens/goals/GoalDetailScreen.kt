@@ -51,7 +51,9 @@ import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.PeriodTotal
 import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.color
+import com.kefe.app.domain.model.formatLong
 import com.kefe.app.domain.model.formatMonthYear
+import com.kefe.app.domain.model.kefeDateOfEpochDay
 import com.kefe.app.domain.model.label
 import com.kefe.app.domain.model.monthLabel
 import com.kefe.app.ui.charts.BarSegment
@@ -69,6 +71,7 @@ import com.kefe.app.ui.components.KefeEmptyState
 import com.kefe.app.ui.components.KefeHairline
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
+import com.kefe.app.ui.components.KefeSecondaryButton
 import com.kefe.app.ui.components.KefeSkeletonBlock
 import com.kefe.app.ui.components.KefeSlider
 import com.kefe.app.ui.format.Money
@@ -117,6 +120,9 @@ fun GoalDetailScreen(
     // bozulacakti (bkz. KefeBackHandler).
     KefeBackHandler(enabled = state.assetPickerOpen) {
         onIntent(GoalDetailIntent.CloseAssetPicker)
+    }
+    KefeBackHandler(enabled = state.spend != null) {
+        onIntent(GoalDetailIntent.CloseSpend)
     }
 
     // Secici icerigin USTUNDE cizilir; Column olsaydi dikey akisa katilir,
@@ -171,6 +177,7 @@ fun GoalDetailScreen(
         if (state.assetPickerOpen) {
             AssetPickerSheet(state, onIntent)
         }
+        GoalSpendSheet(state.spend, goal?.name.orEmpty(), onIntent)
     }
 }
 
@@ -243,7 +250,19 @@ private fun DetailBody(
 ) {
     val c = KefeTheme.colors
 
-    if (state.exceeded) {
+    val spentAt = goal.spentAt
+    if (spentAt != null) {
+        // Harcanan hedef: ulasildi/gecikti bilgisinden once bu soylenir.
+        StatusBanner(
+            icon = KefeIcons.Check,
+            text = "Harcandı · ${kefeDateOfEpochDay(spentAt / MillisPerDay).formatLong()}",
+            contentColor = c.onSurfaceMuted,
+            background = c.surfaceSunken,
+            borderColor = c.outline,
+            bold = true,
+        )
+        Spacer(Modifier.height(BlockGap))
+    } else if (state.exceeded) {
         StatusBanner(
             icon = KefeIcons.Check,
             text = "Hedefe ulaşıldı · Fazlası birikimde kalır",
@@ -267,6 +286,16 @@ private fun DetailBody(
 
     RingCard(goal, state, onIntent, onEdit)
     Spacer(Modifier.height(BlockGap))
+
+    // Hedefe ayrilan varliktan harcama: tatilin kendisi ya da acil bir sey (bkz. GoalSpend.kt).
+    if (state.composingAssets.isNotEmpty() && goal.spentAt == null) {
+        KefeSecondaryButton(
+            text = "Hedeften harca",
+            onClick = { onIntent(GoalDetailIntent.OpenSpend) },
+            modifier = Modifier.padding(horizontal = Space.x16).fillMaxWidth(),
+        )
+        Spacer(Modifier.height(BlockGap))
+    }
 
     planCard()
 
@@ -748,6 +777,16 @@ private fun RingCard(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
+        goal.anchorLine()?.let { line ->
+            Text(
+                text = line,
+                style = KefeTheme.type.caption.tabular(),
+                color = c.onSurfaceMuted,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         // Ozet ekranindaki iki satirin hedefe ozel hali. Tutarin hemen altinda
         // duruyor cunku ayni soruyu tamamliyorlar: "ne kadar birikti" -
@@ -1337,3 +1376,5 @@ private fun RowScope.BodyCell(text: String, weight: Float, align: TextAlign, col
 
 private fun List<Double>.toPoints(): List<Point> =
     mapIndexed { index, value -> Point(index.toFloat(), value.toFloat()) }
+
+private const val MillisPerDay = 86_400_000L

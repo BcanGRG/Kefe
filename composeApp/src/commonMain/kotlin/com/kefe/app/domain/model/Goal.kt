@@ -5,24 +5,23 @@ data class Goal(
     val name: String,
     val iconKey: String,
     /**
-     * Hedef tutari - HER ZAMAN TL.
+     * Hedef tutari TL. Butun hesaplar (ilerleme, projeksiyon, gereken aylik) bunu
+     * okur.
      *
-     * Gram altin ya da dolar secilse bile burada TL durur: giris aninda o
-     * gunun kuruyla cevrilir ve bir daha degismez.
+     * Kura bagli hedefte ([anchorAmount] dolu) depo bunu OKUMA ANINDA guncel kurla
+     * yeniden hesaplar: €3.000 x bugunku euro (bkz. withLiveAmount). Saklanan
+     * deger o yuzden "son bilinen TL karsiligi"dir; kur gelmezse o kullanilir.
      */
     val amount: Double,
     /**
-     * Tutarin GIRILDIGI birim - bir GIRIS KOLAYLIGIDIR, canli bir capa degil.
+     * Hedefin birimi. TL disinda HEDEF O BIRIMDE YASAR: [anchorAmount] tutari o
+     * birimde tutar, TL karsiligi her okumada guncel kurla bulunur - euro
+     * yukselirse hedefin TL'si de yukselir. Yurtdisi tatili gibi dovizle
+     * odenecek bir hedef boylece gercek maliyetinin altinda kalmaz.
      *
-     * Hicbir hesap bu alani okumaz: ilerleme, projeksiyon, kilometre taslari ve
-     * senaryolarin hepsi dogrudan [amount] ile calisir. Yani "gram altin" secili
-     * bir hedefle "TL" secili bir hedef, ayni tutarda birebir ayni davranir.
-     * Alan yalniz editoru ayni birimde geri acmak icin saklanir.
-     *
-     * Ekran bir zamanlar bunun aksini vaat ediyordu ("hedef de piyasayla birlikte
-     * guncellenir"); metin duzeltildi. Hedefin gercekten altina/dolara
-     * capalanmasi ayri bir ozelliktir - tutarin birim cinsinden saklanmasini ve
-     * paydanin okuma aninda guncel kurla cevrilmesini ister.
+     * NEYDI: birim yalniz bir giris kolayligiydi; "€3.000" o gunun kuruyla TL'ye
+     * cevrilip donuyordu. [anchorAmount] null olan eski dolar/gram hedefleri hala
+     * oyle (TL sabit); duzenleyip kaydedince kura baglanirlar.
      */
     val unit: GoalUnit,
     val targetDate: KefeDate,
@@ -30,7 +29,44 @@ data class Goal(
     val isMain: Boolean = false,
     val status: GoalStatus = GoalStatus.Active,
     val order: Int = 0,
+    /** Tutar [unit] cinsinden (3000.0 = €3.000); null = TL sabit. */
+    val anchorAmount: Double? = null,
+    /**
+     * Hedefin parasi harcandi (epoch ms) - "Harcadım" ile kapanan hedef. Durum
+     * [GoalStatus.Completed] olarak kalir: eski bir surum bilinmeyen bir durum
+     * degerinde cokerdi (bkz. 13.sqm).
+     */
+    val spentAt: Long? = null,
 )
+
+/** Hedef guncel kurla mi yasiyor. */
+val Goal.isAnchored: Boolean get() = anchorAmount != null && unit != GoalUnit.Try
+
+/**
+ * [unit] kolonuna yazilacak deger: eski bir surumun TANIDIGI deger. Euro'yu
+ * bilmeyen surum "Eur" metninde cokerdi; euro hedefi o kolonda TL gorunur,
+ * gercek birim anchorUnit'te durur (bkz. 13.sqm).
+ */
+fun GoalUnit.storageUnit(): GoalUnit = if (this == GoalUnit.Eur) GoalUnit.Try else this
+
+/** Birimin fiyat tablosundaki anahtari; TL'de null. */
+fun GoalUnit.priceKey(): String? = when (this) {
+    GoalUnit.Try -> null
+    GoalUnit.GoldGram -> "gold_gram"
+    GoalUnit.Usd -> "usd_try"
+    GoalUnit.Eur -> "eur_try"
+}
+
+/**
+ * Kura bagli hedefin TL tutari GUNCEL kurla. Kur SATIS (odenecek) tarafidir:
+ * hedef "bu euroyu almak icin ne odemem gerekir" sorusunu yanitlar. Kur yoksa
+ * son bilinen TL karsiligi ([Goal.amount]) kalir.
+ */
+fun Goal.withLiveAmount(rateOf: (String) -> Double?): Goal {
+    if (!isAnchored) return this
+    val rate = unit.priceKey()?.let(rateOf)?.takeIf { it > 0.0 } ?: return this
+    return copy(amount = anchorAmount!! * rate)
+}
 
 /**
  * Hedef tarihi gecmis mi - TURETILIR, saklanmaz.
@@ -71,12 +107,18 @@ fun Goal.requiredMonthly(currentWealth: Double, today: KefeDate): Double? {
 enum class GoalUnit {
     Try,
     GoldGram,
-    Usd;
+    Usd,
+    Eur;
 
     fun label(): String = when (this) {
-        Try -> "TL sabit"
+        Try -> "TL"
         GoldGram -> "Gram altın"
-        Usd -> "USD"
+        Usd -> "Dolar"
+        Eur -> "Euro"
+    }
+
+    companion object {
+        fun fromName(name: String?): GoalUnit? = entries.firstOrNull { it.name == name }
     }
 }
 

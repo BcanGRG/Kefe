@@ -151,7 +151,11 @@ create table if not exists public.goals (
     status               text   not null default 'Active',
     sort_order           bigint not null default 0,
     updated_at           bigint not null default 0,
-    deleted_at           bigint
+    deleted_at           bigint,
+    -- Kura bagli hedef ve harcanan hedef (bkz. migrations/20261001_goal_anchor.sql).
+    anchor_unit          text,
+    anchor_amount        double precision,
+    spent_at             bigint
 );
 
 alter table public.goals enable row level security;

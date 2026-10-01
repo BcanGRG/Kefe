@@ -45,6 +45,7 @@ class GoalsViewModel(
     // hedefinde 0 kurla acilir ve onizleme "₺0 · gram ₺0" gosterir.
     private var latestGoldPrice = 0.0
     private var latestUsdPrice = 0.0
+    private var latestEurPrice = 0.0
 
     init {
         observeData()
@@ -153,10 +154,12 @@ class GoalsViewModel(
                 // Gecerli kur geldiginde sakla; gecici bos emisyon iyi degeri silmesin.
                 board.byKey("gold_gram")?.ask?.takeIf { it > 0.0 }?.let { latestGoldPrice = it }
                 board.byKey("usd_try")?.ask?.takeIf { it > 0.0 }?.let { latestUsdPrice = it }
+                board.byKey("eur_try")?.ask?.takeIf { it > 0.0 }?.let { latestEurPrice = it }
                 update { current ->
                     val editor = current.editor?.copy(
                         goldGramPrice = latestGoldPrice,
                         usdPrice = latestUsdPrice,
+                        eurPrice = latestEurPrice,
                     )
                     // Kur beklerken TL olarak acilmis bir hedef varsa gecis
                     // SIMDI tamamlanir - tutar dogru kurla cevrilir.
@@ -182,6 +185,7 @@ class GoalsViewModel(
         advancedExpanded = true,
         goldGramPrice = latestGoldPrice,
         usdPrice = latestUsdPrice,
+        eurPrice = latestEurPrice,
         openGoalCount = current.goals.size,
     )
 
@@ -198,8 +202,14 @@ class GoalsViewModel(
             advancedExpanded = true,
             goldGramPrice = latestGoldPrice,
             usdPrice = latestUsdPrice,
+            eurPrice = latestEurPrice,
             openGoalCount = current.goals.size,
         )
+        // Kura bagli hedef KENDI BIRIMINDE acilir: tutar zaten o birimde saklaniyor,
+        // cevrim (ve kurun gelmesini beklemek) gerekmez.
+        goal.anchorAmount?.takeIf { goal.unit != GoalUnit.Try }?.let { anchor ->
+            return base.copy(unit = goal.unit, amountText = rawAmount(anchor.roundTo(goal.unit.editDecimals())))
+        }
         // Hedef TL disi bir birime sabitlenmisse tutar o birime cevrilerek acilir.
         // Kur henuz gelmediyse cevrim YAPILMAZ: alan TL olarak acilir ve gecis
         // pendingUnit'e yazilir, observePrices kur gelince tamamlar.
@@ -261,6 +271,10 @@ class GoalsViewModel(
             isMain = editor.isMain,
             status = existing?.status ?: GoalStatus.Active,
             order = existing?.order ?: _state.value.goals.size,
+            // TL disi birimde hedef O BIRIMDE yasar (bkz. Goal.unit): tutar birim
+            // cinsinden saklanir, TL karsiligi her okumada guncel kurla bulunur.
+            anchorAmount = editor.amountText.parseAmount().takeIf { editor.unit != GoalUnit.Try },
+            spentAt = existing?.spentAt,
         )
 
         viewModelScope.launch {
@@ -302,6 +316,7 @@ private fun GoalUnit.editDecimals(): Int = when (this) {
     GoalUnit.Try -> 0
     GoalUnit.GoldGram -> 4
     GoalUnit.Usd -> 2
+    GoalUnit.Eur -> 2
 }
 
 /** [decimals] haneye yuvarlar - cevrimdeki kayan nokta kuyrugunu keser. */

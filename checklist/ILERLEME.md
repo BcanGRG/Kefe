@@ -2426,3 +2426,71 @@ paylaşılacak; değişim "senin kazancın" olacak.
 - İkinci telefon güncellenince kendi gördüğü günleri yazar ve iki telefonun
   boşlukları birbirini doldurur. Hiçbir telefonun açılmadığı günler için
   sunucuda günlük toplayıcı (seçilmeyen seçenek) hâlâ bir yol.
+
+## 49 · Döviz cinsinden hedef ve hedeften harcama ✅
+
+**Neydi.** Kullanıcı gelecek Nisan'daki yurtdışı tatili için birikim yapmak
+istedi. Hedefler bunun büyük kısmını zaten karşılıyordu (tutar, tarih, varlık
+atama, gereken aylık tutar, Plan'dan alım). Eksik iki şey vardı:
+
+- **Hedef tutarı TL'ye sabitleniyordu.** "€3.000" yazınca o günün kuruyla TL'ye
+  çevrilip donuyordu; euro yükselince hedef büyümüyordu. Birim olarak euro da
+  yoktu.
+- **"Harcanacak birikim" kavramı yoktu.** Harcamak için satışı elle girmek
+  gerekiyordu; net değer düşüyor ve paranın ne için biriktirildiği hiçbir yerde
+  görünmüyordu. Kullanıcı ayrıca sordu: "acil bir şey oldu tatil parasından
+  harcamam gerekti o zaman ne yapılır".
+
+**Kararlar** (ikisi de önerilen seçenek): euro, dolar ve gram altın canlı kurla
+izlenecek; "Harcadım" diyince kaydı uygulama girecek.
+
+**Ne yapıldı.**
+
+- **Kura bağlı hedef.**
+  - Euro, dolar ya da gram altın seçilince tutar o birimde saklanır
+    (`anchorAmount`). Depo, TL karşılığını her okumada güncel satış kuruyla
+    hesaplar (`withLiveAmount`); ilerleme, gereken aylık tutar ve projeksiyon
+    kura göre güncellenir.
+  - TL hedefleri sabit kalır. Eski dolar/gram hedefleri düzenlenip
+    kaydedilince kura bağlanır.
+  - Kart ve detay sabit olanı yazar: "Hedef €3.000 · güncel kurla".
+    Düzenleyicide: "Bugünkü kurla ₺… · euro ₺…".
+- **Eski telefonlar için şema.**
+  - `unit` ve `status` kolonları yerelde enum olarak okunuyor; eski sürüm
+    bilinmeyen bir değerde ("Eur", "Spent") çökerdi.
+  - Yeni bilgi bu yüzden ayrı kolonlarda: `anchorUnit`, `anchorAmount`,
+    `spentAt` (13.sqm; sunucuda `20261001_goal_anchor.sql`, canlıya
+    uygulandı).
+  - Euro hedefi `unit` kolonuna "Try" yazar. Harcanan hedefin durumu
+    "Completed" olur ve ayrıca `spentAt` taşır.
+  - Eski telefonun push'u yeni kolonları göndermez, sunucudaki değer
+    korunur.
+- **Hedeften harca.**
+  - Hedef detayına "Hedeften harca" düğmesi geldi. Sayfada her varlık için
+    harcanacak miktar, harcamanın adı (varsayılan hedefin adı, ör. "Araba
+    tamiri") ve "Hedefi kapat" seçeneği var.
+  - Miktarlar BOŞ açılır: telefonda ilk sürüm her şeyi dolu açıyordu ve tek
+    bir dokunuş ₺983.954,70'lik Ev birikimini satılmış sayardı. "Tümünü harca"
+    hepsini doldurup hedefi kapatır.
+  - Onaylanınca:
+    - seçilen miktarlar bugünkü satış fiyatından satılır;
+    - aynı tutarda harcama girilir;
+    - hedef ataması harcanan kadar düşer;
+    - istenirse hedef "Harcandı" olarak kapanır.
+  - Açık kalan hedefte ilerleme düşer, gereken aylık tutar artar. Plan'daki
+    Kalan değişmez.
+  - Atama elle düşürülür. Satış kuralı atamayı yalnız elde kalana kırpar:
+    450 euronun 300'ü atanmışken 200 harcansa hedef 250 sayardı, doğrusu 100.
+
+**Doğrulama.**
+
+- **843 masaüstü testi**, hepsi yeşil. Yeniler:
+  - `AnchoredGoalTest`: canlı kurla okuma, kur yokken son TL değeri, eski
+    sürüm için `unit` kolonu, TL hedefinin sabit kalması.
+  - `GoalSpendTest`: kısmi acil harcamada atama 300→100 ve hedef açık; tam
+    harcamada hedef "Harcandı"; ad ya da miktar yoksa kayıt yok.
+- **Cihazda**, 1 Ekim 2026, R58N81SAZ1Y:
+  - Düzenleyicide Euro 3.000 → "Bugünkü kurla ₺165.627,30 · euro ₺55,21".
+  - Ev hedefinde "Hedeften harca" sayfası boş açıldı: "₺0 harcanacak",
+    "Ayrılan 120 gr · ₺718.714,80".
+  - Hiçbir şey kaydedilmedi.

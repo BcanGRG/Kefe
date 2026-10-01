@@ -35,7 +35,9 @@ import com.kefe.app.domain.model.ActivityKind
 import com.kefe.app.domain.model.DailySnapshot
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAssignment
+import com.kefe.app.domain.model.buyPrice
 import com.kefe.app.domain.model.goalAssignmentChange
+import com.kefe.app.domain.model.isAnchored
 import com.kefe.app.domain.model.revertedAssignmentQuantity
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.Portfolio
@@ -45,7 +47,9 @@ import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.costBasis
 import com.kefe.app.domain.model.priceKey
+import com.kefe.app.domain.model.storageUnit
 import com.kefe.app.domain.model.valuedAt
+import com.kefe.app.domain.model.withLiveAmount
 import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.domain.repository.PreferenceKeys
 import com.kefe.app.domain.repository.PriceRepository
@@ -206,9 +210,14 @@ class SqlDelightPortfolioRepository(
         }
 
     /** Siralama sozu SQL'de tutulur (ORDER BY sortOrder). */
-    override fun observeGoals(): Flow<List<Goal>> =
-        goalQueries.selectGoals().asFlow().mapToList(dispatcher)
-            .map { rows -> rows.map { it.toDomain() } }
+    // Kura bagli hedefin TL tutari GUNCEL kurla (bkz. Goal.withLiveAmount): euro
+    // yukselince ilerleme, gereken aylik ve projeksiyon kendiliginden guncellenir.
+    override fun observeGoals(): Flow<List<Goal>> = combine(
+        goalQueries.selectGoals().asFlow().mapToList(dispatcher).map { rows -> rows.map { it.toDomain() } },
+        priceRepository.observePrices(),
+    ) { goals, board ->
+        goals.map { goal -> goal.withLiveAmount { key -> board.byKey(key)?.buyPrice() } }
+    }
 
     override fun observeActivity(): Flow<List<ActivityEvent>> =
         activityQueries.selectActivity().asFlow().mapToList(dispatcher)
@@ -522,6 +531,9 @@ class SqlDelightPortfolioRepository(
                         isMain = it.isMain,
                         status = it.status.name,
                         order = it.sortOrder.toInt(),
+                        anchorUnit = it.anchorUnit,
+                        anchorAmount = it.anchorAmount,
+                        spentAt = it.spentAt,
                     )
                 },
                 goalAssets = goalAssetQueries.selectGoalAssets().executeAsList().map {
@@ -736,6 +748,9 @@ class SqlDelightPortfolioRepository(
                         status = goal.status.toGoalStatus(),
                         sortOrder = goal.order.toLong(),
                         updatedAt = clock.nowEpochMillis(),
+                        anchorUnit = goal.anchorUnit,
+                        anchorAmount = goal.anchorAmount,
+                        spentAt = goal.spentAt,
                     )
                 }
 
@@ -1170,7 +1185,7 @@ class SqlDelightPortfolioRepository(
                     name = goal.name,
                     iconKey = goal.iconKey,
                     amount = goal.amount,
-                    unit = goal.unit,
+                    unit = goal.unit.storageUnit(),
                     targetYear = goal.targetDate.year.toLong(),
                     targetMonth = goal.targetDate.month.toLong(),
                     targetDay = goal.targetDate.day.toLong(),
@@ -1179,13 +1194,16 @@ class SqlDelightPortfolioRepository(
                     status = goal.status,
                     sortOrder = goal.order.toLong(),
                     updatedAt = now,
+                    anchorUnit = goal.anchorUnitColumn(),
+                    anchorAmount = goal.anchorAmount,
+                    spentAt = goal.spentAt,
                 )
                 goalQueries.applyGoalMeta(
                     id = goal.id,
                     name = goal.name,
                     iconKey = goal.iconKey,
                     amount = goal.amount,
-                    unit = goal.unit,
+                    unit = goal.unit.storageUnit(),
                     targetYear = goal.targetDate.year.toLong(),
                     targetMonth = goal.targetDate.month.toLong(),
                     targetDay = goal.targetDate.day.toLong(),
@@ -1193,6 +1211,9 @@ class SqlDelightPortfolioRepository(
                     isMain = goal.isMain,
                     status = goal.status,
                     sortOrder = goal.order.toLong(),
+                    anchorUnit = goal.anchorUnitColumn(),
+                    anchorAmount = goal.anchorAmount,
+                    spentAt = goal.spentAt,
                     updatedAt = now,
                 )
             }
@@ -1276,3 +1297,6 @@ private val DeviceOnlySettings = setOf(
     PreferenceKeys.CloudLinkMigrated,
     PreferenceKeys.LocalRestoredAt,
 )
+
+/** anchorUnit kolonu: kura bagli hedefte birimin adi, TL sabitte null (bkz. 13.sqm). */
+private fun Goal.anchorUnitColumn(): String? = anchorAmount?.let { unit.name }.takeIf { isAnchored }

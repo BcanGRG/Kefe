@@ -3,12 +3,15 @@ package com.kefe.app.ui.screens.goals
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kefe.app.domain.KefeClock
+import com.kefe.app.domain.model.ExpenseCategory
+import com.kefe.app.domain.model.ExpenseEntry
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.MonthlyContribution
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.QuantityUnit
+import com.kefe.app.domain.model.TradeSide
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.allocation
 import com.kefe.app.domain.model.assetsOf
@@ -21,17 +24,22 @@ import com.kefe.app.domain.model.monthName
 import com.kefe.app.domain.model.monthOrdinal
 import com.kefe.app.domain.model.monthlyContributions
 import com.kefe.app.domain.model.monthsToReach
+import com.kefe.app.domain.model.newId
 import com.kefe.app.domain.model.otherGoalOf
 import com.kefe.app.domain.model.plusMonths
 import com.kefe.app.domain.model.progress
 import com.kefe.app.domain.model.todayChange
 import com.kefe.app.domain.model.totalReturn
+import com.kefe.app.domain.repository.PlanRepository
 import com.kefe.app.domain.repository.PortfolioRepository
+import com.kefe.app.domain.repository.PreferenceKeys
+import com.kefe.app.domain.repository.PreferencesRepository
 import kotlin.math.round
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** Katki gecmisi tablosunun penceresi - tasarimdaki gibi son 12 ay. */
@@ -53,6 +61,9 @@ class GoalDetailViewModel(
     private val portfolioRepository: PortfolioRepository,
     private val clock: KefeClock,
     private val goalId: String,
+    // "Hedeften harca": harcama Plan'a, kaydi giren profil tercihten.
+    private val planRepository: PlanRepository,
+    private val preferences: PreferencesRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(GoalDetailUiState())
@@ -130,6 +141,25 @@ class GoalDetailViewModel(
                 )
             }
 
+            GoalDetailIntent.OpenSpend -> {
+                val goal = _state.value.goal ?: return
+                _state.value = _state.value.copy(spend = spendSheetOf(goal.name, _state.value.composingAssets))
+            }
+            GoalDetailIntent.CloseSpend -> _state.value = _state.value.copy(spend = null)
+            GoalDetailIntent.SpendAll -> updateSpend { it.spendingAll() }
+            is GoalDetailIntent.SpendQuantity -> updateSpend { sheet ->
+                val next = sheet.copy(
+                    lines = sheet.lines.map { if (it.positionId == intent.positionId) it.copy(quantityText = intent.text) else it },
+                    amountError = false,
+                )
+                // Hepsi harcaniyorsa hedef kapanir, bir kismiysa (acil harcama) acik kalir.
+                // Kullanici anahtari sonra yine degistirebilir.
+                next.copy(closeGoal = next.spendsAll)
+            }
+            is GoalDetailIntent.SpendName -> updateSpend { it.copy(name = intent.text, nameError = false) }
+            is GoalDetailIntent.SpendCloseGoal -> updateSpend { it.copy(closeGoal = intent.close) }
+            GoalDetailIntent.ConfirmSpend -> confirmSpend()
+
             GoalDetailIntent.CloseGoal -> {
                 val goal = _state.value.goal ?: return
                 viewModelScope.launch {
@@ -158,6 +188,83 @@ class GoalDetailViewModel(
                     build(goal, positions, transactions, assignments)
                 }
             }.collect { _state.value = it }
+        }
+    }
+
+    private inline fun updateSpend(block: (SpendSheet) -> SpendSheet) {
+        val open = _state.value.spend ?: return
+        _state.value = _state.value.copy(spend = block(open))
+    }
+
+    /**
+     * Hedeften harcama: secilen miktarlar bugunku SATIS fiyatindan satilir, ayni
+     * tutarda bir harcama girilir, hedef atamasi harcanan kadar duser ve istenirse
+     * hedef "Harcandı" kapanir.
+     *
+     * ATAMA ELLE DUSURULUR. Satisin kendi kurali atamayi elde kalana kirpar, satilan
+     * kadar dusurmez (bkz. goalAssignmentChange): 450 euronun 300'u tatile ayrilmisken
+     * 200 euro harcanirsa hedef 250 saymaya devam ederdi; dogrusu 100. "Tum varlik"
+     * atamasinda gerek yok - pozisyon kuculur, atama onu izler.
+     *
+     * Sayfa yazmadan ONCE kapanir: cift dokunus ikinci kez satmasin.
+     */
+    private fun confirmSpend() {
+        val sheet = _state.value.spend ?: return
+        val goal = _state.value.goal ?: return
+        val name = sheet.name.trim()
+        val lines = sheet.lines.filter { it.spendQuantity > 0.0 }
+        if (name.isEmpty() || lines.isEmpty()) {
+            updateSpend { it.copy(nameError = name.isEmpty(), amountError = lines.isEmpty()) }
+            return
+        }
+        val total = sheet.total
+        val assignments = _state.value.composingAssets.associate { it.position.id to it.assignment }
+        _state.value = _state.value.copy(spend = null)
+        viewModelScope.launch {
+            val today = clock.today()
+            val member = preferences.get(PreferenceKeys.ActiveMemberId)
+                ?: portfolioRepository.observeMembers().first().firstOrNull()?.id.orEmpty()
+            val note = "${goal.name} hedefinden"
+            lines.forEach { line ->
+                portfolioRepository.replaceTransaction(
+                    transaction = Transaction(
+                        id = newId(),
+                        positionId = line.positionId,
+                        date = today,
+                        side = TradeSide.Sell,
+                        quantity = line.spendQuantity,
+                        unitPrice = line.unitPrice,
+                        note = "$name · $note",
+                        addedByMemberId = member,
+                    ),
+                    replacing = null,
+                    selectedGoalId = null,
+                )
+                val assignment = assignments[line.positionId]
+                if (assignment != null && !assignment.isWhole) {
+                    val left = (line.assigned - line.spendQuantity).coerceAtLeast(0.0)
+                    portfolioRepository.assignPositionToGoal(
+                        positionId = line.positionId,
+                        goalId = if (left > SpendTolerance) goalId else null,
+                        quantity = left,
+                    )
+                }
+            }
+            planRepository.upsertExpense(
+                ExpenseEntry(
+                    id = newId(),
+                    date = today,
+                    category = ExpenseCategory.custom(name) ?: ExpenseCategory.Other,
+                    amount = total,
+                    note = note,
+                    addedByMemberId = member,
+                ),
+            )
+            if (sheet.closeGoal) {
+                portfolioRepository.upsertGoal(
+                    goal.copy(status = GoalStatus.Completed, spentAt = clock.nowEpochMillis()),
+                )
+            }
         }
     }
 
@@ -337,3 +444,6 @@ private fun GoalDetailUiState.withScenario(thousands: Float): GoalDetailUiState 
         },
     )
 }
+
+/** Ondalik miktar artigi - 0,1 + 0,2 tam 0,3 cikmaz. */
+private const val SpendTolerance = 1e-9

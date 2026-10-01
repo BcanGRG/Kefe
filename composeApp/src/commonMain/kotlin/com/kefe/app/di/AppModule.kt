@@ -157,7 +157,7 @@ val appModule = module {
 
     // Detay ekranlari hedef/pozisyon kimligini calisma aninda alir.
     viewModel { (positionId: String) -> AssetDetailViewModel(get(), get(), get(), positionId) }
-    viewModel { (goalId: String) -> GoalDetailViewModel(get(), get(), goalId) }
+    viewModel { (goalId: String) -> GoalDetailViewModel(get(), get(), goalId, get(), get()) }
 }
 
 /**
