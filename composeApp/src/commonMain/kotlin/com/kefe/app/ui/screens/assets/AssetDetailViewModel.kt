@@ -26,7 +26,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
@@ -46,8 +45,8 @@ class AssetDetailViewModel(
     private val positionId: String,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(AssetDetailUiState())
-    val state: StateFlow<AssetDetailUiState> = _state.asStateFlow()
+    val state: StateFlow<AssetDetailUiState>
+        field = MutableStateFlow(AssetDetailUiState())
 
     private val _effects = Channel<AssetDetailEffect>(capacity = 4)
     val effects: Flow<AssetDetailEffect> = _effects.receiveAsFlow()
@@ -73,7 +72,7 @@ class AssetDetailViewModel(
                 val position = positions.firstOrNull { it.id == positionId }
                 buildState(position, transactions, members, board)
             }.collect { next ->
-                _state.value = next
+                state.value = next
                 if (next.position != null) {
                     everSeen = true
                 } else if (everSeen) {
@@ -95,7 +94,7 @@ class AssetDetailViewModel(
             priceRepository.observePriceHistory(assetKey).collect { series ->
                 // Tek nokta egri degildir: iki noktadan az veri varken grafik
                 // hic cizilmez (ekran zaten size >= 2 kontrolu yapiyor).
-                _state.value = _state.value.copy(
+                state.value = state.value.copy(
                     priceSeries = series.map { it.price },
                     // Etiket serinin GERCEK araligini yazar; sabit "12 ay"
                     // fonlarda dolu bir aylik egrinin ustunde yalan oluyordu.
@@ -111,20 +110,20 @@ class AssetDetailViewModel(
                 repo.deleteTransaction(intent.transactionId)
             }
 
-            AssetDetailIntent.OpenMenu -> _state.value = _state.value.copy(menuOpen = true)
-            AssetDetailIntent.CloseMenu -> _state.value = _state.value.copy(menuOpen = false)
+            AssetDetailIntent.OpenMenu -> state.value = state.value.copy(menuOpen = true)
+            AssetDetailIntent.CloseMenu -> state.value = state.value.copy(menuOpen = false)
 
             // Menu kapanir, onay acilir: silme geri alinamaz, tek dokunusla
             // olmamali.
             AssetDetailIntent.RequestDelete ->
-                _state.value = _state.value.copy(menuOpen = false, confirmDelete = true)
+                state.value = state.value.copy(menuOpen = false, confirmDelete = true)
 
             AssetDetailIntent.DismissDeleteConfirm ->
-                _state.value = _state.value.copy(confirmDelete = false)
+                state.value = state.value.copy(confirmDelete = false)
 
             // Silinen varligin ekrani da kapanir; PositionGone kabugu geri atar.
             AssetDetailIntent.ConfirmDelete -> viewModelScope.launch {
-                _state.value = _state.value.copy(confirmDelete = false)
+                state.value = state.value.copy(confirmDelete = false)
                 repo.deletePosition(positionId)
             }
         }
@@ -185,12 +184,12 @@ class AssetDetailViewModel(
             transactions = ordered,
             members = members,
             // Grafik AYRI akistan gelir; burada yeniden yazmak onu sifirlardi.
-            priceSeries = _state.value.priceSeries,
+            priceSeries = state.value.priceSeries,
             // Gecici UI bayraklari da korunur: akis fiyat/senkron her tiktiginde
             // yeniden kuruluyor; korunmazsa acilan menu ya da silme onayi bir
             // sonraki emisyonda ANINDA kapaniyordu (dialog "acilip hemen kapaniyor").
-            menuOpen = _state.value.menuOpen,
-            confirmDelete = _state.value.confirmDelete,
+            menuOpen = state.value.menuOpen,
+            confirmDelete = state.value.confirmDelete,
             // Isaretciler ve eksen etiketleri gecmis serisine dayaniyordu;
             // gercek seri gunluk ve daha yeni oldugu icin ikisi de bu turda
             // bos birakildi - uydurma bir eksen cizmektense hic cizmemek dogru.

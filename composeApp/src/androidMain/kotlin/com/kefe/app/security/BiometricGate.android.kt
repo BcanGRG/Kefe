@@ -2,7 +2,6 @@ package com.kefe.app.security
 
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
-import androidx.fragment.app.FragmentActivity
 import com.kefe.app.data.backup.AndroidFileBridge
 import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +34,7 @@ actual class BiometricGate actual constructor() {
     }
 
     actual suspend fun authenticate(title: String, subtitle: String): BiometricResult {
-        val activity = AndroidFileBridge.activity as? FragmentActivity
+        val activity = AndroidFileBridge.activity
             ?: return BiometricResult.Failed("Ekran hazır değil")
 
         // BiometricPrompt ANA IS PARCACIGINDA kurulmali; baska bir yerden

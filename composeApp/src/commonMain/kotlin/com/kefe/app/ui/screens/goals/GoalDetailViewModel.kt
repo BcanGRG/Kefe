@@ -41,7 +41,6 @@ import com.kefe.app.domain.repository.PreferencesRepository
 import kotlin.math.round
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -70,8 +69,8 @@ class GoalDetailViewModel(
     private val preferences: PreferencesRepository,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(GoalDetailUiState())
-    val state: StateFlow<GoalDetailUiState> = _state.asStateFlow()
+    val state: StateFlow<GoalDetailUiState>
+        field = MutableStateFlow(GoalDetailUiState())
 
     /** Hedef kimligi -> ad. Secicide "Araba'da" uyarisini yazmak icin. */
     private var goalNames: Map<String, String> = emptyMap()
@@ -83,24 +82,24 @@ class GoalDetailViewModel(
     fun onIntent(intent: GoalDetailIntent) {
         when (intent) {
             is GoalDetailIntent.SetScenarioContribution -> {
-                val scale = _state.value.scenarioScale
-                _state.value = _state.value.withScenario(intent.value.coerceIn(scale.min, scale.max))
+                val scale = state.value.scenarioScale
+                state.value = state.value.withScenario(intent.value.coerceIn(scale.min, scale.max))
             }
 
             GoalDetailIntent.ToggleAllRows -> {
-                _state.value = _state.value.copy(showAllRows = !_state.value.showAllRows)
+                state.value = state.value.copy(showAllRows = !state.value.showAllRows)
             }
 
             GoalDetailIntent.OpenAssetPicker ->
-                _state.value = _state.value.copy(assetPickerOpen = true)
+                state.value = state.value.copy(assetPickerOpen = true)
 
             GoalDetailIntent.CloseAssetPicker ->
-                _state.value = _state.value.copy(assetPickerOpen = false)
+                state.value = state.value.copy(assetPickerOpen = false)
 
             // Atanmisi tekrar secmek atamayi KALDIRIR - ayni dokunusla geri
             // alinabilmesi icin ayri bir "kaldir" dugmesi yok.
             is GoalDetailIntent.ToggleAsset -> viewModelScope.launch {
-                val alreadyMine = _state.value.assignedAssets
+                val alreadyMine = state.value.assignedAssets
                     .any { it.position.id == intent.positionId }
                 portfolioRepository.assignPositionToGoal(
                     positionId = intent.positionId,
@@ -113,7 +112,7 @@ class GoalDetailViewModel(
             }
 
             is GoalDetailIntent.SetAssetQuantity -> viewModelScope.launch {
-                val position = _state.value.assignableAssets
+                val position = state.value.assignableAssets
                     .firstOrNull { it.position.id == intent.positionId }
                     ?.position
                     ?: return@launch
@@ -145,10 +144,10 @@ class GoalDetailViewModel(
             }
 
             GoalDetailIntent.OpenSpend -> {
-                val goal = _state.value.goal ?: return
-                _state.value = _state.value.copy(spend = spendSheetOf(goal.name, _state.value.composingAssets))
+                val goal = state.value.goal ?: return
+                state.value = state.value.copy(spend = spendSheetOf(goal.name, state.value.composingAssets))
             }
-            GoalDetailIntent.CloseSpend -> _state.value = _state.value.copy(spend = null)
+            GoalDetailIntent.CloseSpend -> state.value = state.value.copy(spend = null)
             GoalDetailIntent.SpendAll -> updateSpend { it.spendingAll() }
             is GoalDetailIntent.SpendQuantity -> updateSpend { sheet ->
                 val next = sheet.copy(
@@ -164,7 +163,7 @@ class GoalDetailViewModel(
             GoalDetailIntent.ConfirmSpend -> confirmSpend()
 
             GoalDetailIntent.CloseGoal -> {
-                val goal = _state.value.goal ?: return
+                val goal = state.value.goal ?: return
                 viewModelScope.launch {
                     portfolioRepository.upsertGoal(goal.copy(status = GoalStatus.Completed))
                 }
@@ -186,17 +185,17 @@ class GoalDetailViewModel(
                 // Secicideki "Araba'da" uyarisi icin: kimlikten ada.
                 goalNames = goals.associate { it.id to it.name }
                 if (goal == null) {
-                    _state.value.copy(stage = GoalDetailStage.Missing, goal = null)
+                    state.value.copy(stage = GoalDetailStage.Missing, goal = null)
                 } else {
                     build(goal, positions, transactions, assignments)
                 }
-            }.collect { _state.value = it }
+            }.collect { state.value = it }
         }
     }
 
     private inline fun updateSpend(block: (SpendSheet) -> SpendSheet) {
-        val open = _state.value.spend ?: return
-        _state.value = _state.value.copy(spend = block(open))
+        val open = state.value.spend ?: return
+        state.value = state.value.copy(spend = block(open))
     }
 
     /**
@@ -212,8 +211,8 @@ class GoalDetailViewModel(
      * Sayfa yazmadan ONCE kapanir: cift dokunus ikinci kez satmasin.
      */
     private fun confirmSpend() {
-        val sheet = _state.value.spend ?: return
-        val goal = _state.value.goal ?: return
+        val sheet = state.value.spend ?: return
+        val goal = state.value.goal ?: return
         val name = sheet.name.trim()
         val lines = sheet.lines.filter { it.spendQuantity > 0.0 }
         if (name.isEmpty() || lines.isEmpty()) {
@@ -221,8 +220,8 @@ class GoalDetailViewModel(
             return
         }
         val total = sheet.total
-        val assignments = _state.value.composingAssets.associate { it.position.id to it.assignment }
-        _state.value = _state.value.copy(spend = null)
+        val assignments = state.value.composingAssets.associate { it.position.id to it.assignment }
+        state.value = state.value.copy(spend = null)
         viewModelScope.launch {
             val today = clock.today()
             val member = preferences.get(PreferenceKeys.ActiveMemberId)
@@ -277,7 +276,7 @@ class GoalDetailViewModel(
         transactions: List<Transaction>,
         assignments: Map<String, GoalAssignment>,
     ): GoalDetailUiState {
-        val previous = _state.value
+        val previous = state.value
         // KATI ATAMA: yalniz hedefe atanan varliklar sayilir; atama yoksa 0.
         val wealth = goalWealth(goal, positions, assignments)
         val today = clock.today()

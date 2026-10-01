@@ -18,7 +18,6 @@ import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.rawAmount
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -36,8 +35,8 @@ class GoalsViewModel(
     private val clock: KefeClock,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(GoalsUiState())
-    val state: StateFlow<GoalsUiState> = _state.asStateFlow()
+    val state: StateFlow<GoalsUiState>
+        field = MutableStateFlow(GoalsUiState())
 
     // Editor tutar cevrimi icin son bilinen kur. observePrices bunlari surekli
     // tazeler; newEditor/editorOf editor'u bunlarla tohumlar. Aksi halde editor
@@ -146,7 +145,7 @@ class GoalsViewModel(
                 val today = clock.today()
                 // Tamamlananlar ayri gruba iner; vadesi gecmis hedef ACIKTIR -
                 // tasarimda "Hedef duruyor" der, kapatilmis degil.
-                _state.value.copy(
+                state.value.copy(
                     stage = if (goals.isEmpty()) GoalsStage.Empty else GoalsStage.Ready,
                     goals = goals.filter { it.status != GoalStatus.Completed },
                     completed = goals.filter { it.status == GoalStatus.Completed },
@@ -162,7 +161,7 @@ class GoalsViewModel(
                         goal.requiredMonthlyOf(wealth[goal.id] ?: 0.0, today)?.let { goal.id to it }
                     }.toMap(),
                 )
-            }.collect { _state.value = it }
+            }.collect { state.value = it }
         }
     }
 
@@ -260,7 +259,7 @@ class GoalsViewModel(
     }
 
     private fun save() {
-        val editor = _state.value.editor ?: return
+        val editor = state.value.editor ?: return
         // Kur bilinmiyorsa null doner ve kayit ENGELLENIR: 1.0 kuruyla yazmak
         // "400 gram" hedefini ₺400 olarak kaydediyordu.
         val amount = editor.amountInTryOrNull()
@@ -277,7 +276,7 @@ class GoalsViewModel(
         // acilabiliyor (bkz. EditGoal); yalniz aciklara bakilinca `existing` null
         // kaliyor ve kayit hedefi Active'e cekip tamamlandi isaretini, sirasini ve
         // tahmini varisini siliyordu.
-        val all = _state.value.goals + _state.value.completed
+        val all = state.value.goals + state.value.completed
         val existing = all.firstOrNull { it.id == editor.goalId }
         val goal = Goal(
             // Yeni hedef UUID alir. Once "goal_<ikon>_<sayi>" idi ve silme sonrasi
@@ -296,7 +295,7 @@ class GoalsViewModel(
             monthlyContribution = editor.contributionInTry(),
             isMain = editor.isMain,
             status = existing?.status ?: GoalStatus.Active,
-            order = existing?.order ?: _state.value.goals.size,
+            order = existing?.order ?: state.value.goals.size,
             // TL disi birimde hedef O BIRIMDE yasar (bkz. Goal.unit): tutar birim
             // cinsinden saklanir, TL karsiligi her okumada guncel kurla bulunur.
             anchorAmount = editor.amountText.parseAmount().takeIf { editor.unit != GoalUnit.Try },
@@ -311,7 +310,7 @@ class GoalsViewModel(
             // ve tamamlanmis bir hedef ana hedef olarak kalabiliyordu; iki ana
             // hedef ayni anda isaretli oluyordu.
             if (goal.isMain) {
-                (_state.value.goals + _state.value.completed)
+                (state.value.goals + state.value.completed)
                     .filter { it.isMain && it.id != goal.id }
                     .forEach { portfolioRepository.upsertGoal(it.copy(isMain = false)) }
             }
@@ -322,7 +321,7 @@ class GoalsViewModel(
 
 
     private fun delete() {
-        val id = _state.value.editor?.goalId ?: return
+        val id = state.value.editor?.goalId ?: return
         viewModelScope.launch { portfolioRepository.deleteGoal(id) }
         update { it.copy(editor = null) }
     }
@@ -330,12 +329,12 @@ class GoalsViewModel(
     // --- Yardimci -----------------------------------------------------------
 
     private inline fun update(block: (GoalsUiState) -> GoalsUiState) {
-        _state.value = block(_state.value)
+        state.value = block(state.value)
     }
 
     private inline fun editor(block: (GoalEditorState) -> GoalEditorState) {
-        val current = _state.value.editor ?: return
-        _state.value = _state.value.copy(editor = block(current))
+        val current = state.value.editor ?: return
+        state.value = state.value.copy(editor = block(current))
     }
 }
 

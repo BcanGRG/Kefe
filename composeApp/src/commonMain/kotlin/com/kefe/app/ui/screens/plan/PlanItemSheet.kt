@@ -3,7 +3,6 @@ package com.kefe.app.ui.screens.plan
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -74,7 +73,6 @@ internal fun PlanItemSheet(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ColumnScope.ItemBody(editor: PlanItemEditor, onIntent: (PlanIntent) -> Unit) {
     val c = KefeTheme.colors
@@ -128,7 +126,6 @@ private fun SelectedAssetRow(editor: PlanItemEditor, onIntent: (PlanIntent) -> U
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AssetPicker(editor: PlanItemEditor, onIntent: (PlanIntent) -> Unit) {
     val c = KefeTheme.colors
@@ -174,7 +171,6 @@ private fun AssetPicker(editor: PlanItemEditor, onIntent: (PlanIntent) -> Unit) 
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ItemDetails(editor: PlanItemEditor, onIntent: (PlanIntent) -> Unit) {
     val c = KefeTheme.colors

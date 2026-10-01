@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -248,7 +247,6 @@ private fun InvestmentPlanCard(card: InvestmentCard, onIntent: (PlanIntent) -> U
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PlanRow(row: PlanRowUi, onIntent: (PlanIntent) -> Unit) {
     val c = KefeTheme.colors
@@ -615,7 +613,6 @@ private fun FlowLineRow(line: FlowLine) {
  * Gelirin nereye gittigi: gider, yatirim ve kalan tek cubukta. Renk tek basina
  * sinyal degil - anahtar her payi yazar, asim ayrica metinle soylenir.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FlowSplitBar(split: FlowSplit) {
     val c = KefeTheme.colors

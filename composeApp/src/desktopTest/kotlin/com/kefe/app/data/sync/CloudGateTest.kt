@@ -151,6 +151,7 @@ private class GateHarness(scheduler: TestCoroutineScheduler) {
 }
 
 /** Debounce (1,5 sn) ve push-sonrasi pull'un rahatca gecmesi icin sanal sure. */
+@OptIn(ExperimentalCoroutinesApi::class)
 private fun TestScope.settle() {
     advanceTimeBy(10_000)
     runCurrent()

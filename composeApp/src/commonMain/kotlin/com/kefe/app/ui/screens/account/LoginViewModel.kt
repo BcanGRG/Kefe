@@ -11,7 +11,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -37,8 +36,8 @@ class LoginViewModel(
     private val preferences: PreferencesRepository,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(LoginUiState())
-    val state: StateFlow<LoginUiState> = _state.asStateFlow()
+    val state: StateFlow<LoginUiState>
+        field = MutableStateFlow(LoginUiState())
 
     // "Kodu tekrar gonder" geri sayimi; e-posta duzeltilince ya da yeni gonderimde
     // iptal edilir.
@@ -53,7 +52,7 @@ class LoginViewModel(
         when (intent) {
             is LoginIntent.Begin -> begin(intent.email)
 
-            is LoginIntent.ChangeEmail -> _state.value = _state.value.copy(
+            is LoginIntent.ChangeEmail -> state.value = state.value.copy(
                 // Kullanici yazmaya baslayinca hata, engel ve "gonderildi"
                 // bilgisi duser.
                 email = intent.value.trim(),
@@ -64,7 +63,7 @@ class LoginViewModel(
 
             LoginIntent.SendCode -> sendCode()
 
-            is LoginIntent.ChangeCode -> _state.value = _state.value.copy(
+            is LoginIntent.ChangeCode -> state.value = state.value.copy(
                 code = intent.value.filter { it.isDigit() }.take(LoginCodeLength),
                 emailError = null,
             )
@@ -75,9 +74,9 @@ class LoginViewModel(
                 // Dogrulama suruyorken e-postaya donulmez (bkz. signInBack):
                 // sonuc yine gelir ve oturum yazilir; ekran onu karsilayacak
                 // durumda kalmali, bos bir e-posta formunda degil.
-                if (_state.value.verifying) return
+                if (state.value.verifying) return
                 cooldownJob?.cancel()
-                _state.value = _state.value.copy(
+                state.value = state.value.copy(
                     codeSent = false,
                     code = "",
                     emailError = null,
@@ -87,8 +86,8 @@ class LoginViewModel(
 
             LoginIntent.ResendCode -> resendCode()
 
-            LoginIntent.SignInHandled -> _state.value =
-                _state.value.copy(signedIn = false, codeSent = false, code = "", emailError = null)
+            LoginIntent.SignInHandled -> state.value =
+                state.value.copy(signedIn = false, codeSent = false, code = "", emailError = null)
         }
     }
 
@@ -96,19 +95,19 @@ class LoginViewModel(
         sendJob?.cancel()
         verifyJob?.cancel()
         cooldownJob?.cancel()
-        _state.value = LoginUiState(email = email?.trim().orEmpty())
+        state.value = LoginUiState(email = email?.trim().orEmpty())
     }
 
     private fun sendCode() {
-        val current = _state.value
+        val current = state.value
         if (!current.email.isValidEmail()) {
-            _state.value = current.copy(emailError = "Geçerli bir e-posta yazın")
+            state.value = current.copy(emailError = "Geçerli bir e-posta yazın")
             return
         }
-        _state.value = current.copy(sendingCode = true, emailError = null)
+        state.value = current.copy(sendingCode = true, emailError = null)
         sendJob = viewModelScope.launch {
             val error = authRepository.sendCode(current.email).exceptionOrNull()
-            _state.value = _state.value.copy(
+            state.value = state.value.copy(
                 sendingCode = false,
                 // Kod kutusu ancak gonderim BASARILIYSA acilir; yoksa kullanici
                 // hic gelmeyecek bir kodu bekler.
@@ -125,12 +124,12 @@ class LoginViewModel(
      * ATMAZ - kullanici zaten kod bekliyor, yalniz hatayi gorur ve tekrar dener.
      */
     private fun resendCode() {
-        val current = _state.value
+        val current = state.value
         if (current.resendCooldown > 0 || current.sendingCode) return
-        _state.value = current.copy(sendingCode = true, emailError = null)
+        state.value = current.copy(sendingCode = true, emailError = null)
         sendJob = viewModelScope.launch {
             val error = authRepository.sendCode(current.email).exceptionOrNull()
-            _state.value = _state.value.copy(
+            state.value = state.value.copy(
                 sendingCode = false,
                 emailError = error?.userMessage(),
             )
@@ -143,21 +142,21 @@ class LoginViewModel(
         cooldownJob?.cancel()
         cooldownJob = viewModelScope.launch {
             for (remaining in ResendCooldownSeconds downTo 1) {
-                _state.value = _state.value.copy(resendCooldown = remaining)
+                state.value = state.value.copy(resendCooldown = remaining)
                 delay(1_000)
             }
-            _state.value = _state.value.copy(resendCooldown = 0)
+            state.value = state.value.copy(resendCooldown = 0)
         }
     }
 
     private fun verifyCode() {
-        val current = _state.value
+        val current = state.value
         if (current.verifying) return
         if (current.code.length != LoginCodeLength) {
-            _state.value = current.copy(emailError = "Kod altı haneli olmalı")
+            state.value = current.copy(emailError = "Kod altı haneli olmalı")
             return
         }
-        _state.value = current.copy(verifying = true, emailError = null, guard = null)
+        state.value = current.copy(verifying = true, emailError = null, guard = null)
         verifyJob = viewModelScope.launch {
             // Baglanti DOGRULAMADAN ONCE okunur: dogrulama bitince esitleme
             // bir sonraki karede baslayabilir; o anki okuma yarisa girerdi.
@@ -177,7 +176,7 @@ class LoginViewModel(
                     // giren cihaz profil adimina gidiyor, oradan iki hesabin
                     // kayitlari birbirine akabiliyordu.
                     authRepository.signOut()
-                    _state.value = _state.value.copy(
+                    state.value = state.value.copy(
                         verifying = false,
                         signedIn = false,
                         codeSent = false,
@@ -189,7 +188,7 @@ class LoginViewModel(
                     return@launch
                 }
             }
-            _state.value = _state.value.copy(
+            state.value = state.value.copy(
                 verifying = false,
                 signedIn = error == null,
                 // Yanlis kod en sik hata; sebebi sunucudan gelen metinle yazariz

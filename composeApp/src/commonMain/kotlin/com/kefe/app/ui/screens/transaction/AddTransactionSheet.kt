@@ -8,7 +8,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -1201,7 +1200,6 @@ private fun PlanHintNote(hint: PlanHint) {
  * detayindaki "Varlık seç" ile ayni atamayi ONDEN yapar - kullanici varligi
  * eklerken hangi hedefe saydigina karar verir.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GoalPicker(
     state: AddTransactionUiState,

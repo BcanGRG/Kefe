@@ -22,7 +22,6 @@ import com.kefe.app.ui.format.ChangePeriod
 import com.kefe.app.ui.format.changeIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -39,8 +38,8 @@ class AssetsViewModel(
     private val clock: KefeClock,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(AssetsUiState())
-    val state: StateFlow<AssetsUiState> = _state.asStateFlow()
+    val state: StateFlow<AssetsUiState>
+        field = MutableStateFlow(AssetsUiState())
 
     private var positions: List<Position> = emptyList()
     private var transactionsByPosition: Map<String, List<Transaction>> = emptyMap()
@@ -62,20 +61,20 @@ class AssetsViewModel(
     fun onIntent(intent: AssetsIntent) {
         when (intent) {
             is AssetsIntent.SelectSort -> {
-                _state.value = _state.value.copy(sort = intent.sort)
+                state.value = state.value.copy(sort = intent.sort)
                 rebuild()
             }
 
             // Pencere degisince gruplar AYNI pozisyonlardan yeniden kurulur:
             // hafta ve ay zaten fiyat tablosundan geliyor, depoya gidilmez.
             is AssetsIntent.SelectChange -> {
-                _state.value = _state.value.copy(change = intent.change)
+                state.value = state.value.copy(change = intent.change)
                 rebuild()
             }
 
             is AssetsIntent.ToggleGroup -> {
-                val current = _state.value.collapsed
-                _state.value = _state.value.copy(
+                val current = state.value.collapsed
+                state.value = state.value.copy(
                     collapsed = if (intent.assetClass in current) {
                         current - intent.assetClass
                     } else {
@@ -89,8 +88,8 @@ class AssetsViewModel(
     private fun rebuild() {
         val today = clock.today()
         val total = positions.totalValue()
-        val mode = _state.value.change
-        val comparator = comparatorFor(_state.value.sort)
+        val mode = state.value.change
+        val comparator = comparatorFor(state.value.sort)
 
         val groups = positions
             .groupBy { it.assetClass }
@@ -136,7 +135,7 @@ class AssetsViewModel(
             }
             .sortedByDescending { it.total }
 
-        _state.value = _state.value.copy(
+        state.value = state.value.copy(
             loading = false,
             groups = groups,
             totalValue = total,

@@ -360,7 +360,7 @@ class PlanDeriveTest {
         val lines = assertNotNull(flow.lines).associateBy { it.kind }
         assertEquals(
             listOf("Gelir", "Aylık giderler", "Plan dışı harcamalar", "Yatırım", "Kalan"),
-            flow.lines!!.map { it.label },
+            flow.lines.map { it.label },
         )
         assertEquals("₺85.000", lines.getValue(FlowLineKind.Income).amount)
         assertEquals("—", lines.getValue(FlowLineKind.Expense).amount)
@@ -466,8 +466,8 @@ class PlanDeriveTest {
         val flow = assertNotNull(planContent(inputs(selection = nov, books = listOf(book))).flow)
         assertEquals("Plan", flow.caption)
         assertEquals(listOf("Gelir", "Aylık giderler", "Planlanan yatırım", "Kalacak"), flow.lines!!.map { it.label })
-        assertEquals(listOf("₺85.000", "₺10.000", "—", "₺75.000"), flow.lines!!.map { it.amount })
-        assertEquals("plan yok", flow.lines!![2].note)
+        assertEquals(listOf("₺85.000", "₺10.000", "—", "₺75.000"), flow.lines.map { it.amount })
+        assertEquals("plan yok", flow.lines[2].note)
         assertNull(flow.split)
         assertNull(flow.planLine)
     }
