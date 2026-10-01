@@ -104,7 +104,7 @@ class GoalReturnsTest {
             // 100 TL, +%10 -> gun basi 90,909 ; fark +9,09
             asset(position("pos_kucuk", quantity = 1.0, unitPrice = 100.0, dailyChangePercent = 10.0)),
         )
-        val change = assets.todayChange()!!
+        val change = assets.todayChange(emptyList(), KefeDate(2026, 10, 1))!!
         // Duz ortalama %5,5 olurdu; agirlikli sonuc %1'e cok daha yakin.
         assertTrue(change.percent < 1.2, "beklenen ~%1, gelen ${change.percent}")
         assertEquals(108.10, change.amount, 0.01)
@@ -118,14 +118,14 @@ class GoalReturnsTest {
     @Test
     fun kapaliGunHedefDegisimiSIFIR() {
         val assets = listOf(asset(position("pos_a", dailyChangePercent = 0.0)))
-        val change = assets.todayChange()!!
+        val change = assets.todayChange(emptyList(), KefeDate(2026, 10, 1))!!
         assertEquals(0.0, change.amount, EPS)
         assertEquals(0.0, change.percent, EPS)
     }
 
     @Test
     fun bosHedefNullDoner() {
-        assertNull(emptyList<GoalAsset>().todayChange())
+        assertNull(emptyList<GoalAsset>().todayChange(emptyList(), KefeDate(2026, 10, 1)))
     }
 
     // --- Dagilim ---

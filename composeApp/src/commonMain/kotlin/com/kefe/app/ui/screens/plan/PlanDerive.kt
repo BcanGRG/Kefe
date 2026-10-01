@@ -191,12 +191,12 @@ internal fun currentMonthPlan(inputs: PlanInputs, progress: MonthPlanProgress): 
             // Hicbir kalemin agirligi bilinmiyorsa "₺0" uydurulmaz.
             val planned = if (weights.isEmpty()) null else weights.sum()
             val summary = buildString {
-                append("Planlanan ${planned?.let { Money.tl(it) } ?: "—"}")
-                if (goal.monthlyContribution > 0.0) append(" · Aylık katkı ${Money.tl(goal.monthlyContribution)}")
+                append("Planlanan ${planned?.let { Money.tlExact(it) } ?: "—"}")
+                if (goal.monthlyContribution > 0.0) append(" · Aylık katkı ${Money.tlExact(goal.monthlyContribution)}")
             }
             val required = goal.requiredMonthly(goalWealth(goal, inputs.held, inputs.assignments), inputs.today)
                 ?.takeIf { it > 0.0 }
-                ?.let { "Gereken aylık ≈ ${Money.tl(it)} (${monthsToTarget(goal, inputs.today)} ay)" }
+                ?.let { "Gereken aylık ≈ ${Money.tlExact(it)} (${monthsToTarget(goal, inputs.today)} ay)" }
             GoalMonthPlan(
                 goalId = goal.id,
                 // Hedef cipi yazilmaz: kart zaten o hedefin sayfasinda.
@@ -248,7 +248,7 @@ internal fun investmentCard(
     // Gelecek ayda "0/5" bir olgu degil: henuz hicbir sey beklenmiyor.
     val counted = if (future) "$count kalem" else "${progress.doneCount}/$count kalem"
     // Hicbir kalemin agirligi bilinmiyorsa "₺0 planlandı" yazilmaz.
-    val summary = if (progress.plannedTl > 0.0) "$counted · ${Money.tl(progress.plannedTl)} planlandı" else counted
+    val summary = if (progress.plannedTl > 0.0) "$counted · ${Money.tlExact(progress.plannedTl)} planlandı" else counted
     val score = if (future) null else progress.score
     return InvestmentCard(
         scoreText = scoreText(score),
@@ -293,7 +293,7 @@ internal fun emptyPlanCard(month: YearMonth, copy: CopyDraftUi?): EmptyPlanCard 
 internal fun extrasCard(progress: MonthPlanProgress): ExtrasCard? {
     if (progress.extras.isEmpty()) return null
     return ExtrasCard(
-        total = Money.tl(progress.extrasTl),
+        total = Money.tlExact(progress.extrasTl),
         rows = progress.extras.map { e ->
             val assetClass = parseAssetKey(e.assetKey)?.assetClass
             val kind = when (e.kind) {
@@ -310,7 +310,7 @@ internal fun extrasCard(progress: MonthPlanProgress): ExtrasCard? {
                 assetClass = assetClass,
                 name = e.name,
                 detail = kind + quantity,
-                amount = Money.tl(e.tl),
+                amount = Money.tlExact(e.tl),
             )
         },
     )
@@ -341,9 +341,9 @@ internal fun goalContributionRows(
                 ?.takeIf { it > 0.0 }
         }
         val line = buildString {
-            append("planlanan ${plannedTl?.let { Money.tl(it) } ?: "—"}")
-            if (monthly > 0.0) append(" / aylık katkı ${Money.tl(monthly)}")
-            if (required != null) append(" · gereken ${Money.tl(required)}")
+            append("planlanan ${plannedTl?.let { Money.tlExact(it) } ?: "—"}")
+            if (monthly > 0.0) append(" / aylık katkı ${Money.tlExact(monthly)}")
+            if (required != null) append(" · gereken ${Money.tlExact(required)}")
         }
         GoalContributionRow(
             goalId = goal.id,
@@ -378,7 +378,7 @@ internal fun moneyFlowCard(inputs: PlanInputs, progress: MonthPlanProgress, rela
             name = member.name,
             initials = member.initials,
             index = index,
-            amount = flow.incomeByMember[member.id]?.let { Money.tl(it) } ?: "—",
+            amount = flow.incomeByMember[member.id]?.let { Money.tlExact(it) } ?: "—",
         )
     }
     val hasExpenses = book.expenses.isNotEmpty()
@@ -422,15 +422,15 @@ private fun actualFlowCard(
     val anyCost = hasExpenses || flow.budgetTotal != null
     val remaining = flow.remaining.takeIf { anyCost }
     val investNote = listOfNotNull(
-        plannedInvest?.let { "planlanan ${Money.tl(it)}" },
+        plannedInvest?.let { "planlanan ${Money.tlExact(it)}" },
         // Yatirim NET: ayni ay satilan dusulur, yoksa alimlarin toplamiyla karisirdi.
-        flow.sells.takeIf { it > 0.0 }?.let { "${Money.tl(it)} satış düşüldü" },
+        flow.sells.takeIf { it > 0.0 }?.let { "${Money.tlExact(it)} satış düşüldü" },
     ).joinToString(" · ").ifEmpty { null }
     val plannedNote = flow.budgetTotal?.let {
         listOfNotNull(
             "${flow.budgetByCategory.size} kalem",
-            flow.spentInPlan.takeIf { it > 0.0 }?.let { "harcanan ${Money.tl(it)}" },
-            flow.overPlan.takeIf { it > 0.0 }?.let { "${Money.tl(it)} aşım dahil" },
+            flow.spentInPlan.takeIf { it > 0.0 }?.let { "harcanan ${Money.tlExact(it)}" },
+            flow.overPlan.takeIf { it > 0.0 }?.let { "${Money.tlExact(it)} aşım dahil" },
         ).joinToString(" · ")
     } ?: "eklenmedi"
     val unplannedNote = flow.unplannedCategories.takeIf { it.isNotEmpty() }?.let { list ->
@@ -498,8 +498,8 @@ private fun flowLine(kind: FlowLineKind, label: String, value: Double?, note: St
     val negative = kind == FlowLineKind.Remaining && value != null && value < 0.0
     val amount = when {
         value == null -> "—"
-        negative -> "−${Money.tl(-value)}"
-        else -> Money.tl(value)
+        negative -> "−${Money.tlExact(-value)}"
+        else -> Money.tlExact(value)
     }
     // "—" ekran okuyucuda "tire" diye okunur; bilinmeyen rakam soylenmez, not soyler.
     val spoken = listOfNotNull(label, amount.takeIf { value != null }, note).joinToString(", ")
@@ -522,7 +522,7 @@ internal fun flowSplit(income: Double, expenses: Double, investedNet: Double): F
         expenseText = sharePercent(expenses / income),
         investText = sharePercent(invest / income),
         remainingText = sharePercent(left / income),
-        deficitText = (used - income).takeIf { it > 0.0 }?.let { "Gelirin ${Money.tl(it)} üstünde" },
+        deficitText = (used - income).takeIf { it > 0.0 }?.let { "Gelirin ${Money.tlExact(it)} üstünde" },
     )
 }
 
@@ -549,9 +549,9 @@ internal fun planLine(remaining: Double?, investedNet: Double, plannedInvest: Do
     val now = remaining ?: return null
     val left = now - (planned - investedNet.coerceAtLeast(0.0)).coerceAtLeast(0.0)
     return if (left >= 0.0) {
-        "Yatırım planı tamamlanınca ${Money.tl(left)} kalır."
+        "Yatırım planı tamamlanınca ${Money.tlExact(left)} kalır."
     } else {
-        "Yatırım planı tamamlanırsa gelir ${Money.tl(-left)} aşılır."
+        "Yatırım planı tamamlanırsa gelir ${Money.tlExact(-left)} aşılır."
     }
 }
 
@@ -572,7 +572,7 @@ internal fun expensesCard(book: MonthBook): ExpensesCard {
             category = category,
             label = category.label(),
             // Harcama yokken "₺0 / ₺25.000" yazilmaz: kira bir sinir degil, ayrilan para.
-            amounts = if (spent > 0.0) "${Money.tl(spent)} / ${Money.tl(planned)}" else Money.tl(planned),
+            amounts = if (spent > 0.0) "${Money.tlExact(spent)} / ${Money.tlExact(planned)}" else Money.tlExact(planned),
             ratio = if (spent > 0.0) spentRatio(spent, planned) else null,
             overText = overText(spent, planned),
         )
@@ -580,17 +580,17 @@ internal fun expensesCard(book: MonthBook): ExpensesCard {
     val plannedLine = flow.budgetTotal?.let {
         buildString {
             append("${categories.size} kalem")
-            if (flow.spentInPlan > 0.0) append(" · harcanan ${Money.tl(flow.spentInPlan)}")
-            if (flow.overPlan > 0.0) append(" · ${Money.tl(flow.overPlan)} aşıldı")
+            if (flow.spentInPlan > 0.0) append(" · harcanan ${Money.tlExact(flow.spentInPlan)}")
+            if (flow.overPlan > 0.0) append(" · ${Money.tlExact(flow.overPlan)} aşıldı")
         }
     }
 
     return ExpensesCard(
-        plannedTotal = flow.budgetTotal?.let { Money.tl(it) },
+        plannedTotal = flow.budgetTotal?.let { Money.tlExact(it) },
         plannedLine = plannedLine,
         categories = categories,
-        totalLine = if (book.expenses.isEmpty()) "Harcama girilmedi." else Money.tl(flow.expenses),
-        unplannedLine = flow.unplannedSpent.takeIf { it > 0.0 }?.let { "Plan dışı ${Money.tl(it)}" },
+        totalLine = if (book.expenses.isEmpty()) "Harcama girilmedi." else Money.tlExact(flow.expenses),
+        unplannedLine = flow.unplannedSpent.takeIf { it > 0.0 }?.let { "Plan dışı ${Money.tlExact(it)}" },
         recent = book.expenses
             .sortedWith(NewestFirst)
             .take(RecentExpenseCount)
@@ -600,7 +600,7 @@ internal fun expensesCard(book: MonthBook): ExpensesCard {
                     id = e.id,
                     title = e.category.label(),
                     subtitle = "${e.date.day} ${e.date.monthLabel()}$note",
-                    amount = Money.tl(e.amount),
+                    amount = Money.tlExact(e.amount),
                     unplanned = e.category !in budgetBy,
                 )
             },
@@ -615,7 +615,7 @@ private fun spentRatio(spent: Double, budget: Double): Float? =
 
 /** "₺2.300 aşıldı" - yalniz butce varken ve asildiysa. */
 private fun overText(spent: Double, budget: Double?): String? =
-    if (budget != null && spent > budget) "${Money.tl(spent - budget)} aşıldı" else null
+    if (budget != null && spent > budget) "${Money.tlExact(spent - budget)} aşıldı" else null
 
 /** En yeni once: tarih, ayni gunde giris ani. */
 private val NewestFirst: Comparator<ExpenseEntry> =

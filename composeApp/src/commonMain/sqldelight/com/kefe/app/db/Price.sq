@@ -85,6 +85,12 @@ upsertPriceHistory:
 INSERT OR REPLACE INTO price_history(assetKey, dateYear, dateMonth, dateDay, price)
 VALUES (:assetKey, :dateYear, :dateMonth, :dateDay, :price);
 
+-- Hesaptan gelen gun (bkz. PriceHistorySync): yalniz bu cihazda o gunun kaydi
+-- YOKSA yazilir - cihazin kendi gozlemi ezilmez.
+insertPriceHistoryIfMissing:
+INSERT OR IGNORE INTO price_history(assetKey, dateYear, dateMonth, dateDay, price)
+VALUES (:assetKey, :dateYear, :dateMonth, :dateDay, :price);
+
 deleteAllPriceHistory:
 DELETE FROM price_history;
 

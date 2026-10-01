@@ -732,9 +732,9 @@ private fun MainGoalCard(
         Row(Modifier.fillMaxWidth()) {
             Text(
                 text = buildString {
-                    append(if (masked) Money.masked(digits = 4) else Money.tl(currentWealth))
+                    append(if (masked) Money.masked(digits = 4) else Money.tlExact(currentWealth))
                     append(" / ")
-                    append(Money.tl(goal.amount))
+                    append(Money.tlExact(goal.amount))
                 },
                 style = t.body.tabular(),
                 color = c.onSurface,
@@ -756,7 +756,7 @@ private fun MainGoalCard(
         Spacer(Modifier.height(Space.x10))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = (if (masked) Money.masked(digits = 4) else Money.tl(remaining)) + " kaldı",
+                text = (if (masked) Money.masked(digits = 4) else Money.tlExact(remaining)) + " kaldı",
                 style = t.caption.tabular(),
                 color = c.onSurfaceMuted,
                 maxLines = 1,
@@ -893,7 +893,7 @@ private fun NetWorthCard(
                 selectedValue = if (state.masked) {
                     Money.masked(digits = 4)
                 } else {
-                    Money.tl(state.netWorthTotal.last())
+                    Money.tlExact(state.netWorthTotal.last())
                 },
                 modifier = Modifier.fillMaxWidth().height(NetWorthChartHeight),
             )
@@ -956,7 +956,7 @@ private fun MonthCard(
                 Spacer(Modifier.height(Space.x4))
                 Row {
                     Text(
-                        text = if (masked) Money.masked(digits = 4) else Money.tl(totals.monthAdded),
+                        text = if (masked) Money.masked(digits = 4) else Money.tlExact(totals.monthAdded),
                         style = t.h2.tabular(),
                         color = c.onSurface,
                         modifier = Modifier.alignByBaseline(),
@@ -966,7 +966,7 @@ private fun MonthCard(
                     if (totals.monthTarget > 0.0) {
                         Spacer(Modifier.width(DeltaGap))
                         Text(
-                            text = "/ ${Money.tl(totals.monthTarget)} hedef",
+                            text = "/ ${Money.tlExact(totals.monthTarget)} hedef",
                             style = t.caption.tabular(),
                             color = c.onSurfaceMuted,
                             modifier = Modifier.alignByBaseline(),
@@ -1402,7 +1402,7 @@ private fun SummaryEmpty(onOpenGoals: () -> Unit, onAddAsset: () -> Unit) {
             ) {
                 KefeIcon(KefeIcons.Balance, null, size = IconSize.default)
                 Text(
-                    text = Money.tl(0.0, spaced = true),
+                    text = Money.tlExact(0.0, spaced = true),
                     style = t.h2.tabular(),
                     color = c.onSurfaceMuted,
                 )

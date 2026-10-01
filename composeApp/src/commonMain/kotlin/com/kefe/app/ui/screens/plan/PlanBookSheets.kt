@@ -97,7 +97,7 @@ private fun IncomeField(
     if (last != null && last > 0.0) {
         Spacer(Modifier.height(Space.x8))
         KefeChip(
-            text = "Geçen ay: ${Money.tl(last)} — aynısı",
+            text = "Geçen ay: ${Money.tlExact(last)} — aynısı",
             selected = false,
             onClick = onUseLast,
             height = Sizes.chipSmall,
@@ -290,7 +290,7 @@ internal fun PlanBudgetSheet(
                     onValueChange = { onIntent(PlanIntent.BudgetAmount(category, it.asAmountInput())) },
                     helper = editor.lastSpent[category]
                         ?.takeIf { it > 0.0 }
-                        ?.let { "geçen ay ${Money.tl(it)} harcandı" },
+                        ?.let { "geçen ay ${Money.tlExact(it)} harcandı" },
                 )
             }
             Spacer(Modifier.height(Space.x16))

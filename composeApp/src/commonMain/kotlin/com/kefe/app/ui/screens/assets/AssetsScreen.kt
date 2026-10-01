@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kefe.app.domain.model.AssetClass
+import com.kefe.app.domain.model.PeriodTotal
 import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.color
 import com.kefe.app.domain.model.label
@@ -162,6 +163,11 @@ private fun AssetsHeader(state: AssetsUiState, onIntent: (AssetsIntent) -> Unit)
                 lastWeight = 1f,
             )
         }
+        // Olcu tam gunun fiyatiyla degilse hangi gunle oldugu yazilir.
+        state.periodNote?.let { note ->
+            Spacer(Modifier.height(Space.x4))
+            Text(note, style = t.micro, color = c.onSurfaceMuted)
+        }
     }
 }
 
@@ -269,14 +275,19 @@ private fun AssetGroupCard(
         if (expanded) {
             group.positions.forEach { position ->
                 KefeHairline()
-                AssetRow(position, mode, onClick = { onOpenPosition(position.id) })
+                AssetRow(
+                    position = position,
+                    mode = mode,
+                    change = if (mode.period == null) position.changeIn(mode) else group.rowChanges[position.id],
+                    onClick = { onOpenPosition(position.id) },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun AssetRow(position: Position, mode: AssetChange, onClick: () -> Unit) {
+private fun AssetRow(position: Position, mode: AssetChange, change: PeriodTotal?, onClick: () -> Unit) {
     val c = KefeTheme.colors
 
     // Elle girilen fiyat rozetle isaretlenir - hesabin nereden geldigi gizlenmez.
@@ -288,8 +299,7 @@ private fun AssetRow(position: Position, mode: AssetChange, onClick: () -> Unit)
 
     // Alt rakam SECILI pencerenin TL'si ve yuzdesi. Once iki ayri sayi ust uste
     // duruyordu (hep toplam TL kar, altinda donem yuzdesi); ayni satirda iki
-    // farkli soruya cevap vermek karisikti.
-    val change = position.changeIn(mode)
+    // farkli soruya cevap vermek karisikti. Donemde KAZANC (ViewModel hesaplar).
 
     KefeListRow(
         title = position.name,

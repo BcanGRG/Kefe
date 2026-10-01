@@ -39,6 +39,14 @@ interface PostgrestApi {
      * Basarisizsa [SyncException] atar.
      */
     suspend fun selectAll(table: String, accessToken: String): String
+
+    /**
+     * Suzgecli/sayfali okuma: [query] PostgREST sorgu metni
+     * ("select=a,b&day=gte.2026-08-01&order=day.asc&limit=1000&offset=0").
+     * Supabase sayfa basina en cok 1000 satir doner; buyuk tabloyu cagiran sayfalar.
+     */
+    suspend fun select(table: String, query: String, accessToken: String): String =
+        throw UnsupportedOperationException("select")
 }
 
 class SupabasePostgrestApi(
@@ -64,6 +72,19 @@ class SupabasePostgrestApi(
             val body = runCatching { response.bodyAsText() }.getOrNull().orEmpty()
             throw SyncException("$table upsert ${response.status.value}: ${body.take(300)}")
         }
+    }
+
+    override suspend fun select(table: String, query: String, accessToken: String): String {
+        val response = client.get("$baseUrl/rest/v1/$table?$query") {
+            header("apikey", anonKey)
+            header("Authorization", "Bearer $accessToken")
+            expectSuccess = false
+        }
+        if (!response.status.isSuccess()) {
+            val body = runCatching { response.bodyAsText() }.getOrNull().orEmpty()
+            throw SyncException("$table select ${response.status.value}: ${body.take(300)}")
+        }
+        return response.bodyAsText()
     }
 
     override suspend fun selectAll(table: String, accessToken: String): String {

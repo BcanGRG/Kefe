@@ -29,6 +29,9 @@ data class Price(
      */
     val weekChangePercent: Double? = null,
     val monthChangePercent: Double? = null,
+    /** Haftalik/aylik yuzdenin olculdugu gun (bkz. periodChange); bilinmiyorsa null. */
+    val weekSince: KefeDate? = null,
+    val monthSince: KefeDate? = null,
     /**
      * Kaynagin verdigi GUNLUK fiyat serisi - yalniz CEKIM ANINDA doludur.
      *

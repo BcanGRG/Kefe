@@ -201,6 +201,8 @@ class SqlDelightPriceRepository(
                     },
                     weekChangePercent = changes.week,
                     monthChangePercent = changes.month,
+                    weekSince = changes.weekSince,
+                    monthSince = changes.monthSince,
                 )
             }
         }

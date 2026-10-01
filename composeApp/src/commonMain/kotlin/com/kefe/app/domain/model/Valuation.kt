@@ -99,9 +99,17 @@ fun Position.valuedAt(price: Price?, today: KefeDate): Position {
     return copy(
         unitPrice = unit,
         value = quantity * unit,
+        // "Elle" rozeti DEGERLEMENIN fiyatini anlatir. Saklanan bayrak, islem
+        // eklenirken birim fiyatin elle yazildigini soyler - o bir ALIS fiyatidir.
+        // Once rozet ondan okunuyordu: alis fiyatini bir kez elle yazan her varlik,
+        // canli fiyatla degerlendigi halde kalici olarak "Elle" gorunuyordu
+        // (1 Eki 2026, 11 varligin 11'i). Piyasadan fiyat varsa karar onundur.
+        manualPrice = price.isManual,
         dailyChangePercent = price.todayChangePercent(today),
         weekChangePercent = price.weekChangePercent,
         monthChangePercent = price.monthChangePercent,
+        weekSince = price.weekSince,
+        monthSince = price.monthSince,
     )
 }
 

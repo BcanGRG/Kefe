@@ -30,6 +30,9 @@ data class PeriodChanges(
     val day: Double? = null,
     val week: Double? = null,
     val month: Double? = null,
+    /** Haftalik/aylik yuzdenin olculdugu GUN; yuzde bilinmiyorsa null. */
+    val weekSince: KefeDate? = null,
+    val monthSince: KefeDate? = null,
 ) {
     companion object {
         val Unknown = PeriodChanges()
@@ -143,11 +146,61 @@ fun periodChangesOf(
     history: List<PricePoint>,
     latest: Double,
     today: KefeDate,
-): PeriodChanges = PeriodChanges(
-    day = periodChangePercent(history, latest, today, DayDaysBack, DayTolerance),
-    week = periodChangePercent(history, latest, today, WeekDaysBack, WeekTolerance),
-    month = periodChangePercent(history, latest, today, MonthDaysBack, MonthTolerance),
-)
+): PeriodChanges {
+    val week = periodChange(history, latest, today, WeekDaysBack, WeekTolerance)
+    val month = periodChange(history, latest, today, MonthDaysBack, MonthTolerance)
+    return PeriodChanges(
+        day = periodChangePercent(history, latest, today, DayDaysBack, DayTolerance),
+        week = week?.percent,
+        month = month?.percent,
+        weekSince = week?.since,
+        monthSince = month?.since,
+    )
+}
+
+/** Donem yuzdesi ve olculdugu gun. */
+data class PeriodPoint(val percent: Double, val since: KefeDate)
+
+/**
+ * [periodChangePercent] + YEDEK: tolerans penceresinde kayit yoksa hedef gune
+ * EN YAKIN kayitli gun kullanilir - ama yalniz [daysBack]'in yarisi ile iki
+ * kati arasindaysa (haftada 4-14, ayda 15-60 gun once). Hangi gunle olculdugu
+ * [PeriodPoint.since] ile soylenir; ekran "8 Eyl'den bu yana" yazar.
+ *
+ * NEDEN: gecmis yalniz uygulamanin acildigi gunleri tutar. Kullanici iki hafta
+ * telefonu acmayinca (ya da telefon degistirince) "Ay" butun altin ve dovizde
+ * "—" kaliyordu, oysa 23 gun onceki fiyat elde duruyordu. Gunu yazildigi
+ * surece yaklasik olcu, hic olcu olmamasindan iyidir; yazilmadan kullanmak ise
+ * uydurmak olurdu.
+ */
+fun periodChange(
+    history: List<PricePoint>,
+    latest: Double,
+    today: KefeDate,
+    daysBack: Int,
+    tolerance: Int,
+): PeriodPoint? {
+    if (latest <= 0.0 || history.isEmpty()) return null
+    val todayEpoch = today.toEpochDay()
+    val newest = todayEpoch - daysBack
+    val oldest = newest - tolerance
+    val exact = history
+        .filter { it.date.toEpochDay() in oldest..newest && it.price > 0.0 }
+        .maxByOrNull { it.date.toEpochDay() }
+    val reference = exact ?: history
+        .filter { it.price > 0.0 }
+        .filter { (todayEpoch - it.date.toEpochDay()) in ((daysBack + 1) / 2).toLong()..(daysBack * 2).toLong() }
+        // Hedef gune en yakin; esitlikte ESKI olan (donemi kisaltmaktansa uzatmak).
+        .minWithOrNull(
+            compareBy<PricePoint> { kotlin.math.abs((todayEpoch - it.date.toEpochDay()) - daysBack) }
+                .thenBy { it.date.toEpochDay() },
+        )
+        ?: return null
+    return PeriodPoint(
+        percent = (latest - reference.price) / reference.price * 100.0,
+        since = reference.date,
+    )
+}
 
 /**
  * Bir degisimin TL tutari ve yuzdesi BIRLIKTE.

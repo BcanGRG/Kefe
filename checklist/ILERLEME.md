@@ -2347,3 +2347,82 @@ diyordu.
     ₺1.050 / ₺15.000, Dışarıda yemek ₺1.175 / ₺5.000 …
   - Harcamalar kartı: "₺2.968 · Plan dışı ₺370"; Halisaha "plan dışı"
     rozetiyle görünüyor.
+
+## 48 · Gün / Hafta / Ay değişimi denetlendi: kazanç, paylaşılan geçmiş, doğru rozet ✅
+
+**Neydi.** Kullanıcı Varlıklar'daki gün/hafta/ay değişiminin "düzgün gelmediğini"
+ve ikinci telefonda da doğru görünmesini istedi. Ayrıca bazı tutarlar kuruşu
+kırpıyordu: girilen ₺277,5 market harcaması "₺278" görünüyordu. 1 Ekim 2026'da
+S10'da ölçülenler:
+
+- **"Ay" bütün altın ve dövizde "—" idi.** Fiyat geçmişi yalnız uygulamanın
+  açıldığı günleri tutuyor. Telefon değiştiği için 25 Ağu – 7 Eyl arası boştu,
+  30 gün önceki fiyat (tolerans 7 gün) bulunamıyordu. Geçmiş cihazlar arasında
+  paylaşılmıyordu; iki telefon aynı varlık için farklı değişim gösterebilirdi.
+- **11 varlığın 11'inde "Elle" rozeti vardı**, ama hepsi canlı fiyatla
+  değerleniyordu. Rozet, işlem eklenirken birim fiyatın elle yazıldığını
+  söyleyen bayraktan okunuyordu. Oysa o bir alış fiyatı.
+- **Dönem değişimi "fiyat yüzdesi × bugünkü değer" idi.** Salı alınan altın,
+  pazartesinin yükselişini kullanıcının kazancı diye yazıyordu.
+- **Kuruş kırpılıyordu.** Plan, Hedefler ve Özet'in hedef satırları `Money.tl`
+  kullanıyordu ve bu kuruşu atıyordu.
+
+**Kararlar** (ikisi de önerilen seçenek): fiyat geçmişi hesap üzerinden
+paylaşılacak; değişim "senin kazancın" olacak.
+
+**Ne yapıldı.**
+
+- **Rozet.** Değerleme, rozeti kullandığı fiyattan yazar (`Price.isManual`).
+  Piyasa fiyatı yoksa saklanan değer ve bayrak korunur.
+- **Kuruş.** Bu ekranlarda `Money.tlExact` kullanılıyor: tutarın gerçekten
+  taşıdığı kuruş yazılır (₺277,50), tam tutarlar ondalıksız kalır. Ana toplamlar
+  hâlâ "Kuruşları göster" ayarına bağlı.
+- **Kazanç** (`HoldingGain.kt`).
+  - Formül: kazanç = bugünkü değer − dönem başı değeri − (dönem içi alımlar −
+    satışlar); yüzde = kazanç / (dönem başı değeri + alımlar).
+  - Dönem başı fiyatı, mevcut dönem yüzdesinden geri çözülür. Böylece kotasyon
+    günü, tolerans ve elle fiyat kuralları aynen geçerli.
+  - Dönem içinde baştan alınan bir varlık yüzde gerektirmez.
+  - Varlıklar'daki satırlar ve gruplar, Özet'teki "bugün" ve hedef detayındaki
+    "bugün" bu kurala geçti. Gruplarda TL'ler toplanır; hedefte kazanç, hedefe
+    atanan payla ölçeklenir.
+- **En yakın gün** (`periodChange`). Tolerans penceresinde kayıt yoksa hedef
+  güne en yakın kayıtlı gün kullanılır, ama yalnız dönemin yarısı ile iki katı
+  arasındaysa (haftada 4–14, ayda 15–60 gün). Varlıklar ekranı bu durumda
+  "Kıyas: 8 Eyl fiyatı · aradaki günlerin fiyatı kayıtlı değil" yazar. Dönem
+  içi işlem penceresi de o günden başlar.
+- **Paylaşılan geçmiş** (`PriceHistorySync`, sunucuda
+  `20261001_price_history.sql`).
+  - Bağlı her telefon gördüğü günlük fiyatları hesaba yazar.
+  - Günde bir kez hesaptaki kayıtları çeker ve yalnız kendinde olmayan günleri
+    doldurur; kendi gözlemini ezmez.
+  - İlk seferde bütün geçmiş, sonra son 70 gün çekilir; 1000 satırlık sayfalarla.
+  - Eşitleme motorundan ayrıdır. Hata verirse yalnız loglanır, "Eşitlendi"
+    çipini düşürmez.
+  - İşaretler hesaba göre tutulur: başka bir hesaba bağlanan cihaz baştan
+    başlar.
+
+**Doğrulama.**
+
+- **836 masaüstü testi**, hepsi yeşil. Yeniler:
+  - `HoldingGainTest`: dönem içi alım ve satım, bugün alınan varlık, bilinmeyen
+    yüzde, dönem dışı işlem, toplam.
+  - `PriceHistorySyncTest`: itme, yalnız eksik günü doldurma, günde bir
+    çekim, sayfalama, hesap değişimi.
+  - `PeriodChangeTest`: en yakın gün, yedek sınırları.
+  - `ValuationTest`: rozet.
+  - `PlanDeriveTest`: kuruş.
+- **Sunucu.** Tablo 1 Ekim'de canlıya uygulandı: RLS, politika, bileşik
+  anahtar.
+- **Cihazda**, 1 Ekim 2026, R58N81SAZ1Y:
+  - "Elle" rozetleri kalktı.
+  - "Ay" dolu: 22 ayar −₺26.243,70 · −%3,51 (8 Eyl ₺6.236 → ₺6.017), notu
+    "Kıyas: 8 Eyl fiyatı".
+  - Telefon açılışta hesaba 21 varlığın 735 günlük fiyatını yazdı
+    (30 Haz – 1 Eki).
+
+**Sonraya.**
+
+- İkinci telefon güncellenince kendi gördüğü günleri yazar ve iki telefonun
+  boşlukları birbirini doldurur. Hiçbir telefonun açılmadığı günler için
+  sunucuda günlük toplayıcı (seçilmeyen seçenek) hâlâ bir yol.

@@ -416,11 +416,11 @@ private fun DesktopGoalCard(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = buildString {
-                        append(if (masked) Money.masked(4, false) else Money.tl(currentWealth))
+                        append(if (masked) Money.masked(4, false) else Money.tlExact(currentWealth))
                         append(" / ")
-                        append(Money.tl(goal.amount))
+                        append(Money.tlExact(goal.amount))
                         append(" · ")
-                        append(if (masked) Money.masked(4, false) else Money.tl(remaining))
+                        append(if (masked) Money.masked(4, false) else Money.tlExact(remaining))
                         append(" kaldı")
                     },
                     style = t.micro.tabular(),
@@ -536,7 +536,7 @@ private fun DesktopAllocationCard(
                             text = if (masked) {
                                 Money.masked(4, false)
                             } else {
-                                Money.tl(slice.value)
+                                Money.tlExact(slice.value)
                             },
                             style = t.captionSmall.tabular(),
                             color = c.onSurface,
@@ -672,11 +672,11 @@ private fun DesktopEmpty(onOpenGoals: () -> Unit, onAddAsset: () -> Unit) {
  */
 private fun monthLine(totals: PortfolioTotals, masked: Boolean): String = buildString {
     append("Bu ay eklenen ")
-    append(if (masked) Money.masked(4, false) else Money.tl(totals.monthAdded))
+    append(if (masked) Money.masked(4, false) else Money.tlExact(totals.monthAdded))
     // Ana hedef yokken aylik katki hedefi de yok: " / ₺0" gurultuydu.
     if (totals.monthTarget > 0.0) {
         append(" / ")
-        append(Money.tl(totals.monthTarget))
+        append(Money.tlExact(totals.monthTarget))
     }
 }
 

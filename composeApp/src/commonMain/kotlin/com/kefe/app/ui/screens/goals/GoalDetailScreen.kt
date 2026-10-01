@@ -428,7 +428,7 @@ private fun AssignedAssetsCard(
                     }
                     Spacer(Modifier.width(Space.x8))
                     Text(
-                        text = Money.tl(asset.value),
+                        text = Money.tlExact(asset.value),
                         style = t.body.tabular(),
                         color = c.onSurface,
                         maxLines = 1,
@@ -596,7 +596,7 @@ private fun AssignableAssetRow(
             }
             Spacer(Modifier.width(Space.x8))
             Text(
-                text = Money.tl(position.value),
+                text = Money.tlExact(position.value),
                 style = t.caption.tabular(),
                 color = c.onSurfaceMuted,
                 maxLines = 1,
@@ -741,7 +741,7 @@ private fun RingCard(
 
         // Tutar halkanin ALTINDA, tam yazimla: burada genislik sinirli degil.
         Text(
-            text = "${Money.tl(state.currentWealth)} / ${Money.tl(goal.amount)}",
+            text = "${Money.tlExact(state.currentWealth)} / ${Money.tlExact(goal.amount)}",
             style = KefeTheme.type.body.tabular(),
             color = c.onSurfaceMuted,
             maxLines = 1,
@@ -761,7 +761,7 @@ private fun RingCard(
                 value = if (state.exceeded) {
                     Money.tlSigned(surplus)
                 } else {
-                    Money.tl((-surplus).coerceAtLeast(0.0))
+                    Money.tlExact((-surplus).coerceAtLeast(0.0))
                 },
                 modifier = Modifier.weight(1f),
             )
@@ -1019,7 +1019,7 @@ private fun projectionSummary(goal: Goal, state: GoalDetailUiState) = buildAnnot
 
     append("Ayda ")
     withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
-        append(Money.tl(goal.monthlyContribution))
+        append(Money.tlExact(goal.monthlyContribution))
     }
     append(" katkıyla devam ederseniz hedefe ")
     withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(arrival.formatMonthYear()) }
@@ -1056,7 +1056,7 @@ private fun ScenarioCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) 
             )
             Spacer(Modifier.weight(1f))
             Text(
-                Money.tl(amount),
+                Money.tlExact(amount),
                 style = t.h2.tabular(),
                 color = c.accent,
                 modifier = Modifier.alignByBaseline(),
@@ -1072,13 +1072,13 @@ private fun ScenarioCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) 
 
         Row(Modifier.fillMaxWidth()) {
             Text(
-                Money.tl(ScenarioMinThousands.toDouble() * 1000.0),
+                Money.tlExact(ScenarioMinThousands.toDouble() * 1000.0),
                 style = t.micro.tabular(),
                 color = c.onSurfaceMuted,
             )
             Spacer(Modifier.weight(1f))
             Text(
-                Money.tl(ScenarioMaxThousands.toDouble() * 1000.0),
+                Money.tlExact(ScenarioMaxThousands.toDouble() * 1000.0),
                 style = t.micro.tabular(),
                 color = c.onSurfaceMuted,
             )
@@ -1110,7 +1110,7 @@ private fun ScenarioCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) 
  * sonra" diyebiliyordu.
  */
 private fun scenarioSentence(state: GoalDetailUiState, amount: Double): String {
-    val head = "Aylık katkıyı ${Money.tl(state.baseContribution)} → ${Money.tl(amount)} yaparsanız: "
+    val head = "Aylık katkıyı ${Money.tlExact(state.baseContribution)} → ${Money.tlExact(amount)} yaparsanız: "
 
     val months = state.scenarioMonths
         ?: return head + "hedefe varış yine de hesaplanamıyor."
@@ -1270,7 +1270,7 @@ private fun HistoryCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) -
                 )
                 // O aya ait fotograf yoksa tire: bilinmeyen deger sifir degildir.
                 BodyCell(
-                    text = row.monthEnd?.let { Money.tl(it) } ?: "—",
+                    text = row.monthEnd?.let { Money.tlExact(it) } ?: "—",
                     weight = 1.2f,
                     align = TextAlign.End,
                     color = if (row.monthEnd == null) c.onSurfaceMuted else c.onSurface,
