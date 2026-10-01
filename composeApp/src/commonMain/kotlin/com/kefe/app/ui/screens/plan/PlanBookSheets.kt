@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -273,7 +276,67 @@ internal fun PlanBudgetSheet(
                         ?.let { "geçen ay ${Money.tl(it)} harcandı" },
                 )
             }
+            Spacer(Modifier.height(Space.x16))
+            BudgetAddItem(editor, onIntent)
         }
+    }
+}
+
+/**
+ * Butcede kendi kalemi: kapaliyken tek "Kalem ekle" dugmesi. Acikken once daha
+ * eski aylarda kullanilan kalemler cip olarak (tek dokunusla eklenir), altinda
+ * yeni bir adin alani. Eklenen kalem listeye bos tutar alaniyla girer.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BudgetAddItem(editor: BudgetEditor, onIntent: (PlanIntent) -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    if (!editor.addOpen) {
+        KefeTextButton(
+            text = "Kalem ekle",
+            onClick = { onIntent(PlanIntent.BudgetOpenAdd) },
+            leadingIcon = KefeIcons.Plus,
+        )
+        return
+    }
+
+    KefeFieldLabel("Kalem ekle")
+    if (editor.olderCustom.isNotEmpty()) {
+        Spacer(Modifier.height(Space.x8))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(Space.x8),
+            verticalArrangement = Arrangement.spacedBy(Space.x8),
+        ) {
+            editor.olderCustom.forEach { category ->
+                KefeChip(
+                    text = category.label(),
+                    selected = false,
+                    onClick = { onIntent(PlanIntent.BudgetAddExisting(category)) },
+                    height = Sizes.chipSmall,
+                    leadingIcon = KefeIcons.Plus,
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(Space.x8))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        KefeTextField(
+            value = editor.addText,
+            onValueChange = { onIntent(PlanIntent.BudgetAddText(it)) },
+            modifier = Modifier.weight(1f),
+            placeholder = "ör. Tatil, Düğün hediyesi",
+            singleLine = true,
+            error = if (editor.addError) "Kalemin adını yazın." else null,
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { onIntent(PlanIntent.BudgetAddConfirm) }),
+        )
+        Spacer(Modifier.width(Space.x8))
+        KefeTextButton(text = "Ekle", onClick = { onIntent(PlanIntent.BudgetAddConfirm) })
     }
 }
 

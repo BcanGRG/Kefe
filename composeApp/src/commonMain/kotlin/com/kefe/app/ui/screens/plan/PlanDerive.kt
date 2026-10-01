@@ -687,9 +687,15 @@ internal fun customCategoriesOf(books: List<MonthBook>): List<ExpenseCategory> {
     return used.filter { it.first.isCustom }.sortedByDescending { it.second }.map { it.first }.distinct()
 }
 
-internal fun budgetEditorOf(inputs: PlanInputs): BudgetEditor = BudgetEditor(
+internal fun budgetEditorOf(inputs: PlanInputs): BudgetEditor {
+    val categories = ExpenseCategory.entries + customCategoriesOf(listOf(inputs.book, inputs.previousBook))
+    return budgetEditorOf(inputs, categories)
+}
+
+private fun budgetEditorOf(inputs: PlanInputs, categories: List<ExpenseCategory>): BudgetEditor = BudgetEditor(
     month = inputs.month,
-    categories = ExpenseCategory.entries + customCategoriesOf(listOf(inputs.book, inputs.previousBook)),
+    categories = categories,
+    olderCustom = customCategoriesOf(inputs.books) - categories.toSet(),
     texts = inputs.book.budgets.groupBy { it.category }
         .mapValues { (_, list) -> rawAmount(list.sumOf { it.amount }) },
     lastSpent = inputs.previousBook.expenses.totalsByCategory(),

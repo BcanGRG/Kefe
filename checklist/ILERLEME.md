@@ -2249,3 +2249,29 @@ verebiliyoruz". "Diğer"e yazılan her şey tek bir satırda toplanıyordu.
   - Sonraki "Harcama ekle"de "Test kalemi" çip olarak geldi. Bütçe sayfası
     "TEST KALEMİ" alanını listeledi.
   - Test harcaması sonra silindi.
+
+## 46 · Bütçede de kendi kalemin eklenebiliyor ✅
+
+**Neydi.** Kendi kalemin (bkz. 45) yalnız harcama eklerken oluşuyordu. Kullanıcı:
+"bu özellik bütçe eklemede de olması gerekmez mi". Henüz para harcanmamış bir
+şeye ("Tatil için bu ay ₺20.000 ayır") önceden bütçe konamıyordu.
+
+**Ne yapıldı.**
+
+- Bütçe sayfasının sonunda "Kalem ekle" düğmesi var. Dokununca daha eski
+  aylarda kullanılan kalemler çip olarak gelir (tek dokunuşla eklenir),
+  altında yeni bir adın alanı ve "Ekle" var.
+- Eklenen kalem listeye boş tutar alanıyla girer; tutar yazılmazsa bütçe
+  satırı açılmaz.
+- Aynı kalem başka yazımla ("tatil") ya da hazır bir kategorinin adı
+  ("market") yazılırsa ikinci bir alan açılmaz.
+- Ad yazılmadan "Ekle"ye basılırsa "Kalemin adını yazın." uyarısı çıkar.
+
+**Doğrulama.**
+
+- **817 masaüstü testi**, hepsi yeşil. `PlanViewModelTest` bütün akışı sınar:
+  boş ad hatası, yeni ad, yazım farkı, hazır ad, eski kalemin çiple eklenmesi,
+  kaydedilen bütçenin kimliği (`eb_2026_10_c_tatil`) ve tutarsız kalemin satır
+  açmaması.
+- Cihazda, 27 Eylül 2026, R58N81SAZ1Y: "Kalem ekle" → "Tatil" → "Ekle" ile
+  listeye "TATİL" alanı geldi. Sayfa kaydedilmeden kapatıldı.
