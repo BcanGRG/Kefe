@@ -1,5 +1,6 @@
 package com.kefe.app.ui.screens.plan
 
+import androidx.lifecycle.viewModelScope
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.kefe.app.data.db.bootstrapIfNeeded
 import com.kefe.app.data.db.createKefeDatabase
@@ -16,6 +17,7 @@ import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.GoldSubtype
 import com.kefe.app.domain.model.IncomeKind
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.MonthBook
 import com.kefe.app.domain.model.PlanItem
 import com.kefe.app.domain.model.PlanItemStatus
 import com.kefe.app.domain.model.PlanTargetMode
@@ -34,10 +36,13 @@ import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.domain.repository.RefreshOutcome
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -79,11 +84,32 @@ import com.kefe.app.ui.screens.transaction.AddTransactionPrefill
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlanViewModelTest {
 
+    /** Bu testte kurulan VM'ler ([Env.vm]); [tearDown] hepsini durdurur. */
+    private val viewModels = mutableListOf<PlanViewModel>()
+
     @BeforeTest
     fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
 
+    /**
+     * VM'ler DURDURULUR ve BITMELERI beklenir; Main ancak ondan sonra geri alinir.
+     *
+     * NEDEN: viewModelScope Main uzerinden calisir, turetim ve depo yazmasi
+     * Default'ta. Test bittiginde yarim kalan bir is (withContext donusu, turetimin
+     * sonucu) Main'e geri doner. Bu donus resetMain/setMain degisimine denk gelirse
+     * TestMainDispatcher "dispatch gerekli mi"yi eski Main'e (Swing: evet), dispatch'i
+     * yeni testin Unconfined'ina sorar ve UnsupportedOperationException firlar; runTest
+     * onu SIRADAKI testin hatasi olarak raporlar - tam kosuda ara sira, tek basina hic.
+     */
     @AfterTest
-    fun tearDown() = Dispatchers.resetMain()
+    fun tearDown() {
+        try {
+            runBlocking {
+                withTimeout(10_000) { viewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() } }
+            }
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
 
     /** Fiyat tablosu elle surulur; bos tablo yeterli olan testler varsayilani kullanir. */
     private class BoardPrices(prices: List<Price> = emptyList()) : PriceRepository {
@@ -95,7 +121,7 @@ class PlanViewModelTest {
         override suspend fun clearManualPrice(assetKey: String) = Unit
     }
 
-    private class Env {
+    private inner class Env {
         val database: KefeDatabase
         val prices = BoardPrices()
         val portfolio: SqlDelightPortfolioRepository
@@ -117,7 +143,7 @@ class PlanViewModelTest {
         }
 
         /** Veri once tohumlanir, VM sonra kurulur: ilk Ready durumu veriyi gorur. */
-        fun vm() = PlanViewModel(plan, portfolio, prices, prefs, clock, dayTicks = days)
+        fun vm() = PlanViewModel(plan, portfolio, prices, prefs, clock, dayTicks = days).also { viewModels += it }
 
         suspend fun buyGram(id: String, date: KefeDate, quantity: Double = 1.0) {
             portfolio.upsertPosition(gram())
@@ -169,7 +195,11 @@ class PlanViewModelTest {
         suspend fun awaitItems(predicate: (List<PlanItem>) -> Boolean): List<PlanItem> =
             realTime { plan.observePlanItems().first(predicate) }
 
-        suspend fun items(): List<PlanItem> = plan.observePlanItems().first()
+        suspend fun items(): List<PlanItem> = realTime { plan.observePlanItems().first() }
+
+        suspend fun book(month: YearMonth): MonthBook = realTime { plan.observeMonthBook(month).first() }
+
+        suspend fun positions(): List<Position> = realTime { portfolio.observeAllPositions().first() }
 
         suspend fun expense(id: String, date: KefeDate, amount: Double, category: ExpenseCategory = ExpenseCategory.Groceries) =
             plan.upsertExpense(ExpenseEntry(id = id, date = date, category = category, amount = amount))
@@ -775,7 +805,7 @@ class PlanViewModelTest {
         vm.onIntent(PlanIntent.IncomeSalary(""))
         vm.onIntent(PlanIntent.SaveIncome)
         vm.awaitState { it.incomeOf("member_owner") == "—" }
-        assertTrue(env.plan.observeMonthBook(October).first().incomes.isEmpty())
+        assertTrue(env.book(October).incomes.isEmpty())
     }
 
     // --- Defter: gider -------------------------------------------------------
@@ -829,7 +859,7 @@ class PlanViewModelTest {
 
         val card = vm.awaitState { it.content.expenses?.recent?.isNotEmpty() == true }.content.expenses!!
         assertEquals("₺1.500", card.totalLine)
-        val book = env.plan.observeMonthBook(October).first()
+        val book = env.book(October)
         assertEquals(1, book.expenses.size)
         assertEquals("market", book.expenses.single().note)
     }
@@ -856,7 +886,7 @@ class PlanViewModelTest {
             .content.expenses!!
         assertTrue(card.recent.single { it.title == "Tatil" }.unplanned)
         assertEquals("Plan dışı ₺12.000", card.unplannedLine)
-        assertEquals("c:Tatil", env.plan.observeMonthBook(October).first().expenses.single().category.name)
+        assertEquals("c:Tatil", env.book(October).expenses.single().category.name)
 
         // Sonraki harcamada hazir cip; farkli yazim ayni kaleme duser.
         vm.onIntent(PlanIntent.AddExpense)
@@ -875,7 +905,7 @@ class PlanViewModelTest {
         vm.onIntent(PlanIntent.BudgetAmount(trip, "20000"))
         vm.onIntent(PlanIntent.SaveBudget)
         vm.awaitState { state -> state.content.expenses?.categories?.any { it.amounts == "₺15.000 / ₺20.000" } == true }
-        assertEquals(listOf("eb_2026_10_c_tatil"), env.plan.observeMonthBook(October).first().budgets.map { it.id })
+        assertEquals(listOf("eb_2026_10_c_tatil"), env.book(October).budgets.map { it.id })
     }
 
     @Test
@@ -924,7 +954,7 @@ class PlanViewModelTest {
         // Harcamasi olmayan aylik gider: yalniz ayrilan tutar.
         assertEquals("₺20.000", card.categories.single { it.label == "Tatil" }.amounts)
         // Tutar yazilmayan kalem butce satiri acmaz.
-        assertEquals(listOf("eb_2026_10_c_tatil"), env.plan.observeMonthBook(October).first().budgets.map { it.id })
+        assertEquals(listOf("eb_2026_10_c_tatil"), env.book(October).budgets.map { it.id })
     }
 
     @Test
@@ -962,7 +992,7 @@ class PlanViewModelTest {
 
         val card = vm.awaitState { it.content.expenses?.plannedTotal == "₺32.000" }.content.expenses!!
         assertEquals(2, card.categories.size)
-        val budgets = env.plan.observeMonthBook(October).first().budgets.associate { it.category to it.amount }
+        val budgets = env.book(October).budgets.associate { it.category to it.amount }
         assertEquals(mapOf(ExpenseCategory.Groceries to 12_000.0, ExpenseCategory.Housing to 20_000.0), budgets)
     }
 
@@ -1064,7 +1094,7 @@ class PlanViewModelTest {
         // Alim varliklarda kalir ve plan disina duser.
         val extras = vm.awaitState { it.content.extras != null }.content.extras
         assertEquals("gold_gram", extras?.rows?.single()?.assetKey)
-        assertEquals(2.0, env.portfolio.observeAllPositions().first().single { it.id == GramId }.quantity, 1e-9)
+        assertEquals(2.0, env.positions().single { it.id == GramId }.quantity, 1e-9)
     }
 
     @Test
@@ -1139,7 +1169,7 @@ class PlanViewModelTest {
         vm.onIntent(PlanIntent.DeletePurchases)
         val after = vm.awaitState { it.content.extras == null }
         assertNull(after.content.extras)
-        assertTrue(env.portfolio.observeAllPositions().first().none { it.id == GramId && it.quantity > 0.0 })
+        assertTrue(env.positions().none { it.id == GramId && it.quantity > 0.0 })
     }
 
     @Test
