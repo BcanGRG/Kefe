@@ -22,7 +22,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -57,8 +56,8 @@ class ProfileSetupViewModel(
     private val accountLinker: AccountLinker,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ProfileSetupUiState())
-    val state: StateFlow<ProfileSetupUiState> = _state.asStateFlow()
+    val state: StateFlow<ProfileSetupUiState>
+        field = MutableStateFlow(ProfileSetupUiState())
 
     private var loadJob: Job? = null
 
@@ -79,16 +78,16 @@ class ProfileSetupViewModel(
 
             is ProfileSetupIntent.ChooseConflict -> {
                 val link = pending ?: return
-                if (_state.value.phase != ProfileSetupPhase.Conflict) return
+                if (state.value.phase != ProfileSetupPhase.Conflict) return
                 pending = link.copy(choice = intent.choice)
                 viewModelScope.launch { showLinkPick(link.prepared, intent.choice) }
             }
 
             ProfileSetupIntent.BackToConflict -> {
                 val link = pending ?: return
-                if (link.prepared.decision != LinkDecision.Conflict || _state.value.saving) return
+                if (link.prepared.decision != LinkDecision.Conflict || state.value.saving) return
                 pending = link.copy(choice = null)
-                _state.value = _state.value.copy(phase = ProfileSetupPhase.Conflict, conflictChoice = null)
+                state.value = state.value.copy(phase = ProfileSetupPhase.Conflict, conflictChoice = null)
             }
 
             // Oturum yeniden okunur: bu arada kapandiysa (sunucu jetonu
@@ -99,7 +98,7 @@ class ProfileSetupViewModel(
                 pending = null
                 val auth = currentAuth()
                 val signedIn = auth is AuthState.SignedIn
-                _state.value = _state.value.copy(
+                state.value = state.value.copy(
                     signedIn = signedIn,
                     accountEmail = (auth as? AuthState.SignedIn)?.session?.email,
                     linking = false,
@@ -107,16 +106,16 @@ class ProfileSetupViewModel(
                 showMembers(pickOnly = signedIn)
             }
 
-            ProfileSetupIntent.EditNames -> _state.value = _state.value.copy(editingNames = true)
+            ProfileSetupIntent.EditNames -> state.value = state.value.copy(editingNames = true)
 
             is ProfileSetupIntent.ChangeOwnerName ->
-                _state.value = _state.value.copy(ownerName = intent.value)
+                state.value = state.value.copy(ownerName = intent.value)
 
             is ProfileSetupIntent.ChangePartnerName ->
-                _state.value = _state.value.copy(partnerName = intent.value)
+                state.value = state.value.copy(partnerName = intent.value)
 
             is ProfileSetupIntent.SelectThisDevice ->
-                _state.value = _state.value.copy(thisDeviceIsOwner = intent.isOwner)
+                state.value = state.value.copy(thisDeviceIsOwner = intent.isOwner)
 
             ProfileSetupIntent.Save -> save()
 
@@ -125,7 +124,7 @@ class ProfileSetupViewModel(
                 pulledAccount = null
                 accountBroughtNames = false
                 pending = null
-                _state.value = ProfileSetupUiState()
+                state.value = ProfileSetupUiState()
             }
         }
     }
@@ -139,7 +138,7 @@ class ProfileSetupViewModel(
         pulledAccount = null
         accountBroughtNames = false
         pending = null
-        _state.value = _state.value.copy(
+        state.value = state.value.copy(
             phase = ProfileSetupPhase.Checking,
             failureDetail = null,
             commitFailed = false,
@@ -152,7 +151,7 @@ class ProfileSetupViewModel(
         loadJob = viewModelScope.launch {
             val auth = currentAuth()
             val signedIn = auth is AuthState.SignedIn
-            _state.value = _state.value.copy(
+            state.value = state.value.copy(
                 signedIn = signedIn,
                 accountEmail = (auth as? AuthState.SignedIn)?.session?.email,
             )
@@ -161,7 +160,7 @@ class ProfileSetupViewModel(
                 return@launch
             }
 
-            _state.value = _state.value.copy(phase = ProfileSetupPhase.Syncing)
+            state.value = state.value.copy(phase = ProfileSetupPhase.Syncing)
             // Devralma ve onizleme BAGLANTIYA gore: cihaz bu hesaba zaten
             // bagliysa (ayni hesaba yeniden giris, profil secimi eksik) olagan
             // LWW pull'u yeter - esitleme zaten o hesapla calisiyor. Degilse hesap
@@ -191,12 +190,12 @@ class ProfileSetupViewModel(
             result.exceptionOrNull()?.let { error ->
                 if (error is CancellationException) throw error
                 if (error is SessionGone) {
-                    _state.value = _state.value.copy(signedIn = false, accountEmail = null)
+                    state.value = state.value.copy(signedIn = false, accountEmail = null)
                     showMembers(pickOnly = false)
                     return@launch
                 }
                 println("Kefe profil: hesaba bakilamadi - ${error.message}")
-                _state.value = _state.value.copy(
+                state.value = state.value.copy(
                     phase = ProfileSetupPhase.Failed,
                     failureDetail = error.message?.take(160),
                 )
@@ -215,7 +214,7 @@ class ProfileSetupViewModel(
 
             pending = PendingLink(auth.session.userId, auth.session.email, prepared, choice = null)
             when (prepared.decision) {
-                LinkDecision.Conflict -> _state.value = _state.value.copy(
+                LinkDecision.Conflict -> state.value = state.value.copy(
                     phase = ProfileSetupPhase.Conflict,
                     conflictLocal = prepared.preview.localRecords,
                     conflictServer = prepared.preview.serverRecords,
@@ -263,7 +262,7 @@ class ProfileSetupViewModel(
         val serverNamed = prepared.serverNamed
         val localNamed = !replace && members.any { it.isNamed }
         val pick = serverNamed || localNamed
-        val current = _state.value
+        val current = state.value
         val keepTyped = !pick && current.editingNames && !current.profilesNamed
         val typedSomething = current.ownerName.isNotBlank() || current.partnerName.isNotBlank()
         val ownerLoaded = when {
@@ -276,7 +275,7 @@ class ProfileSetupViewModel(
             localNamed -> partner.namedOrEmpty()
             else -> ""
         }
-        _state.value = current.copy(
+        state.value = current.copy(
             phase = ProfileSetupPhase.Ready,
             linking = true,
             accountDownloaded = true,
@@ -306,7 +305,7 @@ class ProfileSetupViewModel(
         val partner = members.firstOrNull { it.id == LocalPartnerMemberId }
         val named = members.any { it.isNamed }
         val pick = named || pickOnly
-        val current = _state.value
+        val current = state.value
         // YAZILANLAR KORUNUR. Ekran her gorundugunde (LaunchedEffect) yeniden
         // yuklenir: "Hesaba bağla"ya gidip geri donen ya da hesabi bos cikan
         // kullanicinin yazdigi iki ad ve secimi siliniyordu. Yalniz zaten
@@ -314,7 +313,7 @@ class ProfileSetupViewModel(
         // Varsayilan durum da bu kosulu saglar (bos adlar, true) - ilk yukleme
         // ve Reset sonrasi degisen bir sey yok.
         val keepTyped = !pick && current.editingNames && !current.profilesNamed
-        _state.value = current.copy(
+        state.value = current.copy(
             phase = ProfileSetupPhase.Ready,
             linking = false,
             conflictChoice = null,
@@ -361,11 +360,11 @@ class ProfileSetupViewModel(
         authRepository.observeAuthState().first { it !is AuthState.Unknown }
 
     private fun save() {
-        val s = _state.value
+        val s = state.value
         if (!s.canSave) return
         val isOwner = s.thisDeviceIsOwner ?: return
         val activeMemberId = if (isOwner) LocalOwnerMemberId else LocalPartnerMemberId
-        _state.value = s.copy(saving = true)
+        state.value = s.copy(saving = true)
         val link = pending
         viewModelScope.launch {
             // Secim modunda adlara DOKUNULMAZ. Duzenlemede yalniz DEGISEN ad
@@ -401,7 +400,7 @@ class ProfileSetupViewModel(
                     }
                 },
             )
-            _state.value = _state.value.copy(saving = false, done = true)
+            state.value = state.value.copy(saving = false, done = true)
         }
     }
 
@@ -416,10 +415,10 @@ class ProfileSetupViewModel(
      * commitFailed, failureMessage).
      */
     private suspend fun commit(link: PendingLink, activeMemberId: String, renames: List<MemberRename>) {
-        _state.value = _state.value.copy(saving = true)
+        state.value = state.value.copy(saving = true)
         val session = (currentAuth() as? AuthState.SignedIn)?.session
         if (session?.userId != link.userId) {
-            _state.value = _state.value.copy(saving = false)
+            state.value = state.value.copy(saving = false)
             load()
             return
         }
@@ -436,7 +435,7 @@ class ProfileSetupViewModel(
         result.exceptionOrNull()?.let { error ->
             if (error is CancellationException) throw error
             println("Kefe profil: baglanti kurulamadi - ${error.message}")
-            _state.value = _state.value.copy(
+            state.value = state.value.copy(
                 saving = false,
                 phase = ProfileSetupPhase.Failed,
                 failureDetail = error.message?.take(160),
@@ -445,7 +444,7 @@ class ProfileSetupViewModel(
             return
         }
         pending = null
-        _state.value = _state.value.copy(saving = false, done = true, linkedNow = true)
+        state.value = state.value.copy(saving = false, done = true, linkedNow = true)
     }
 
     /**

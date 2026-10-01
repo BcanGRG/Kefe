@@ -1,6 +1,5 @@
 package com.kefe.app.domain.model
 
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /**
@@ -19,7 +18,6 @@ import kotlin.uuid.Uuid
  * altin" icin bagimsiz olarak ayni kimligi uretir; esitlemede iki ayri "Ceyrek"
  * satiri olusmaz, ayni satirda bulusurlar.
  */
-@OptIn(ExperimentalUuidApi::class)
 fun newId(): String = Uuid.random().toString()
 
 /**

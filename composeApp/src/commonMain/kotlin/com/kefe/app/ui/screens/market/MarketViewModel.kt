@@ -16,7 +16,6 @@ import com.kefe.app.ui.format.changeText
 import com.kefe.app.ui.format.parseTrAmountOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -31,8 +30,8 @@ class MarketViewModel(
     private val clock: KefeClock,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(MarketUiState())
-    val state: StateFlow<MarketUiState> = _state.asStateFlow()
+    val state: StateFlow<MarketUiState>
+        field = MutableStateFlow(MarketUiState())
 
     /** Sayfa acilirken alani mevcut fiyatla doldurabilmek icin ham fiyatlar saklanir. */
     private var lastPrices: List<Price> = emptyList()
@@ -46,29 +45,29 @@ class MarketViewModel(
         when (intent) {
             MarketIntent.Refresh -> refresh()
 
-            MarketIntent.DismissNotice -> _state.value = _state.value.copy(notice = null)
+            MarketIntent.DismissNotice -> state.value = state.value.copy(notice = null)
 
             // Donem degisince tablo AYNI fiyatlarla yeniden bicimlenir; aga
             // cikilmaz - hafta ve ay zaten elde olan veriden hesaplaniyor.
-            is MarketIntent.SelectPeriod -> _state.value = _state.value.copy(
+            is MarketIntent.SelectPeriod -> state.value = state.value.copy(
                 period = intent.period,
                 sections = lastPrices.toSections(intent.period, clock.marketToday()),
             )
 
             is MarketIntent.OpenManualPrice -> openEdit(intent.assetKey)
 
-            MarketIntent.DismissManualPrice -> _state.value = _state.value.copy(edit = null)
+            MarketIntent.DismissManualPrice -> state.value = state.value.copy(edit = null)
 
-            is MarketIntent.ChangeManualPrice -> _state.value = _state.value.copy(
-                edit = _state.value.edit?.copy(input = intent.text, invalid = false),
+            is MarketIntent.ChangeManualPrice -> state.value = state.value.copy(
+                edit = state.value.edit?.copy(input = intent.text, invalid = false),
             )
 
             MarketIntent.SetManualPrice -> commitManualPrice()
 
             is MarketIntent.ClearManualPrice -> viewModelScope.launch {
                 priceRepository.clearManualPrice(intent.assetKey)
-                if (_state.value.edit?.assetKey == intent.assetKey) {
-                    _state.value = _state.value.copy(edit = null)
+                if (state.value.edit?.assetKey == intent.assetKey) {
+                    state.value = state.value.copy(edit = null)
                 }
             }
         }
@@ -78,13 +77,13 @@ class MarketViewModel(
         viewModelScope.launch {
             priceRepository.observePrices().collect { board ->
                 lastPrices = board.prices
-                _state.value = _state.value.copy(
+                state.value = state.value.copy(
                     // PIYASA gunu, cihazin gunu DEGIL. Kotasyon gunu kaynagin
                     // takviminden (Turkiye) geliyor ve "Gun" sutunu o gune
                     // esitse sayiyor. Burasi cihazin takvimini okuyordu; yurt
                     // disindaki bir cihazda gece penceresinde ayni satir
                     // Ozet'te gercek hareketi, Piyasa'da %0,00 gosteriyordu.
-                    sections = board.prices.toSections(_state.value.period, clock.marketToday()),
+                    sections = board.prices.toSections(state.value.period, clock.marketToday()),
                     updatedAtLabel = board.updatedAtLabel,
                     freshness = board.freshness,
                 )
@@ -94,9 +93,9 @@ class MarketViewModel(
 
     private fun refresh() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(refreshing = true, notice = null)
+            state.value = state.value.copy(refreshing = true, notice = null)
             val outcome = priceRepository.refresh().getOrNull()
-            _state.value = _state.value.copy(
+            state.value = state.value.copy(
                 refreshing = false,
                 // Kisitlanan yenileme Ozet'teki ile AYNI: kullanici yenileye
                 // basiyor, ekranda hicbir sey degismiyordu. Fiyat zaten taze,
@@ -110,7 +109,7 @@ class MarketViewModel(
 
     private fun openEdit(assetKey: String) {
         val price = lastPrices.firstOrNull { it.assetKey == assetKey }
-        _state.value = _state.value.copy(
+        state.value = state.value.copy(
             edit = MarketPriceEdit(
                 assetKey = assetKey,
                 name = displayName(assetKey, price?.label.orEmpty()),
@@ -130,15 +129,15 @@ class MarketViewModel(
     }
 
     private fun commitManualPrice() {
-        val edit = _state.value.edit ?: return
+        val edit = state.value.edit ?: return
         val value = edit.input.parseTrAmountOrNull()
         if (value == null || value <= 0.0) {
-            _state.value = _state.value.copy(edit = edit.copy(invalid = true))
+            state.value = state.value.copy(edit = edit.copy(invalid = true))
             return
         }
         viewModelScope.launch {
             priceRepository.setManualPrice(edit.assetKey, value)
-            _state.value = _state.value.copy(edit = null)
+            state.value = state.value.copy(edit = null)
         }
     }
 }

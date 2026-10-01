@@ -1,6 +1,5 @@
 package com.kefe.app.ui.components
 
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -19,7 +18,6 @@ import com.kefe.app.ui.theme.KefeTheme
  * Gostergenin rengi temadan gelir - Material varsayilani mor bir vurgu
  * getiriyor ve uygulamanin hicbir yerinde o renk yok.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KefePullToRefresh(
     refreshing: Boolean,

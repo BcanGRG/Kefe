@@ -415,7 +415,7 @@ class PlanViewModel(
             mode = editor.mode,
             target = target,
             goalId = editor.goalId,
-            unitPriceAtPlan = if (keepSnapshot) existing?.unitPriceAtPlan else buyPriceOf(key, inputs.board, inputs.positions),
+            unitPriceAtPlan = if (keepSnapshot) existing.unitPriceAtPlan else buyPriceOf(key, inputs.board, inputs.positions),
         )
         val replacing = editor.editingId?.takeIf { it != item.id }
 

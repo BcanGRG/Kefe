@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -1008,7 +1007,6 @@ private fun RowScope.SecondaryAction(text: String, onClick: () -> Unit) {
 
 // --- Hedefe gidis ----------------------------------------------------------
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ProjectionCard(goal: Goal, state: GoalDetailUiState) {
     val c = KefeTheme.colors

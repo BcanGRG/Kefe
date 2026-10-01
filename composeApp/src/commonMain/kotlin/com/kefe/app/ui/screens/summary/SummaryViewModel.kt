@@ -39,7 +39,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -60,7 +59,8 @@ class SummaryViewModel(
     private val syncCoordinator: SyncCoordinator,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(SummaryUiState())
+    val state: StateFlow<SummaryUiState>
+        field = MutableStateFlow(SummaryUiState())
 
     /**
      * "Açılışta bakiyeyi gizle" tercihi yalniz ILK emisyonda uygulanir.
@@ -70,7 +70,6 @@ class SummaryViewModel(
      * tercih emisyonunda tekrar kapanirdi. Bu bayrak ilk okumadan sonra kilitler.
      */
     private var maskInitialized = false
-    val state: StateFlow<SummaryUiState> = _state.asStateFlow()
 
     /**
      * Acilis akisi gecildi mi. Ekranin durumuna DEGIL kabuga ait - hangi ekranla
@@ -105,7 +104,7 @@ class SummaryViewModel(
      * "az önce" saatlerce asili kalmasin. Yalniz metin degisince yayilir.
      */
     private fun observeCloud() {
-        _state.value = _state.value.copy(cloudConfigured = syncCoordinator.cloudConfigured)
+        state.value = state.value.copy(cloudConfigured = syncCoordinator.cloudConfigured)
         viewModelScope.launch {
             combine(
                 syncCoordinator.mode(),
@@ -116,7 +115,7 @@ class SummaryViewModel(
             ) { mode, syncedAt, _ ->
                 mode to syncedAt?.let { relativeSince(it, clock.nowEpochMillis()) }
             }.distinctUntilChanged().collect { (mode, ago) ->
-                _state.value = _state.value.copy(cloudMode = mode, syncedAgo = ago)
+                state.value = state.value.copy(cloudMode = mode, syncedAgo = ago)
             }
         }
     }
@@ -135,7 +134,7 @@ class SummaryViewModel(
                 maskInitialized = true
                 // Varsayilan GIZLI: bakiye omuz ustunden bakisa kapali baslasin.
                 val hide = prefs[PreferenceKeys.HideBalanceOnStart]?.toBooleanStrictOrNull() ?: true
-                _state.value = _state.value.copy(masked = hide)
+                state.value = state.value.copy(masked = hide)
             }
         }
     }
@@ -147,17 +146,17 @@ class SummaryViewModel(
 
     fun onIntent(intent: SummaryIntent) {
         when (intent) {
-            is SummaryIntent.SelectUnit -> _state.value = _state.value.copy(unit = intent.unit)
-            SummaryIntent.ToggleMask -> _state.value =
-                _state.value.copy(masked = !_state.value.masked)
+            is SummaryIntent.SelectUnit -> state.value = state.value.copy(unit = intent.unit)
+            SummaryIntent.ToggleMask -> state.value =
+                state.value.copy(masked = !state.value.masked)
             // Aralik degisince aga cikilmaz: seri elde, yalniz penceresi degisir.
             is SummaryIntent.SelectPeriod -> applyRange(intent.range)
             SummaryIntent.Refresh -> refresh()
-            SummaryIntent.DismissRefreshError -> _state.value =
-                _state.value.copy(refreshError = null)
+            SummaryIntent.DismissRefreshError -> state.value =
+                state.value.copy(refreshError = null)
 
             SummaryIntent.DismissRefreshNotice ->
-                _state.value = _state.value.copy(refreshNotice = null)
+                state.value = state.value.copy(refreshNotice = null)
 
             SummaryIntent.DropLink -> viewModelScope.launch { syncCoordinator.dropLink() }
         }
@@ -201,7 +200,7 @@ class SummaryViewModel(
                 val (snapshot, transactions, assignments) = triple
                 val (portfolio, members, positions, goals, activity) = snapshot
                 val main = goals.firstOrNull { it.isMain }
-                _state.value.copy(
+                state.value.copy(
                     stage = if (positions.isEmpty()) SummaryStage.Empty else SummaryStage.Ready,
                     portfolioName = portfolio.name,
                     members = members,
@@ -243,7 +242,7 @@ class SummaryViewModel(
                     openGoalCount = goals.count { it.isOpen() },
                 )
             }.collect { next ->
-                _state.value = next
+                state.value = next
                 recordTodaySnapshot(next)
             }
         }
@@ -265,7 +264,7 @@ class SummaryViewModel(
                 // kendi rakami tepede dururken altinda baskasinin egrisini
                 // cizmek "param buyumus" dedirtirdi.
                 snapshots = history
-                applyRange(_state.value.range)
+                applyRange(state.value.range)
             }
         }
     }
@@ -287,7 +286,7 @@ class SummaryViewModel(
             val cutoff = clock.today().toEpochDay() - days
             snapshots.filter { it.date.toEpochDay() >= cutoff }
         }
-        _state.value = _state.value.copy(
+        state.value = state.value.copy(
             range = range,
             netWorthTotal = visible.map { it.totalValue },
             netWorthPrincipal = visible.map { it.principal },
@@ -333,7 +332,7 @@ class SummaryViewModel(
     private fun observePrices() {
         viewModelScope.launch {
             priceRepository.observePrices().collect { board ->
-                _state.value = _state.value.copy(
+                state.value = state.value.copy(
                     refreshing = false,
                     freshness = board.freshness,
                     pricesUpdatedAt = board.updatedAtLabel,
@@ -398,14 +397,14 @@ class SummaryViewModel(
      */
     private fun refresh() {
         viewModelScope.launch {
-            _state.value = _state.value.copy(
+            state.value = state.value.copy(
                 refreshing = true,
                 refreshError = null,
                 refreshNotice = null,
             )
             val result = priceRepository.refresh()
             val error = result.exceptionOrNull()
-            _state.value = _state.value.copy(
+            state.value = state.value.copy(
                 refreshing = false,
                 // Sebep de yazilir. "Güncellenemedi" tek basina ne kullaniciya
                 // ne bize bir sey soyluyor: ag mi yok, kaynak mi dustu, sertifika

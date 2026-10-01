@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -126,7 +125,6 @@ import com.kefe.app.ui.theme.tabular
  * Tum durum bu fonksiyonda tutulur: LazyColumn ogeleri ekrandan cikinca
  * ic durum sifirlanmasin diye state ogenin icine birakilmaz.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DesignSystemGallery(
     darkTheme: Boolean,

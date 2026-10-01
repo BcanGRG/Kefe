@@ -9,7 +9,6 @@ import com.kefe.app.domain.repository.PortfolioRepository
 import com.kefe.app.ui.format.Money
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -21,8 +20,8 @@ class ActivityViewModel(
     private val portfolioRepository: PortfolioRepository,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ActivityUiState())
-    val state: StateFlow<ActivityUiState> = _state.asStateFlow()
+    val state: StateFlow<ActivityUiState>
+        field = MutableStateFlow(ActivityUiState())
 
     private var members: List<Member> = emptyList()
     private var events: List<ActivityEvent> = emptyList()
@@ -34,8 +33,8 @@ class ActivityViewModel(
     fun onIntent(intent: ActivityIntent) {
         when (intent) {
             is ActivityIntent.SelectFilter -> {
-                val index = intent.index.coerceIn(0, _state.value.filters.lastIndex.coerceAtLeast(0))
-                _state.value = _state.value.copy(selectedFilterIndex = index)
+                val index = intent.index.coerceIn(0, state.value.filters.lastIndex.coerceAtLeast(0))
+                state.value = state.value.copy(selectedFilterIndex = index)
                 rebuild()
             }
         }
@@ -52,7 +51,7 @@ class ActivityViewModel(
                     // "Hedeflerden haric tutma" urunden cikarildi; eski kayitlari
                     // gostermek kullaniciya artik var olmayan bir ozelligi anlatir.
                     events = activity.filter { it.kind != ActivityKind.ExcludeFromGoals }
-                    _state.value = _state.value.copy(
+                    state.value = state.value.copy(
                         loading = false,
                         filters = buildFilters(memberList),
                     )
@@ -66,7 +65,7 @@ class ActivityViewModel(
             memberList.map { ActivityFilterOption(it.name, it.id) }
 
     private fun rebuild() {
-        val current = _state.value
+        val current = state.value
         val selected = current.filters.getOrNull(current.selectedFilterIndex)?.memberId
         val visible = events.filter { selected == null || it.memberId == selected }
 
@@ -91,7 +90,7 @@ class ActivityViewModel(
             )
         }
 
-        _state.value = current.copy(
+        state.value = current.copy(
             days = days.map { (label, rows) -> ActivityDay(label, rows) },
         )
     }

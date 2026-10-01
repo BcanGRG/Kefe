@@ -3,7 +3,6 @@ package com.kefe.app.ui.charts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
@@ -295,7 +294,6 @@ data class ChartLegendItem(
  * Grafik alti legend satiri. Renk tek sinyal olmadigi icin her ogede
  * her zaman metin etiketi bulunur.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun KefeChartLegend(
     items: List<ChartLegendItem>,

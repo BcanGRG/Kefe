@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -111,7 +110,6 @@ fun KefeStreakGrid(
  * Izgaranin aciklamasi: her isaret kelimesiyle. "Plan başlamadan önce" yok - o
  * aylar ilk plandan onceki soluk noktadir, okunacak bir durum degil.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun KefeStreakLegend(modifier: Modifier = Modifier) {
     val colors = KefeTheme.colors

@@ -9,7 +9,6 @@ import com.kefe.app.domain.repository.PreferencesRepository
 import com.kefe.app.ui.format.trUpper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -28,8 +27,8 @@ class ProfilesViewModel(
     private val syncCoordinator: SyncCoordinator,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ProfilesUiState())
-    val state: StateFlow<ProfilesUiState> = _state.asStateFlow()
+    val state: StateFlow<ProfilesUiState>
+        field = MutableStateFlow(ProfilesUiState())
 
     init {
         observe()
@@ -42,26 +41,26 @@ class ProfilesViewModel(
             }
 
             is ProfilesIntent.OpenRename -> {
-                val row = _state.value.profiles.firstOrNull { it.id == intent.memberId } ?: return
-                _state.value = _state.value.copy(
+                val row = state.value.profiles.firstOrNull { it.id == intent.memberId } ?: return
+                state.value = state.value.copy(
                     editing = ProfileNameEdit(id = row.id, name = row.name),
                 )
             }
 
-            is ProfilesIntent.ChangeName -> _state.value = _state.value.copy(
-                editing = _state.value.editing?.copy(name = intent.value),
+            is ProfilesIntent.ChangeName -> state.value = state.value.copy(
+                editing = state.value.editing?.copy(name = intent.value),
             )
 
             ProfilesIntent.SaveName -> saveName()
 
-            ProfilesIntent.DismissRename -> _state.value = _state.value.copy(editing = null)
+            ProfilesIntent.DismissRename -> state.value = state.value.copy(editing = null)
         }
     }
 
     private fun observe() {
         viewModelScope.launch {
             syncCoordinator.mode().collect { mode ->
-                _state.value = _state.value.copy(cloudMode = mode)
+                state.value = state.value.copy(cloudMode = mode)
             }
         }
         viewModelScope.launch {
@@ -80,16 +79,16 @@ class ProfilesViewModel(
                     )
                 }
             }.collect { rows ->
-                _state.value = _state.value.copy(profiles = rows)
+                state.value = state.value.copy(profiles = rows)
             }
         }
     }
 
     private fun saveName() {
-        val edit = _state.value.editing ?: return
+        val edit = state.value.editing ?: return
         val name = edit.name.trim()
         if (name.isBlank()) {
-            _state.value = _state.value.copy(editing = null)
+            state.value = state.value.copy(editing = null)
             return
         }
         viewModelScope.launch {
@@ -98,7 +97,7 @@ class ProfilesViewModel(
                 name = name,
                 initials = name.firstOrNull()?.toString()?.trUpper() ?: "?",
             )
-            _state.value = _state.value.copy(editing = null)
+            state.value = state.value.copy(editing = null)
         }
     }
 }

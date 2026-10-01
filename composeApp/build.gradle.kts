@@ -42,7 +42,7 @@ fun localOrEnv(key: String): String {
     return System.getenv(key).orEmpty()
 }
 
-val generateSupabaseConfig by tasks.registering {
+val generateSupabaseConfig = tasks.register("generateSupabaseConfig") {
     val outputDir = layout.buildDirectory.dir("generated/supabase")
     inputs.property("url", supabaseUrl)
     inputs.property("key", supabaseAnonKey)
@@ -70,6 +70,12 @@ val generateSupabaseConfig by tasks.registering {
 }
 
 kotlin {
+    compilerOptions {
+        // expect/actual SINIFLAR (FileTransfer, DatabaseDriver, BiometricGate,
+        // SecureStore) hala Beta; bayrak her derlemede tekrarlanan uyariyi susturur.
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
     androidTarget {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_11) }
     }
@@ -138,7 +144,7 @@ kotlin {
                 implementation(libs.sqldelight.driver.native)
             }
         }
-        val desktopMain by getting
+        val desktopMain = getByName("desktopMain")
         desktopMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
@@ -148,7 +154,7 @@ kotlin {
         // Depo testleri GERCEK bir veritabanina ihtiyac duyar: mezar tasi ve
         // yeniden hesap kurallari SQL'de yasiyor, sahte bir depoyla dogrulanamaz.
         // JDBC surucusu bellekte calisir, dosya birakmaz.
-        val desktopTest by getting
+        val desktopTest = getByName("desktopTest")
         desktopTest.dependencies {
             implementation(libs.sqldelight.driver.jvm)
             implementation(libs.kotlinx.coroutines.test)

@@ -137,7 +137,7 @@ class PriceFreshnessTest {
 
         assertTrue(outcome is RefreshOutcome.Throttled, "kisitlama calismadi: $outcome")
         assertTrue(
-            (outcome as RefreshOutcome.Throttled).retryInSeconds in 1..60,
+            outcome.retryInSeconds in 1..60,
             "anlamsiz bekleme suresi: ${outcome.retryInSeconds}",
         )
     }

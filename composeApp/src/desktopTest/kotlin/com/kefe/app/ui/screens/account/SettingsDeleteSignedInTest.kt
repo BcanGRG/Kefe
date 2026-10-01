@@ -394,6 +394,7 @@ private fun resetTx(id: String, stamp: Long) = TransactionDto(
  * eşitleme"nin dakikalik saati sonsuz bir dongu - acik kalsa runTest'in son
  * bosaltmasi bitmezdi.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 private fun resetTest(body: suspend TestScope.(ResetHarness) -> Unit) = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val harness = ResetHarness(this)
@@ -406,6 +407,7 @@ private fun resetTest(body: suspend TestScope.(ResetHarness) -> Unit) = runTest 
 }
 
 /** Debounce (1,5 sn) ve push-sonrasi pull'un rahatca gecmesi icin sanal sure. */
+@OptIn(ExperimentalCoroutinesApi::class)
 private fun TestScope.settle() {
     advanceTimeBy(10_000)
     runCurrent()

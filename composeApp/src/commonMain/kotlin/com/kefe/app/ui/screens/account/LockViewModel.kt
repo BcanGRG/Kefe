@@ -8,7 +8,6 @@ import com.kefe.app.security.BiometricGate
 import com.kefe.app.security.BiometricResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -23,8 +22,8 @@ class LockViewModel(
     private val biometric: BiometricGate,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(LockUiState())
-    val state: StateFlow<LockUiState> = _state.asStateFlow()
+    val state: StateFlow<LockUiState>
+        field = MutableStateFlow(LockUiState())
 
     init {
         observePortfolio()
@@ -40,7 +39,7 @@ class LockViewModel(
     private fun observePortfolio() {
         viewModelScope.launch {
             portfolioRepository.observePortfolio().collect { portfolio ->
-                _state.value = _state.value.copy(portfolioName = portfolio.name)
+                state.value = state.value.copy(portfolioName = portfolio.name)
             }
         }
     }
@@ -56,12 +55,12 @@ class LockViewModel(
      * kullanici tekrar dener. Buraya yalniz sonuc doner.
      */
     private fun unlock() {
-        if (!_state.value.canStartUnlock()) return
-        _state.value = _state.value.copy(unlocking = true, unlockError = null)
+        if (!state.value.canStartUnlock()) return
+        state.value = state.value.copy(unlocking = true, unlockError = null)
 
         viewModelScope.launch {
             if (biometric.availability() != BiometricAvailability.Available) {
-                _state.value = _state.value.copy(unlocking = false, unlocked = true)
+                state.value = state.value.copy(unlocking = false, unlocked = true)
                 return@launch
             }
 
@@ -69,16 +68,16 @@ class LockViewModel(
                 title = "Kefe kilitli",
                 subtitle = "Bakiyeleri görmek için kimliğinizi doğrulayın",
             )
-            _state.value = when (result) {
+            state.value = when (result) {
                 BiometricResult.Success ->
-                    _state.value.copy(unlocking = false, unlocked = true, unlockError = null)
+                    state.value.copy(unlocking = false, unlocked = true, unlockError = null)
 
                 // Vazgecmek hata degil: ekran kilitli kalir, kirmizi yazi cikmaz.
                 BiometricResult.Cancelled ->
-                    _state.value.copy(unlocking = false, unlockError = null)
+                    state.value.copy(unlocking = false, unlockError = null)
 
                 is BiometricResult.Failed ->
-                    _state.value.copy(unlocking = false, unlockError = result.message)
+                    state.value.copy(unlocking = false, unlockError = result.message)
             }
         }
     }

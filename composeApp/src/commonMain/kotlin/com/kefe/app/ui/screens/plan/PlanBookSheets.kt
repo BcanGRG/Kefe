@@ -2,7 +2,6 @@ package com.kefe.app.ui.screens.plan
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -109,7 +108,6 @@ private fun IncomeField(
  * Tek harcama ya da ay sonu toplami. Tarih sorulmaz: bu ayda bugun, baska ayda o
  * ayin son gunu (onayli kural, bkz. PlanDerive.newExpenseEditor).
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun PlanExpenseSheet(
     visible: Boolean,
@@ -304,7 +302,6 @@ internal fun PlanBudgetSheet(
  * eski aylarda kullanilan kalemler cip olarak (tek dokunusla eklenir), altinda
  * yeni bir adin alani. Eklenen kalem listeye bos tutar alaniyla girer.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BudgetAddItem(editor: BudgetEditor, onIntent: (PlanIntent) -> Unit) {
     val c = KefeTheme.colors

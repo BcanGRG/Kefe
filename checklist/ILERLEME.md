@@ -2685,3 +2685,83 @@ görünürdü.
   - senaryo €50…€1.000, "€250 → €400 yaparsanız: Mart 2027";
   - Plan: "planlanan €50 / aylık katkı €250 · gereken €300". Ev hedefi TL
     kaldı.
+
+## 54 · Bağımlılık güncellemesi ve Kotlin 2.4 özellikleri ✅
+
+**Neydi.** Kullanıcı Compose, Kotlin ve diğer kütüphaneleri güncellemek,
+kullanabildiğimiz yeni özellikleri de koda almak istedi.
+
+**Sürümler** (yalnız kararlı sürümler):
+
+| | Önce | Sonra |
+|---|---|---|
+| Kotlin | 2.4.10 | **2.4.20** |
+| Compose Multiplatform | 1.11.1 | **1.12.1** |
+| AGP | 9.3.1 | **9.4.1** |
+| Gradle | 9.5.0 | **9.7.1** |
+| Ktor | 3.5.1 | **3.6.0** |
+| SQLDelight | 2.3.2 | **2.4.0** |
+| navigation3 | 1.1.1 | **1.1.2** |
+| navigationevent | 1.0.1 | **1.1.0** |
+
+- Güncel olduğu için dokunulmayanlar: coroutines 1.11.0, serialization 1.11.0,
+  lifecycle 2.11.0, Koin 4.2.2, activity-compose 1.13.0, splashscreen 1.2.0,
+  biometric 1.1.0.
+- Gradle 9.8 değil 9.7.1: AGP 9.4 en az 9.6 istiyor, Kotlin 2.4.20 ise 9.7'ye
+  kadar tam uyumlu.
+- navigationevent 1.1.0: hem navigation3 1.1.2 hem CMP 1.12.1 bunu istiyor.
+  Ayrı kopya kalmasın diye katalogdaki sürüm onlarla aynı tutuldu.
+- Material3 kararlı **1.9.0**'da kaldı (Jetpack Material3 1.4). CMP 1.12'nin
+  paketlediği 1.12.0-alpha03 alfa.
+
+**Koda alınanlar.**
+
+- **Explicit backing fields** (Kotlin 2.4'te kararlı). 11 ViewModel'de
+  `private val _state = MutableStateFlow(..)` + `val state = _state.asStateFlow()`
+  çifti tek bildirime indi:
+  ```kotlin
+  val state: StateFlow<GoalsUiState>
+      field = MutableStateFlow(GoalsUiState())
+  ```
+  Sınıfın içinde `state.value = …` yazılır. Bildirim, eski alanın
+  ilklendiği yerde duruyor; aradaki ilklendiricilerin sırası değişmedi.
+  `MviViewModel`'in `_state`'i alt sınıflara açık olduğu için kaldı: açık
+  alan yalnız kendi sınıfında değiştirilebilir görünür.
+- **Gereksiz opt-in'ler kaldırıldı** (15 yer): Uuid kararlı oldu
+  (`ExperimentalUuidApi`); FlowRow/FlowColumn (`ExperimentalLayoutApi`, 12
+  yer), PullToRefresh (`ExperimentalMaterial3Api`) ve GoalEditSheet'teki
+  `ExperimentalFoundationApi` artık deneysel değil. Uyarılar açık derlemede
+  hiçbiri opt-in istemedi.
+- **Yeni derleyicinin yakaladıkları:**
+  - gereksiz `?.` (PlanViewModel);
+  - gereksiz tür dönüşümü ve kullanılmayan import (BiometricGate);
+  - testlerde gereksiz `!!` ve dönüşüm;
+  - testlerde eksik `ExperimentalCoroutinesApi` opt-in'leri.
+- `-Xexpect-actual-classes`: FileTransfer, DatabaseDriver, BiometricGate ve
+  SecureStore'un her derlemede tekrarlanan Beta uyarısı susturuldu.
+- Gradle Kotlin DSL: `by tasks.registering` ve `by getting` Gradle 10'da
+  kalkıyor; `tasks.register(..)` / `getByName(..)` yapıldı.
+
+**Yapılmayanlar (bilerek).**
+
+- AGP 9'un geçiş bayrakları (`android.builtInKotlin=false`,
+  `android.newDsl=false`) ve KMP eklentisinin `com.android.application` ile
+  kullanımı artık uyarı veriyor. Kalıcı çözüm Android uygulamasını ayrı bir
+  modüle almak (`androidApp` + `com.android.kotlin.multiplatform.library`).
+  Bu bir yapı değişikliği, kısa güncellemenin kapsamı dışında. AGP 10'dan
+  önce yapılmalı.
+- Compose 1.12'nin yenilikleri bu uygulamada karşılık bulmuyor:
+  - masaüstü Window/Dialog API v2;
+  - `MeshGradientPainter`, `LayerOutsets`, `mediaQuery()`;
+  - Popup `blockPointerInputOutside`.
+  `LocalSystemTheme` kullanımdan kaldırıldı ama biz `isSystemInDarkTheme`
+  kullanıyoruz.
+
+**Doğrulama.**
+
+- **863 masaüstü testi**, hepsi yeşil. Android derlemesi temiz. Kalan tek uyarı
+  bir testteki Json örneği.
+- **Cihazda**, 1 Ekim 2026, R58N81SAZ1Y:
+  - Özet, Varlıklar, Hedefler ve Plan açıldı, çökme kaydı yok.
+  - Hedef detayından ve işlem ekleme sayfasından geri tuşu doğru yere döndü
+    (navigationevent 1.1.0).
