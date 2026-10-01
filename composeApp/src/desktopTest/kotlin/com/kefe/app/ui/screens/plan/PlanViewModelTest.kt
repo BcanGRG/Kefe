@@ -1,6 +1,5 @@
 package com.kefe.app.ui.screens.plan
 
-import androidx.lifecycle.viewModelScope
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.kefe.app.data.db.bootstrapIfNeeded
 import com.kefe.app.data.db.createKefeDatabase
@@ -34,19 +33,14 @@ import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.domain.repository.RefreshOutcome
+import com.kefe.app.testing.TestMain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.job
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlin.test.AfterTest
@@ -84,32 +78,14 @@ import com.kefe.app.ui.screens.transaction.AddTransactionPrefill
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlanViewModelTest {
 
-    /** Bu testte kurulan VM'ler ([Env.vm]); [tearDown] hepsini durdurur. */
-    private val viewModels = mutableListOf<PlanViewModel>()
+    /** Kurulan VM'ler ([Env.vm]) testten sonra durdurulur (bkz. [TestMain]). */
+    private val main = TestMain()
 
     @BeforeTest
-    fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
+    fun setUp() = main.install()
 
-    /**
-     * VM'ler DURDURULUR ve BITMELERI beklenir; Main ancak ondan sonra geri alinir.
-     *
-     * NEDEN: viewModelScope Main uzerinden calisir, turetim ve depo yazmasi
-     * Default'ta. Test bittiginde yarim kalan bir is (withContext donusu, turetimin
-     * sonucu) Main'e geri doner. Bu donus resetMain/setMain degisimine denk gelirse
-     * TestMainDispatcher "dispatch gerekli mi"yi eski Main'e (Swing: evet), dispatch'i
-     * yeni testin Unconfined'ina sorar ve UnsupportedOperationException firlar; runTest
-     * onu SIRADAKI testin hatasi olarak raporlar - tam kosuda ara sira, tek basina hic.
-     */
     @AfterTest
-    fun tearDown() {
-        try {
-            runBlocking {
-                withTimeout(10_000) { viewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() } }
-            }
-        } finally {
-            Dispatchers.resetMain()
-        }
-    }
+    fun tearDown() = main.release()
 
     /** Fiyat tablosu elle surulur; bos tablo yeterli olan testler varsayilani kullanir. */
     private class BoardPrices(prices: List<Price> = emptyList()) : PriceRepository {
@@ -143,7 +119,7 @@ class PlanViewModelTest {
         }
 
         /** Veri once tohumlanir, VM sonra kurulur: ilk Ready durumu veriyi gorur. */
-        fun vm() = PlanViewModel(plan, portfolio, prices, prefs, clock, dayTicks = days).also { viewModels += it }
+        fun vm() = main.track(PlanViewModel(plan, portfolio, prices, prefs, clock, dayTicks = days))
 
         suspend fun buyGram(id: String, date: KefeDate, quantity: Double = 1.0) {
             portfolio.upsertPosition(gram())
