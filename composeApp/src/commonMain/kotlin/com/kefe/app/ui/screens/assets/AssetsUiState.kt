@@ -98,6 +98,11 @@ data class AssetsUiState(
      * kazandim" diye sorar, "bugun ne oldu" ikinci sorudur.
      */
     val change: AssetChange = AssetChange.Total,
+    /**
+     * Hafta/Ay tam gununun fiyati yokken: "Kıyas: 8 Eyl fiyatı · aradaki günlerin
+     * fiyatı kayıtlı değil" (bkz. periodChange). Olcu tam gunle ise null.
+     */
+    val periodNote: String? = null,
 )
 
 sealed interface AssetsIntent {

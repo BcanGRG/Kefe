@@ -31,6 +31,12 @@ data class Position(
      */
     val weekChangePercent: Double? = null,
     val monthChangePercent: Double? = null,
+    /**
+     * Haftalik/aylik yuzdenin olculdugu gun. Donem kazancinin islem penceresi
+     * buradan baslar (bkz. HoldingGain); yaklasik olcude ekran gunu yazar.
+     */
+    val weekSince: KefeDate? = null,
+    val monthSince: KefeDate? = null,
 ) {
     val profit: Double get() = value - cost
 

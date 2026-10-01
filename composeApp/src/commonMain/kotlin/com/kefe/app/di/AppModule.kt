@@ -14,6 +14,7 @@ import com.kefe.app.data.remote.StockApi
 import com.kefe.app.data.remote.TcmbApi
 import com.kefe.app.data.remote.TefasApi
 import com.kefe.app.data.remote.stockSymbolOf
+import com.kefe.app.data.sync.PriceHistorySync
 import com.kefe.app.domain.model.PositionIdPrefix
 import com.kefe.app.data.remote.createKefeHttpClient
 import com.kefe.app.data.backup.FileTransfer
@@ -126,7 +127,8 @@ val appModule = module {
     single { AccountLinker(get(), get(), get(), get()) }
     // Kordinator surec-omurlu durumunu (SyncRuntime.Process) kendisi tasir;
     // Koin grafigi yeniden kurulsa da yeni ornek ayni durumu gorur.
-    single { SyncCoordinator(get(), get(), get(), get(), get(), get(), get()) }
+    single { PriceHistorySync(get(), get(), get(), get(), get()) }
+    single { SyncCoordinator(get(), get(), get(), get(), get(), get(), get(), priceHistory = get()) }
 
     // Dosya paylasimi/secimi platforma iner; Android tarafi Activity ister.
     single { FileTransfer() }

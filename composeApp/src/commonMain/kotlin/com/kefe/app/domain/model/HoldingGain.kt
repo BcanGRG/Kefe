@@ -35,20 +35,21 @@ data class HoldingGain(
 }
 
 /**
- * [daysBack] gunluk donemdeki kazanc: donem ici islemler tarihi bugunden
- * [daysBack] gun oncesinden SONRA olanlardir (gunlukte yalniz bugun). Bilinemiyorsa
- * null - donem basinda elde varlik var ama donem yuzdesi bilinmiyor.
+ * [since] gununden SONRAKI donemin kazanci: donem ici islemler tarihi [since]'ten
+ * sonra olanlardir (gunlukte [since] dun, yani yalniz bugun). [since], yuzdenin
+ * olculdugu gun olmali - yaklasik olcude (bkz. periodChange) islem penceresi de
+ * o gunden baslar. Bilinemiyorsa null: donem basinda elde varlik var ama donem
+ * yuzdesi bilinmiyor.
  *
  * [transactions] bu pozisyonun islemleri olmali.
  */
 fun Position.gainIn(
     percent: Double?,
     transactions: List<Transaction>,
-    today: KefeDate,
-    daysBack: Int,
+    since: KefeDate,
 ): HoldingGain? {
-    val since = today.toEpochDay() - daysBack
-    val inPeriod = transactions.filter { it.date.toEpochDay() > since }
+    val sinceEpoch = since.toEpochDay()
+    val inPeriod = transactions.filter { it.date.toEpochDay() > sinceEpoch }
     val bought = inPeriod.filter { it.side == TradeSide.Buy }
     val sold = inPeriod.filter { it.side == TradeSide.Sell }
     val boughtTl = bought.sumOf { it.quantity * it.unitPrice + it.fee }
@@ -83,6 +84,9 @@ fun List<HoldingGain?>.total(): PeriodTotal? {
 const val GainDayDays: Int = 1
 const val GainWeekDays: Int = 7
 const val GainMonthDays: Int = 30
+
+/** Bugunden [days] gun once. */
+fun KefeDate.minusDays(days: Int): KefeDate = kefeDateOfEpochDay(toEpochDay() - days)
 
 /** Ondalik miktar artigi: 0,1 + 0,2 - 0,3 tam sifir cikmaz. */
 private const val QuantityTolerance = 1e-9

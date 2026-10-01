@@ -126,6 +126,13 @@ object PreferenceKeys {
      * Varsa goc bir daha calismaz. CIHAZA AITTIR.
      */
     const val CloudLinkMigrated = "cloudLinkMigrated"
+
+    /**
+     * Fiyat gecmisinin hesaba en son itildigi ve hesaptan en son cekildigi gun,
+     * "<kullanici>:<epochDay>" (bkz. PriceHistorySync). CIHAZA AITTIR.
+     */
+    const val PriceHistoryPushed = "priceHistoryPushed"
+    const val PriceHistoryPulled = "priceHistoryPulled"
 }
 
 /**

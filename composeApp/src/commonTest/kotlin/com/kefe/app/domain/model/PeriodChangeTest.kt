@@ -224,4 +224,34 @@ class PeriodChangeTest {
         val history = listOf(daysAgo(1, 10_000.0))
         assertEquals(0.0, periodChangesOf(history, 10_000.0, today).day!!, 1e-9)
     }
+
+    // --- Tolerans disinda en yakin gun ------------------------------------------
+
+    @Test
+    fun aylikPenceredeKayitYoksaEnYakinGunKullanilirVeGunuSoylenir() {
+        // 30 gun onceki pencere (30-37) bos; 23 gun once ve 38 gun once kayit var.
+        val history = listOf(daysAgo(38, 9_000.0), daysAgo(23, 9_500.0))
+        val point = periodChange(history, 10_450.0, today, 30, 7)!!
+        // Hedefe en yakin: |23-30| = 7 < |38-30| = 8.
+        assertEquals(dateOf(today.toEpochDay() - 23), point.since)
+        assertEquals(10.0, point.percent, 1e-9)
+        assertEquals(point.since, periodChangesOf(history, 10_450.0, today).monthSince)
+    }
+
+    @Test
+    fun yedekPencereninDisindaVeriYoksaBilinmiyor() {
+        // Ayda 15-60 gun disi: 70 gun once ve 10 gun once.
+        assertNull(periodChange(listOf(daysAgo(70, 9_000.0), daysAgo(10, 9_500.0)), 10_000.0, today, 30, 7))
+        // Haftada 4-14 gun disi: 3 gun once yetmez.
+        assertNull(periodChange(listOf(daysAgo(3, 9_500.0)), 10_000.0, today, 7, 3))
+    }
+
+    @Test
+    fun tamPenceredeKayitVarsaOKullanilir() {
+        val history = listOf(daysAgo(8, 9_000.0), daysAgo(5, 9_900.0))
+        val point = periodChange(history, 9_900.0, today, 7, 3)!!
+        assertEquals(dateOf(today.toEpochDay() - 8), point.since)
+        assertEquals(10.0, point.percent, 1e-9)
+    }
 }
+

@@ -126,7 +126,7 @@ fun portfolioTotals(
     // yukselisini kazanc diye yazmaz.
     val byPosition = transactions.groupBy { it.positionId }
     val dayChange = positions
-        .map { it.gainIn(it.dailyChangePercent, byPosition[it.id].orEmpty(), today, GainDayDays) }
+        .map { it.gainIn(it.dailyChangePercent, byPosition[it.id].orEmpty(), today.minusDays(GainDayDays)) }
         .total()
 
     return PortfolioTotals(

@@ -307,7 +307,7 @@ fun List<GoalAsset>.todayChange(transactions: List<Transaction>, today: KefeDate
     return map { asset ->
         val position = asset.position
         val share = if (position.value > 0.0) asset.value / position.value else 0.0
-        position.gainIn(position.dailyChangePercent, byPosition[position.id].orEmpty(), today, GainDayDays)
+        position.gainIn(position.dailyChangePercent, byPosition[position.id].orEmpty(), today.minusDays(GainDayDays))
             ?.let { HoldingGain(amount = it.amount * share, base = it.base * share) }
     }.total()
 }

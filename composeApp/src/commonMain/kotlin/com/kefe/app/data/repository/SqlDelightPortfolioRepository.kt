@@ -1268,6 +1268,9 @@ private val DeviceOnlySettings = setOf(
     // cihazin baglantisi eski bir yedekle silinirdi.
     PreferenceKeys.CloudLinkUserId,
     PreferenceKeys.CloudLinkEmail,
+    // Fiyat gecmisi paylasiminin isaretleri: bu cihazin ilerlemesi.
+    PreferenceKeys.PriceHistoryPushed,
+    PreferenceKeys.PriceHistoryPulled,
     // Esitleme ani ve goc isareti de bu cihazin gecmisi, verinin degil.
     PreferenceKeys.LastSyncedAt,
     PreferenceKeys.CloudLinkMigrated,

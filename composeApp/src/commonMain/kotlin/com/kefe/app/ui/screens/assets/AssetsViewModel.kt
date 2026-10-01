@@ -6,8 +6,12 @@ import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.GainDayDays
 import com.kefe.app.domain.model.GainMonthDays
 import com.kefe.app.domain.model.GainWeekDays
+import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.gainIn
+import com.kefe.app.domain.model.minusDays
+import com.kefe.app.domain.model.monthLabel
+import com.kefe.app.domain.model.toEpochDay
 import com.kefe.app.domain.model.total
 import com.kefe.app.domain.model.totalValue
 import com.kefe.app.domain.model.Position
@@ -103,8 +107,8 @@ class AssetsViewModel(
                         position.id to position.gainIn(
                             percent = position.changeIn(period),
                             transactions = transactionsByPosition[position.id].orEmpty(),
-                            today = today,
-                            daysBack = period.daysBack(),
+                            // Yuzde hangi gunle olculduyse islem penceresi de oradan.
+                            since = position.since(period) ?: today.minusDays(period.daysBack()),
                         )
                     }
                 }.orEmpty()
@@ -136,6 +140,7 @@ class AssetsViewModel(
             loading = false,
             groups = groups,
             totalValue = total,
+            periodNote = periodNoteOf(mode.period, positions, today),
         )
     }
 
@@ -179,4 +184,30 @@ private fun ChangePeriod.daysBack(): Int = when (this) {
     ChangePeriod.Day -> GainDayDays
     ChangePeriod.Week -> GainWeekDays
     ChangePeriod.Month -> GainMonthDays
+}
+
+/** Yuzdenin olculdugu gun; gunlukte ve bilinmiyorsa null (pencere sabit). */
+private fun Position.since(period: ChangePeriod): KefeDate? = when (period) {
+    ChangePeriod.Day -> null
+    ChangePeriod.Week -> weekSince
+    ChangePeriod.Month -> monthSince
+}
+
+/**
+ * Yaklasik olcunun notu: en degerli varligin yuzdesi tam gunun fiyati yerine
+ * en yakin kayitli gunle olculduyse o gun yazilir. Gecmis yalniz uygulamanin
+ * acildigi (ya da hesaptan gelen) gunleri tutar; gun yazilmadan kullanmak
+ * yaklasik olcuyu kesin gibi gostermek olurdu.
+ */
+private fun periodNoteOf(period: ChangePeriod?, positions: List<Position>, today: KefeDate): String? {
+    val (days, tolerance) = when (period) {
+        ChangePeriod.Week -> GainWeekDays to 3
+        ChangePeriod.Month -> GainMonthDays to 7
+        else -> return null
+    }
+    val since = positions.sortedByDescending { it.value }.firstNotNullOfOrNull { it.since(period) } ?: return null
+    val age = today.toEpochDay() - since.toEpochDay()
+    if (age in days.toLong()..(days + tolerance).toLong()) return null
+    // Ay kisaltmasina ek getirilmez ("Eyl'den", "Kas'tan" her ayda ayri kural ister).
+    return "Kıyas: ${since.day} ${since.monthLabel()} fiyatı · aradaki günlerin fiyatı kayıtlı değil"
 }

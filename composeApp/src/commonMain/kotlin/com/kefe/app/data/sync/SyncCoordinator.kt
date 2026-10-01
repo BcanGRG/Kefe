@@ -94,6 +94,8 @@ class SyncCoordinator(
     private val preferences: PreferencesRepository,
     private val clock: KefeClock,
     private val runtime: SyncRuntime = Process,
+    /** Gunluk fiyat gecmisinin paylasimi; null ise (testler) atlanir. */
+    private val priceHistory: PriceHistorySync? = null,
 ) {
 
     /** Bulut anahtarlari bu surumde var mi; yoksa hesap satirlari hic cizilmez. */
@@ -317,6 +319,14 @@ class SyncCoordinator(
         val userId = runtime.linkedUser.value ?: return
         pullEngine.pullOnce(adoptServerMembers = false) {
             preferences.get(PreferenceKeys.CloudLinkUserId) == userId
+        }
+        // Fiyat gecmisi esitlemenin PARCASI DEGIL: patlarsa yalniz loglanir, cip
+        // "Eşitlenemiyor"a dusmez - kayitlar gitti, eksik olan bir gozlem.
+        priceHistory?.let { sync ->
+            runCatching { sync.syncOnce(userId) }.onFailure {
+                if (it is CancellationException) throw it
+                println("Kefe senkron: fiyat gecmisi - ${it.message}")
+            }
         }
     }
 

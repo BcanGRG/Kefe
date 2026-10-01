@@ -108,6 +108,8 @@ fun Position.valuedAt(price: Price?, today: KefeDate): Position {
         dailyChangePercent = price.todayChangePercent(today),
         weekChangePercent = price.weekChangePercent,
         monthChangePercent = price.monthChangePercent,
+        weekSince = price.weekSince,
+        monthSince = price.monthSince,
     )
 }
 

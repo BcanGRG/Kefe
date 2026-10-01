@@ -163,6 +163,11 @@ private fun AssetsHeader(state: AssetsUiState, onIntent: (AssetsIntent) -> Unit)
                 lastWeight = 1f,
             )
         }
+        // Olcu tam gunun fiyatiyla degilse hangi gunle oldugu yazilir.
+        state.periodNote?.let { note ->
+            Spacer(Modifier.height(Space.x4))
+            Text(note, style = t.micro, color = c.onSurfaceMuted)
+        }
     }
 }
 

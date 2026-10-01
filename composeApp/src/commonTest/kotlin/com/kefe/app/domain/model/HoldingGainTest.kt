@@ -13,7 +13,7 @@ class HoldingGainTest {
     @Test
     fun donemIciIslemYoksaFiyatHareketiyleAyni() {
         // 10 gr, fiyat 100 -> 110 (+%10).
-        val gain = gold(10.0, 110.0).gainIn(10.0, emptyList(), today, GainWeekDays)!!
+        val gain = gold(10.0, 110.0).gainIn(10.0, emptyList(), today.minusDays(GainWeekDays))!!
         assertEquals(100.0, gain.amount, 1e-9)
         assertEquals(1000.0, gain.base, 1e-9)
         assertEquals(10.0, gain.toPeriodTotal()!!.percent, 1e-9)
@@ -24,7 +24,7 @@ class HoldingGainTest {
         // Hafta basinda 10 gr (fiyat 100). 3 gun once 5 gr 105'ten alindi; simdi 110.
         val position = gold(15.0, 110.0)
         val buy = planBuy(position, 5.0, 105.0, date = KefeDate(2026, 10, 17))
-        val gain = position.gainIn(10.0, listOf(buy), today, GainWeekDays)!!
+        val gain = position.gainIn(10.0, listOf(buy), today.minusDays(GainWeekDays))!!
         // Eski 10 gr: +100; yeni 5 gr: 5 x (110 - 105) = +25.
         assertEquals(125.0, gain.amount, 1e-9)
         assertEquals(1525.0, gain.base, 1e-9)
@@ -36,7 +36,7 @@ class HoldingGainTest {
         // Hafta basinda 10 gr (fiyat 100); 4 gr 108'den satildi, kalan 6 gr simdi 110.
         val position = gold(6.0, 110.0)
         val sell = planSell(position, 4.0, 108.0, date = KefeDate(2026, 10, 16))
-        val gain = position.gainIn(10.0, listOf(sell), today, GainWeekDays)!!
+        val gain = position.gainIn(10.0, listOf(sell), today.minusDays(GainWeekDays))!!
         // Kalan 6 gr: +60; satilan 4 gr: 4 x (108 - 100) = +32.
         assertEquals(92.0, gain.amount, 1e-9)
     }
@@ -46,14 +46,14 @@ class HoldingGainTest {
         // Hepsi bugun 105'ten alindi, deger satis fiyatiyla 100: makas kadar eksi.
         val position = gold(5.0, 100.0)
         val buy = planBuy(position, 5.0, 105.0, date = today)
-        val gain = position.gainIn(null, listOf(buy), today, GainDayDays)!!
+        val gain = position.gainIn(null, listOf(buy), today.minusDays(GainDayDays))!!
         assertEquals(-25.0, gain.amount, 1e-9)
         assertEquals(525.0, gain.base, 1e-9)
     }
 
     @Test
     fun donemBasindaEldeVarYuzdeBilinmiyorsaNull() {
-        assertNull(gold(10.0, 110.0).gainIn(null, emptyList(), today, GainMonthDays))
+        assertNull(gold(10.0, 110.0).gainIn(null, emptyList(), today.minusDays(GainMonthDays)))
     }
 
     @Test
@@ -61,7 +61,7 @@ class HoldingGainTest {
         val position = gold(10.0, 110.0)
         // Gunluk pencere: dunku alim donem basinda elde sayilir.
         val yesterday = planBuy(position, 5.0, 90.0, date = KefeDate(2026, 10, 19))
-        val gain = position.gainIn(10.0, listOf(yesterday), today, GainDayDays)!!
+        val gain = position.gainIn(10.0, listOf(yesterday), today.minusDays(GainDayDays))!!
         assertEquals(100.0, gain.amount, 1e-9)
     }
 
