@@ -534,6 +534,7 @@ class SqlDelightPortfolioRepository(
                         anchorUnit = it.anchorUnit,
                         anchorAmount = it.anchorAmount,
                         spentAt = it.spentAt,
+                        contributionAnchor = it.contributionAnchor,
                     )
                 },
                 goalAssets = goalAssetQueries.selectGoalAssets().executeAsList().map {
@@ -751,6 +752,7 @@ class SqlDelightPortfolioRepository(
                         anchorUnit = goal.anchorUnit,
                         anchorAmount = goal.anchorAmount,
                         spentAt = goal.spentAt,
+                        contributionAnchor = goal.contributionAnchor,
                     )
                 }
 
@@ -1197,6 +1199,7 @@ class SqlDelightPortfolioRepository(
                     anchorUnit = goal.anchorUnitColumn(),
                     anchorAmount = goal.anchorAmount,
                     spentAt = goal.spentAt,
+                    contributionAnchor = goal.contributionAnchor.takeIf { goal.isAnchored },
                 )
                 goalQueries.applyGoalMeta(
                     id = goal.id,
@@ -1214,6 +1217,7 @@ class SqlDelightPortfolioRepository(
                     anchorUnit = goal.anchorUnitColumn(),
                     anchorAmount = goal.anchorAmount,
                     spentAt = goal.spentAt,
+                    contributionAnchor = goal.contributionAnchor.takeIf { goal.isAnchored },
                     updatedAt = now,
                 )
             }

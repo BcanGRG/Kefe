@@ -156,6 +156,7 @@ data class BackupGoal(
     val anchorUnit: String? = null,
     val anchorAmount: Double? = null,
     val spentAt: Long? = null,
+    val contributionAnchor: Double? = null,
 )
 
 @Serializable

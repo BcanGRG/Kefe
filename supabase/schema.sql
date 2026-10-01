@@ -155,7 +155,8 @@ create table if not exists public.goals (
     -- Kura bagli hedef ve harcanan hedef (bkz. migrations/20261001_goal_anchor.sql).
     anchor_unit          text,
     anchor_amount        double precision,
-    spent_at             bigint
+    spent_at             bigint,
+    contribution_anchor  double precision
 );
 
 alter table public.goals enable row level security;

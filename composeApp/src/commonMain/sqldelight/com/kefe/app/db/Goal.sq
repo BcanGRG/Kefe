@@ -40,7 +40,9 @@ CREATE TABLE goals (
     -- surum bilinmeyen bir enum degerinde (EnumColumnAdapter) cokerdi.
     anchorUnit TEXT,
     anchorAmount REAL,
-    spentAt INTEGER
+    spentAt INTEGER,
+    -- Aylik katki hedefin biriminde (bkz. 14.sqm); null = TL.
+    contributionAnchor REAL
 );
 
 -- observeGoals() siralamayi VAAT EDIYOR - sira SQL'de kalmali, ekranda degil.
@@ -70,8 +72,8 @@ ORDER BY updatedAt;
 -- Pull: sunucudan gelen hedef. goals'ta OR REPLACE KULLANILMAZ - goal_assets
 -- goalId'ye CASCADE bagli, silinip yeniden yazilinca atamalar ucar. Iki adim.
 insertOrIgnoreGoalPull:
-INSERT OR IGNORE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, status, sortOrder, updatedAt, anchorUnit, anchorAmount, spentAt)
-VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :status, :sortOrder, :updatedAt, :anchorUnit, :anchorAmount, :spentAt);
+INSERT OR IGNORE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, status, sortOrder, updatedAt, anchorUnit, anchorAmount, spentAt, contributionAnchor)
+VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :status, :sortOrder, :updatedAt, :anchorUnit, :anchorAmount, :spentAt, :contributionAnchor);
 
 applyGoalMetaPull:
 UPDATE goals
@@ -89,6 +91,7 @@ SET name = :name,
     anchorUnit = :anchorUnit,
     anchorAmount = :anchorAmount,
     spentAt = :spentAt,
+    contributionAnchor = :contributionAnchor,
     updatedAt = :updatedAt,
     deletedAt = :deletedAt
 WHERE id = :id;
@@ -105,8 +108,8 @@ WHERE id = :id;
 -- Kural yukaridaki pull yolunda zaten dogru yazilmisti; eksik olan onu yerel
 -- yola da uygulamakti.
 insertOrIgnoreGoal:
-INSERT OR IGNORE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, status, sortOrder, updatedAt, anchorUnit, anchorAmount, spentAt)
-VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :status, :sortOrder, :updatedAt, :anchorUnit, :anchorAmount, :spentAt);
+INSERT OR IGNORE INTO goals(id, name, iconKey, amount, unit, targetYear, targetMonth, targetDay, monthlyContribution, isMain, status, sortOrder, updatedAt, anchorUnit, anchorAmount, spentAt, contributionAnchor)
+VALUES (:id, :name, :iconKey, :amount, :unit, :targetYear, :targetMonth, :targetDay, :monthlyContribution, :isMain, :status, :sortOrder, :updatedAt, :anchorUnit, :anchorAmount, :spentAt, :contributionAnchor);
 
 -- deletedAt NULL'lanir: REPLACE satiri sifirdan yazdigi icin zaten oyle
 -- davraniyordu ve "kullanici bu hedefi kaydediyor" demek onu diri tutmak demek.
@@ -126,6 +129,7 @@ SET name = :name,
     anchorUnit = :anchorUnit,
     anchorAmount = :anchorAmount,
     spentAt = :spentAt,
+    contributionAnchor = :contributionAnchor,
     updatedAt = :updatedAt,
     deletedAt = NULL
 WHERE id = :id;

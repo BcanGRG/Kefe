@@ -115,6 +115,7 @@ fun KefeDatabase.seedSampleDataIfEmpty(today: KefeDate) {
                 anchorUnit = null,
                 anchorAmount = null,
                 spentAt = null,
+                contributionAnchor = null,
             )
         }
 

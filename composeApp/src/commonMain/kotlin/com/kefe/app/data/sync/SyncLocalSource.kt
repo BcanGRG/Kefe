@@ -118,6 +118,7 @@ class SyncLocalSource(
                             anchorUnit = r.anchorUnit,
                             anchorAmount = r.anchorAmount,
                             spentAt = r.spentAt,
+                            contributionAnchor = r.contributionAnchor,
                         )
                     }
                     .let { batch("goals", it) }

@@ -85,10 +85,25 @@ class GoalsViewModel(
                 it.copy(amountText = intent.value, amountError = false)
             }
 
-            is GoalsIntent.EditorUnit -> editor { it.convertTo(intent.unit) }
+            is GoalsIntent.EditorUnit -> editor { current ->
+                val converted = current.convertTo(intent.unit)
+                when {
+                    // TL'ye donulunce katki da TL'ye cevrilir.
+                    converted.unit == GoalUnit.Try -> converted.contributionTo(inUnit = false)
+                    // Katki henuz bos: hedefin birimini izler (dovizle biriktiren icin dogal).
+                    converted.contributionText.isBlank() -> converted.copy(contributionInUnit = true)
+                    // Katki zaten birimdeydi: yeni birime cevrilir (euro -> dolar).
+                    current.contributionInUnit && converted.unit != current.unit ->
+                        converted.copy(
+                            contributionText = current.contributionText.convertedBetween(current, current.unit, converted, converted.unit),
+                        )
+                    else -> converted
+                }
+            }
             is GoalsIntent.EditorContribution -> editor {
                 it.copy(contributionText = intent.value)
             }
+            is GoalsIntent.EditorContributionInUnit -> editor { it.contributionTo(intent.inUnit) }
 
             is GoalsIntent.EditorMain -> editor { it.copy(isMain = intent.value) }
 
@@ -208,7 +223,13 @@ class GoalsViewModel(
         // Kura bagli hedef KENDI BIRIMINDE acilir: tutar zaten o birimde saklaniyor,
         // cevrim (ve kurun gelmesini beklemek) gerekmez.
         goal.anchorAmount?.takeIf { goal.unit != GoalUnit.Try }?.let { anchor ->
-            return base.copy(unit = goal.unit, amountText = rawAmount(anchor.roundTo(goal.unit.editDecimals())))
+            val contribution = goal.contributionAnchor
+            return base.copy(
+                unit = goal.unit,
+                amountText = rawAmount(anchor.roundTo(goal.unit.editDecimals())),
+                contributionInUnit = contribution != null,
+                contributionText = contribution?.let { rawAmount(it.roundTo(goal.unit.editDecimals())) } ?: base.contributionText,
+            )
         }
         // Hedef TL disi bir birime sabitlenmisse tutar o birime cevrilerek acilir.
         // Kur henuz gelmediyse cevrim YAPILMAZ: alan TL olarak acilir ve gecis
@@ -267,13 +288,17 @@ class GoalsViewModel(
             amount = amount,
             unit = editor.unit,
             targetDate = editor.targetDate,
-            monthlyContribution = editor.contributionText.parseAmount(),
+            // Katki birimindeyse TL'si bugunku kurla (depo okurken guncel kurla
+            // yeniden hesaplar); kur yoksa amountInTryOrNull zaten kaydi durdurdu.
+            monthlyContribution = editor.contributionInTry(),
             isMain = editor.isMain,
             status = existing?.status ?: GoalStatus.Active,
             order = existing?.order ?: _state.value.goals.size,
             // TL disi birimde hedef O BIRIMDE yasar (bkz. Goal.unit): tutar birim
             // cinsinden saklanir, TL karsiligi her okumada guncel kurla bulunur.
             anchorAmount = editor.amountText.parseAmount().takeIf { editor.unit != GoalUnit.Try },
+            contributionAnchor = editor.contributionText.parseAmount()
+                .takeIf { editor.unit != GoalUnit.Try && editor.contributionInUnit },
             spentAt = existing?.spentAt,
         )
 
@@ -324,4 +349,39 @@ private fun Double.roundTo(decimals: Int): Double {
     var factor = 1.0
     repeat(decimals) { factor *= 10.0 }
     return kotlin.math.round(this * factor) / factor
+}
+
+/**
+ * Aylik katkiyi TL ile hedefin birimi arasinda cevirir; yazilan deger anlamini
+ * korur (€250 <-> ₺13.800). Kur bilinmiyorsa cevrilmez, yalniz isaret degisir.
+ */
+private fun GoalEditorState.contributionTo(inUnit: Boolean): GoalEditorState {
+    if (inUnit == contributionInUnit) return this
+    if (unit == GoalUnit.Try) return copy(contributionInUnit = false)
+    val rate = rateOrNull(unit) ?: return copy(contributionInUnit = inUnit)
+    val value = contributionText.parseAmount()
+    if (value <= 0.0) return copy(contributionInUnit = inUnit)
+    // TL tarafi kurusuyla: €250 x 55,2687 = ₺13.817,18; tam liraya yuvarlamak
+    // kaydedilen aylik katkiyi sessizce degistirirdi.
+    val converted = if (inUnit) (value / rate).roundTo(unit.editDecimals()) else (value * rate).roundTo(2)
+    return copy(contributionInUnit = inUnit, contributionText = rawAmount(converted))
+}
+
+/** Birimdeki katkiyi bir birimden digerine (euro -> dolar) TL uzerinden cevirir. */
+private fun String.convertedBetween(
+    fromState: GoalEditorState,
+    from: GoalUnit,
+    toState: GoalEditorState,
+    to: GoalUnit,
+): String {
+    val fromRate = fromState.rateOrNull(from) ?: return this
+    val toRate = toState.rateOrNull(to) ?: return this
+    return rawAmount(((parseAmount() * fromRate) / toRate).roundTo(to.editDecimals()))
+}
+
+/** Aylik katkinin TL karsiligi: birimdeyse bugunku kurla, degilse yazildigi gibi. */
+private fun GoalEditorState.contributionInTry(): Double {
+    val value = contributionText.parseAmount()
+    if (!contributionInUnit || unit == GoalUnit.Try) return value
+    return rateOrNull(unit)?.let { value * it } ?: value
 }

@@ -356,6 +356,7 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
         Column(Modifier.weight(1f)) {
             SheetLabel("Aylık katkı")
             Spacer(Modifier.height(6.dp))
+            val inUnit = state.contributionInUnit && state.unit != GoalUnit.Try
             SheetTextField(
                 value = state.contributionText,
                 onValueChange = { onIntent(GoalsIntent.EditorContribution(it.asAmountInput())) },
@@ -365,8 +366,47 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
                 textStyle = t.body.tabular(),
                 // Tasarimda alan tek parca "₺50.000" gosterir - araya bosluk girmez.
                 spacing = 0.dp,
-                leading = { Text("₺", style = t.body, color = c.onSurface) },
+                leading = { Text(if (inUnit) state.unit.symbol() else "₺", style = t.body, color = c.onSurface) },
             )
+        }
+    }
+
+    // Kura bagli hedefte aylik katki ISTEGE BAGLI olarak hedefin biriminde: ayda
+    // €250 biriktiren biri bunu TL'ye cevirip yazmak zorunda kalmasin.
+    if (state.unit != GoalUnit.Try) {
+        Spacer(Modifier.height(Space.x8))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(KefeShapes.pill)
+                .background(c.surface)
+                .border(Sizes.hairline, c.outline, KefeShapes.pill)
+                .padding(Space.x4),
+            horizontalArrangement = Arrangement.spacedBy(Space.x4),
+        ) {
+            UnitSegment(
+                text = "Katkı TL",
+                selected = !state.contributionInUnit,
+                onClick = { onIntent(GoalsIntent.EditorContributionInUnit(false)) },
+            )
+            UnitSegment(
+                text = "Katkı ${state.unit.label().lowercase()}",
+                selected = state.contributionInUnit,
+                enabled = state.rateKnown(state.unit),
+                onClick = { onIntent(GoalsIntent.EditorContributionInUnit(true)) },
+            )
+        }
+        if (state.contributionInUnit) {
+            val monthly = state.contributionText.parseAmount()
+            val rate = state.rateOrNull(state.unit) ?: 0.0
+            if (monthly > 0.0 && rate > 0.0) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Bugünkü kurla ayda ${Money.tlExact(monthly * rate)}",
+                    style = t.caption.tabular(),
+                    color = c.onSurfaceMuted,
+                )
+            }
         }
     }
 
@@ -743,4 +783,12 @@ private fun GoalUnit.suffix(): String = when (this) {
     GoalUnit.GoldGram -> "gr altın"
     GoalUnit.Usd -> "USD"
     GoalUnit.Eur -> "EUR"
+}
+
+/** Aylik katki alanindaki birim simgesi. */
+private fun GoalUnit.symbol(): String = when (this) {
+    GoalUnit.Try -> "₺"
+    GoalUnit.Eur -> "€"
+    GoalUnit.Usd -> "$"
+    GoalUnit.GoldGram -> "gr"
 }

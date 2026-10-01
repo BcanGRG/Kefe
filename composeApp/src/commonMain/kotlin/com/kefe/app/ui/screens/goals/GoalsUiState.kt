@@ -44,6 +44,11 @@ data class GoalEditorState(
     val unit: GoalUnit = GoalUnit.Try,
     val targetDate: KefeDate = KefeDate(2028, 12, 1),
     val contributionText: String = "",
+    /**
+     * Aylik katki hedefin BIRIMINDE mi ([contributionText] o birimde). Yalniz
+     * TL disi hedefte anlamli; TL hedefte hep false.
+     */
+    val contributionInUnit: Boolean = false,
     val isMain: Boolean = false,
     val advancedExpanded: Boolean = true,
 
@@ -161,6 +166,9 @@ sealed interface GoalsIntent {
     data class EditorAmount(val value: String) : GoalsIntent
     data class EditorUnit(val unit: GoalUnit) : GoalsIntent
     data class EditorContribution(val value: String) : GoalsIntent
+
+    /** Aylik katki hedefin biriminde mi TL mi; tutar kurla cevrilir. */
+    data class EditorContributionInUnit(val inUnit: Boolean) : GoalsIntent
     data class EditorMain(val value: Boolean) : GoalsIntent
 
     data object ToggleEditorDatePicker : GoalsIntent
@@ -210,5 +218,13 @@ internal fun Goal.anchorLine(): String? {
         GoalUnit.GoldGram -> Money.quantity(units, "gr altın", Money.decimals(units, max = 4))
         GoalUnit.Try -> return null
     }
-    return "Hedef $text · güncel kurla"
+    val monthly = contributionAnchor?.let { c ->
+        when (unit) {
+            GoalUnit.Eur -> Money.foreign(c, "EUR", decimals = Money.decimals(c, max = 2))
+            GoalUnit.Usd -> Money.foreign(c, "USD", decimals = Money.decimals(c, max = 2))
+            GoalUnit.GoldGram -> Money.quantity(c, "gr", Money.decimals(c, max = 4))
+            GoalUnit.Try -> null
+        }
+    }
+    return listOfNotNull("Hedef $text", monthly?.let { "aylık $it" }, "güncel kurla").joinToString(" · ")
 }

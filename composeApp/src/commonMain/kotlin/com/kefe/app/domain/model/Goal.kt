@@ -32,6 +32,11 @@ data class Goal(
     /** Tutar [unit] cinsinden (3000.0 = €3.000); null = TL sabit. */
     val anchorAmount: Double? = null,
     /**
+     * Aylik katki [unit] cinsinden (250.0 = €250/ay); null = katki TL. Kura bagli
+     * hedefte istege bagli: kullanici dovizle de TL ile de biriktirebilir.
+     */
+    val contributionAnchor: Double? = null,
+    /**
      * Hedefin parasi harcandi (epoch ms) - "Harcadım" ile kapanan hedef. Durum
      * [GoalStatus.Completed] olarak kalir: eski bir surum bilinmeyen bir durum
      * degerinde cokerdi (bkz. 13.sqm).
@@ -65,7 +70,11 @@ fun GoalUnit.priceKey(): String? = when (this) {
 fun Goal.withLiveAmount(rateOf: (String) -> Double?): Goal {
     if (!isAnchored) return this
     val rate = unit.priceKey()?.let(rateOf)?.takeIf { it > 0.0 } ?: return this
-    return copy(amount = anchorAmount!! * rate)
+    return copy(
+        amount = anchorAmount!! * rate,
+        // Katki da birimindeyse ayni kurla: €250/ay euro yukselince TL'de buyur.
+        monthlyContribution = contributionAnchor?.let { it * rate } ?: monthlyContribution,
+    )
 }
 
 /**

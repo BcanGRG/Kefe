@@ -2494,3 +2494,38 @@ izlenecek; "Harcadım" diyince kaydı uygulama girecek.
   - Ev hedefinde "Hedeften harca" sayfası boş açıldı: "₺0 harcanacak",
     "Ayrılan 120 gr · ₺718.714,80".
   - Hiçbir şey kaydedilmedi.
+
+## 50 · Aylık katkı hedefin biriminde (isteğe bağlı) ✅
+
+**Neydi.** Euro hedefinde aylık katkı yalnızca TL girilebiliyordu. Kullanıcı
+ayda euro biriktiriyor ve katkıyı da euro olarak koymak istedi.
+
+**Ne yapıldı.**
+
+- Birim TL değilse katkı alanının altında **"Katkı TL | Katkı euro"** seçimi
+  var. Katkı boşken seçim hedefin birimini izler; euro hedefi €'yla açılır.
+- Euro katkı `contributionAnchor` olarak saklanır. Okurken TL karşılığı
+  hedefin tutarı gibi güncel kurla hesaplanır (`withLiveAmount`), bu yüzden
+  ilerleme, varış tahmini ve Plan'daki katkı satırı kurla birlikte değişir.
+  TL katkı sabit kalır.
+- Seçim değişince yazılan değer anlamını korur: €250 ↔ ₺13.817,18. TL tarafı
+  kuruşuyla çevrilir; tam liraya yuvarlamak kaydedilen katkıyı değiştirirdi.
+- Kartta ve detayda: "Hedef €3.000 · aylık €250 · güncel kurla".
+- Yeni düz kolon: `goals.contributionAnchor` (`14.sqm`), sunucuda
+  `contribution_anchor` (**canlıya uygulandı**). Eski sürüm kolonu bilmez,
+  okuduğu `monthlyContribution` son TL karşılığıdır. Eşitleme ve yedek kolonu
+  taşır.
+
+**Doğrulama.**
+
+- **846 masaüstü testi**, hepsi yeşil. Yeni `GoalContributionUnitTest`
+  (gerçek veritabanı):
+  - euro katkı kurla okunur, euro yükselince TL'si büyür;
+  - TL'ye çevrilen katkı kuruşunu korur;
+  - TL katkı kaydedilince `contributionAnchor` boş kalır ve kur değişse de
+    sabit durur.
+- **Cihazda**, 1 Ekim 2026, R58N81SAZ1Y:
+  - Euro seçilince katkı alanı "€" ile açıldı.
+  - €250 → "Bugünkü kurla ayda ₺13.817,18".
+  - "Katkı TL"ye geçince "13.814,32" oldu (kur bu arada değişmişti).
+  - Hiçbir şey kaydedilmedi.

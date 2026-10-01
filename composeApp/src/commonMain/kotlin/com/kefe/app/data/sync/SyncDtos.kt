@@ -102,6 +102,7 @@ data class GoalDto(
     @SerialName("anchor_unit") val anchorUnit: String? = null,
     @SerialName("anchor_amount") val anchorAmount: Double? = null,
     @SerialName("spent_at") val spentAt: Long? = null,
+    @SerialName("contribution_anchor") val contributionAnchor: Double? = null,
 )
 
 @Serializable

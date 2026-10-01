@@ -1,0 +1,12 @@
+-- Aylik katki hedefin biriminde.
+--
+-- NEYDI. Hedef euro olabiliyordu (bkz. 13.sqm) ama aylik katki hep TL idi:
+-- "ayda €250 biriktiriyorum" diyen kullanici bunu TL'ye cevirip yazmak zorundaydi
+-- ve euro yukselince katki geride kaliyordu.
+--
+-- contributionAnchor - aylik katki hedefin biriminde (250.0 = €250); null = TL.
+-- monthlyContribution TL'nin son bilinen karsiligi olarak kalir; depo okurken
+-- guncel kurla yeniden hesaplar. Duz kolon - eski surum bilmedigi alani okumaz.
+--
+-- Sema .sq dosyalariyla BIREBIR ayni olmali (bkz. 11.sqm).
+ALTER TABLE goals ADD COLUMN contributionAnchor REAL;

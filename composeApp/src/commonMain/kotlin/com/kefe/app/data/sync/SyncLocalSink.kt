@@ -455,6 +455,7 @@ class SyncLocalSink(
                 anchorUnit = r.anchorUnit,
                 anchorAmount = r.anchorAmount,
                 spentAt = r.spentAt,
+                contributionAnchor = r.contributionAnchor,
             )
             database.goalQueries.applyGoalMetaPull(
                 name = r.name,
@@ -471,6 +472,7 @@ class SyncLocalSink(
                 anchorUnit = r.anchorUnit,
                 anchorAmount = r.anchorAmount,
                 spentAt = r.spentAt,
+                contributionAnchor = r.contributionAnchor,
                 updatedAt = r.updatedAt,
                 deletedAt = r.deletedAt,
                 id = r.id,
