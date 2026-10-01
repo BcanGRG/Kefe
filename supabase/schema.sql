@@ -509,3 +509,24 @@ end $$;
 -- =========================================================================
 -- Bildirimler (adim 12) BU DOSYADA YOK - kendi adiminda eklenir.
 -- =========================================================================
+
+-- -------------------------------------------------------------------------
+-- price_history - hesap uzerinden paylasilan gunluk fiyat gozlemleri
+--    (bkz. migrations/20261001_price_history.sql, PriceHistorySync).
+--    Esitleme motorunun disinda: mezar tasi ve LWW yok, yayin yok.
+-- -------------------------------------------------------------------------
+create table if not exists public.price_history (
+    user_id    uuid             not null default auth.uid() references auth.users (id) on delete cascade,
+    asset_key  text             not null,
+    day        date             not null,
+    price      double precision not null,
+    primary key (user_id, asset_key, day)
+);
+
+alter table public.price_history enable row level security;
+drop policy if exists price_history_own on public.price_history;
+create policy price_history_own on public.price_history
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create index if not exists price_history_user_day on public.price_history (user_id, day);
+grant select, insert, update on public.price_history to authenticated;
