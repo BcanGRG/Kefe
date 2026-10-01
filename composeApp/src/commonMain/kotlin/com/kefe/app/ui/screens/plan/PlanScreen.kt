@@ -581,7 +581,7 @@ private fun FlowLineRow(line: FlowLine) {
     val style = if (result) t.bodyStrong else t.body
     val sign = when (line.kind) {
         FlowLineKind.Income -> ""
-        FlowLineKind.Expense, FlowLineKind.Invest -> "−"
+        FlowLineKind.Expense, FlowLineKind.Unplanned, FlowLineKind.Invest -> "−"
         FlowLineKind.Remaining -> "="
     }
 
@@ -692,58 +692,96 @@ private fun IncomeRow(row: IncomeRowUi, onIntent: (PlanIntent) -> Unit) {
  */
 @Composable
 private fun ExpensesCardView(card: ExpensesCard, onIntent: (PlanIntent) -> Unit) {
+    // Iki ayri kart; aradaki bosluk sayfa sutununun kendi araligindan gelir.
+    MonthlyCostsCard(card, onIntent)
+    SpendingCard(card, onIntent)
+}
+
+/**
+ * "Aylık giderler": ay icin AYRILAN para - kira, faturalar, market siniri. Harcama
+ * girilen kalemde "₺372 / ₺7.000" ve cubuk; girilmeyende yalniz ayrilan tutar.
+ */
+@Composable
+private fun MonthlyCostsCard(card: ExpensesCard, onIntent: (PlanIntent) -> Unit) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
-    // Yatay dolgu 4dp: "Son girişler" KefeListRow'un kendi 12dp dolgusunu tasir; geri
-    // kalan icerik 12dp ile diger kartlarin 16dp hizasinda durur (Plan dışı alımlar gibi).
     KefeCard(
         modifier = Modifier.fillMaxWidth(),
-        // Ust dolgu 4dp: basliktaki "Bütçe" dugmesi 44dp; "Giderler" boylece diger
-        // kartlarin basligiyla ayni yukseklikte durur.
+        // Ust dolgu 4dp: basliktaki dugme 44dp; baslik diger kartlarinkiyle ayni hizada.
+        contentPadding = PaddingValues(start = Space.x16, end = Space.x4, top = Space.x4, bottom = Space.x16),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Aylık giderler", style = t.bodyStrong, color = c.onSurface, modifier = Modifier.weight(1f))
+            KefeTextButton(
+                text = if (card.plannedTotal == null) "Ekle" else "Düzenle",
+                onClick = { onIntent(PlanIntent.EditBudget) },
+            )
+        }
+        Column(Modifier.padding(end = Space.x12)) {
+            val total = card.plannedTotal
+            if (total == null) {
+                Text(
+                    "Kira, faturalar gibi her ay belli olan giderlerini ve market gibi sınır koyduğun kalemleri ekle. Ayrılan para gelirden düşülür.",
+                    style = t.caption,
+                    color = c.onSurfaceMuted,
+                )
+            } else {
+                Text(total, style = t.h2.tabular(), color = c.onSurface)
+                card.plannedLine?.let { line ->
+                    Text(line, style = t.caption.tabular(), color = c.onSurfaceMuted)
+                }
+                card.categories.forEach { row ->
+                    Spacer(Modifier.height(Space.x12))
+                    CategoryRow(row)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * "Harcamalar": gun icinde girilen anlik odemeler. Aylik gideri olan kalemdeki
+ * harcama o kalemin icinden yenir; olmayan kalemdeki "plan dışı" rozetiyle
+ * isaretlenir - gelirden ayrica dusen yalniz odur.
+ */
+@Composable
+private fun SpendingCard(card: ExpensesCard, onIntent: (PlanIntent) -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+
+    // Yatay dolgu 4dp: girisler KefeListRow'un kendi 12dp dolgusunu tasir; geri kalan
+    // icerik 12dp ile diger kartlarin 16dp hizasinda durur.
+    KefeCard(
+        modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(start = Space.x4, end = Space.x4, top = Space.x4, bottom = Space.x8),
     ) {
         Column(Modifier.padding(horizontal = Space.x12)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Giderler", style = t.bodyStrong, color = c.onSurface, modifier = Modifier.weight(1f))
-                KefeTextButton(text = "Bütçe", onClick = { onIntent(PlanIntent.EditBudget) })
+                Text("Harcamalar", style = t.bodyStrong, color = c.onSurface, modifier = Modifier.weight(1f))
+                KefeTextButton(
+                    text = "Ekle",
+                    onClick = { onIntent(PlanIntent.AddExpense) },
+                    leadingIcon = KefeIcons.Plus,
+                )
             }
-            if (card.isEmpty) {
+            if (card.noSpending) {
                 Text(card.totalLine, style = t.body, color = c.onSurfaceMuted)
+                Text(
+                    "Gün içinde yaptığın ödemeleri buraya gir; aylık gideri olan kaleme girersen o kalemin içinden düşer.",
+                    style = t.caption,
+                    color = c.onSurfaceMuted,
+                )
             } else {
                 Text(card.totalLine, style = t.h2.tabular(), color = c.onSurface)
+                card.unplannedLine?.let { line ->
+                    Text(line, style = t.caption.tabular(), color = c.onSurfaceMuted)
+                }
             }
-            val over = card.totalOverText != null
-            card.totalRatio?.let { ratio ->
-                Spacer(Modifier.height(Space.x8))
-                KefeProgressBar(progress = ratio, color = if (over) c.negative else c.accent)
-            }
-            card.totalOverText?.let { text ->
-                Spacer(Modifier.height(Space.x4))
-                Text(text, style = t.caption.tabular(), color = c.negative)
-            }
-
-            card.categories.forEach { row ->
-                Spacer(Modifier.height(Space.x12))
-                CategoryRow(row)
-            }
-
-            Spacer(Modifier.height(Space.x8))
-            KefeTextButton(
-                text = "Harcama ekle",
-                onClick = { onIntent(PlanIntent.AddExpense) },
-                leadingIcon = KefeIcons.Plus,
-            )
         }
 
         if (card.recent.isNotEmpty()) {
-            Spacer(Modifier.height(Space.x4))
-            Text(
-                "Son girişler",
-                style = t.micro,
-                color = c.onSurfaceMuted,
-                modifier = Modifier.padding(horizontal = Space.x12),
-            )
+            Spacer(Modifier.height(Space.x8))
             card.recent.forEach { row ->
                 KefeListRow(
                     title = row.title,
@@ -751,6 +789,18 @@ private fun ExpensesCardView(card: ExpensesCard, onIntent: (PlanIntent) -> Unit)
                     value = row.amount,
                     leadingIcon = KefeIcons.Receipt,
                     onClick = { onIntent(PlanIntent.EditExpense(row.id)) },
+                    badges = if (row.unplanned) {
+                        {
+                            KefeBadge(
+                                text = "plan dışı",
+                                background = c.surfaceSunken,
+                                contentColor = c.onSurfaceMuted,
+                                uppercase = false,
+                            )
+                        }
+                    } else {
+                        null
+                    },
                 )
             }
         }

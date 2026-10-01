@@ -211,7 +211,11 @@ class PlanViewModel(
                 it.copy(addText = intent.value.take(ExpenseCategory.MaxCustomLength), addError = false)
             }
             PlanIntent.BudgetAddConfirm -> updateBudget { e ->
-                ExpenseCategory.custom(e.addText)?.let { e.withCategory(it) } ?: e.copy(addError = true)
+                // Eski bir kalemin adi yazildiysa onun yazilisi kullanilir.
+                ExpenseCategory.custom(e.addText)
+                    ?.let { typed -> e.olderCustom.firstOrNull { it == typed } ?: typed }
+                    ?.let { e.withCategory(it) }
+                    ?: e.copy(addError = true)
             }
             is PlanIntent.BudgetAddExisting -> updateBudget { it.withCategory(intent.category) }
         }
@@ -447,7 +451,14 @@ class PlanViewModel(
         val editor = (current.sheet as? PlanSheet.Expense)?.editor ?: return
         // Yazilan ad daha once kullanilan bir kalemse (ya da hazir bir kategorinin adi)
         // o kalem kullanilir - esitlik harf buyuklugune bakmaz (bkz. ExpenseCategory.custom).
-        val category = if (editor.newCategoryOpen) ExpenseCategory.custom(editor.newCategoryText) else editor.category
+        // Yazilan ad zaten kullanilan bir kalemse ONUN yazilisi kullanilir ("tatil" -> "Tatil").
+        val category = if (editor.newCategoryOpen) {
+            ExpenseCategory.custom(editor.newCategoryText)?.let { typed ->
+                editor.customCategories.firstOrNull { it == typed } ?: typed
+            }
+        } else {
+            editor.category
+        }
         val amount = editor.amountText.parseTrAmountOrNull()?.takeIf { it > 0.0 }
         if (category == null || amount == null) {
             updateExpense { it.copy(categoryError = category == null, amountError = amount == null) }

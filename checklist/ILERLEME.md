@@ -2275,3 +2275,75 @@ verebiliyoruz". "Diğer"e yazılan her şey tek bir satırda toplanıyordu.
   açmaması.
 - Cihazda, 27 Eylül 2026, R58N81SAZ1Y: "Kalem ekle" → "Tatil" → "Ekle" ile
   listeye "TATİL" alanı geldi. Sayfa kaydedilmeden kapatıldı.
+
+## 47 · Aylık giderler ile harcamalar ayrıldı ✅
+
+**Neydi.** Kullanıcı aylık gider ile harcamanın birbirine karıştığını söyledi.
+Kira ve faturalar gibi önceden bilinen kalemlere aylık limit koyuyordu, gün
+içindeki anlık ödemeleri ise harcama olarak giriyordu ve bunlar "giderlere
+yansımıyor gibi" duruyordu. Para akışından da "neredeyse hiçbir şey"
+anlamıyordu.
+
+Ekim verisi (1 Eki 2026) bunu gösteriyordu:
+
+- Gelir ₺170.000.
+- Aylık limitler toplam ₺89.500, 11 kalem.
+- Anlık harcamalar toplam ₺2.967, 5 kayıt.
+- Kira, Pastacılık ve Ulaşım önce harcama olarak girilip silinmiş, sonra
+  limit olarak eklenmişti.
+
+Model yalnız harcamaları gider sayıyordu; limit sadece bir sınırdı. Kira
+₺25.000 limitte dursa da gelirden düşmüyor, para akışı "Elde kalan ₺167.032"
+diyordu.
+
+**Karar** (önerilen seçenek): aylık gider, o ay için ayrılan paradır.
+
+- Aylık gider tam sayılır: kirayı her ay harcama olarak girmek gerekmez.
+- Aylık gideri olan kalemdeki harcama o kalemin içinden yenir; kalemi aşarsa
+  yalnız aşım eklenir.
+- Aylık gideri olmayan kalemdeki harcama "plan dışı"dır ve tam eklenir.
+- Ayın gideri = aylık giderler + aşımlar + plan dışı harcamalar
+  (`MonthFlow.outgoing`).
+
+**Ne yapıldı.** Sunucu şeması ve senkron değişmedi; "bütçe" satırları artık
+"aylık gider" olarak okunuyor.
+
+- **Para akışı.** Satırlar Gelir, − Aylık giderler, − Plan dışı harcamalar,
+  − Yatırım ve = Kalan.
+  - Aylık giderlerin notu kalem sayısını ve harcananı söyler: "11 kalem ·
+    harcanan ₺2.597"; aşım varsa "· ₺X aşım dahil" eklenir.
+  - Plan dışı satırının notunda kalemlerin adları yazar: "Halisaha".
+  - Yatırım planının cümlesi: "Yatırım planı tamamlanınca ₺X kalır."
+- **"Giderler" kartı ikiye ayrıldı.**
+  - "Aylık giderler" kartı toplamı ve kalemleri gösterir; kalemler ayrılan
+    tutara göre sıralanır. Harcama varsa "₺372 / ₺7.000" ve çubuk, yoksa
+    yalnız ayrılan tutar ("₺25.000") yazar. "Düzenle" düğmesi var; boşken
+    açıklama ve "Ekle" çıkar.
+  - "Harcamalar" kartı toplamı, "Plan dışı ₺370" satırını ve son 10 girişi
+    gösterir. Aylık gideri olmayan girişlerde "plan dışı" rozeti var.
+- **Bütçe sayfası** "Aylık giderler" adını aldı ve kısa bir açıklama
+  satırı kazandı.
+- **Harcama sayfası.**
+  - Ayın aylık gider kalemleri çiplerin başında gelir.
+  - Seçilen kalemin bu ay aylık gideri yoksa "Bu ayın aylık giderlerinde yok
+    · plan dışı harcama sayılır." yazar.
+  - Yeni kalem adı daha önce kullanılan bir kalemle aynıysa ("tatil") o kalemin
+    yazılışı kullanılır ("Tatil").
+
+**Doğrulama.**
+
+- **819 masaüstü testi**, hepsi yeşil. Yeni testler:
+  - `BudgetTest`: ayrılan para, kalem içi harcama ve plan dışı harcama.
+  - `PlanDeriveTest`: kullanıcının Ekim örneği (₺32.000 + ₺370 → kalan
+    ₺137.630), aşım dahil aylık gider, gelir aşımı, yatırım planı cümlesi,
+    iki kartın satırları.
+- Cihazda, 1 Ekim 2026, R58N81SAZ1Y, kullanıcının gerçek Ekim verisiyle:
+  - Para akışı: "Aylık giderler ₺89.500 · 11 kalem · harcanan ₺2.598", "Plan
+    dışı harcamalar ₺370 · Halisaha", "Yatırım ₺0 · planlanan ₺27.956",
+    "Kalan ₺80.130". Eski ekran ₺167.032 gösteriyordu.
+  - Çubuk "gider %53 · yatırım %0 · kalan %47"; cümle "Yatırım planı
+    tamamlanınca ₺52.174 kalır."
+  - Aylık giderler kartı: Konut/Kira ₺25.000 (çubuksuz), Kredi Kartı Limit
+    ₺1.050 / ₺15.000, Dışarıda yemek ₺1.175 / ₺5.000 …
+  - Harcamalar kartı: "₺2.968 · Plan dışı ₺370"; Halisaha "plan dışı"
+    rozetiyle görünüyor.

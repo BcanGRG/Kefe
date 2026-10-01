@@ -141,7 +141,8 @@ internal fun PlanExpenseSheet(
                 horizontalArrangement = Arrangement.spacedBy(Space.x8),
                 verticalArrangement = Arrangement.spacedBy(Space.x8),
             ) {
-                (ExpenseCategory.entries + editor.customCategories).forEach { category ->
+                // Ayin aylik giderleri once: harcama cogu zaman onlardan birinin icinden yenir.
+                (editor.plannedCategories + ExpenseCategory.entries + editor.customCategories).distinct().forEach { category ->
                     val isSelected = !editor.newCategoryOpen && category == editor.category
                     KefeChip(
                         text = category.label(),
@@ -185,6 +186,16 @@ internal fun PlanExpenseSheet(
                 NoteLine(
                     icon = KefeIcons.Info,
                     text = "Kartla yaptığınız harcamaları tek tek girdiyseniz ekstreyi ayrıca girmeyin.",
+                    color = c.onSurfaceMuted,
+                )
+            }
+            // Secilen kalemin bu ay aylik gideri yoksa harcama gelirden ayrica duser - bunu soyle.
+            val chosen = editor.category
+            if (!editor.newCategoryOpen && chosen != null && editor.plannedCategories.isNotEmpty() && chosen !in editor.plannedCategories) {
+                Spacer(Modifier.height(Space.x8))
+                NoteLine(
+                    icon = KefeIcons.Info,
+                    text = "Bu ayın aylık giderlerinde yok · plan dışı harcama sayılır.",
                     color = c.onSurfaceMuted,
                 )
             }
@@ -239,7 +250,7 @@ internal fun PlanBudgetSheet(
     KefeBottomSheet(
         visible = visible,
         onDismiss = { onIntent(PlanIntent.DismissSheet) },
-        title = "Bütçe",
+        title = "Aylık giderler",
         subtitle = editor?.month?.label(),
         closeIcon = KefeIcons.Close,
         modifier = modifier,
@@ -265,6 +276,12 @@ internal fun PlanBudgetSheet(
         },
     ) {
         if (editor != null) {
+            Text(
+                "Bu ay için ayırdığın tutarlar: kira gibi sabit ödemeler ve market gibi sınır koyduğun kalemler. Hepsi gelirden düşülür; harcamalar kendi kaleminin içinden yenir.",
+                style = t.caption,
+                color = c.onSurfaceMuted,
+            )
+            Spacer(Modifier.height(Space.x16))
             editor.categories.forEachIndexed { index, category ->
                 if (index > 0) Spacer(Modifier.height(Space.x16))
                 AmountTextField(

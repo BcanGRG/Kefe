@@ -851,9 +851,11 @@ class PlanViewModelTest {
         vm.onIntent(PlanIntent.SaveExpense)
         assertNull(vm.state.value.sheet)
 
-        val card = vm.awaitState { state -> state.content.expenses?.categories?.any { it.label == "Tatil" } == true }
+        // Aylik gideri yok: kartta satir degil, plan disi giris.
+        val card = vm.awaitState { state -> state.content.expenses?.recent?.any { it.title == "Tatil" } == true }
             .content.expenses!!
-        assertEquals("₺12.000", card.categories.single { it.label == "Tatil" }.amounts)
+        assertTrue(card.recent.single { it.title == "Tatil" }.unplanned)
+        assertEquals("Plan dışı ₺12.000", card.unplannedLine)
         assertEquals("c:Tatil", env.plan.observeMonthBook(October).first().expenses.single().category.name)
 
         // Sonraki harcamada hazir cip; farkli yazim ayni kaleme duser.
@@ -863,8 +865,8 @@ class PlanViewModelTest {
         vm.onIntent(PlanIntent.ExpenseNewCategoryText("tatil"))
         vm.onIntent(PlanIntent.ExpenseAmount("3000"))
         vm.onIntent(PlanIntent.SaveExpense)
-        val merged = vm.awaitState { state -> state.content.expenses?.categories?.any { it.amounts == "₺15.000" } == true }
-        assertEquals(1, merged.content.expenses!!.categories.count { it.label.lowercase() == "tatil" })
+        val merged = vm.awaitState { state -> state.content.expenses?.unplannedLine == "Plan dışı ₺15.000" }
+        assertEquals(setOf("Tatil"), merged.content.expenses!!.recent.map { it.title }.toSet())
 
         // Butce sayfasi kalemi de listeler; kaydedilen butce kalemin kimligiyle yazilir.
         vm.onIntent(PlanIntent.EditBudget)
@@ -919,7 +921,8 @@ class PlanViewModelTest {
         vm.onIntent(PlanIntent.SaveBudget)
         val card = vm.awaitState { state -> state.content.expenses?.categories?.any { it.label == "Tatil" } == true }
             .content.expenses!!
-        assertEquals("₺0 / ₺20.000", card.categories.single { it.label == "Tatil" }.amounts)
+        // Harcamasi olmayan aylik gider: yalniz ayrilan tutar.
+        assertEquals("₺20.000", card.categories.single { it.label == "Tatil" }.amounts)
         // Tutar yazilmayan kalem butce satiri acmaz.
         assertEquals(listOf("eb_2026_10_c_tatil"), env.plan.observeMonthBook(October).first().budgets.map { it.id })
     }
@@ -930,9 +933,9 @@ class PlanViewModelTest {
         env.plan.setBudgets(October, mapOf(ExpenseCategory.Groceries to 10_000.0))
         env.expense("e1", KefeDate(2026, 10, 5), 12_300.0)
         val vm = env.vm()
-        val card = vm.awaitState { it.content.expenses?.totalOverText != null }.content.expenses!!
-        assertEquals("₺2.300 aşıldı", card.totalOverText)
+        val card = vm.awaitState { it.content.expenses?.categories?.singleOrNull()?.overText != null }.content.expenses!!
         assertEquals("₺2.300 aşıldı", card.categories.single().overText)
+        assertEquals("1 kalem · harcanan ₺12.300 · ₺2.300 aşıldı", card.plannedLine)
     }
 
     // --- Defter: butce -------------------------------------------------------
@@ -957,7 +960,7 @@ class PlanViewModelTest {
         vm.onIntent(PlanIntent.SaveBudget)
         assertNull(vm.state.value.sheet)
 
-        val card = vm.awaitState { it.content.expenses?.totalLine == "₺0 / ₺32.000" }.content.expenses!!
+        val card = vm.awaitState { it.content.expenses?.plannedTotal == "₺32.000" }.content.expenses!!
         assertEquals(2, card.categories.size)
         val budgets = env.plan.observeMonthBook(October).first().budgets.associate { it.category to it.amount }
         assertEquals(mapOf(ExpenseCategory.Groceries to 12_000.0, ExpenseCategory.Housing to 20_000.0), budgets)

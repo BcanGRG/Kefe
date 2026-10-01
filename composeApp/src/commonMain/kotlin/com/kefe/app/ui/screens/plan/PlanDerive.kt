@@ -405,9 +405,11 @@ private fun flowCaption(relation: MonthRelation): String = when (relation) {
 }
 
 /**
- * Bu ay ve gecmis ay: gerceklesen. Elde kalan YALNIZ gelir ve gider birlikte
- * girildiyse hesaplanir - gider girilmemisken "gelir - yatirim" elde kalan diye
- * yazilsaydi hic girilmemis harcamalar yokmus gibi okunurdu.
+ * Bu ay ve gecmis ay. Aylik giderler AYRILAN para olarak tam dusulur, harcamalar
+ * kendi kaleminin icinden yenir; aylik gideri olmayan harcama "plan dışı" olarak
+ * ayrica dusulur (bkz. MonthFlow). Kalan, gelir ve en az bir gider (aylik gider ya
+ * da harcama) girildiyse hesaplanir - hic gider girilmemisken "gelir - yatirim"
+ * kalan diye yazilsaydi girilmemis giderler yokmus gibi okunurdu.
  */
 private fun actualFlowCard(
     flow: MonthFlow,
@@ -417,33 +419,41 @@ private fun actualFlowCard(
     incomeRows: List<IncomeRowUi>,
 ): MoneyFlowCard {
     val income = flow.income
-    val remaining = flow.remaining.takeIf { hasExpenses }
+    val anyCost = hasExpenses || flow.budgetTotal != null
+    val remaining = flow.remaining.takeIf { anyCost }
     val investNote = listOfNotNull(
         plannedInvest?.let { "planlanan ${Money.tl(it)}" },
-        // Yatirima giden NET: ayni ay satilan dusulur, yoksa alimlarin toplamiyla karisirdi.
+        // Yatirim NET: ayni ay satilan dusulur, yoksa alimlarin toplamiyla karisirdi.
         flow.sells.takeIf { it > 0.0 }?.let { "${Money.tl(it)} satış düşüldü" },
     ).joinToString(" · ").ifEmpty { null }
+    val plannedNote = flow.budgetTotal?.let {
+        listOfNotNull(
+            "${flow.budgetByCategory.size} kalem",
+            flow.spentInPlan.takeIf { it > 0.0 }?.let { "harcanan ${Money.tl(it)}" },
+            flow.overPlan.takeIf { it > 0.0 }?.let { "${Money.tl(it)} aşım dahil" },
+        ).joinToString(" · ")
+    } ?: "eklenmedi"
+    val unplannedNote = flow.unplannedCategories.takeIf { it.isNotEmpty() }?.let { list ->
+        list.take(UnplannedNameCount).joinToString(", ") { it.label() } + if (list.size > UnplannedNameCount) ", …" else ""
+    }
     val lines = listOf(
         flowLine(FlowLineKind.Income, "Gelir", income, note = if (income == null) "girilmedi" else null),
         flowLine(
             FlowLineKind.Expense,
-            "Giderler",
-            flow.expenses.takeIf { hasExpenses },
-            note = when {
-                !hasExpenses -> "girilmedi"
-                flow.budgetTotal != null -> "bütçe ${Money.tl(flow.budgetTotal)}"
-                else -> "bütçe yok"
-            },
+            "Aylık giderler",
+            flow.budgetTotal?.let { it + flow.overPlan },
+            note = plannedNote,
         ),
-        flowLine(FlowLineKind.Invest, "Yatırıma giden", flow.investedNet, note = investNote),
+        flowLine(FlowLineKind.Unplanned, "Plan dışı harcamalar", flow.unplannedSpent, note = unplannedNote),
+        flowLine(FlowLineKind.Invest, "Yatırım", flow.investedNet, note = investNote),
         flowLine(
             FlowLineKind.Remaining,
-            "Elde kalan",
+            "Kalan",
             remaining,
             note = when {
-                remaining != null && remaining < 0.0 -> "gelirin üstünde harcandı"
+                remaining != null && remaining < 0.0 -> "gelirin üstünde"
                 income == null -> "gelir girilince hesaplanır"
-                !hasExpenses -> "giderler girilince hesaplanır"
+                !anyCost -> "giderler girilince hesaplanır"
                 else -> null
             },
         ),
@@ -452,8 +462,8 @@ private fun actualFlowCard(
         caption = flowCaption(relation),
         lines = lines,
         emptyHint = null,
-        split = if (income != null && income > 0.0 && hasExpenses) flowSplit(income, flow.expenses, flow.investedNet) else null,
-        planLine = if (relation == MonthRelation.Current) planLine(income, flow.budgetTotal, plannedInvest) else null,
+        split = if (income != null && income > 0.0 && anyCost) flowSplit(income, flow.outgoing, flow.investedNet) else null,
+        planLine = if (relation == MonthRelation.Current) planLine(remaining, flow.investedNet, plannedInvest) else null,
         incomeRows = incomeRows,
     )
 }
@@ -465,7 +475,7 @@ private fun plannedFlowCard(flow: MonthFlow, plannedInvest: Double?, incomeRows:
     val remaining = flow.plannedRemaining.takeIf { income != null && (flow.budgetTotal != null || plannedInvest != null) }
     val lines = listOf(
         flowLine(FlowLineKind.Income, "Gelir", income, note = if (income == null) "girilmedi" else null),
-        flowLine(FlowLineKind.Expense, "Gider bütçesi", flow.budgetTotal, note = if (flow.budgetTotal == null) "bütçe yok" else null),
+        flowLine(FlowLineKind.Expense, "Aylık giderler", flow.budgetTotal, note = if (flow.budgetTotal == null) "eklenmedi" else null),
         flowLine(FlowLineKind.Invest, "Planlanan yatırım", plannedInvest, note = if (plannedInvest == null) "plan yok" else null),
         flowLine(
             FlowLineKind.Remaining,
@@ -530,61 +540,57 @@ private fun sharePercent(fraction: Double): String {
 }
 
 /**
- * Bu ayin plani tek cumlede: "Plana göre ₺74.149 yatırıma gidecek, ay sonunda
- * ₺10.851 kalacak." Butce varsa gider de soylenir; plan geliri asiyorsa asim.
- * Plan yoksa null - "Plana göre" cumlesi planin kendisini ister.
+ * Bu ayin yatirim plani tek cumlede: "Yatırım planı tamamlanınca ₺10.851 kalır."
+ * Kalan, planin henuz yapilmamis kismi da dusulerek bulunur. Kalan bilinmiyorsa
+ * (gelir ya da gider girilmedi) ya da yatirim plani yoksa null.
  */
-internal fun planLine(income: Double?, budget: Double?, plannedInvest: Double?): String? {
-    val invest = plannedInvest ?: return null
-    val outgoing = buildString {
-        append("Plana göre ")
-        if (budget != null) append("${Money.tl(budget)} gidere, ")
-        append("${Money.tl(invest)} yatırıma gidecek")
-    }
-    if (income == null) return "$outgoing."
-    val left = income - (budget ?: 0.0) - invest
+internal fun planLine(remaining: Double?, investedNet: Double, plannedInvest: Double?): String? {
+    val planned = plannedInvest ?: return null
+    val now = remaining ?: return null
+    val left = now - (planned - investedNet.coerceAtLeast(0.0)).coerceAtLeast(0.0)
     return if (left >= 0.0) {
-        "$outgoing, ay sonunda ${Money.tl(left)} kalacak."
+        "Yatırım planı tamamlanınca ${Money.tl(left)} kalır."
     } else {
-        "$outgoing; bu, gelirin ${Money.tl(-left)} üstünde."
+        "Yatırım planı tamamlanırsa gelir ${Money.tl(-left)} aşılır."
     }
 }
 
 /**
- * "Giderler" - bos ayda da kurulur (harcama ve butcenin giris noktasi). "Bu ay"
- * denmez: sayfa baska aylari da gosterir.
+ * "Aylık giderler" ve "Harcamalar" kartlari (bkz. ExpensesCard) - bos ayda da
+ * kurulur: aylik gider ve harcamanin giris noktasi. "Bu ay" denmez: sayfa baska
+ * aylari da gosterir.
  */
 internal fun expensesCard(book: MonthBook): ExpensesCard {
-    val spentBy = book.expenses.totalsByCategory()
-    val budgetBy = book.budgets.groupBy { it.category }.mapValues { (_, list) -> list.sumOf { it.amount } }
-    val spent = spentBy.values.sum()
-    val budget = budgetBy.takeIf { it.isNotEmpty() }?.values?.sum()
+    val flow = monthFlow(book, emptyList(), plannedInvest = null)
+    val spentBy = flow.expensesByCategory
+    val budgetBy = flow.budgetByCategory
 
-    // Hazir kategoriler ekrandaki sirayla, ardindan ozel kalemler harcanana gore.
-    val custom = (spentBy.keys + budgetBy.keys).filter { it.isCustom }.distinct()
-        .sortedByDescending { spentBy[it] ?: 0.0 }
-    val categories = (ExpenseCategory.entries + custom).mapNotNull { category ->
-        val categorySpent = spentBy[category] ?: 0.0
-        val categoryBudget = budgetBy[category]
-        if (categorySpent == 0.0 && categoryBudget == null) return@mapNotNull null
+    // Aylik giderler ayrilana gore - en buyuk kalem ustte.
+    val categories = budgetBy.entries.sortedByDescending { it.value }.map { (category, planned) ->
+        val spent = spentBy[category] ?: 0.0
         CategoryRowUi(
             category = category,
             label = category.label(),
-            amounts = categoryBudget?.let { "${Money.tl(categorySpent)} / ${Money.tl(it)}" } ?: Money.tl(categorySpent),
-            ratio = categoryBudget?.let { spentRatio(categorySpent, it) },
-            overText = overText(categorySpent, categoryBudget),
+            // Harcama yokken "₺0 / ₺25.000" yazilmaz: kira bir sinir degil, ayrilan para.
+            amounts = if (spent > 0.0) "${Money.tl(spent)} / ${Money.tl(planned)}" else Money.tl(planned),
+            ratio = if (spent > 0.0) spentRatio(spent, planned) else null,
+            overText = overText(spent, planned),
         )
+    }
+    val plannedLine = flow.budgetTotal?.let {
+        buildString {
+            append("${categories.size} kalem")
+            if (flow.spentInPlan > 0.0) append(" · harcanan ${Money.tl(flow.spentInPlan)}")
+            if (flow.overPlan > 0.0) append(" · ${Money.tl(flow.overPlan)} aşıldı")
+        }
     }
 
     return ExpensesCard(
-        totalLine = when {
-            budget != null -> "${Money.tl(spent)} / ${Money.tl(budget)}"
-            book.expenses.isNotEmpty() -> Money.tl(spent)
-            else -> "Harcama girilmedi."
-        },
-        totalRatio = budget?.let { spentRatio(spent, it) },
-        totalOverText = overText(spent, budget),
+        plannedTotal = flow.budgetTotal?.let { Money.tl(it) },
+        plannedLine = plannedLine,
         categories = categories,
+        totalLine = if (book.expenses.isEmpty()) "Harcama girilmedi." else Money.tl(flow.expenses),
+        unplannedLine = flow.unplannedSpent.takeIf { it > 0.0 }?.let { "Plan dışı ${Money.tl(it)}" },
         recent = book.expenses
             .sortedWith(NewestFirst)
             .take(RecentExpenseCount)
@@ -595,6 +601,7 @@ internal fun expensesCard(book: MonthBook): ExpensesCard {
                     title = e.category.label(),
                     subtitle = "${e.date.day} ${e.date.monthLabel()}$note",
                     amount = Money.tl(e.amount),
+                    unplanned = e.category !in budgetBy,
                 )
             },
     )
@@ -618,7 +625,10 @@ private val NewestFirst: Comparator<ExpenseEntry> =
         .thenByDescending { it.createdAt }
 
 /** "Son girişler"de gosterilen en fazla giris. */
-private const val RecentExpenseCount = 5
+private const val RecentExpenseCount = 10
+
+/** Plan disi satirinin notunda adi gecen kalem sayisi. */
+private const val UnplannedNameCount = 3
 
 // --- Defter editorleri -------------------------------------------------------
 
@@ -658,7 +668,14 @@ internal fun newExpenseEditor(inputs: PlanInputs, id: String): ExpenseEditor = E
     date = if (inputs.month == inputs.current) inputs.today else inputs.month.lastDay(),
     addedByMemberId = inputs.activeMemberId ?: inputs.members.firstOrNull()?.id,
     customCategories = customCategoriesOf(inputs.books),
+    plannedCategories = plannedCategoriesOf(inputs.book),
 )
+
+/** Ayin aylik gideri olan kalemler, ayrilana gore - harcama ciplerinin basi. */
+internal fun plannedCategoriesOf(book: MonthBook): List<ExpenseCategory> =
+    book.budgets.groupBy { it.category }
+        .mapValues { (_, list) -> list.sumOf { it.amount } }
+        .entries.sortedByDescending { it.value }.map { it.key }
 
 /** Kayitli harcama: kimligi, tarihi ve giris ani korunur (sira degismez). */
 internal fun expenseEditorOf(entry: ExpenseEntry, books: List<MonthBook>): ExpenseEditor = ExpenseEditor(
@@ -672,6 +689,7 @@ internal fun expenseEditorOf(entry: ExpenseEntry, books: List<MonthBook>): Expen
     createdAt = entry.createdAt,
     addedByMemberId = entry.addedByMemberId,
     customCategories = customCategoriesOf(books),
+    plannedCategories = books.firstOrNull { it.month == entry.month }?.let(::plannedCategoriesOf).orEmpty(),
 )
 
 /**

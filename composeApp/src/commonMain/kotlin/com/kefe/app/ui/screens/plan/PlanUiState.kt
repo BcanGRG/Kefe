@@ -203,7 +203,7 @@ data class MoneyFlowCard(
     val emptyHint: String?,
     /** Gelirin dagilimi; gelir ya da gider girilmediyse ve gelecek ayda null. */
     val split: FlowSplit?,
-    /** "Plana göre ₺74.149 yatırıma gidecek, ay sonunda ₺10.851 kalacak." - yalniz bu ay. */
+    /** "Yatırım planı tamamlanınca ₺10.851 kalır." - yalniz bu ay ve yatirim plani varken. */
     val planLine: String?,
     /** Her uye - gelir girisinin kapisi, girilmemisse tutar "—". */
     val incomeRows: List<IncomeRowUi>,
@@ -212,8 +212,11 @@ data class MoneyFlowCard(
 enum class FlowLineKind {
     Income,
 
-    /** Gelirden dusulen: satir "−" ile baslar. */
+    /** Gelirden dusulen: satir "−" ile baslar. Aylik giderler (asimlar dahil). */
     Expense,
+
+    /** Aylik gideri olmayan kalemlerdeki harcamalar. */
+    Unplanned,
     Invest,
 
     /** Hesabin sonucu: ustunde cizgi, satir "=" ile baslar. */
@@ -259,31 +262,42 @@ data class IncomeRowUi(
     val amount: String,
 )
 
+/**
+ * Iki kart: "Aylık giderler" - ay icin AYRILAN para (Kira, Market sinirlari) -
+ * ve "Harcamalar" - gun icinde girilen anlik odemeler. Harcama aylik gideri olan
+ * bir kalemdeyse o kalemin icinden yenir; olmayan kalemdeyse "plan dışı"dir
+ * (bkz. MonthFlow).
+ *
+ * NEYDI: tek "Giderler" karti ve bir "Bütçe" dugmesi. Bütce yalniz bir sinirdi,
+ * gider yalniz girilen harcamalardi; kullanici kirayi butceye de harcamaya da
+ * yaziyor, anlik harcamanin nereye sayildigini goremiyordu.
+ */
 data class ExpensesCard(
-    /** "₺18.400 / ₺25.000" | "₺18.400" | "Harcama girilmedi.". */
-    val totalLine: String,
-    /** Harcanan / butce; butce yoksa null (cubuk cizilmez). */
-    val totalRatio: Float?,
-    /** "₺2.300 aşıldı" - asimin sinyali metindir, renk yalniz eslik eder. */
-    val totalOverText: String?,
-    /** Harcamasi VE butcesi olmayan kategori listede yok. */
+    // --- Aylik giderler ---
+    /** "₺89.500"; ayin aylik gideri yoksa null (kart bos durum notunu yazar). */
+    val plannedTotal: String?,
+    /** "11 kalem · harcanan ₺2.597" (+ " · ₺1.200 aşıldı"); aylik gider yoksa null. */
+    val plannedLine: String?,
+    /** Aylik gideri olan kalemler, ayrilana gore. */
     val categories: List<CategoryRowUi>,
-    /** En yeni 5 giris. */
+    // --- Harcamalar ---
+    /** "₺2.967" | "Harcama girilmedi.". */
+    val totalLine: String,
+    /** "Plan dışı ₺370" - aylik gideri olmayan kalemlerdeki harcamalar; yoksa null. */
+    val unplannedLine: String?,
+    /** En yeni girisler. */
     val recent: List<ExpenseRowUi>,
 ) {
-    /**
-     * Ayda ne harcama ne butce var: [totalLine] bir TUTAR degil, bir not.
-     * NEYDI: "Harcama girilmedi." tutar basligi boyutunda (h2) ciziliyor,
-     * kartin en buyuk yazisi bos durumun kendisi oluyordu.
-     */
-    val isEmpty: Boolean get() = totalRatio == null && categories.isEmpty() && recent.isEmpty()
+    /** Ayda hic harcama yok: [totalLine] bir TUTAR degil, bir not (h2 ile cizilmez). */
+    val noSpending: Boolean get() = recent.isEmpty()
 }
 
 data class CategoryRowUi(
     val category: ExpenseCategory,
     val label: String,
-    /** "₺4.200 / ₺5.000" | "₺4.200". */
+    /** "₺372 / ₺7.000" (harcama var) | "₺25.000" (henuz harcama yok). */
     val amounts: String,
+    /** Harcanan / ayrilan; harcama yoksa null (cubuk cizilmez - kira bir sinir degil). */
     val ratio: Float?,
     val overText: String?,
 )
@@ -294,6 +308,8 @@ data class ExpenseRowUi(
     /** "14 Eki · market" - gun, kisa ay ve varsa not. */
     val subtitle: String,
     val amount: String,
+    /** Kalemin bu ay aylik gideri yok: harcama ayrica gidere eklenir. */
+    val unplanned: Boolean = false,
 )
 
 // --- Seri ----------------------------------------------------------------------
@@ -428,6 +444,11 @@ data class ExpenseEditor(
     val addedByMemberId: String?,
     /** Daha once kullanilan ozel kalemler, en yeni once - hazir dokuzun yaninda cip. */
     val customCategories: List<ExpenseCategory> = emptyList(),
+    /**
+     * Ayin aylik gideri olan kalemler - cipler bunlarla baslar. Secilen kalem burada
+     * yoksa harcama "plan dışı" sayilir ve sayfa bunu soyler.
+     */
+    val plannedCategories: List<ExpenseCategory> = emptyList(),
     /** "+ Yeni" acik: kategori yazilan addan gelir, cip secimi bosalir. */
     val newCategoryOpen: Boolean = false,
     val newCategoryText: String = "",
