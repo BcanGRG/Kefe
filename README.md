@@ -171,10 +171,13 @@ resurrect them.
 ```bash
 git clone https://github.com/BcanGRG/Kefe.git && cd Kefe
 
-./gradlew :composeApp:assembleDebug     # 🤖 Android
+./gradlew :androidApp:assembleDebug     # 🤖 Android
 ./gradlew :composeApp:run               # 🖥️ Desktop
 ./gradlew :composeApp:desktopTest       # 🧪 Tests
 ```
+
+`composeApp` holds all shared code plus the desktop app and the Android library target;
+`androidApp` is only the Android entry point (`MainActivity`, manifest, icon, splash, version).
 
 <details>
 <summary><b>☁️ Optional cloud sync</b></summary>

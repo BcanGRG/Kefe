@@ -8,7 +8,7 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
-    alias(libs.plugins.androidApplication)
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
     alias(libs.plugins.sqldelight)
 }
 
@@ -26,11 +26,12 @@ val supabaseUrl: String = localOrEnv("SUPABASE_URL")
 val supabaseAnonKey: String = localOrEnv("SUPABASE_ANON_KEY")
 
 /**
- * Uygulama surumu TEK YERDE. Hem Android paketine (versionName) hem uretilen
- * SupabaseConfig'e buradan gider - once Ayarlar'daki "Kefe 1.0.4" sabit
- * yaziliydi ve paketin gercek surumuyle (1.0.0) uyusmuyordu.
+ * Uygulama surumu TEK YERDE: libs.versions.toml. Android paketi (androidApp)
+ * versionName'i oradan okur, uretilen SupabaseConfig de buradan - once
+ * Ayarlar'daki "Kefe 1.0.4" sabit yaziliydi ve paketin gercek surumuyle (1.0.0)
+ * uyusmuyordu.
  */
-val appVersionName = "1.0.0"
+val appVersionName: String = libs.versions.appVersionName.get()
 
 fun localOrEnv(key: String): String {
     val local = rootProject.file("local.properties")
@@ -76,8 +77,19 @@ kotlin {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
-    androidTarget {
+    // Android tarafi bir KUTUPHANE: uygulama (applicationId, manifest, ikon,
+    // MainActivity, surum) androidApp modulunde. AGP 9'dan beri KMP eklentisi
+    // com.android.application ile ayni modulde calismiyor.
+    android {
+        // Uygulamanin namespace'i (com.kefe.app) androidApp'te; iki modul ayni
+        // namespace'i paylasirsa R siniflari cakisir.
+        namespace = "com.kefe.app.shared"
+        compileSdk = libs.versions.androidCompileSdk.get().toInt()
+        minSdk = libs.versions.androidMinSdk.get().toInt()
         compilerOptions { jvmTarget.set(JvmTarget.JVM_11) }
+        // commonTest Android tarafinda da derlenip kosulabilsin (eski androidTarget'taki
+        // testDebugUnitTest'in karsiligi). Asil test paketi yine desktopTest.
+        withHostTest {}
     }
 
     jvm("desktop")
@@ -130,9 +142,9 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+        // Acilis penceresi (core-splashscreen) androidApp'te, MainActivity ile birlikte.
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
-            implementation(libs.androidx.core.splashscreen)
             implementation(libs.androidx.biometric)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.sqldelight.driver.android)
@@ -191,33 +203,6 @@ sqldelight {
             // SQLite surumuyle ayni. Daha yenisini secmek eski telefonlarda calisma
             // aninda patlar (ornegin ON CONFLICT ... DO UPDATE 3.24 ister).
         }
-    }
-}
-
-android {
-    namespace = "com.kefe.app"
-
-    // android.newDsl=false ile AGP 8 DSL'i gecerli (bkz. gradle.properties).
-    compileSdk = libs.versions.androidCompileSdk.get().toInt()
-
-    defaultConfig {
-        applicationId = "com.kefe.app"
-        minSdk = libs.versions.androidMinSdk.get().toInt()
-        targetSdk = libs.versions.androidTargetSdk.get().toInt()
-        versionCode = 1
-        versionName = appVersionName
-    }
-
-    sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
-    sourceSets["main"].res.srcDirs("src/androidMain/res")
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    buildTypes {
-        getByName("release") { isMinifyEnabled = false }
     }
 }
 

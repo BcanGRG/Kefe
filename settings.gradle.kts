@@ -15,4 +15,7 @@ dependencyResolutionManagement {
     }
 }
 
+// composeApp: ortak kod + masaustu uygulamasi + iOS cercevesi + Android kutuphanesi.
+// androidApp: yalniz Android giris noktasi (MainActivity, manifest, ikon, imza, surum).
 include(":composeApp")
+include(":androidApp")
