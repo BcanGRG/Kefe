@@ -13,10 +13,12 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import com.kefe.app.domain.model.GoalAsset
 import com.kefe.app.domain.model.QuantityUnit
+import com.kefe.app.domain.model.label
 import com.kefe.app.ui.components.AmountKeyboard
 import com.kefe.app.ui.components.KefeBottomSheet
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeSwitchRow
+import com.kefe.app.ui.components.KefeTextButton
 import com.kefe.app.ui.components.KefeTextField
 import com.kefe.app.ui.components.asAmountInput
 import com.kefe.app.ui.format.Money
@@ -60,6 +62,8 @@ data class SpendLine(
     val positionId: String,
     val title: String,
     val unit: QuantityUnit,
+    /** "gr", "adet"; dovizde bos. */
+    val unitLabel: String,
     /** Hedefe ayrilan miktar - harcanabilecek en cok. */
     val assigned: Double,
     /** Bugunku SATIS fiyati: "bugun satsam" tutari. */
@@ -69,20 +73,33 @@ data class SpendLine(
     val spendQuantity: Double get() = min(quantityText.parseTrAmountOrNull() ?: 0.0, assigned).coerceAtLeast(0.0)
 }
 
-/** Hedefin bugunku varliklarindan acilis hali: hepsi harcanir, hedef kapanir. */
+/**
+ * Acilis hali: miktarlar BOS, hedef acik kalir. Sayfa her seyi harcamaya hazir
+ * acilsaydi tek bir yanlis dokunus Ev gibi buyuk bir birikimin tamamini satilmis
+ * sayardi (1 Eki 2026, telefonda ₺983.954,70 hazir bekliyordu). Hepsi harcanacaksa
+ * "Tümünü harca" tek dokunusla doldurur ve hedefi kapatir.
+ */
 internal fun spendSheetOf(goalName: String, assets: List<GoalAsset>): SpendSheet = SpendSheet(
     lines = assets.filter { it.quantity > 0.0 }.map { asset ->
         SpendLine(
             positionId = asset.position.id,
             title = asset.position.name,
             unit = asset.position.unit,
+            unitLabel = asset.position.unit.label(),
             assigned = asset.quantity,
             unitPrice = asset.position.unitPrice,
-            quantityText = rawAmount(asset.quantity),
+            quantityText = "",
         )
     },
     name = goalName,
+    closeGoal = false,
+)
+
+/** "Tümünü harca": her satir ayrilan miktarla dolar, hedef kapanir. */
+internal fun SpendSheet.spendingAll(): SpendSheet = copy(
+    lines = lines.map { it.copy(quantityText = rawAmount(it.assigned)) },
     closeGoal = true,
+    amountError = false,
 )
 
 @Composable
@@ -122,6 +139,10 @@ internal fun GoalSpendSheet(
         },
     ) {
         if (sheet == null) return@KefeBottomSheet
+        KefeTextButton(
+            text = "Tümünü harca",
+            onClick = { onIntent(GoalDetailIntent.SpendAll) },
+        )
         Text(
             "Seçtiğin miktar bugünkü fiyattan satılmış sayılır ve aynı tutarda bir harcama girilir. " +
                 "Para birikimden harcandığı için Plan'daki Kalan değişmez.",
@@ -135,8 +156,9 @@ internal fun GoalSpendSheet(
                 onValueChange = { onIntent(GoalDetailIntent.SpendQuantity(line.positionId, it.asAmountInput())) },
                 modifier = Modifier.fillMaxWidth(),
                 label = line.title,
-                helper = "Hedefe ayrılan ${Money.number(line.assigned, Money.decimals(line.assigned, 4))} · " +
-                    "≈ ${Money.tlExact(line.spendQuantity * line.unitPrice)}",
+                placeholder = "0",
+                helper = "Ayrılan ${Money.quantity(line.assigned, line.unitLabel, Money.decimals(line.assigned, 4)).trim()} · " +
+                    Money.tlExact(line.assigned * line.unitPrice),
                 textStyle = t.body.tabular(),
                 keyboardOptions = AmountKeyboard,
             )

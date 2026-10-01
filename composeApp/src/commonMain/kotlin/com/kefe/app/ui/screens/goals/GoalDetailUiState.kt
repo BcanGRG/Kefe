@@ -172,6 +172,7 @@ sealed interface GoalDetailIntent {
 
     // --- Hedeften harca (bkz. GoalSpend.kt) ---
     data object OpenSpend : GoalDetailIntent
+    data object SpendAll : GoalDetailIntent
     data object CloseSpend : GoalDetailIntent
     data class SpendQuantity(val positionId: String, val text: String) : GoalDetailIntent
     data class SpendName(val text: String) : GoalDetailIntent

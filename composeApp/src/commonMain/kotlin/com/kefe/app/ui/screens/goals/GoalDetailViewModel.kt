@@ -146,6 +146,7 @@ class GoalDetailViewModel(
                 _state.value = _state.value.copy(spend = spendSheetOf(goal.name, _state.value.composingAssets))
             }
             GoalDetailIntent.CloseSpend -> _state.value = _state.value.copy(spend = null)
+            GoalDetailIntent.SpendAll -> updateSpend { it.spendingAll() }
             is GoalDetailIntent.SpendQuantity -> updateSpend { sheet ->
                 val next = sheet.copy(
                     lines = sheet.lines.map { if (it.positionId == intent.positionId) it.copy(quantityText = intent.text) else it },

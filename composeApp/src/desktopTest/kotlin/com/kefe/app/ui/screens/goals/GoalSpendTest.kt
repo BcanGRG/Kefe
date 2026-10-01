@@ -108,7 +108,9 @@ class GoalSpendTest {
         vm.onIntent(GoalDetailIntent.OpenSpend)
         val opened = assertNotNull(vm.state.value.spend)
         assertEquals(300.0, opened.lines.single().assigned, 1e-9)
-        assertTrue(opened.closeGoal, "hepsi harcanacakken hedef kapanir")
+        // Bos acilir: tek bir yanlis dokunus butun birikimi satmasin.
+        assertEquals(0.0, opened.total, 1e-9)
+        assertEquals(false, opened.closeGoal)
 
         vm.onIntent(GoalDetailIntent.SpendQuantity("pos_eur_try", "200"))
         assertEquals(false, vm.state.value.spend?.closeGoal, "bir kismi harcaninca hedef acik kalir")
@@ -143,6 +145,8 @@ class GoalSpendTest {
         vm.awaitAssets()
 
         vm.onIntent(GoalDetailIntent.OpenSpend)
+        vm.onIntent(GoalDetailIntent.SpendAll)
+        assertEquals(true, vm.state.value.spend?.closeGoal, "tumu harcaninca hedef kapanir")
         vm.onIntent(GoalDetailIntent.ConfirmSpend)
 
         val goal = realTime {
