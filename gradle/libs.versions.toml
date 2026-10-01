@@ -3,26 +3,26 @@
 # uzerinden yapar. androidx compose-bom EKLENMEZ - CMP'nin Android tarafi zaten
 # androidx.compose.* artifact'lerine cozuluyor ve BOM onlarin surumunu ezerek
 # CMP'nin bekledigi surumden kaydirir.
-agp = "9.3.1"
-kotlin = "2.4.10"
-composeMultiplatform = "1.11.1"
+agp = "9.4.1"
+kotlin = "2.4.20"
+composeMultiplatform = "1.12.1"
 coreSplashscreen = "1.2.0"
 androidxBiometric = "1.1.0"
 coroutines = "1.11.0"
 lifecycle = "2.11.0"
-navigation3 = "1.1.1"
-# navigation3 1.1.1'in gecisli olarak istedigi surum; ayrisirsa NavDisplay ile
+navigation3 = "1.1.2"
+# navigation3 1.1.2'nin (ve CMP 1.12.1'in) gecisli olarak istedigi surum; ayrisirsa NavDisplay ile
 # ayni gonderici ustunde bulusmayan iki kopya olusabilir.
-navigationevent = "1.0.1"
+navigationevent = "1.1.0"
 activityCompose = "1.13.0"
-ktor = "3.5.1"
+ktor = "3.6.0"
 koin = "4.2.2"
 serialization = "1.11.0"
 # 2.2.0, 2.3.0 ve 2.3.1 eksik artifact'la yayinlandi; bakim ekibi bu ucunu de
 # "kirik yayin" olarak isaretledi. 2.3.2 hem bunlarin duzeltmesi hem de AGP 9'un
 # yeni DSL'i ve AGP'nin gomulu Kotlin'i ile uyumu getiren ilk surum - bu proje
 # AGP 9.3.1 uzerinde durdugu icin daha eskisi secilemez.
-sqldelight = "2.3.2"
+sqldelight = "2.4.0"
 
 # lifecycle 2.11.0 compileSdk 37+ istiyor.
 androidCompileSdk = "37"
@@ -45,7 +45,7 @@ navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui",
 # getiriyor ama YALNIZ calisma zamaninda; derlemede gorunmesi icin acikca yazilir.
 # Compose'un ui-backhandler'i kullanimdan kaldirildi; NavDisplay'in kendi geri
 # isleyicisi de bu artifact'tan geliyor - ayni gonderici, ayni oncelik sirasi.
-# Surum navigation3'un istedigiyle ayni tutulur (1.1.1 -> 1.0.1).
+# Surum navigation3'un istedigiyle ayni tutulur (1.1.2 -> 1.1.0).
 navigationevent-compose = { module = "org.jetbrains.androidx.navigationevent:navigationevent-compose", version.ref = "navigationevent" }
 
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "androidxBiometric" }
