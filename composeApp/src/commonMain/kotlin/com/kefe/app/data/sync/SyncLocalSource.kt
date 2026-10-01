@@ -115,6 +115,9 @@ class SyncLocalSource(
                             sortOrder = r.sortOrder,
                             updatedAt = r.updatedAt,
                             deletedAt = r.deletedAt,
+                            anchorUnit = r.anchorUnit,
+                            anchorAmount = r.anchorAmount,
+                            spentAt = r.spentAt,
                         )
                     }
                     .let { batch("goals", it) }

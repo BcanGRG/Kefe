@@ -259,18 +259,46 @@ private fun SheetBody(state: GoalEditorState, onIntent: (GoalsIntent) -> Unit) {
     }
 
     Spacer(Modifier.height(Space.x10))
-    // Bu kutu once "hedefi altin ya da dolar cinsinden sabitlerseniz hedef de
-    // piyasayla birlikte guncellenir" diyordu. Uygulama bunu YAPMIYOR: birim
-    // yalnizca girise yardim ediyor, tutar bugunku kurla TL'ye cevrilip oyle
-    // kaydediliyor ve sonra piyasadan bagimsiz duruyor (bkz. Goal.amount).
-    // Olmayan bir ozelligi vaat etmektense ne yaptigimizi yazmak dogru.
+    // Kutu artik dogruyu soyluyor: TL disi birimde hedef o birimde yasar ve TL
+    // karsiligi guncel kurla hesaplanir (bkz. Goal.unit). Once birim yalniz bir
+    // giris kolayligiydi ve kutu "TL tutarı sonradan piyasayla değişmez" diyordu.
     SheetInfoBox(
-        text = "Tutarı gram altın ya da dolar cinsinden girebilirsiniz; hedef " +
-            "bugünkü kurla TL'ye çevrilip kaydedilir. Hedefin TL tutarı " +
-            "sonradan piyasayla değişmez.",
+        text = if (state.unit == GoalUnit.Try) {
+            "TL hedefi sabit kalır. Gram altın, dolar ya da euro seçerseniz hedef o " +
+                "birimde tutulur ve TL karşılığı her gün güncel kurla hesaplanır."
+        } else {
+            "Hedef ${state.unit.label().lowercase()} cinsinden tutulur; TL karşılığı her gün " +
+                "güncel kurla hesaplanır. Kur yükselirse hedefin TL'si de yükselir."
+        },
         background = c.surface,
         bordered = true,
     )
+
+    if (state.unit != GoalUnit.Try && state.unit != GoalUnit.GoldGram) {
+        val units = state.amountText.parseAmount()
+        val rate = state.rateOrNull(state.unit) ?: 0.0
+        Spacer(Modifier.height(Space.x10))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(KefeShapes.button)
+                .background(c.accentMuted)
+                .padding(horizontal = Space.x14, vertical = Space.x12),
+        ) {
+            val code = if (state.unit == GoalUnit.Eur) "EUR" else "USD"
+            Text(
+                "Hedef ${Money.foreign(units, code, decimals = Money.decimals(units, max = 2))}",
+                style = t.bodyStrong.tabular(),
+                color = c.onSurface,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                "Bugünkü kurla ${Money.tlExact(units * rate)} · ${state.unit.label().lowercase()} ${Money.tl(rate, decimals = 2)}",
+                style = t.caption.tabular(),
+                color = c.onSurfaceMuted,
+            )
+        }
+    }
 
     if (state.unit == GoalUnit.GoldGram) {
         val grams = state.amountText.parseAmount()
@@ -714,4 +742,5 @@ private fun GoalUnit.suffix(): String = when (this) {
     GoalUnit.Try -> "₺"
     GoalUnit.GoldGram -> "gr altın"
     GoalUnit.Usd -> "USD"
+    GoalUnit.Eur -> "EUR"
 }

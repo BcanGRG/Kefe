@@ -291,12 +291,16 @@ private fun GoalCard(
 
         Spacer(Modifier.height(Space.x14))
         Row(Modifier.fillMaxWidth()) {
-            Text(
-                text = "${Money.tlExact(totalWealth)} / ${Money.tlExact(goal.amount)}",
-                style = t.body.tabular(),
-                color = c.onSurface,
-                modifier = Modifier.alignByBaseline(),
-            )
+            Column(Modifier.alignByBaseline()) {
+                Text(
+                    text = "${Money.tlExact(totalWealth)} / ${Money.tlExact(goal.amount)}",
+                    style = t.body.tabular(),
+                    color = c.onSurface,
+                )
+                goal.anchorLine()?.let { line ->
+                    Text(line, style = t.micro.tabular(), color = c.onSurfaceMuted)
+                }
+            }
             Spacer(Modifier.weight(1f))
             Text(
                 // Ulasilan hedefte %200 gibi bir sayi bilgi vermez, hata gibi

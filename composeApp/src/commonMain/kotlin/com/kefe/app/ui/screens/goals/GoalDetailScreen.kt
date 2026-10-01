@@ -748,6 +748,16 @@ private fun RingCard(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
+        goal.anchorLine()?.let { line ->
+            Text(
+                text = line,
+                style = KefeTheme.type.caption.tabular(),
+                color = c.onSurfaceMuted,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         // Ozet ekranindaki iki satirin hedefe ozel hali. Tutarin hemen altinda
         // duruyor cunku ayni soruyu tamamliyorlar: "ne kadar birikti" -

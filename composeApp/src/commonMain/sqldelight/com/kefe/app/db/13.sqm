@@ -1,0 +1,23 @@
+-- Canli kur hedefi ve harcanan hedef.
+--
+-- NEYDI. Hedef tutari HER ZAMAN TL idi; "€3.000" yazilinca o gunun kuruyla
+-- TL'ye cevrilip donuyordu, euro yukselince hedef buyumuyordu. Yurtdisi tatili
+-- gibi dovizle odenecek bir hedef boylece gercek maliyetin altinda kaliyordu.
+-- Hedefe ayrilan para harcandiginda da bunu soyleyecek bir yer yoktu.
+--
+-- NEDEN YENI KOLON. unit ve status EnumColumnAdapter ile okunuyor ve bilinmeyen
+-- metinde OKURKEN patliyor (bkz. 10.sqm). "Eur" ya da "Spent" diye yeni bir deger
+-- yazmak, henuz guncellenmemis ikinci telefonu esitleme aninda cokertirdi. Yeni
+-- bilgi ayri, duz kolonlarda; eski kolonlar eski telefonun tanidigi degerleri
+-- tasimaya devam eder (euro hedefinde unit = Try, harcanan hedefte
+-- status = Completed).
+--
+--   anchorUnit   - hedefin birimi ("Eur", "Usd", "GoldGram"); null = TL sabit.
+--   anchorAmount - tutar o birimde (3000.0 = €3.000). amount TL'nin son bilinen
+--                  karsiligi olarak kalir; ekran guncel kurla yeniden hesaplar.
+--   spentAt      - hedefin parasi harcandi (epoch ms); null = harcanmadi.
+--
+-- Sema .sq dosyalariyla BIREBIR ayni olmali (bkz. 11.sqm).
+ALTER TABLE goals ADD COLUMN anchorUnit TEXT;
+ALTER TABLE goals ADD COLUMN anchorAmount REAL;
+ALTER TABLE goals ADD COLUMN spentAt INTEGER;

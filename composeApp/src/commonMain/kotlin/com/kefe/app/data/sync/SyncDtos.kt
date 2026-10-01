@@ -94,6 +94,14 @@ data class GoalDto(
     @SerialName("sort_order") val sortOrder: Long,
     @SerialName("updated_at") val updatedAt: Long,
     @SerialName("deleted_at") val deletedAt: Long?,
+    /**
+     * Kura bagli hedef ve harcanan hedef (bkz. 13.sqm). Varsayilan null: bu alanlari
+     * tanimayan eski bir telefonun push'u onlari GONDERMEZ, sunucudaki deger
+     * (merge-duplicates yalniz gelen kolonlari yazar) korunur.
+     */
+    @SerialName("anchor_unit") val anchorUnit: String? = null,
+    @SerialName("anchor_amount") val anchorAmount: Double? = null,
+    @SerialName("spent_at") val spentAt: Long? = null,
 )
 
 @Serializable

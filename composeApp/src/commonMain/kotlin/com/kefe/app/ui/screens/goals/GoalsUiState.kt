@@ -3,6 +3,8 @@ package com.kefe.app.ui.screens.goals
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.isAnchored
+import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.parseTrAmountOrNull
 
 /** Ekranin veri durumu. Tasarimda liste ve bos durum ayri cerceveler. */
@@ -56,6 +58,7 @@ data class GoalEditorState(
     val datePickerOpen: Boolean = false,
     val goldGramPrice: Double = 0.0,
     val usdPrice: Double = 0.0,
+    val eurPrice: Double = 0.0,
 
     /**
      * Kur beklendigi icin HENUZ gecilemeyen birim.
@@ -100,6 +103,7 @@ fun GoalEditorState.rateOrNull(target: GoalUnit): Double? = when (target) {
     GoalUnit.Try -> 1.0
     GoalUnit.GoldGram -> goldGramPrice.takeIf { it > 0.0 }
     GoalUnit.Usd -> usdPrice.takeIf { it > 0.0 }
+    GoalUnit.Eur -> eurPrice.takeIf { it > 0.0 }
 }
 
 /** Secili birimin kuru elde mi - ekran birim cipini buna gore kilitler. */
@@ -192,4 +196,19 @@ internal fun trCount(value: Int): String = when (value) {
     8 -> "Sekiz"
     9 -> "Dokuz"
     else -> value.toString()
+}
+
+/**
+ * Kura bagli hedefin kendi birimindeki tutari: "€3.000 · güncel kurla". TL
+ * hedefte null. TL rakam her gun degistigi icin neyin sabit oldugu yazilmali.
+ */
+internal fun Goal.anchorLine(): String? {
+    val units = anchorAmount?.takeIf { isAnchored } ?: return null
+    val text = when (unit) {
+        GoalUnit.Eur -> Money.foreign(units, "EUR", decimals = Money.decimals(units, max = 2))
+        GoalUnit.Usd -> Money.foreign(units, "USD", decimals = Money.decimals(units, max = 2))
+        GoalUnit.GoldGram -> Money.quantity(units, "gr altın", Money.decimals(units, max = 4))
+        GoalUnit.Try -> return null
+    }
+    return "Hedef $text · güncel kurla"
 }

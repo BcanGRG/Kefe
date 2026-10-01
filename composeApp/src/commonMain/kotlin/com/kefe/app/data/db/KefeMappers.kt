@@ -11,6 +11,7 @@ import com.kefe.app.db.Transactions
 import com.kefe.app.domain.model.ActivityEvent
 import com.kefe.app.domain.model.DailySnapshot
 import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.Member
 import com.kefe.app.domain.model.Portfolio
@@ -68,7 +69,10 @@ internal fun Goals.toDomain(): Goal = Goal(
     name = name,
     iconKey = iconKey,
     amount = amount,
-    unit = unit,
+    // Gercek birim anchorUnit'te; unit kolonu eski surumler icin (bkz. 13.sqm).
+    unit = GoalUnit.fromName(anchorUnit)?.takeIf { anchorAmount != null } ?: unit,
+    anchorAmount = anchorAmount?.takeIf { GoalUnit.fromName(anchorUnit) != null },
+    spentAt = spentAt,
     targetDate = KefeDate(targetYear.toInt(), targetMonth.toInt(), targetDay.toInt()),
     monthlyContribution = monthlyContribution,
     isMain = isMain,
