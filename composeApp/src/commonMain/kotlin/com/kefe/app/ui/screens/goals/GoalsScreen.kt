@@ -295,12 +295,15 @@ private fun GoalCard(
         Spacer(Modifier.height(Space.x14))
         Row(Modifier.fillMaxWidth()) {
             Column(Modifier.alignByBaseline()) {
+                // Kura bagli hedefte ana rakam HEDEFIN BIRIMINDE ("€100 / €1.800"),
+                // TL altinda kucuk: kullanici euro biriktiriyor, euroyla bakiyor.
+                val money = goal.money
                 Text(
-                    text = "${Money.tlExact(totalWealth)} / ${Money.tlExact(goal.amount)}",
+                    text = "${money.main(totalWealth)} / ${money.main(goal.amount)}",
                     style = t.body.tabular(),
                     color = c.onSurface,
                 )
-                goal.anchorLine()?.let { line ->
+                goal.tlNote(totalWealth)?.let { line ->
                     Text(line, style = t.micro.tabular(), color = c.onSurfaceMuted)
                 }
             }
@@ -376,7 +379,13 @@ private fun GoalCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     KefeIcon(KefeIcons.Target, null, size = 14.dp, tint = c.onSurfaceMuted)
                     Spacer(Modifier.width(6.dp))
-                    Text(text = it.cardLine(), style = t.caption.tabular(), color = c.onSurface)
+                    AmountWithNote(
+                        prefix = "Tarihe yetişmek için ayda ",
+                        main = it.main,
+                        note = it.note,
+                        style = t.caption,
+                        color = c.onSurface,
+                    )
                 }
             }
         }
@@ -509,7 +518,7 @@ private fun CompletedGroup(
                     }
                     Spacer(Modifier.width(Space.x12))
                     Text(
-                        Money.tlExact(goal.amount),
+                        goal.money.main(goal.amount),
                         style = t.body.tabular(),
                         color = c.onSurfaceMuted,
                     )

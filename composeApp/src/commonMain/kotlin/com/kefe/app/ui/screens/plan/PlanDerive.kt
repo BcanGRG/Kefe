@@ -47,6 +47,9 @@ import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.rawAmount
 import kotlin.math.round
+import com.kefe.app.ui.screens.goals.money
+import com.kefe.app.domain.model.priceKey
+import com.kefe.app.domain.model.unitPerTl
 
 // Plan sekmesinin turetimi. SAF ve Compose'suz: ViewModel yalniz akislari
 // toplar ve niyetleri isler, butun hesap buradadir. NEDEN: turetim ana is
@@ -187,16 +190,14 @@ internal fun currentMonthPlan(inputs: PlanInputs, progress: MonthPlanProgress): 
         .groupBy { it.item.goalId }
         .mapNotNull { (goalId, lines) ->
             val goal = goalId?.let { id -> inputs.goals.firstOrNull { it.id == id } } ?: return@mapNotNull null
-            val weights = lines.mapNotNull { it.plannedTl }
-            // Hicbir kalemin agirligi bilinmiyorsa "₺0" uydurulmaz.
-            val planned = if (weights.isEmpty()) null else weights.sum()
+            val money = goal.money
             val summary = buildString {
-                append("Planlanan ${planned?.let { Money.tlExact(it) } ?: "—"}")
-                if (goal.monthlyContribution > 0.0) append(" · Aylık katkı ${Money.tlExact(goal.monthlyContribution)}")
+                append("Planlanan ${plannedForGoal(goal, lines) ?: "—"}")
+                if (goal.monthlyContribution > 0.0) append(" · Aylık katkı ${money.main(goal.monthlyContribution)}")
             }
             val required = goal.requiredMonthly(goalWealth(goal, inputs.held, inputs.assignments), inputs.today)
                 ?.takeIf { it > 0.0 }
-                ?.let { "Gereken aylık ≈ ${Money.tlExact(it)} (${monthsToTarget(goal, inputs.today)} ay)" }
+                ?.let { "Gereken aylık ≈ ${money.main(it)} (${monthsToTarget(goal, inputs.today)} ay)" }
             GoalMonthPlan(
                 goalId = goal.id,
                 // Hedef cipi yazilmaz: kart zaten o hedefin sayfasinda.
@@ -214,6 +215,29 @@ internal fun currentMonthPlan(inputs: PlanInputs, progress: MonthPlanProgress): 
         summary = card.summary,
         goals = goals,
     )
+}
+
+/**
+ * Kalemlerin bu hedefe planlanan tutari, HEDEFIN BIRIMINDE yazilmis.
+ *
+ * Kura bagli hedefte ayni birimdeki miktar kalemi ADEDIYLE sayilir (100 € =
+ * €100); TL agirligi plan anindaki fiyatla tutuldugu icin bugunku kurla geri
+ * cevirmek planlanan 100 euroyu "€98,70" yapardi. Hicbir kalemin agirligi
+ * bilinmiyorsa null - "₺0" uydurulmaz.
+ */
+internal fun plannedForGoal(goal: Goal, lines: List<PlanItemProgress>): String? {
+    val money = goal.money
+    val unitPerTl = goal.unitPerTl
+    val sameKey = goal.unit.priceKey()
+    if (unitPerTl == null) {
+        val weights = lines.mapNotNull { it.plannedTl }
+        return if (weights.isEmpty()) null else Money.tlExact(weights.sum())
+    }
+    val units = lines.mapNotNull { line ->
+        val item = line.item
+        if (item.assetKey == sameKey && item.mode == PlanTargetMode.Quantity) item.target else line.plannedTl?.let { it * unitPerTl }
+    }
+    return if (units.isEmpty()) null else money.unitText(units.sum())
 }
 
 /** requiredMonthly ile AYNI ay sayimi (ay farki, en az 1). */
@@ -340,10 +364,12 @@ internal fun goalContributionRows(
             goal.requiredMonthly(goalWealth(goal, inputs.held, inputs.assignments), inputs.today)
                 ?.takeIf { it > 0.0 }
         }
+        // Kura bagli hedefte satir hedefin biriminde: "planlanan €100 · gereken €300".
+        val money = goal.money
         val line = buildString {
-            append("planlanan ${plannedTl?.let { Money.tlExact(it) } ?: "—"}")
-            if (monthly > 0.0) append(" / aylık katkı ${Money.tlExact(monthly)}")
-            if (required != null) append(" · gereken ${Money.tlExact(required)}")
+            append("planlanan ${plannedForGoal(goal, planned.getValue(goal.id)) ?: "—"}")
+            if (monthly > 0.0) append(" / aylık katkı ${money.main(monthly)}")
+            if (required != null) append(" · gereken ${money.main(required)}")
         }
         GoalContributionRow(
             goalId = goal.id,

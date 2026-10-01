@@ -6,6 +6,10 @@ import com.kefe.app.domain.KefeClock
 import com.kefe.app.domain.model.ExpenseCategory
 import com.kefe.app.domain.model.ExpenseEntry
 import com.kefe.app.domain.model.Goal
+import com.kefe.app.domain.model.KefeDate
+import com.kefe.app.domain.model.assetKey
+import com.kefe.app.domain.model.priceKey
+import com.kefe.app.domain.model.unitPerTl
 import com.kefe.app.domain.model.GoalAssignment
 import com.kefe.app.domain.model.GoalStatus
 import com.kefe.app.domain.model.MonthlyContribution
@@ -79,9 +83,8 @@ class GoalDetailViewModel(
     fun onIntent(intent: GoalDetailIntent) {
         when (intent) {
             is GoalDetailIntent.SetScenarioContribution -> {
-                _state.value = _state.value.withScenario(
-                    intent.thousands.coerceIn(ScenarioMinThousands, ScenarioMaxThousands),
-                )
+                val scale = _state.value.scenarioScale
+                _state.value = _state.value.withScenario(intent.value.coerceIn(scale.min, scale.max))
             }
 
             GoalDetailIntent.ToggleAllRows -> {
@@ -296,7 +299,7 @@ class GoalDetailViewModel(
             today,
         )
         val projection = goalProjection(goal, wealth, today)
-        val rows = buildRows(months)
+        val rows = buildRows(months, unitContributions(goal, transactions, composing.map { it.position }))
 
         val base = previous.copy(
             stage = GoalDetailStage.Ready,
@@ -341,15 +344,43 @@ class GoalDetailViewModel(
             },
         )
 
-        // Kaydirici hedefin kendi katkisinin bir tik uzerinde acilir: kullanici
-        // "biraz artirsam ne olur" sorusunun cevabini ilk bakista gorur.
-        val start = if (previous.stage == GoalDetailStage.Ready) {
+        // Kaydirici hedefin kendi katkisinin uc adim uzerinde acilir: kullanici
+        // "biraz artirsam ne olur" sorusunun cevabini ilk bakista gorur. Yeri
+        // yalniz olcek degisince (hedef duzenlendi) sifirlanir, kur oynayinca degil.
+        val scale = scenarioScaleOf(goal, today)
+        val start = if (previous.stage == GoalDetailStage.Ready && previous.scenarioScale.sameRange(scale)) {
             previous.scenarioContribution
         } else {
-            ((goal.monthlyContribution / 1000.0).toFloat() + ScenarioOpeningStep)
-                .coerceIn(ScenarioMinThousands, ScenarioMaxThousands)
+            ((goal.monthlyContribution / scale.tlPerUnit).toFloat() + ScenarioOpeningSteps * scale.step)
+                .coerceIn(scale.min, scale.max)
         }
-        return base.withScenario(start)
+        return base.copy(scenarioScale = scale).withScenario(start)
+    }
+
+    /**
+     * Kura bagli hedefte her ayin katkisi HEDEFIN BIRIMINDE: ayni birimdeki
+     * alim/satim ADEDIYLE (100 € = €100), digerleri bugunku kurla. TL hedefte null.
+     */
+    private fun unitContributions(goal: Goal, transactions: List<Transaction>, positions: List<Position>): Map<Int, Double>? {
+        val unitPerTl = goal.unitPerTl ?: return null
+        val sameKey = goal.unit.priceKey()
+        val byId = positions.associateBy { it.id }
+        val byMonth = mutableMapOf<Int, Double>()
+        transactions.forEach { tx ->
+            val position = byId[tx.positionId] ?: return@forEach
+            val units = if (position.assetKey() == sameKey) {
+                if (tx.side == TradeSide.Buy) tx.quantity else -tx.quantity
+            } else {
+                // monthlyContributions ile ayni TL tanimi: alimda komisyon dahil, satista dusulur.
+                unitPerTl * when (tx.side) {
+                    TradeSide.Buy -> tx.quantity * tx.unitPrice + tx.fee
+                    TradeSide.Sell -> -(tx.quantity * tx.unitPrice - tx.fee)
+                }
+            }
+            val ordinal = tx.date.monthOrdinal()
+            byMonth[ordinal] = (byMonth[ordinal] ?: 0.0) + units
+        }
+        return byMonth
     }
 
     /**
@@ -372,11 +403,12 @@ class GoalDetailViewModel(
      * durumu ongormus. Katki sutunu dogru kalir: o defterden geliyor ve artik
      * yalnizca hedefin varliklarini sayiyor.
      */
-    private fun buildRows(months: List<MonthlyContribution>): List<ContributionRow> =
+    private fun buildRows(months: List<MonthlyContribution>, units: Map<Int, Double>?): List<ContributionRow> =
         months.map { month ->
             ContributionRow(
                 monthLabel = "${month.date.monthLabel()} ${month.date.year}",
                 contribution = month.total,
+                unitContribution = units?.let { it[month.date.monthOrdinal()] ?: 0.0 },
                 monthEnd = null,
                 gain = null,
             )
@@ -409,8 +441,40 @@ class GoalDetailViewModel(
 
 // --- Senaryo ---------------------------------------------------------------
 
-/** Kaydirici acilis konumu: mevcut katkinin 15 bin TL uzeri. */
-private const val ScenarioOpeningStep = 15f
+/** Kaydirici acilis konumu: mevcut katkinin uc adim uzeri (TL hedefte 15 bin TL). */
+private const val ScenarioOpeningSteps = 3f
+
+/** Kura bagli hedefin kaydiricisi: [ScenarioUnitIntervals] esit adim, ilk adimdan baslar. */
+private const val ScenarioUnitIntervals = 20
+
+/**
+ * Senaryo olcegi. TL hedefte sabit 30-120 bin TL. Kura bagli hedefte birimde:
+ * ust sinir katkinin ve "tarihe yetismek icin" tutarinin (bos hedef / kalan ay)
+ * iki katina yuvarlanir, adim onun yirmide biri - €1.800 / 6 ay icin €50..€1.000.
+ * Birikime bakilmaz: her alimda kaydiricinin araligi kaymasin.
+ */
+internal fun scenarioScaleOf(goal: Goal, today: KefeDate): ScenarioScale {
+    val unitPerTl = goal.unitPerTl ?: return ScenarioScale.Thousands
+    val months = (goal.targetDate.monthOrdinal() - today.monthOrdinal()).coerceAtLeast(1)
+    val needed = (goal.anchorAmount ?: 0.0) / months
+    val top = niceCeil(2.0 * maxOf(goal.monthlyContribution * unitPerTl, needed))
+    val step = top / ScenarioUnitIntervals
+    return ScenarioScale(
+        min = step.toFloat(),
+        max = top.toFloat(),
+        steps = ScenarioUnitIntervals - 1,
+        tlPerUnit = 1.0 / unitPerTl,
+    )
+}
+
+/** 1, 2, 2,5 ve 5'in on katlarindan [value]'yu karsilayan en kucugu: 600 -> 1.000, 17 -> 20. */
+private fun niceCeil(value: Double): Double {
+    if (value <= 0.0) return 1.0
+    var magnitude = 1.0
+    while (magnitude * 10.0 <= value) magnitude *= 10.0
+    while (magnitude > value) magnitude /= 10.0
+    return listOf(1.0, 2.0, 2.5, 5.0, 10.0).first { it * magnitude >= value } * magnitude
+}
 
 /**
  * Kaydiricinin verdigi katkiyla hedefe varis.
@@ -424,14 +488,14 @@ private const val ScenarioOpeningStep = 15f
  * Karsilastirma artik SIMDIKI PLANA gore: "bu kadar ay erken/gec" derken neye
  * gore erken oldugu bellidir.
  */
-private fun GoalDetailUiState.withScenario(thousands: Float): GoalDetailUiState {
-    val goal = goal ?: return copy(scenarioContribution = thousands)
+private fun GoalDetailUiState.withScenario(value: Float): GoalDetailUiState {
+    val goal = goal ?: return copy(scenarioContribution = value)
 
-    val months = monthsToReach(currentWealth, goal.amount, thousands * 1000.0)
+    val months = monthsToReach(currentWealth, goal.amount, value * scenarioScale.tlPerUnit)
     val baseMonths = monthsToReach(currentWealth, goal.amount, goal.monthlyContribution)
 
     return copy(
-        scenarioContribution = thousands,
+        scenarioContribution = value,
         scenarioMonths = months,
         scenarioArrival = months
             ?.let { today.plusMonths(it) }

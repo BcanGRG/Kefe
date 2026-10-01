@@ -3,7 +3,6 @@ package com.kefe.app.ui.screens.goals
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.KefeDate
-import com.kefe.app.domain.model.isAnchored
 import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.parseTrAmountOrNull
 
@@ -206,27 +205,4 @@ internal fun trCount(value: Int): String = when (value) {
     8 -> "Sekiz"
     9 -> "Dokuz"
     else -> value.toString()
-}
-
-/**
- * Kura bagli hedefin kendi birimindeki tutari: "€3.000 · güncel kurla". TL
- * hedefte null. TL rakam her gun degistigi icin neyin sabit oldugu yazilmali.
- */
-internal fun Goal.anchorLine(): String? {
-    val units = anchorAmount?.takeIf { isAnchored } ?: return null
-    val text = when (unit) {
-        GoalUnit.Eur -> Money.foreign(units, "EUR", decimals = Money.decimals(units, max = 2))
-        GoalUnit.Usd -> Money.foreign(units, "USD", decimals = Money.decimals(units, max = 2))
-        GoalUnit.GoldGram -> Money.quantity(units, "gr altın", Money.decimals(units, max = 4))
-        GoalUnit.Try -> return null
-    }
-    val monthly = contributionAnchor?.let { c ->
-        when (unit) {
-            GoalUnit.Eur -> Money.foreign(c, "EUR", decimals = Money.decimals(c, max = 2))
-            GoalUnit.Usd -> Money.foreign(c, "USD", decimals = Money.decimals(c, max = 2))
-            GoalUnit.GoldGram -> Money.quantity(c, "gr", Money.decimals(c, max = 4))
-            GoalUnit.Try -> null
-        }
-    }
-    return listOfNotNull("Hedef $text", monthly?.let { "aylık $it" }, "güncel kurla").joinToString(" · ")
 }
