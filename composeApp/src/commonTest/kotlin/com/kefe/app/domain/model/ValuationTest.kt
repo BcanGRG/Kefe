@@ -63,6 +63,17 @@ class ValuationTest {
     }
 
     @Test
+    fun elleRozetiDegerlemeFiyatindanGelir() {
+        // Alis fiyati elle yazilmis (bayrak saklaniyor) ama canli fiyatla degerleniyor.
+        val boughtByHand = position().copy(manualPrice = true)
+        assertFalse(boughtByHand.valuedAt(price(), Today).manualPrice)
+        // Degerleme fiyatinin kendisi elle girildiyse rozet kalir.
+        assertTrue(boughtByHand.copy(manualPrice = false).valuedAt(price().copy(isManual = true), Today).manualPrice)
+        // Tahtada fiyat yoksa saklanan deger ve bayrak korunur.
+        assertTrue(boughtByHand.valuedAt(null, Today).manualPrice)
+    }
+
+    @Test
     fun odenecekTutarSatisTarafi() {
         assertEquals(10_018.0, price().buyPrice(), EPS)
     }
