@@ -73,6 +73,7 @@ internal fun Goals.toDomain(): Goal = Goal(
     unit = GoalUnit.fromName(anchorUnit)?.takeIf { anchorAmount != null } ?: unit,
     anchorAmount = anchorAmount?.takeIf { GoalUnit.fromName(anchorUnit) != null },
     spentAt = spentAt,
+    contributionAnchor = contributionAnchor?.takeIf { GoalUnit.fromName(anchorUnit) != null && anchorAmount != null },
     targetDate = KefeDate(targetYear.toInt(), targetMonth.toInt(), targetDay.toInt()),
     monthlyContribution = monthlyContribution,
     isMain = isMain,
