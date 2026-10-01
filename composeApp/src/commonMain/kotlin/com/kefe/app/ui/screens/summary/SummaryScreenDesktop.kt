@@ -72,6 +72,7 @@ import com.kefe.app.ui.theme.Sizes
 import com.kefe.app.ui.theme.Space
 import com.kefe.app.ui.theme.tabular
 import com.kefe.app.ui.format.UnknownChangeText
+import com.kefe.app.ui.screens.goals.money
 
 /**
  * Ozet - masaustu yerlesimi (1440x900 cercevesi).
@@ -416,11 +417,11 @@ private fun DesktopGoalCard(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = buildString {
-                        append(if (masked) Money.masked(4, false) else Money.tlExact(currentWealth))
+                        append(if (masked) Money.masked(4, false) else goal.money.main(currentWealth))
                         append(" / ")
-                        append(Money.tlExact(goal.amount))
+                        append(goal.money.main(goal.amount))
                         append(" · ")
-                        append(if (masked) Money.masked(4, false) else Money.tlExact(remaining))
+                        append(if (masked) Money.masked(4, false) else goal.money.main(remaining))
                         append(" kaldı")
                     },
                     style = t.micro.tabular(),

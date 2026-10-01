@@ -2618,3 +2618,70 @@ sorulsun; plan dışı satıra dokununca "Plana ekle" ya da "Alımı sil".
     · ₺5.523,98" sayfasını açtı.
   - "Plana ekle" editörü Euro, 100 € ve hedef çipleriyle açtı.
   - Kaydedilmeden kapatıldı; kullanıcının alımı yerinde.
+
+## 53 · Kura bağlı hedefte rakamlar hedefin biriminde ✅
+
+**Neydi.** Kullanıcı 1.800 euro biriktiriyor ve "aylık kaç euro" diye bakıyor.
+Hedefin tutarı euroda saklanıyordu ama ekranlar her şeyi TL yazıyordu: "₺0 /
+₺99.354,78", "Kalan ₺99.354,78", senaryoda 30–120 bin TL. İstek: hangi birim
+biriktiriliyorsa gösterim o birimde olsun, TL de küçük olarak köşede kalsın.
+
+Bir de hesap kusuru vardı. Varlık satış (bid), hedef alış (ask) fiyatından
+değerleniyor. Elde tutulan 100 euro, aradaki makas yüzünden hedefte "€99,51"
+görünürdü.
+
+**Ne yapıldı.**
+
+- **Sayım.** `goalWealth`, hedefle aynı birimdeki varlığı (euro hedefinde euro,
+  gram hedefinde 24 ayar gram) **adediyle** ve hedefin kendi kuruyla sayar.
+  100 € = €100. Diğer varlıklar TL değeriyle sayılmaya devam eder. Kısmi
+  atamada atanan adet sayılır.
+- **Gösterim.** `GoalMoney` (`Goal.money`) ve `AmountWithNote` ekleniyor.
+  Ana rakam birimde yazılır, TL yanında küçük ve soluk durur. Çevrim hedefin
+  kendi kuruyla yapılır (`Goal.unitPerTl` = birim tutar ÷ TL tutar), böylece
+  aynı ekrandaki euro rakamları birbirini tutar. TL hedefte değişiklik yok.
+- **Hedef kartı:** "€0 / €1.800", altında "₺0 / ₺99.476,64 · güncel kurla";
+  "Tarihe yetişmek için ayda €300  ₺16.579,44".
+- **Hedef detayı:**
+  - halkanın altı "€0 / €1.800" + TL satırı;
+  - Kalan "€1.800" + TL;
+  - gereken kutusu "€300" + TL;
+  - grafik etiketi "€1.800 hedef";
+  - tahmin cümlesi "Ayda €250 katkıyla…".
+- **Senaryo:** kaydırıcı hedefin biriminde. Üst sınır, katkının ve
+  "boş hedef ÷ kalan ay" tutarının iki katının üstündeki ilk düz sayı; adım
+  bunun yirmide biri. €1.800 / 6 ay için €50…€1.000, €50 adım. TL
+  karşılığı altta yazılır. Aralık birikime bağlı değil (her alımda kaymasın);
+  kur oynayınca kaydırıcının yeri değişmez. TL hedef 30–120 bin TL'de kalır.
+- **Katkı geçmişi:** "Katkı" sütunu birimde. Aynı birimdeki alım/satım
+  adediyle, diğerleri bugünkü kurla.
+- **Özet ana hedef kartı:**
+  - telefonda birim + TL satırı, "€… kaldı";
+  - tablet ve masaüstündeki tek satırda yalnız birim.
+- **Plan:** "Hedeflere katkı" satırı ve hedef detayındaki "Ekim planı"
+  birimde. Aynı birimdeki miktar kalemi adediyle sayılır: plan anındaki
+  fiyatla tutulan TL'den geri çevirmek, planlanan 100 euroyu kur değişince
+  "€98,70" yapardı.
+- TL kalanlar:
+  - getiri satırları (Bugün / Toplam) ve varlık listesindeki değerler (kazanç
+    TL'dir);
+  - hedef düzenleyicideki "Bugünkü kurla" notları.
+- Kullanılmayan `anchorLine` kaldırıldı.
+
+**Doğrulama.**
+
+- **863 masaüstü testi**, hepsi yeşil. Yeni `GoalUnitDisplayTest`:
+  - euronun adediyle, altının TL değeriyle sayılması ve kısmi atama;
+  - TL hedefin değişmemesi;
+  - birim ve TL metinleri;
+  - plan kaleminin €100 kalması;
+  - senaryo ölçeği (€50…€1.000, 19 aralık);
+  - gerçek veritabanıyla detay durumu: "€100", gereken "€283,33", Ekim
+    katkısı 100.
+- **Cihazda**, 1 Ekim 2026, R58N81SAZ1Y, Amsterdam Gezi (€1.800, aylık €250):
+  - kart "€0 / €1.800", "Tarihe yetişmek için ayda €300  ₺16.579,44";
+  - detay: Kalan €1.800, "Aylık katkın €250 · ayda €50 eksik", "Planlanan
+    €50 · Aylık katkı €250", "Gereken aylık ≈ €300 (6 ay)";
+  - senaryo €50…€1.000, "€250 → €400 yaparsanız: Mart 2027";
+  - Plan: "planlanan €50 / aylık katkı €250 · gereken €300". Ev hedefi TL
+    kaldı.

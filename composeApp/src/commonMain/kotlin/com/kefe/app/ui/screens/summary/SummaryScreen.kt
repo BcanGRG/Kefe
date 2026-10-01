@@ -95,6 +95,8 @@ import com.kefe.app.ui.theme.Space
 import com.kefe.app.ui.theme.tabular
 import com.kefe.app.ui.format.UnknownChangeText
 import com.kefe.app.ui.format.changeText
+import com.kefe.app.ui.screens.goals.money
+import com.kefe.app.ui.screens.goals.tlNote
 
 /**
  * Ozet - en kritik ekran. "Toplam ne kadar var, hedefe ne kaldi" sorusunu bir
@@ -682,6 +684,8 @@ private fun MainGoalCard(
     val t = KefeTheme.type
     val progress = goal.progress(currentWealth)
     val remaining = (goal.amount - currentWealth).coerceAtLeast(0.0)
+    // Kura bagli hedefte rakamlar hedefin biriminde ("€100 / €1.800"), TL kucuk.
+    val money = goal.money
 
     KefeCard(modifier = modifier, onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -732,9 +736,9 @@ private fun MainGoalCard(
         Row(Modifier.fillMaxWidth()) {
             Text(
                 text = buildString {
-                    append(if (masked) Money.masked(digits = 4) else Money.tlExact(currentWealth))
+                    append(if (masked) Money.masked(digits = 4) else money.main(currentWealth))
                     append(" / ")
-                    append(Money.tlExact(goal.amount))
+                    append(money.main(goal.amount))
                 },
                 style = t.body.tabular(),
                 color = c.onSurface,
@@ -750,13 +754,17 @@ private fun MainGoalCard(
             )
         }
 
+        if (!masked) {
+            goal.tlNote(currentWealth)?.let { Text(it, style = t.micro.tabular(), color = c.onSurfaceMuted) }
+        }
+
         Spacer(Modifier.height(Space.x8))
         KefeProgressBar(progress = progress)
 
         Spacer(Modifier.height(Space.x10))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = (if (masked) Money.masked(digits = 4) else Money.tlExact(remaining)) + " kaldı",
+                text = (if (masked) Money.masked(digits = 4) else money.main(remaining)) + " kaldı",
                 style = t.caption.tabular(),
                 color = c.onSurfaceMuted,
                 maxLines = 1,

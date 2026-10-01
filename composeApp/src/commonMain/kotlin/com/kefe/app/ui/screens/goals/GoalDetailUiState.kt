@@ -46,6 +46,11 @@ data class ContributionRow(
     val monthLabel: String,
     /** 0.0 ise o ay katki yapilmamistir - tabloda "katkı yok" yazar. */
     val contribution: Double,
+    /**
+     * Kura bagli hedefte ayin katkisi HEDEFIN BIRIMINDE (euro alimi adediyle);
+     * TL hedefte null.
+     */
+    val unitContribution: Double? = null,
     /** O ayin son fotografi. Fotograf yoksa null - "0" yazmak yanlis olurdu. */
     val monthEnd: Double?,
     /** Ay sonu - ay basi - katki. Iki ucundan biri bilinmiyorsa null. */
@@ -111,8 +116,9 @@ data class GoalDetailUiState(
     /** "Hedeften harca" sayfasi; kapaliyken null (bkz. GoalSpend.kt). */
     val spend: SpendSheet? = null,
 
-    /** Senaryo kaydiricisi: aylik katki, BIN TL cinsinden (30..120). */
+    /** Senaryo kaydiricisi: aylik katki, [scenarioScale] biriminde (TL hedefte bin TL). */
     val scenarioContribution: Float = ScenarioMinThousands,
+    val scenarioScale: ScenarioScale = ScenarioScale.Thousands,
     val baseContribution: Double = 0.0,
     /** Senaryonun verdigi varis ayi etiketi: "Ekim 2028". Hesaplanamazsa bos. */
     val scenarioArrival: String = "",
@@ -143,8 +149,29 @@ const val ScenarioMaxThousands: Float = 120f
 /** 30.000 - 120.000 arasi 5.000'lik adimlar -> 18 aralik. */
 const val ScenarioSteps: Int = 18
 
+/**
+ * Senaryo kaydiricisinin olcegi: [min]..[max] kaydirici birimi, [steps] aralik,
+ * bir birim [tlPerUnit] TL.
+ *
+ * TL hedefte 30-120 bin TL. Kura bagli hedefte HEDEFIN BIRIMINDE: €1.800'luk bir
+ * tatil hedefinde ayda €250 (₺13.800) bin TL'lik kaydiricinin en altina (₺30.000)
+ * bile inmiyordu ve kullanici euroyla dusunuyor.
+ */
+data class ScenarioScale(val min: Float, val max: Float, val steps: Int, val tlPerUnit: Double) {
+    /** Bir adim - acilista mevcut katkinin uc adim uzerine cikilir. */
+    val step: Float get() = (max - min) / steps
+
+    /** Kur oynadikca [tlPerUnit] degisir; kaydiricinin yeri yalniz aralik degisince sifirlanir. */
+    fun sameRange(other: ScenarioScale): Boolean = min == other.min && max == other.max && steps == other.steps
+
+    companion object {
+        val Thousands = ScenarioScale(ScenarioMinThousands, ScenarioMaxThousands, ScenarioSteps, 1000.0)
+    }
+}
+
 sealed interface GoalDetailIntent {
-    data class SetScenarioContribution(val thousands: Float) : GoalDetailIntent
+    /** Kaydiricinin degeri, [GoalDetailUiState.scenarioScale] biriminde. */
+    data class SetScenarioContribution(val value: Float) : GoalDetailIntent
     data object ToggleAllRows : GoalDetailIntent
 
     /** "Hedefi kapat" - asilan hedefi tamamlandi olarak isaretler. */

@@ -48,6 +48,16 @@ data class Goal(
 val Goal.isAnchored: Boolean get() = anchorAmount != null && unit != GoalUnit.Try
 
 /**
+ * Bir TL'nin hedefin birimindeki karsiligi (1 / kur); TL hedefte null.
+ *
+ * Kur tutar / birim tutardan bulunur: [amount] zaten guncel kurla hesaplanmis
+ * oldugu icin fiyat tablosunu yeniden aramaya gerek yok ve hedefin butun
+ * rakamlari AYNI kurla birime cevrilir.
+ */
+val Goal.unitPerTl: Double?
+    get() = anchorAmount?.takeIf { isAnchored && amount > 0.0 && it > 0.0 }?.let { it / amount }
+
+/**
  * [unit] kolonuna yazilacak deger: eski bir surumun TANIDIGI deger. Euro'yu
  * bilmeyen surum "Eur" metninde cokerdi; euro hedefi o kolonda TL gorunur,
  * gercek birim anchorUnit'te durur (bkz. 13.sqm).

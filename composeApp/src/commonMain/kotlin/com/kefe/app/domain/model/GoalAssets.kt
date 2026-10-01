@@ -68,9 +68,22 @@ fun goalWealth(
     positions: List<Position>,
     /** positionId -> atama. */
     assignments: Map<String, GoalAssignment>,
-): Double = positions.sumOf { position ->
-    val assignment = assignments[position.id]
-    if (assignment?.goalId != goal.id) 0.0 else assignment.valueIn(position)
+): Double {
+    // Hedefle AYNI birimdeki varlik (euro hedefinde euro, gram hedefinde 24 ayar
+    // gram) ADEDIYLE sayilir, hedefin kendi kuruyla. Varlik satis (bid), hedef
+    // alis (ask) fiyatindan degerlendiginden aradaki makas elde tutulan 100 euroyu
+    // hedefte "€99,51" gosteriyordu; biriktirdigi birimle bakan kullanici €100 bekler.
+    val sameUnitKey = goal.unit.priceKey()?.takeIf { goal.unitPerTl != null }
+    val goalRate = goal.unitPerTl?.let { 1.0 / it }
+    return positions.sumOf { position ->
+        val assignment = assignments[position.id]
+        when {
+            assignment?.goalId != goal.id -> 0.0
+            goalRate != null && position.assetKey() == sameUnitKey ->
+                assignment.effectiveQuantity(position) * goalRate
+            else -> assignment.valueIn(position)
+        }
+    }
 }
 
 /**

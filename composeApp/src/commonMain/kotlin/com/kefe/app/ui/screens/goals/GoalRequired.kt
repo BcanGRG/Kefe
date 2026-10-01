@@ -3,10 +3,9 @@ package com.kefe.app.ui.screens.goals
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.KefeDate
-import com.kefe.app.domain.model.isAnchored
 import com.kefe.app.domain.model.monthOrdinal
 import com.kefe.app.domain.model.requiredMonthly
-import com.kefe.app.ui.format.Money
+import com.kefe.app.domain.model.unitPerTl
 
 /**
  * "Tarihe yetismek icin ayda ne kadar" - hedef karti ve detayi icin.
@@ -30,20 +29,19 @@ data class RequiredMonthly(
     /** Katki gerekeni karsilamiyorsa ayda eksik kalan TL; katki yoksa null. */
     val shortfall: Double? get() = contribution?.let { (tl - it).takeIf { gap -> gap > Tolerance } ?: 0.0 }
 
+    private val money: GoalMoney get() = GoalMoney(unit, unitPerTl)
+
+    /** Ana rakam: "€257,45" ya da TL hedefte "₺14.231,10". */
+    val main: String get() = money.main(tl)
+
+    /** Yanindaki kucuk TL; TL hedefte null. */
+    val note: String? get() = money.note(tl)
+
     /** "€257,45 · ₺14.231,10" ya da TL hedefte "₺14.231,10". */
-    fun amountText(): String = text(tl, withTl = true)
+    fun amountText(): String = note?.let { "$main · $it" } ?: main
 
     /** Hedefin biriminde (kura bagli hedefte yalniz birim, TL hedefte TL). */
-    fun text(valueTl: Double, withTl: Boolean = false): String {
-        val units = unitPerTl?.let { valueTl * it } ?: return Money.tlExact(valueTl)
-        val unitText = when (unit) {
-            GoalUnit.Eur -> Money.foreign(units, "EUR", decimals = Money.decimals(units, max = 2))
-            GoalUnit.Usd -> Money.foreign(units, "USD", decimals = Money.decimals(units, max = 2))
-            GoalUnit.GoldGram -> Money.quantity(units, "gr altın", Money.decimals(units, max = 2))
-            GoalUnit.Try -> return Money.tlExact(valueTl)
-        }
-        return if (withTl) "$unitText · ${Money.tlExact(valueTl)}" else unitText
-    }
+    fun text(valueTl: Double): String = money.main(valueTl)
 
     private companion object {
         /** Kurus alti fark "eksik" sayilmaz. */
@@ -61,7 +59,7 @@ internal fun Goal.requiredMonthlyOf(wealth: Double, today: KefeDate): RequiredMo
         tl = tl,
         unit = unit,
         // Kura bagli hedefte tutar = birim x kur; oran kuru yeniden aramadan verir.
-        unitPerTl = anchorAmount?.takeIf { isAnchored && amount > 0.0 }?.let { it / amount },
+        unitPerTl = unitPerTl,
         // requiredMonthly ile AYNI ay sayimi (ay farki, en az 1).
         months = (targetDate.monthOrdinal() - today.monthOrdinal()).coerceAtLeast(1),
         contribution = monthlyContribution.takeIf { it > 0.0 },

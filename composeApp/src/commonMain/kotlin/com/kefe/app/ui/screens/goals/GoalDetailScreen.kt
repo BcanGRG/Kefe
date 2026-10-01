@@ -89,6 +89,7 @@ import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
 import com.kefe.app.ui.theme.Space
 import com.kefe.app.ui.theme.tabular
+import com.kefe.app.domain.model.GoalUnit
 
 /** Bloklar arasi dikey bosluk - tasarimdaki `margin-bottom: 12px`. */
 private val BlockGap = Space.x12
@@ -747,6 +748,7 @@ private fun RingCard(
 ) {
     val c = KefeTheme.colors
     val surplus = state.currentWealth - goal.amount
+    val money = goal.money
 
     KefeCard(
         modifier = Modifier.padding(horizontal = Space.x16),
@@ -769,15 +771,16 @@ private fun RingCard(
         }
 
         // Tutar halkanin ALTINDA, tam yazimla: burada genislik sinirli degil.
+        // Kura bagli hedefte HEDEFIN BIRIMINDE ("€100 / €1.800"); TL altinda kucuk.
         Text(
-            text = "${Money.tlExact(state.currentWealth)} / ${Money.tlExact(goal.amount)}",
+            text = "${money.main(state.currentWealth)} / ${money.main(goal.amount)}",
             style = KefeTheme.type.body.tabular(),
             color = c.onSurfaceMuted,
             maxLines = 1,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
-        goal.anchorLine()?.let { line ->
+        goal.tlNote(state.currentWealth)?.let { line ->
             Text(
                 text = line,
                 style = KefeTheme.type.caption.tabular(),
@@ -795,13 +798,11 @@ private fun RingCard(
 
         Spacer(Modifier.height(Space.x12))
         Row(horizontalArrangement = Arrangement.spacedBy(Space.x10)) {
+            val left = (-surplus).coerceAtLeast(0.0)
             SunkenInfoBox(
                 label = if (state.exceeded) "Fazla" else "Kalan",
-                value = if (state.exceeded) {
-                    Money.tlSigned(surplus)
-                } else {
-                    Money.tlExact((-surplus).coerceAtLeast(0.0))
-                },
+                value = if (state.exceeded) money.signed(surplus) else money.main(left),
+                note = if (state.exceeded) money.note(surplus) else money.note(left),
                 modifier = Modifier.weight(1f),
             )
             SunkenInfoBox(
@@ -903,7 +904,7 @@ private val GoalDeltaGap = 6.dp
 private val GoalDeltaArrowSize = 14.dp
 
 @Composable
-private fun SunkenInfoBox(label: String, value: String, modifier: Modifier = Modifier) {
+private fun SunkenInfoBox(label: String, value: String, modifier: Modifier = Modifier, note: String? = null) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
     Column(
@@ -919,6 +920,8 @@ private fun SunkenInfoBox(label: String, value: String, modifier: Modifier = Mod
         )
         Spacer(Modifier.height(Space.x4))
         Text(value, style = t.bodyStrong.tabular(), color = c.onSurface)
+        // Kura bagli hedefte ayni rakamin TL'si, kucuk.
+        note?.let { Text(it, style = t.micro.tabular(), color = c.onSurfaceMuted) }
     }
 }
 
@@ -947,7 +950,7 @@ private fun RequiredMonthlyBox(required: RequiredMonthly, assigned: Boolean) {
             color = c.onSurfaceMuted,
         )
         Spacer(Modifier.height(Space.x4))
-        Text(required.amountText(), style = t.bodyStrong.tabular(), color = c.onSurface)
+        AmountWithNote(main = required.main, note = required.note, style = t.bodyStrong, color = c.onSurface)
         Spacer(Modifier.height(Space.x4))
         Text(
             text = required.contributionLine(),
@@ -1034,7 +1037,11 @@ private fun ProjectionCard(goal: Goal, state: GoalDetailUiState) {
             forecast = state.projectionForecast.toPoints(),
             goal = goal.amount,
             // Gercek tutar, eksen etiketi degil - bkz. Ozet duzenleri.
-            goalLabel = "₺${Money.compact(goal.amount, thousandDecimals = 1)} hedef",
+            goalLabel = if (goal.money.inUnit) {
+                "${goal.money.main(goal.amount)} hedef"
+            } else {
+                "₺${Money.compact(goal.amount, thousandDecimals = 1)} hedef"
+            },
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -1114,7 +1121,7 @@ private fun projectionSummary(goal: Goal, state: GoalDetailUiState) = buildAnnot
 
     append("Ayda ")
     withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
-        append(Money.tlExact(goal.monthlyContribution))
+        append(goal.money.main(goal.monthlyContribution))
     }
     append(" katkıyla devam ederseniz hedefe ")
     withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(arrival.formatMonthYear()) }
@@ -1136,7 +1143,10 @@ private fun projectionSummary(goal: Goal, state: GoalDetailUiState) = buildAnnot
 private fun ScenarioCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) -> Unit) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
-    val amount = state.scenarioContribution.toDouble() * 1000.0
+    val scale = state.scenarioScale
+    val amount = state.scenarioContribution.toDouble() * scale.tlPerUnit
+    // Kura bagli hedefte kaydirici ve cumle hedefin biriminde, TL kucuk.
+    val money = state.goal?.money ?: GoalMoney(GoalUnit.Try, null)
 
     KefeCard(modifier = Modifier.padding(horizontal = Space.x16)) {
         Text("Senaryo", style = t.bodyStrong, color = c.onSurface)
@@ -1151,29 +1161,38 @@ private fun ScenarioCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) 
             )
             Spacer(Modifier.weight(1f))
             Text(
-                Money.tlExact(amount),
+                money.main(amount),
                 style = t.h2.tabular(),
                 color = c.accent,
                 modifier = Modifier.alignByBaseline(),
+            )
+        }
+        money.note(amount)?.let { tl ->
+            Text(
+                "$tl bugünkü kurla",
+                style = t.micro.tabular(),
+                color = c.onSurfaceMuted,
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
 
         KefeSlider(
             value = state.scenarioContribution,
             onValueChange = { onIntent(GoalDetailIntent.SetScenarioContribution(it)) },
-            valueRange = ScenarioMinThousands..ScenarioMaxThousands,
-            steps = ScenarioSteps,
+            valueRange = scale.min..scale.max,
+            steps = scale.steps,
         )
 
         Row(Modifier.fillMaxWidth()) {
             Text(
-                Money.tlExact(ScenarioMinThousands.toDouble() * 1000.0),
+                money.main(scale.min.toDouble() * scale.tlPerUnit),
                 style = t.micro.tabular(),
                 color = c.onSurfaceMuted,
             )
             Spacer(Modifier.weight(1f))
             Text(
-                Money.tlExact(ScenarioMaxThousands.toDouble() * 1000.0),
+                money.main(scale.max.toDouble() * scale.tlPerUnit),
                 style = t.micro.tabular(),
                 color = c.onSurfaceMuted,
             )
@@ -1188,7 +1207,7 @@ private fun ScenarioCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) 
                 .padding(Space.x12),
         ) {
             Text(
-                text = scenarioSentence(state, amount),
+                text = scenarioSentence(state, amount, money),
                 style = t.caption.copy(lineHeight = 20.sp),
                 color = c.onSurface,
             )
@@ -1204,8 +1223,8 @@ private fun ScenarioCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) 
  * olmali. Once hedef TARIHINE gore kiyaslaniyordu ve katkiyi artirmak "8 ay
  * sonra" diyebiliyordu.
  */
-private fun scenarioSentence(state: GoalDetailUiState, amount: Double): String {
-    val head = "Aylık katkıyı ${Money.tlExact(state.baseContribution)} → ${Money.tlExact(amount)} yaparsanız: "
+private fun scenarioSentence(state: GoalDetailUiState, amount: Double, money: GoalMoney): String {
+    val head = "Aylık katkıyı ${money.main(state.baseContribution)} → ${money.main(amount)} yaparsanız: "
 
     val months = state.scenarioMonths
         ?: return head + "hedefe varış yine de hesaplanamıyor."
@@ -1295,6 +1314,7 @@ private fun MilestonesCard(state: GoalDetailUiState) {
 private fun HistoryCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) -> Unit) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
+    val money = state.goal?.money ?: GoalMoney(GoalUnit.Try, null)
     val rows = if (state.showAllRows) state.rows else state.collapsedRows
 
     KefeCard(modifier = Modifier.padding(horizontal = Space.x16)) {
@@ -1358,7 +1378,12 @@ private fun HistoryCard(state: GoalDetailUiState, onIntent: (GoalDetailIntent) -
                     color = if (muted) c.onSurfaceMuted else c.onSurface,
                 )
                 BodyCell(
-                    text = if (muted) "katkı yok" else Money.tlSigned(row.contribution),
+                    // Kura bagli hedefte ayin katkisi birimde: euro alimi adediyle.
+                    text = when {
+                        muted -> "katkı yok"
+                        row.unitContribution != null -> money.signedUnits(row.unitContribution)
+                        else -> Money.tlSigned(row.contribution)
+                    },
                     weight = 1f,
                     align = TextAlign.End,
                     color = if (muted) c.onSurfaceMuted else c.onSurface,
