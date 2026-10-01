@@ -2276,7 +2276,7 @@ verebiliyoruz". "Diğer"e yazılan her şey tek bir satırda toplanıyordu.
 - Cihazda, 27 Eylül 2026, R58N81SAZ1Y: "Kalem ekle" → "Tatil" → "Ekle" ile
   listeye "TATİL" alanı geldi. Sayfa kaydedilmeden kapatıldı.
 
-## 47 · Aylık giderler ile harcamalar ayrıldı ⏳
+## 47 · Aylık giderler ile harcamalar ayrıldı ✅
 
 **Neydi.** Kullanıcı aylık gider ile harcamanın birbirine karıştığını söyledi.
 Kira ve faturalar gibi önceden bilinen kalemlere aylık limit koyuyordu, gün
@@ -2337,5 +2337,13 @@ diyordu.
   - `PlanDeriveTest`: kullanıcının Ekim örneği (₺32.000 + ₺370 → kalan
     ₺137.630), aşım dahil aylık gider, gelir aşımı, yatırım planı cümlesi,
     iki kartın satırları.
-- Cihazda henüz doğrulanmadı: telefon bağlı değildi, emülatör de yanıt
-  vermedi. Bağlanınca doğrulanacak; bu yüzden başlık ⏳.
+- Cihazda, 1 Ekim 2026, R58N81SAZ1Y, kullanıcının gerçek Ekim verisiyle:
+  - Para akışı: "Aylık giderler ₺89.500 · 11 kalem · harcanan ₺2.598", "Plan
+    dışı harcamalar ₺370 · Halisaha", "Yatırım ₺0 · planlanan ₺27.956",
+    "Kalan ₺80.130". Eski ekran ₺167.032 gösteriyordu.
+  - Çubuk "gider %53 · yatırım %0 · kalan %47"; cümle "Yatırım planı
+    tamamlanınca ₺52.174 kalır."
+  - Aylık giderler kartı: Konut/Kira ₺25.000 (çubuksuz), Kredi Kartı Limit
+    ₺1.050 / ₺15.000, Dışarıda yemek ₺1.175 / ₺5.000 …
+  - Harcamalar kartı: "₺2.968 · Plan dışı ₺370"; Halisaha "plan dışı"
+    rozetiyle görünüyor.
