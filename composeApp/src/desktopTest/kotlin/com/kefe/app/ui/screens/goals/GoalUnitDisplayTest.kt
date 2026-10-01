@@ -24,6 +24,7 @@ import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.YearMonth
 import com.kefe.app.domain.model.goalWealth
 import com.kefe.app.domain.model.monthPlanProgress
+import com.kefe.app.testing.TestMain
 import com.kefe.app.ui.screens.plan.plannedForGoal
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -34,10 +35,7 @@ import kotlin.test.assertNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
@@ -48,11 +46,14 @@ import kotlinx.coroutines.withTimeout
 @OptIn(ExperimentalCoroutinesApi::class)
 class GoalUnitDisplayTest {
 
+    /** Kurulan VM testten sonra durdurulur (bkz. [TestMain]). */
+    private val main = TestMain()
+
     @BeforeTest
-    fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
+    fun setUp() = main.install()
 
     @AfterTest
-    fun tearDown() = Dispatchers.resetMain()
+    fun tearDown() = main.release()
 
     /** €1.800 Nisan 2027, euro alis kuru 55,27 -> ₺99.486. */
     private val trip = Goal(
@@ -155,8 +156,10 @@ class GoalUnitDisplayTest {
         )
         portfolio.upsertGoal(trip)
         portfolio.assignPositionToGoal("pos_eur_try", "g_trip", GoalAssignment.WholePosition)
-        val vm = GoalDetailViewModel(
-            portfolio, clock, "g_trip", SqlDelightPlanRepository(database, clock), SqlDelightPreferencesRepository(database),
+        val vm = main.track(
+            GoalDetailViewModel(
+                portfolio, clock, "g_trip", SqlDelightPlanRepository(database, clock), SqlDelightPreferencesRepository(database),
+            ),
         )
 
         val state = withContext(Dispatchers.Default.limitedParallelism(1)) {
