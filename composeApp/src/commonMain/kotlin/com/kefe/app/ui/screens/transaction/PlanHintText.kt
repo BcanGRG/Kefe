@@ -35,7 +35,7 @@ internal fun planHintOf(
     val left = when {
         line.remaining <= 0.0 -> "tamamlandı"
         item.mode == PlanTargetMode.Quantity -> "kalan ${quantityLabel(line.remaining, item.assetKey)}"
-        else -> "kalan ${Money.tl(line.remaining)}"
+        else -> "kalan ${Money.tlExact(line.remaining)}"
     }
     val text = listOfNotNull(
         "$month planında: ${planTargetText(item.mode, item.target, item.assetKey)}",

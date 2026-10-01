@@ -292,7 +292,7 @@ private fun GoalCard(
         Spacer(Modifier.height(Space.x14))
         Row(Modifier.fillMaxWidth()) {
             Text(
-                text = "${Money.tl(totalWealth)} / ${Money.tl(goal.amount)}",
+                text = "${Money.tlExact(totalWealth)} / ${Money.tlExact(goal.amount)}",
                 style = t.body.tabular(),
                 color = c.onSurface,
                 modifier = Modifier.alignByBaseline(),
@@ -492,7 +492,7 @@ private fun CompletedGroup(
                     }
                     Spacer(Modifier.width(Space.x12))
                     Text(
-                        Money.tl(goal.amount),
+                        Money.tlExact(goal.amount),
                         style = t.body.tabular(),
                         color = c.onSurfaceMuted,
                     )

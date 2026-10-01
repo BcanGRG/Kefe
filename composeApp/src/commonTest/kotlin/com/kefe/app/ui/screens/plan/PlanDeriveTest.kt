@@ -149,7 +149,7 @@ class PlanDeriveTest {
         )
         val row = planContent(inputs).goalContributions.single()
         // Birikim 67.000 (10 gr x 6.700); 12 ayda 500.000'e: (500.000 - 67.000) / 12.
-        assertEquals("planlanan ₺67.330 / aylık katkı ₺50.000 · gereken ₺36.083", row.line)
+        assertEquals("planlanan ₺67.330 / aylık katkı ₺50.000 · gereken ₺36.083,33", row.line)
         assertEquals(1f, row.ratio)
         assertEquals("Araba", row.name)
     }
@@ -180,7 +180,7 @@ class PlanDeriveTest {
         assertNull(goal.rows.single().goalName)
         assertEquals("Planlanan ₺67.330 · Aylık katkı ₺50.000", goal.summary)
         // requiredMonthly ile ayni ay sayimi: Ekim 2026 -> Ekim 2027 = 12 ay.
-        assertEquals("Gereken aylık ≈ ₺36.083 (12 ay)", goal.requiredLine)
+        assertEquals("Gereken aylık ≈ ₺36.083,33 (12 ay)", goal.requiredLine)
     }
 
     @Test
@@ -559,6 +559,21 @@ class PlanDeriveTest {
         assertEquals("₺13.300", card.totalLine)
         assertEquals("Plan dışı ₺1.000", card.unplannedLine)
         assertEquals(listOf(true, false), card.recent.map { it.unplanned })
+    }
+
+    @Test
+    fun `tutarlar kurusu kirpmaz`() {
+        val book = MonthBook(
+            oct,
+            expenses = listOf(expense("e1", 2, 95.0), expense("e2", 3, 277.5)),
+            budgets = listOf(ExpenseBudget("b1", oct, ExpenseCategory.Groceries, 7_000.0)),
+        )
+        val card = assertNotNull(planContent(inputs(books = listOf(book))).expenses)
+        // Once "₺373 / ₺7.000" ve "harcanan ₺373" yaziyordu.
+        assertEquals("₺372,50 / ₺7.000", card.categories.single().amounts)
+        assertEquals("1 kalem · harcanan ₺372,50", card.plannedLine)
+        assertEquals("₺372,50", card.totalLine)
+        assertEquals("₺277,50", card.recent.first().amount)
     }
 
     @Test

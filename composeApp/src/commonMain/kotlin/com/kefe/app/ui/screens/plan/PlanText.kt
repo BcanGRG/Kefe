@@ -84,7 +84,7 @@ internal fun quantityLabel(value: Double, assetKey: String): String =
 /** Hedef metni: miktar hedefinde birimiyle ("10 gr"), tutar hedefinde TL ("₺3.000"). */
 internal fun planTargetText(mode: PlanTargetMode, target: Double, assetKey: String): String = when (mode) {
     PlanTargetMode.Quantity -> quantityLabel(target, assetKey)
-    PlanTargetMode.Amount -> Money.tl(target)
+    PlanTargetMode.Amount -> Money.tlExact(target)
 }
 
 /** Satirin ilerlemesi: "6 / 10 gr", "300 / 500 $", "₺2.000 / ₺3.000". */
@@ -93,7 +93,7 @@ internal fun progressText(p: PlanItemProgress): String = when (p.item.mode) {
         "${quantityText(p.actual, p.item.unit)} / ${quantityText(p.item.target, p.item.unit)}",
         planUnitLabel(p.item.assetKey),
     )
-    PlanTargetMode.Amount -> "${Money.tl(p.actual)} / ${Money.tl(p.item.target)}"
+    PlanTargetMode.Amount -> "${Money.tlExact(p.actual)} / ${Money.tlExact(p.item.target)}"
 }
 
 /**
@@ -109,7 +109,7 @@ internal fun rowNotes(p: PlanItemProgress, relation: MonthRelation): List<String
         add(
             when (p.item.mode) {
                 PlanTargetMode.Quantity -> "+${withUnit(quantityText(p.over, p.item.unit), unit)} fazla"
-                PlanTargetMode.Amount -> "+${Money.tl(p.over)} fazla"
+                PlanTargetMode.Amount -> "+${Money.tlExact(p.over)} fazla"
             },
         )
     }
@@ -117,7 +117,7 @@ internal fun rowNotes(p: PlanItemProgress, relation: MonthRelation): List<String
         val prefix = if (relation == MonthRelation.Current) "Bu ay" else "Ay içinde"
         val amount = when (p.item.mode) {
             PlanTargetMode.Quantity -> withUnit(quantityText(p.soldQuantity, p.item.unit), unit)
-            PlanTargetMode.Amount -> Money.tl(p.soldTl)
+            PlanTargetMode.Amount -> Money.tlExact(p.soldTl)
         }
         add("$prefix $amount satıldı")
     }

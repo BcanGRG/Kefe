@@ -619,7 +619,7 @@ fun PlanItemEditor.estimateText(): String? {
     if (mode != PlanTargetMode.Quantity) return null
     val price = unitPrice?.takeIf { it > 0.0 } ?: return null
     val target = targetText.parseTrAmountOrNull()?.takeIf { it > 0.0 } ?: return null
-    return "≈ ${Money.tl(target * price)} (güncel fiyatla)"
+    return "≈ ${Money.tlExact(target * price)} (güncel fiyatla)"
 }
 
 /**
@@ -645,7 +645,7 @@ fun CopyDraftUi.writableCount(): Int = rows.toItems(target, carry) { null }.size
 fun BudgetEditor.totalLine(): String {
     val total = texts.values.sumOf { it.parseTrAmountOrNull()?.takeIf { v -> v > 0.0 } ?: 0.0 }
     val share = income?.takeIf { it > 0.0 }?.let { " · gelirin ${trPercentOf(total / it)}" }.orEmpty()
-    return "Toplam ${Money.tl(total)}$share"
+    return "Toplam ${Money.tlExact(total)}$share"
 }
 
 /** Pozisyon anahtarindaki kod bicimi (AssetKey.kt ile ayni). */

@@ -413,11 +413,11 @@ private fun TabletGoalCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = buildString {
-                    append(if (masked) Money.masked(4, false) else Money.tl(currentWealth))
+                    append(if (masked) Money.masked(4, false) else Money.tlExact(currentWealth))
                     append(" / ")
-                    append(Money.tl(goal.amount))
+                    append(Money.tlExact(goal.amount))
                     append(" · ")
-                    append(if (masked) Money.masked(4, false) else Money.tl(remaining))
+                    append(if (masked) Money.masked(4, false) else Money.tlExact(remaining))
                     append(" kaldı")
                 },
                 style = t.caption.tabular(),
@@ -468,7 +468,7 @@ private fun MonthCard(totals: PortfolioTotals, masked: Boolean, plan: CurrentMon
                 Spacer(Modifier.height(Space.x4))
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
-                        text = if (masked) Money.masked(4, false) else Money.tl(totals.monthAdded),
+                        text = if (masked) Money.masked(4, false) else Money.tlExact(totals.monthAdded),
                         style = t.h2.tabular(),
                         color = c.onSurface,
                     )
@@ -477,7 +477,7 @@ private fun MonthCard(totals: PortfolioTotals, masked: Boolean, plan: CurrentMon
                     if (totals.monthTarget > 0.0) {
                         Spacer(Modifier.width(Space.x8))
                         Text(
-                            text = "/ ${Money.tl(totals.monthTarget)} hedef",
+                            text = "/ ${Money.tlExact(totals.monthTarget)} hedef",
                             style = t.caption.tabular(),
                             color = c.onSurfaceMuted,
                         )
@@ -562,7 +562,7 @@ private fun AllocationCard(allocation: List<AllocationSlice>, total: Double, mas
                             text = if (masked) {
                                 Money.masked(4, false)
                             } else {
-                                Money.tl(slice.value)
+                                Money.tlExact(slice.value)
                             },
                             style = t.caption.tabular(),
                             color = c.onSurface,
@@ -618,7 +618,7 @@ private fun NetWorthCard(state: SummaryUiState) {
             selectedValue = if (state.masked) {
                 Money.masked(4, false)
             } else {
-                Money.tl(state.netWorthTotal.last())
+                Money.tlExact(state.netWorthTotal.last())
             },
             modifier = Modifier.fillMaxWidth().height(180.dp),
         )
@@ -701,7 +701,7 @@ private fun ActivityCard(
                 )
                 event.amount?.let { amount ->
                     Text(
-                        text = if (masked) Money.masked(4, false) else Money.tl(amount),
+                        text = if (masked) Money.masked(4, false) else Money.tlExact(amount),
                         style = t.caption.tabular(),
                         color = c.onSurface,
                         maxLines = 1,
