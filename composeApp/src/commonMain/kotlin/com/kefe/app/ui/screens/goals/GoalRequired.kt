@@ -3,11 +3,9 @@ package com.kefe.app.ui.screens.goals
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.KefeDate
-import com.kefe.app.domain.model.isAnchored
 import com.kefe.app.domain.model.monthOrdinal
 import com.kefe.app.domain.model.requiredMonthly
 import com.kefe.app.domain.model.unitPerTl
-import com.kefe.app.ui.format.Money
 
 /**
  * "Tarihe yetismek icin ayda ne kadar" - hedef karti ve detayi icin.

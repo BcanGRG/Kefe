@@ -3,7 +3,6 @@ package com.kefe.app.ui.screens.goals
 import com.kefe.app.domain.model.Goal
 import com.kefe.app.domain.model.GoalUnit
 import com.kefe.app.domain.model.KefeDate
-import com.kefe.app.ui.format.Money
 import com.kefe.app.ui.format.parseTrAmountOrNull
 
 /** Ekranin veri durumu. Tasarimda liste ve bos durum ayri cerceveler. */
