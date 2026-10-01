@@ -342,6 +342,9 @@ sealed interface PlanSheet {
     data class Income(val editor: IncomeEditor) : PlanSheet
     data class Expense(val editor: ExpenseEditor) : PlanSheet
     data class Budget(val editor: BudgetEditor) : PlanSheet
+
+    /** Ayin bir varliktaki alimlari: kalem silinirken ve plan disi satirda (bkz. PlanPurchaseSheet). */
+    data class Purchase(val sheet: PurchaseSheet) : PlanSheet
 }
 
 /**
@@ -513,7 +516,19 @@ sealed interface PlanIntent {
     data class ItemStep(val up: Boolean) : PlanIntent
     data class ItemGoal(val goalId: String?) : PlanIntent
     data object SaveItem : PlanIntent
+
+    /** Alimi sayilmis kalemde once sorar (bkz. PlanPurchaseSheet); yoksa hemen siler. */
     data object DeleteItem : PlanIntent
+
+    // --- Alim sayfasi (kalem silme ve plan disi alim) ---
+    /** "Plan dışı alımlar" satiri: planli varlikta kalem editoru, yoksa alim sayfasi. */
+    data class OpenExtra(val assetKey: String) : PlanIntent
+    /** Kalemi siler, alim varliklarda kalir. */
+    data object DeleteItemOnly : PlanIntent
+    /** Ayin alimlarini varliktan siler; kalem silinirken acildiysa kalemi de. */
+    data object DeletePurchases : PlanIntent
+    /** Alinan miktarla dolu bir kalem editoru acar. */
+    data object AddPurchaseToPlan : PlanIntent
 
     // --- Kopyala/Devir ---
     data class CopyCarry(val assetKey: String, val carry: Boolean) : PlanIntent

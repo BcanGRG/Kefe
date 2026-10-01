@@ -2567,3 +2567,54 @@ gereken her açılışta yeniden ölçülen birikimden hesaplanır.
   - Amsterdam Gezi (€1.800, Nisan 2027, varlık ayrılmamış): kartta ve
     detayda "€300 · ₺16.559,13".
   - Ev: "₺77.329,16".
+
+## 52 · Plan kalemi silerken alım ve plan dışı alımın çözümü ✅
+
+**Neydi.** Kullanıcı Ekim planında 100 € aldı, sonra kalemi sildi. Alım
+varlıklarda kaldı ve "Plan dışı alımlar"da görünmeye başladı; kullanıcı bunu
+beklemiyordu. Plan kalemi alımlara doğrudan bağlı değil: o ayın aynı
+varlıktaki alımları kaleme sayılıyor. Kalem silinince eşleşecek bir şey
+kalmıyor ve alım plan dışına düşüyor. Plan dışı satırdan bir şey yapmak da
+mümkün değildi.
+
+**Kararlar** (ikisi de önerilen seçenek): alımı sayılmış kalem silinirken
+sorulsun; plan dışı satıra dokununca "Plana ekle" ya da "Alımı sil".
+
+**Ne yapıldı.**
+
+- Yeni **alım sayfası** (`PlanPurchaseSheet`). Ayın o varlıktaki alımlarını
+  gösterir ("1 alım · 100 € · ₺5.523,98") ve her seçeneğin ne yaptığını yazar.
+- **Kalem silme:**
+  - Ayda alımı olan kalemde "Sil" önce sayfayı açar.
+  - "Yalnız planı sil": kalem gider, alım plan dışı kalır.
+  - "Alımı da sil": ayın alımları da silinir; pozisyon miktarı ve hedef ataması
+    depoda yeniden hesaplanır.
+  - Alımı olmayan kalem eskisi gibi sorulmadan silinir.
+- **Plan dışı satır:**
+  - "Planda yok" satırı sayfayı açar.
+  - "Plana ekle" alınan miktarla dolu bir kalem editörü açar (hedef seçilip
+    kaydedilir). Tutar ile planlanan varlıklarda ödenen TL yazılır.
+  - "Alımı sil" ayın alımlarını varlıktan siler.
+  - "Hedefin üstünde" satırı kalemin kendi editörünü açar.
+- Silinen yalnız o ayın **alımlarıdır**; satışlara dokunulmaz. Açık sayfa
+  ikinci cihazdan gelen değişiklikle tazelenir.
+
+**Doğrulama.**
+
+- **857 masaüstü testi**, hepsi yeşil. `PlanViewModelTest`'e 6 senaryo eklendi:
+  - alımı sayılmış kalemde soru, "Yalnız planı sil" sonrası alımın plan dışı
+    kalması;
+  - "Alımı da sil" ile kalemin ve alımın gitmesi;
+  - alımsız kalemin sorulmadan silinmesi;
+  - plan dışı alımın plana eklenince 2 gr ile açılıp kaydedilmesi ve kartın
+    kalkması;
+  - plan dışı alımın silinmesi;
+  - "Hedefin üstünde" satırının editörü açması.
+- İlk tam koşuda var olan bir test ("kendi kalemi yazılır…") bir kez
+  `UnconfinedTestCoroutineDispatcher` hatası verdi. Bu iş o yola dokunmuyor;
+  tekrar koşuda geçti.
+- **Cihazda**, 1 Ekim 2026, R58N81SAZ1Y:
+  - Plan dışı Euro satırı "Euro · Plan dışı alım · Ekim 2026 · 1 alım · 100 €
+    · ₺5.523,98" sayfasını açtı.
+  - "Plana ekle" editörü Euro, 100 € ve hedef çipleriyle açtı.
+  - Kaydedilmeden kapatıldı; kullanıcının alımı yerinde.

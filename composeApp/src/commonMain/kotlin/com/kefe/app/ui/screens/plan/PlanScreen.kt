@@ -114,7 +114,7 @@ private fun PlanBody(
     ) {
         content.investment?.let { InvestmentPlanCard(it, onIntent) }
         content.emptyPlan?.let { EmptyPlanCardView(it, onIntent) }
-        content.extras?.let { ExtrasCardView(it) }
+        content.extras?.let { ExtrasCardView(it, onIntent) }
         if (content.goalContributions.isNotEmpty()) {
             GoalContributionCard(content.goalContributions, onOpenGoal)
         }
@@ -435,7 +435,7 @@ private fun EmptyPlanCardView(card: EmptyPlanCard, onIntent: (PlanIntent) -> Uni
 // --- Plan disi alimlar -----------------------------------------------------------
 
 @Composable
-private fun ExtrasCardView(card: ExtrasCard) {
+private fun ExtrasCardView(card: ExtrasCard, onIntent: (PlanIntent) -> Unit) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
@@ -460,6 +460,8 @@ private fun ExtrasCardView(card: ExtrasCard) {
                 value = row.amount,
                 leadingIcon = row.assetClass?.icon() ?: KefeIcons.Wallet,
                 leadingTint = row.assetClass?.let { c.assetClass(it.color()) } ?: c.onSurfaceMuted,
+                // Dokununca plana eklenir ya da alim silinir (bkz. PlanPurchaseSheet).
+                onClick = { onIntent(PlanIntent.OpenExtra(row.assetKey)) },
             )
         }
     }
