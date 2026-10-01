@@ -2,15 +2,12 @@ package com.kefe.app.ui.screens.account
 
 import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.AuthState
+import com.kefe.app.testing.TestMain
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -30,11 +27,14 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class SignInFlowTest {
 
+    /** Kurulan VM'ler testten sonra durdurulur (bkz. [TestMain]). */
+    private val main = TestMain()
+
     @BeforeTest
-    fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
+    fun setUp() = main.install()
 
     @AfterTest
-    fun tearDown() = Dispatchers.resetMain()
+    fun tearDown() = main.release()
 
     /** Dogrulamayi elle bitirilen sahte kimlik: "Kontrol ediliyor…" ani yakalanir. */
     private class GatedAuth : AuthRepository {
@@ -56,7 +56,7 @@ class SignInFlowTest {
 
     @Test
     fun `acilis onceki denemenin izini siler`() = runTest {
-        val vm = LoginViewModel(GatedAuth(), MemoryPreferences())
+        val vm = main.track(LoginViewModel(GatedAuth(), MemoryPreferences()))
         vm.toCodeStep()
         vm.onIntent(LoginIntent.VerifyCode)
         assertTrue(vm.state.value.signedIn)
@@ -74,7 +74,7 @@ class SignInFlowTest {
 
     @Test
     fun `yeniden giris e-postayla dolu acilir`() = runTest {
-        val vm = LoginViewModel(GatedAuth(), MemoryPreferences())
+        val vm = main.track(LoginViewModel(GatedAuth(), MemoryPreferences()))
         vm.onIntent(LoginIntent.Begin(" burak@k.app "))
         assertEquals("burak@k.app", vm.state.value.email)
         assertTrue(vm.state.value.canSendCode)
@@ -85,7 +85,7 @@ class SignInFlowTest {
         val auth = GatedAuth()
         val gate = CompletableDeferred<Result<Unit>>()
         auth.verifyGate = gate
-        val vm = LoginViewModel(auth, MemoryPreferences())
+        val vm = main.track(LoginViewModel(auth, MemoryPreferences()))
         vm.toCodeStep()
         vm.onIntent(LoginIntent.VerifyCode)
         assertTrue(vm.state.value.verifying)
@@ -103,7 +103,7 @@ class SignInFlowTest {
         val auth = GatedAuth()
         val gate = CompletableDeferred<Result<Unit>>()
         auth.verifyGate = gate
-        val vm = LoginViewModel(auth, MemoryPreferences())
+        val vm = main.track(LoginViewModel(auth, MemoryPreferences()))
         vm.toCodeStep()
         vm.onIntent(LoginIntent.VerifyCode)
 

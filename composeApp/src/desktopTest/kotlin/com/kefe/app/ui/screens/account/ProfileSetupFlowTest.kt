@@ -19,15 +19,13 @@ import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.AuthSession
 import com.kefe.app.domain.repository.AuthState
 import com.kefe.app.domain.repository.PreferenceKeys
+import com.kefe.app.testing.TestMain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
@@ -52,11 +50,14 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProfileSetupFlowTest {
 
+    /** Kurulan VM'ler ([Env.vm]) testten sonra durdurulur (bkz. [TestMain]). */
+    private val main = TestMain()
+
     @BeforeTest
-    fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
+    fun setUp() = main.install()
 
     @AfterTest
-    fun tearDown() = Dispatchers.resetMain()
+    fun tearDown() = main.release()
 
     private class FlowAuth(signedIn: Boolean) : AuthRepository {
         val state = MutableStateFlow<AuthState>(
@@ -96,7 +97,7 @@ class ProfileSetupFlowTest {
         }
     }
 
-    private class Env(signedIn: Boolean) {
+    private inner class Env(signedIn: Boolean) {
         val database: KefeDatabase
         val auth = FlowAuth(signedIn)
         val api = FlowApi()
@@ -113,9 +114,11 @@ class ProfileSetupFlowTest {
             prefs = SqlDelightPreferencesRepository(database)
             val sink = SyncLocalSink(database)
             val pull = PullEngine(auth, api, sink)
-            vm = ProfileSetupViewModel(
-                repo, prefs, auth, pull,
-                AccountLinker(pull, sink, prefs, FixedKefeClock(millis = 9_000L)),
+            vm = main.track(
+                ProfileSetupViewModel(
+                    repo, prefs, auth, pull,
+                    AccountLinker(pull, sink, prefs, FixedKefeClock(millis = 9_000L)),
+                ),
             )
         }
 

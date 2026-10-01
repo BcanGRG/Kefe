@@ -15,6 +15,7 @@ import com.kefe.app.domain.repository.PriceBoard
 import com.kefe.app.domain.repository.PriceFreshness
 import com.kefe.app.domain.repository.PriceRepository
 import com.kefe.app.domain.repository.RefreshOutcome
+import com.kefe.app.testing.TestMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -28,10 +29,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
@@ -39,11 +37,14 @@ import kotlinx.coroutines.withTimeout
 @OptIn(ExperimentalCoroutinesApi::class)
 class GoalContributionUnitTest {
 
+    /** Kurulan VM'ler ([env]) testten sonra durdurulur (bkz. [TestMain]). */
+    private val main = TestMain()
+
     @BeforeTest
-    fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
+    fun setUp() = main.install()
 
     @AfterTest
-    fun tearDown() = Dispatchers.resetMain()
+    fun tearDown() = main.release()
 
     private class Prices(ask: Double) : PriceRepository {
         val board = MutableStateFlow(
@@ -70,7 +71,7 @@ class GoalContributionUnitTest {
         KefeDatabase.Schema.create(driver)
         val clock = FixedKefeClock(KefeDate(2026, 10, 1), millis = 1_000L)
         val repo = SqlDelightPortfolioRepository(createKefeDatabase(driver), clock, prices)
-        return repo to GoalsViewModel(repo, prices, clock)
+        return repo to main.track(GoalsViewModel(repo, prices, clock))
     }
 
     private fun GoalsViewModel.editor() = assertNotNull(state.value.editor)
