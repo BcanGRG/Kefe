@@ -2529,3 +2529,41 @@ ayda euro biriktiriyor ve katkıyı da euro olarak koymak istedi.
   - €250 → "Bugünkü kurla ayda ₺13.817,18".
   - "Katkı TL"ye geçince "13.814,32" oldu (kur bu arada değişmişti).
   - Hiçbir şey kaydedilmedi.
+
+## 51 · Hedefte "tarihe yetişmek için ayda" ✅
+
+**Neydi.** Kullanıcı sordu: "istediğim tarihte bu hedefe ulaşmak için aylık
+ne kadar biriktirmeliyim". Hesap (`requiredMonthly`) vardı ama yalnızca Plan
+sekmesindeki "Hedeflere katkı" satırında görünüyordu. Ayrıca sordu: "aylık 100
+euro koydum ama 150 biriktirdim, gereken her ay güncellenir değil mi". Evet:
+gereken her açılışta yeniden ölçülen birikimden hesaplanır.
+
+**Ne yapıldı.**
+
+- Hesap: (hedef − hedefe ayrılan birikim) ÷ kalan ay. Ay sayımı detaydaki
+  "N ay" ile aynı. Ulaşılmış, kapatılmış ya da tarihi geçmiş hedefte
+  gösterilmez.
+- Kura bağlı hedefte tutar hedefin biriminde ve TL olarak yazılır: "€300 ·
+  ₺16.559,13". Oran tutar ÷ birim tutar ile bulunur, kur ayrıca aranmaz.
+- **Hedef kartı:** tahmini varışın altında "Tarihe yetişmek için ayda …"
+  satırı.
+- **Hedef detayı:** Kalan ve Hedef tarihi kutularının altında bir kutu.
+  - Tutar.
+  - Katkıyla kıyas: "Aylık katkın €250 · ayda €33,33 eksik" (uyarı rengi),
+    "… yetiyor" (yeşil), ya da katkı yoksa ne yapılacağı.
+  - Kısa bir not: kalan N aya bölünür, ayrılan birikim arttıkça her ay
+    yeniden hesaplanır. Hedefe hiç varlık ayrılmadıysa bunu söyler; ayrılmayan
+    birikim düşülmez.
+
+**Doğrulama.**
+
+- **851 masaüstü testi**, hepsi yeşil. Yeni `GoalRequiredTest`:
+  - euro ve TL metinleri;
+  - fazla biriktirince gerekenin düşmesi (€283,33 → €275);
+  - katkı eksik ya da yetiyor;
+  - katkısız hedef;
+  - ulaşılmış, kapatılmış ya da tarihi geçmiş hedefte satırın olmaması.
+- **Cihazda**, 1 Ekim 2026, R58N81SAZ1Y:
+  - Amsterdam Gezi (€1.800, Nisan 2027, varlık ayrılmamış): kartta ve
+    detayda "€300 · ₺16.559,13".
+  - Ev: "₺77.329,16".
