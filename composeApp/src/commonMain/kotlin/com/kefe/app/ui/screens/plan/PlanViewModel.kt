@@ -16,6 +16,7 @@ import com.kefe.app.domain.model.Position
 import com.kefe.app.domain.model.QuantityUnit
 import com.kefe.app.domain.model.Transaction
 import com.kefe.app.domain.model.YearMonth
+import com.kefe.app.domain.model.assetKey
 import com.kefe.app.domain.model.catalogName
 import com.kefe.app.domain.model.defaultPlanMode
 import com.kefe.app.domain.model.monthPlanProgress
@@ -152,6 +153,10 @@ class PlanViewModel(
             is PlanIntent.ItemGoal -> withItemContext { it.copy(goalId = intent.goalId) }
             PlanIntent.SaveItem -> saveItem()
             PlanIntent.DeleteItem -> deleteItem()
+            is PlanIntent.OpenExtra -> latest?.let { inputs -> openExtra(inputs, intent.assetKey) }
+            PlanIntent.DeleteItemOnly -> deleteItemOnly()
+            PlanIntent.DeletePurchases -> deletePurchases()
+            PlanIntent.AddPurchaseToPlan -> addPurchaseToPlan()
 
             is PlanIntent.CopyCarry -> reduce {
                 val open = sheet as? PlanSheet.Copy ?: return@reduce this
@@ -429,8 +434,60 @@ class PlanViewModel(
     private fun deleteItem() {
         val editor = (current.sheet as? PlanSheet.Item)?.editor ?: return
         val id = editor.editingId ?: return
+        // Alimi sayilmis kalem: alim da silinsin mi SORULUR. Once sessizce yalniz
+        // kalem siliniyordu; alim varliklarda kalip "Plan dışı alımlar"a dusuyordu.
+        val inputs = latest
+        val item = inputs?.items?.firstOrNull { it.id == id }
+        val purchases = item?.let { purchaseSheetOf(inputs, it.month, it.assetKey, itemId = id, name = it.assetName) }
+        if (purchases != null) {
+            reduce { copy(sheet = PlanSheet.Purchase(purchases)) }
+            return
+        }
         reduce { copy(sheet = null) }
         write { planRepository.deletePlanItem(id) }
+    }
+
+    private fun openExtra(inputs: PlanInputs, key: String) {
+        val month = inputs.month
+        // Planli varlik: satir "Hedefin üstünde" - cozum kalemin hedefini duzeltmek.
+        inputs.items.firstOrNull { it.month == month && it.assetKey == key }?.let { item ->
+            reduce { copy(sheet = PlanSheet.Item(itemEditorOf(inputs, item))) }
+            return
+        }
+        val name = inputs.positions.filter { it.assetKey() == key }.maxByOrNull { it.value }?.name ?: catalogName(key)
+        val sheet = purchaseSheetOf(inputs, month, key, itemId = null, name = name) ?: return
+        reduce { copy(sheet = PlanSheet.Purchase(sheet)) }
+    }
+
+    private fun deleteItemOnly() {
+        val id = (current.sheet as? PlanSheet.Purchase)?.sheet?.itemId ?: return
+        reduce { copy(sheet = null) }
+        write { planRepository.deletePlanItem(id) }
+    }
+
+    private fun deletePurchases() {
+        val sheet = (current.sheet as? PlanSheet.Purchase)?.sheet ?: return
+        reduce { copy(sheet = null) }
+        write("Alım silinemedi.") {
+            // Pozisyon miktari ve hedef atamasi depoda yeniden hesaplanir (recomputePosition).
+            sheet.transactionIds.forEach { portfolioRepository.deleteTransaction(it) }
+            sheet.itemId?.let { planRepository.deletePlanItem(it) }
+        }
+    }
+
+    /** Alinan miktarla dolu editor; kullanici hedefi ya da hedef cipini secip kaydeder. */
+    private fun addPurchaseToPlan() {
+        val inputs = latest ?: return
+        val sheet = (current.sheet as? PlanSheet.Purchase)?.sheet ?: return
+        val mode = parseAssetKey(sheet.assetKey)?.assetClass?.let(::defaultPlanMode) ?: PlanTargetMode.Quantity
+        val target = if (mode == PlanTargetMode.Amount) sheet.tl else sheet.quantity
+        val editor = PlanItemEditor(
+            month = sheet.month,
+            assetKey = sheet.assetKey,
+            mode = mode,
+            targetText = rawAmount(target),
+        ).withContext(inputs)
+        reduce { copy(sheet = PlanSheet.Item(editor)) }
     }
 
     // --- Defter: gelir, gider, butce ----------------------------------------

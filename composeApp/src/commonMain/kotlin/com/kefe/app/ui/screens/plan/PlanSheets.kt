@@ -61,4 +61,10 @@ fun PlanSheets(
         onIntent = onIntent,
         modifier = modifier,
     )
+    PlanPurchaseSheet(
+        visible = sheet is PlanSheet.Purchase,
+        sheet = (shown as? PlanSheet.Purchase)?.sheet,
+        onIntent = onIntent,
+        modifier = modifier,
+    )
 }

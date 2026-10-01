@@ -1034,7 +1034,128 @@ class PlanViewModelTest {
         assertEquals(3, september.content.investment?.rows?.size)
         assertEquals(1, september.content.currentMonthOpenCount)
     }
+
+    // --- Kalem silme ve plan disi alim -----------------------------------------
+
+    /** Ekim'de 2 gr alinmis, 10 gr planli. */
+    private suspend fun Env.boughtAndPlanned() {
+        buyGram("tx_ekim", KefeDate(2026, 10, 5), quantity = 2.0)
+        planItem(October, "gold_gram", 10.0, name = "Gram Altın")
+    }
+
+    @Test
+    fun `alimi sayilmis kalem silinirken sorulur, yalniz plan silinince alim kalir`() = runTest {
+        val env = Env()
+        env.boughtAndPlanned()
+        val vm = env.vm()
+        vm.awaitState { it.content.investment != null }
+
+        vm.onIntent(PlanIntent.EditItem(planItemId(October, "gold_gram")))
+        vm.onIntent(PlanIntent.DeleteItem)
+        val sheet = assertNotNull(vm.purchaseSheet(), "alim varken kalem hemen silinmez")
+        assertEquals(planItemId(October, "gold_gram"), sheet.itemId)
+        assertEquals(listOf("tx_ekim"), sheet.transactionIds)
+        assertEquals("1 alım · 2 gr · ₺13.400", sheet.summary)
+        assertTrue(env.items().isNotEmpty())
+
+        vm.onIntent(PlanIntent.DeleteItemOnly)
+        assertNull(vm.state.value.sheet)
+        env.awaitItems { it.isEmpty() }
+        // Alim varliklarda kalir ve plan disina duser.
+        val extras = vm.awaitState { it.content.extras != null }.content.extras
+        assertEquals("gold_gram", extras?.rows?.single()?.assetKey)
+        assertEquals(2.0, env.portfolio.observeAllPositions().first().single { it.id == GramId }.quantity, 1e-9)
+    }
+
+    @Test
+    fun `alimi da sil kalemi ve ayin alimini siler`() = runTest {
+        val env = Env()
+        env.boughtAndPlanned()
+        val vm = env.vm()
+        vm.awaitState { it.content.investment != null }
+
+        vm.onIntent(PlanIntent.EditItem(planItemId(October, "gold_gram")))
+        vm.onIntent(PlanIntent.DeleteItem)
+        vm.onIntent(PlanIntent.DeletePurchases)
+        assertNull(vm.state.value.sheet)
+
+        env.awaitItems { it.isEmpty() }
+        val gram = realTime {
+            env.portfolio.observeAllPositions().first { list -> list.none { it.id == GramId && it.quantity > 0.0 } }
+        }
+        assertTrue(gram.none { it.id == GramId && it.quantity > 0.0 })
+        // Plan disi alim da kalmaz.
+        val after = vm.awaitState { it.content.investment == null }
+        assertNull(after.content.extras)
+    }
+
+    @Test
+    fun `alimi olmayan kalem sorulmadan silinir`() = runTest {
+        val env = Env()
+        env.planItem(October, "gold_gram", 10.0)
+        val vm = env.vm()
+        vm.awaitState { it.content.investment != null }
+
+        vm.onIntent(PlanIntent.EditItem(planItemId(October, "gold_gram")))
+        vm.onIntent(PlanIntent.DeleteItem)
+        assertNull(vm.state.value.sheet)
+        env.awaitItems { it.isEmpty() }
+    }
+
+    @Test
+    fun `plan disi alim plana eklenince kalem alinan miktarla acilir`() = runTest {
+        val env = Env()
+        env.buyGram("tx_ekim", KefeDate(2026, 10, 5), quantity = 2.0)
+        val vm = env.vm()
+        vm.awaitState { it.content.extras != null }
+
+        vm.onIntent(PlanIntent.OpenExtra("gold_gram"))
+        val sheet = assertNotNull(vm.purchaseSheet())
+        assertNull(sheet.itemId)
+        assertEquals("Gram Altın", sheet.name)
+
+        vm.onIntent(PlanIntent.AddPurchaseToPlan)
+        val editor = assertNotNull(vm.itemEditor())
+        assertEquals("gold_gram", editor.assetKey)
+        assertEquals(PlanTargetMode.Quantity, editor.mode)
+        assertEquals("2", editor.targetText)
+
+        vm.onIntent(PlanIntent.SaveItem)
+        val saved = env.awaitItems { it.isNotEmpty() }.single()
+        assertEquals(2.0, saved.target, 1e-9)
+        // Alim artik plana sayilir; plan disi kart kalkar.
+        val after = vm.awaitState { it.content.investment != null && it.content.extras == null }
+        assertEquals(1, after.content.investment?.rows?.size)
+    }
+
+    @Test
+    fun `plan disi alim silinince varliktan da duser`() = runTest {
+        val env = Env()
+        env.buyGram("tx_ekim", KefeDate(2026, 10, 5), quantity = 2.0)
+        val vm = env.vm()
+        vm.awaitState { it.content.extras != null }
+
+        vm.onIntent(PlanIntent.OpenExtra("gold_gram"))
+        vm.onIntent(PlanIntent.DeletePurchases)
+        val after = vm.awaitState { it.content.extras == null }
+        assertNull(after.content.extras)
+        assertTrue(env.portfolio.observeAllPositions().first().none { it.id == GramId && it.quantity > 0.0 })
+    }
+
+    @Test
+    fun `hedefin ustundeki alim satiri kalemin editorunu acar`() = runTest {
+        val env = Env()
+        env.buyGram("tx_ekim", KefeDate(2026, 10, 5), quantity = 3.0)
+        env.planItem(October, "gold_gram", 1.0)
+        val vm = env.vm()
+        vm.awaitState { it.content.extras != null }
+
+        vm.onIntent(PlanIntent.OpenExtra("gold_gram"))
+        assertEquals(planItemId(October, "gold_gram"), vm.itemEditor()?.editingId)
+    }
 }
+
+private fun PlanViewModel.purchaseSheet(): PurchaseSheet? = (state.value.sheet as? PlanSheet.Purchase)?.sheet
 
 /** Acik harcama editoru; baska sheet ya da hic sheet yoksa null. */
 private fun PlanViewModel.expenseEditor(): ExpenseEditor? = (state.value.sheet as? PlanSheet.Expense)?.editor

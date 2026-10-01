@@ -845,6 +845,11 @@ internal fun PlanSheet.refreshed(inputs: PlanInputs): PlanSheet = when (this) {
     is PlanSheet.Item ->
         if (editor.month == inputs.month) PlanSheet.Item(editor.withContext(inputs)) else this
 
+    // Ikinci cihazdan gelen alim ya da silme ozeti tazeler; silinecek kimlikler guncel kalir.
+    is PlanSheet.Purchase ->
+        purchaseSheetOf(inputs, sheet.month, sheet.assetKey, sheet.itemId, sheet.name)
+            ?.let { PlanSheet.Purchase(it) } ?: this
+
     is PlanSheet.Copy ->
         if (draft.target == inputs.month) {
             // Kaynak ay bu arada bosaldiysa yazilacak bir sey kalmaz ("Kopyalanacak kalem yok").
