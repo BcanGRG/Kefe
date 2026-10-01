@@ -145,6 +145,8 @@ data class GoalsUiState(
      * degisiyor, saklanan tahmin ertesi gun bayat.
      */
     val arrivalByGoal: Map<String, KefeDate?> = emptyMap(),
+    /** Tarihe yetismek icin ayda gereken; ulasilmis ya da tarihi gecmis hedefte yok. */
+    val requiredByGoal: Map<String, RequiredMonthly> = emptyMap(),
     val completedExpanded: Boolean = false,
     val sortMode: Boolean = false,
     val editor: GoalEditorState? = null,

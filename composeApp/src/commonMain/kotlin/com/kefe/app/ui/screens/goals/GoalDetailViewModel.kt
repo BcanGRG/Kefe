@@ -308,6 +308,7 @@ class GoalDetailViewModel(
                 .coerceAtLeast(0),
             delayMonths = (projection.arrival ?: goal.targetDate).monthIndex() -
                 goal.targetDate.monthIndex(),
+            required = goal.requiredMonthlyOf(wealth, today),
             projectionForecast = projection.forecast,
             projectedArrival = projection.arrival,
             milestones = goalMilestones(goal, wealth, projection.forecast, today),

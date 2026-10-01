@@ -828,6 +828,13 @@ private fun RingCard(
                 SecondaryAction("Tutarı düşür", onEdit)
             }
         }
+
+        if (state.showAnalysis) {
+            state.required?.let { required ->
+                Spacer(Modifier.height(Space.x10))
+                RequiredMonthlyBox(required, assigned = state.composingAssets.isNotEmpty())
+            }
+        }
     }
 }
 
@@ -912,6 +919,55 @@ private fun SunkenInfoBox(label: String, value: String, modifier: Modifier = Mod
         )
         Spacer(Modifier.height(Space.x4))
         Text(value, style = t.bodyStrong.tabular(), color = c.onSurface)
+    }
+}
+
+/**
+ * "Tarihe yetişmek için ayda" - kalan tutar / kalan ay, katkiyla kiyasli.
+ *
+ * Kullanici "istedigim tarihe yetismek icin ayda ne kadar biriktirmeliyim"
+ * diye sordu; rakam yalniz Plan sekmesindeydi. Birikim her acilista yeniden
+ * olculdugu icin fazla biriktiren ayda gerekenin dustugunu burada gorur.
+ */
+@Composable
+private fun RequiredMonthlyBox(required: RequiredMonthly, assigned: Boolean) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    val gap = required.shortfall
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(KefeShapes.button)
+            .background(c.surfaceSunken)
+            .padding(Space.x12),
+    ) {
+        Text(
+            text = "Tarihe yetişmek için ayda".trUpper(),
+            style = t.label(11, 0.06, FontWeight.SemiBold),
+            color = c.onSurfaceMuted,
+        )
+        Spacer(Modifier.height(Space.x4))
+        Text(required.amountText(), style = t.bodyStrong.tabular(), color = c.onSurface)
+        Spacer(Modifier.height(Space.x4))
+        Text(
+            text = required.contributionLine(),
+            style = t.caption.tabular(),
+            color = when {
+                gap == null -> c.onSurfaceMuted
+                gap > 0.0 -> c.warning
+                else -> c.positive
+            },
+        )
+        Spacer(Modifier.height(Space.x4))
+        Text(
+            text = if (assigned) {
+                "Kalan tutar ${required.months} aya bölünür. Hedefe ayrılan birikim arttıkça her ay yeniden hesaplanır."
+            } else {
+                "Bu hedefe henüz varlık ayrılmadı. Ayırdığın birikim kalandan düşülür ve tutar yeniden hesaplanır."
+            },
+            style = t.micro,
+            color = c.onSurfaceMuted,
+        )
     }
 }
 

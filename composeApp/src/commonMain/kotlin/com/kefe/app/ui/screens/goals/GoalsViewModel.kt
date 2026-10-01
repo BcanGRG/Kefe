@@ -158,6 +158,9 @@ class GoalsViewModel(
                     arrivalByGoal = goals.associate {
                         it.id to goalProjection(it, wealth[it.id] ?: 0.0, today).arrival
                     },
+                    requiredByGoal = goals.mapNotNull { goal ->
+                        goal.requiredMonthlyOf(wealth[goal.id] ?: 0.0, today)?.let { goal.id to it }
+                    }.toMap(),
                 )
             }.collect { _state.value = it }
         }

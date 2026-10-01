@@ -179,6 +179,7 @@ private fun GoalsBody(
                 goal = goal,
                 totalWealth = state.wealthByGoal[goal.id] ?: state.totalWealth,
                 arrival = state.arrivalByGoal[goal.id],
+                required = state.requiredByGoal[goal.id],
                 sortMode = state.sortMode,
                 onClick = { onOpenGoal(goal.id) },
                 modifier = Modifier
@@ -249,6 +250,8 @@ private fun GoalCard(
     totalWealth: Double,
     /** Tahmini varis - hesaplanamiyorsa (aylik katki yok) null. */
     arrival: KefeDate?,
+    /** Tarihe yetismek icin ayda gereken; ulasilmis ya da tarihi gecmis hedefte null. */
+    required: RequiredMonthly?,
     sortMode: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -365,6 +368,16 @@ private fun GoalCard(
                     // Tasarimda tahmin metninin alti kesikli: kesin bir tarih degil.
                     modifier = Modifier.dashedUnderline(c.outline).padding(bottom = 1.dp),
                 )
+            }
+            // Tahmin "ne zaman varirim", bu satir "zamaninda varmak icin ne
+            // kadar": kullanici ikincisini soruyordu ve yalniz Plan'da vardi.
+            required?.let {
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    KefeIcon(KefeIcons.Target, null, size = 14.dp, tint = c.onSurfaceMuted)
+                    Spacer(Modifier.width(6.dp))
+                    Text(text = it.cardLine(), style = t.caption.tabular(), color = c.onSurface)
+                }
             }
         }
     }

@@ -78,6 +78,8 @@ data class GoalDetailUiState(
     val monthsToTarget: Int = 0,
     /** Tahmin hedef tarihini kac ay asiyor (negatifse erken). */
     val delayMonths: Int = 0,
+    /** Tarihe yetismek icin ayda gereken; ulasilmis ya da tarihi gecmis hedefte null. */
+    val required: RequiredMonthly? = null,
 
     /** Gerceklesen: gunluk net deger fotograflari. */
     /** Tahmin: bugunku birikim + her ay eklenecek katki. Belirsizlik bandi yok. */
