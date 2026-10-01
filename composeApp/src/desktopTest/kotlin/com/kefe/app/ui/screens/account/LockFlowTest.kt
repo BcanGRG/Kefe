@@ -8,13 +8,11 @@ import com.kefe.app.data.repository.SqlDelightPortfolioRepository
 import com.kefe.app.db.KefeDatabase
 import com.kefe.app.domain.FixedKefeClock
 import com.kefe.app.security.BiometricGate
-import kotlinx.coroutines.Dispatchers
+import com.kefe.app.testing.TestMain
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -32,11 +30,14 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class LockFlowTest {
 
+    /** Kurulan VM'ler testten sonra durdurulur (bkz. [TestMain]). */
+    private val main = TestMain()
+
     @BeforeTest
-    fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
+    fun setUp() = main.install()
 
     @AfterTest
-    fun tearDown() = Dispatchers.resetMain()
+    fun tearDown() = main.release()
 
     private fun lockVm(): LockViewModel {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
@@ -46,7 +47,7 @@ class LockFlowTest {
         val repo = SqlDelightPortfolioRepository(database, FixedKefeClock(millis = 9_000L), NoPrices())
         // Masaustu kapisi "desteklenmiyor" der: kilit perdedir, kapi degil -
         // kullanici icin kimlik sorulmadan iceri alinir.
-        return LockViewModel(repo, BiometricGate())
+        return main.track(LockViewModel(repo, BiometricGate()))
     }
 
     @Test

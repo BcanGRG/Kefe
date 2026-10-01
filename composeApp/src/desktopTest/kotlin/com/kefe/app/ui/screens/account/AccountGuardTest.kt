@@ -4,14 +4,11 @@ import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.AuthSession
 import com.kefe.app.domain.repository.AuthState
 import com.kefe.app.domain.repository.PreferenceKeys
-import kotlinx.coroutines.Dispatchers
+import com.kefe.app.testing.TestMain
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -32,11 +29,14 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class AccountGuardTest {
 
+    /** Kurulan VM'ler testten sonra durdurulur (bkz. [TestMain]). */
+    private val main = TestMain()
+
     @BeforeTest
-    fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
+    fun setUp() = main.install()
 
     @AfterTest
-    fun tearDown() = Dispatchers.resetMain()
+    fun tearDown() = main.release()
 
     /** Dogrulama [userId] hesabinin oturumunu yazar; cikislari sayar. */
     private class GuardAuth(private val userId: String) : AuthRepository {
@@ -71,7 +71,7 @@ class AccountGuardTest {
     fun `baska hesaba bagli cihazda giris geri alinir`() = runTest {
         val auth = GuardAuth(userId = "u2")
         val prefs = linkedTo("u1")
-        val vm = LoginViewModel(auth, prefs)
+        val vm = main.track(LoginViewModel(auth, prefs))
         vm.verify()
 
         val s = vm.state.value
@@ -93,7 +93,7 @@ class AccountGuardTest {
 
     @Test
     fun `e-posta degisince engel kalkar`() = runTest {
-        val vm = LoginViewModel(GuardAuth(userId = "u2"), linkedTo("u1"))
+        val vm = main.track(LoginViewModel(GuardAuth(userId = "u2"), linkedTo("u1")))
         vm.verify()
         assertNotNull(vm.state.value.guard)
         vm.onIntent(LoginIntent.ChangeEmail("burak@k.app"))
@@ -103,7 +103,7 @@ class AccountGuardTest {
     @Test
     fun `ayni hesaba giris engellenmez`() = runTest {
         val auth = GuardAuth(userId = "u1")
-        val vm = LoginViewModel(auth, linkedTo("u1"))
+        val vm = main.track(LoginViewModel(auth, linkedTo("u1")))
         vm.verify("burak@k.app")
         assertTrue(vm.state.value.signedIn)
         assertNull(vm.state.value.guard)
@@ -113,7 +113,7 @@ class AccountGuardTest {
     @Test
     fun `bagli olmayan cihaz her hesapla girer`() = runTest {
         val auth = GuardAuth(userId = "u2")
-        val vm = LoginViewModel(auth, MemoryPreferences())
+        val vm = main.track(LoginViewModel(auth, MemoryPreferences()))
         vm.verify()
         assertTrue(vm.state.value.signedIn)
         assertEquals(0, auth.signOuts)

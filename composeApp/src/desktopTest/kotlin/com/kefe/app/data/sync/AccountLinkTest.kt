@@ -20,6 +20,7 @@ import com.kefe.app.domain.repository.AuthRepository
 import com.kefe.app.domain.repository.AuthSession
 import com.kefe.app.domain.repository.AuthState
 import com.kefe.app.domain.repository.PreferenceKeys
+import com.kefe.app.testing.TestMain
 import com.kefe.app.ui.screens.account.ProfileSetupIntent
 import com.kefe.app.ui.screens.account.ProfileSetupPhase
 import com.kefe.app.ui.screens.account.ProfileSetupUiState
@@ -31,10 +32,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
@@ -74,11 +72,17 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class AccountLinkTest {
 
+    /** Kurulan VM'ler ([viewModel]) testten sonra durdurulur (bkz. [TestMain]). */
+    private val main = TestMain()
+
     @BeforeTest
-    fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
+    fun setUp() = main.install()
 
     @AfterTest
-    fun tearDown() = Dispatchers.resetMain()
+    fun tearDown() = main.release()
+
+    // LinkHarness dosya duzeyinde, [main]'i goremez: VM kaydedilmek uzere burada kurulur.
+    private fun LinkHarness.viewModel() = main.track(ProfileSetupViewModel(repo, prefs, auth, pull, linker))
 
     // --- Indirme (cihaz bos) ------------------------------------------------
 
@@ -867,8 +871,6 @@ private class LinkHarness(foreignKeys: Boolean = false) {
         linker = AccountLinker(pull, sink, prefs, now)
         push = PushEngine(auth, SyncLocalSource(database), api, prefs, now)
     }
-
-    fun viewModel() = ProfileSetupViewModel(repo, prefs, auth, pull, linker)
 
     /** Cihazda duran satirlar (verilen damgalarla). */
     suspend fun local(batch: PullBatch) {
