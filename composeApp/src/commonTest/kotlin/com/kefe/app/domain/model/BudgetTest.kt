@@ -53,9 +53,47 @@ class BudgetTest {
         assertEquals(60500.0, f.investedNet, 1e-9)
         assertEquals(67100.0, f.grossBuys, 1e-9)
         assertEquals(6600.0, f.sells, 1e-9)
+        // Aylik giderler 40.000 tam sayilir; market 2.000 asti, asim eklenir. Plan disi yok.
+        assertEquals(42000.0, f.spentInPlan, 1e-9)
+        assertEquals(2000.0, f.overPlan, 1e-9)
+        assertEquals(0.0, f.unplannedSpent, 1e-9)
+        assertEquals(42000.0, f.outgoing, 1e-9)
         assertEquals(145000.0 - 42000.0 - 60500.0, f.remaining!!, 1e-9)
         assertEquals(145000.0 - 40000.0 - 70000.0, f.plannedRemaining!!, 1e-9)
         assertEquals((145000.0 - 42000.0) / 145000.0, f.savingsRate!!, 1e-12)
+    }
+
+    /**
+     * Aylik gider AYRILAN paradir: harcama girilmese de tam duser, kalemin icindeki
+     * harcama ayrica dusmez. Aylik gideri olmayan kalemdeki harcama plan disidir.
+     */
+    @Test
+    fun aylikGiderAyrilanParaHarcamaKalemindenYenir() {
+        val halisaha = ExpenseCategory.custom("Halisaha")!!
+        val f = monthFlow(
+            MonthBook(
+                month = oct,
+                incomes = listOf(IncomeEntry("a", oct, "member_owner", IncomeKind.Salary, 170000.0)),
+                expenses = listOf(
+                    ExpenseEntry("e1", KefeDate(2026, 10, 2), ExpenseCategory.Groceries, 95.0),
+                    ExpenseEntry("e2", KefeDate(2026, 10, 3), ExpenseCategory.Groceries, 280.0),
+                    ExpenseEntry("e3", KefeDate(2026, 10, 4), halisaha, 370.0),
+                ),
+                budgets = listOf(
+                    ExpenseBudget("b1", oct, ExpenseCategory.Housing, 25000.0),
+                    ExpenseBudget("b2", oct, ExpenseCategory.Groceries, 7000.0),
+                ),
+            ),
+            emptyList(),
+            plannedInvest = null,
+        )
+        assertEquals(745.0, f.expenses, 1e-9)
+        assertEquals(375.0, f.spentInPlan, 1e-9)
+        assertEquals(0.0, f.overPlan, 1e-9)
+        assertEquals(370.0, f.unplannedSpent, 1e-9)
+        assertEquals(listOf(halisaha), f.unplannedCategories)
+        assertEquals(32370.0, f.outgoing, 1e-9)
+        assertEquals(170000.0 - 32370.0, f.remaining!!, 1e-9)
     }
 
     /** Ozet'teki "Bu ay eklenen" ile ayni rakam. */

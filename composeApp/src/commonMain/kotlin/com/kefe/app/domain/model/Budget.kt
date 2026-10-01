@@ -146,22 +146,49 @@ data class MonthBook(
     val isEmpty: Boolean get() = incomes.isEmpty() && expenses.isEmpty() && budgets.isEmpty()
 }
 
-/** Ayin para akisi. null alanlar "bilinmiyor" demektir; ekran "—" yazar, 0 degil. */
+/**
+ * Ayin para akisi. null alanlar "bilinmiyor" demektir; ekran "—" yazar, 0 degil.
+ *
+ * AYLIK GIDER ile HARCAMA ayri seylerdir:
+ * - Aylik gider ("butce" satiri) o ay icin AYRILAN paradir: Kira ₺25.000, Market
+ *   ₺7.000. Hic harcama girilmese de tam sayilir - kirayi her ay harcama olarak
+ *   girmek gerekmez.
+ * - Harcama (gider kaydi) gun icinde girilen anlik odemedir. Aylik gideri olan bir
+ *   kalemdeyse o kalemin ICINDEN yenir (Market ₺372 / ₺7.000) ve ayrica dusmez;
+ *   kalemi asarsa yalniz ASIM eklenir. Aylik gideri olmayan kalemdeki harcama
+ *   "plan disi"dir ve tam eklenir.
+ *
+ * Yani ayin gideri = aylik giderler + asimlar + plan disi harcamalar.
+ * NEYDI: yalniz harcamalar sayiliyordu; butce bir sinirdi. Kira butcede dururken
+ * gidere yansimiyor, kullanici onu harcama olarak girip siliyordu.
+ */
 data class MonthFlow(
     val income: Double?,
     val incomeByMember: Map<String, Double>,
+    /** Girilen BUTUN harcamalar (anlik kayitlar). */
     val expenses: Double,
     val expensesByCategory: Map<ExpenseCategory, Double>,
+    /** Aylik giderlerin toplami; hic aylik gider yoksa null. */
     val budgetTotal: Double?,
     val budgetByCategory: Map<ExpenseCategory, Double>,
+    /** Aylik gideri olan kalemlerde harcanan (asim dahil). */
+    val spentInPlan: Double,
+    /** Aylik giderini asan kalemlerin asimlari toplami. */
+    val overPlan: Double,
+    /** Aylik gideri olmayan kalemlerdeki harcamalar. */
+    val unplannedSpent: Double,
+    /** Plan disi harcamanin kalemleri, harcanana gore. */
+    val unplannedCategories: List<ExpenseCategory>,
+    /** Ayin gideri: aylik giderler + asimlar + plan disi harcamalar. */
+    val outgoing: Double,
     /** Alimlar - satislar, komisyon dahil: Ozet'teki "Bu ay eklenen" ile AYNI tanim. */
     val investedNet: Double,
     val grossBuys: Double,
     val sells: Double,
     val plannedInvest: Double?,
-    /** Gelir - gider - yatirim: nakitte kalan ya da girilmemis bir kayit. */
+    /** Gelir - gider - yatirim. */
     val remaining: Double?,
-    /** Gelir - butce - planlanan yatirim: dagitilmamis para. */
+    /** Gelir - aylik giderler - planlanan yatirim: dagitilmamis para. */
     val plannedRemaining: Double?,
     /** (Gelir - gider) / gelir. */
     val savingsRate: Double?,
@@ -189,6 +216,12 @@ fun monthFlow(
         .mapValues { (_, list) -> list.sumOf { it.amount } }
     val budgetTotal = budgetByCategory.takeIf { it.isNotEmpty() }?.values?.sum()
 
+    val inPlan = expensesByCategory.filterKeys { it in budgetByCategory }
+    val unplanned = expensesByCategory.filterKeys { it !in budgetByCategory }
+    val overPlan = inPlan.entries.sumOf { (category, spent) -> (spent - budgetByCategory.getValue(category)).coerceAtLeast(0.0) }
+    val unplannedSpent = unplanned.values.sum()
+    val outgoing = (budgetTotal ?: 0.0) + overPlan + unplannedSpent
+
     val monthTx = transactions.filter { it.date in month }
     val invested = monthTx.netContributionIn(month.year, month.month)
     val buys = monthTx.filter { it.side == TradeSide.Buy }.sumOf { it.total }
@@ -201,13 +234,18 @@ fun monthFlow(
         expensesByCategory = expensesByCategory,
         budgetTotal = budgetTotal,
         budgetByCategory = budgetByCategory,
+        spentInPlan = inPlan.values.sum(),
+        overPlan = overPlan,
+        unplannedSpent = unplannedSpent,
+        unplannedCategories = unplanned.entries.sortedByDescending { it.value }.map { it.key },
+        outgoing = outgoing,
         investedNet = invested,
         grossBuys = buys,
         sells = sells,
         plannedInvest = plannedInvest,
-        remaining = income?.let { it - expenses - invested },
+        remaining = income?.let { it - outgoing - invested },
         plannedRemaining = income?.let { it - (budgetTotal ?: 0.0) - (plannedInvest ?: 0.0) },
-        savingsRate = income?.takeIf { it > 0.0 }?.let { (it - expenses) / it },
+        savingsRate = income?.takeIf { it > 0.0 }?.let { (it - outgoing) / it },
         investRate = income?.takeIf { it > 0.0 }?.let { invested / it },
     )
 }
