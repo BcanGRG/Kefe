@@ -79,6 +79,11 @@ data class AssetGroup(
     /** Siralama olcutu HER ZAMAN toplam kar - cip penceresi onu degistirmez. */
     val profit: Double,
     val positions: List<Position>,
+    /**
+     * Donem penceresinde satirlarin KAZANCI, pozisyon kimligine gore (bkz.
+     * HoldingGain); null = bilinmiyor. "Toplam"da bos - satir kar/zarari yazar.
+     */
+    val rowChanges: Map<String, PeriodTotal?> = emptyMap(),
 )
 
 data class AssetsUiState(

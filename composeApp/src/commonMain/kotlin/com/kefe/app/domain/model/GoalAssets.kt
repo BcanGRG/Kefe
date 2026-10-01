@@ -300,8 +300,17 @@ fun otherGoalOf(
  * Yuzde SIFIR olabilir ve bu dogrudur: hafta sonu hicbir piyasa oynamaz
  * (bkz. [Price.todayChangePercent]).
  */
-fun List<GoalAsset>.todayChange(): PeriodTotal? =
-    weightedPeriodTotal(map { it.value to it.position.dailyChangePercent })
+fun List<GoalAsset>.todayChange(transactions: List<Transaction>, today: KefeDate): PeriodTotal? {
+    // KAZANC (bkz. HoldingGain), hedefe sayilan PAYLA olceklenir: 16 ceyregin 15'i
+    // bu hedefteyse kazancin 15/16'si.
+    val byPosition = transactions.groupBy { it.positionId }
+    return map { asset ->
+        val position = asset.position
+        val share = if (position.value > 0.0) asset.value / position.value else 0.0
+        position.gainIn(position.dailyChangePercent, byPosition[position.id].orEmpty(), today, GainDayDays)
+            ?.let { HoldingGain(amount = it.amount * share, base = it.base * share) }
+    }.total()
+}
 
 /**
  * Bu hedefin TOPLAM getirisi - atanan kisimlarin kar/zarari.

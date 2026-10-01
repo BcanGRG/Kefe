@@ -122,7 +122,12 @@ fun portfolioTotals(
     val total = positions.totalValue()
     val principal = positions.totalCost()
     val profit = total - principal
-    val dayChange = positions.todayChange()
+    // KAZANC, fiyat hareketi degil (bkz. HoldingGain): bugun alinan varlik dunun
+    // yukselisini kazanc diye yazmaz.
+    val byPosition = transactions.groupBy { it.positionId }
+    val dayChange = positions
+        .map { it.gainIn(it.dailyChangePercent, byPosition[it.id].orEmpty(), today, GainDayDays) }
+        .total()
 
     return PortfolioTotals(
         totalValue = total,

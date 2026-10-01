@@ -215,7 +215,7 @@ class GoalDetailViewModel(
             composingAssets = composing,
             // Ucu de AYNI listeden turer - hedefin rakamlariyla altindaki
             // varlik listesi birbirini tutsun diye.
-            todayChange = composing.todayChange(),
+            todayChange = composing.todayChange(transactions, today),
             totalReturn = composing.totalReturn(),
             allocation = composing.allocation(),
             // Secici: her varlik, varsa baska hedefin adiyla. Secmek TASIR;
