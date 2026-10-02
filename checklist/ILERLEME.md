@@ -2850,3 +2850,37 @@ işaretliyordu (`kotlin:kgp:misconfiguration:non-kmp-agp-is-deprecated`).
 - Lint: `mipmap-anydpi-v26` klasörü minSdk 26'da gereksiz, Activity'deki
   `android:label` fazlalık. İkisi de taşınan kaynaklarda önceden vardı; APK
   aynı kalsın diye dokunulmadı.
+
+## 56 · Compose bağımlılıkları doğrudan koordinatla ✅
+
+**Neydi.** CMP 1.12'de `compose.runtime`, `compose.foundation`,
+`compose.material3`, `compose.ui` ve `compose.components.resources` Gradle
+erişimcileri kullanımdan kalktı ("Specify dependency directly"). §54'te bu
+uyarı süzgeçte görünmemişti; §55'in oturumu yakaladı.
+
+**Ne yapıldı.**
+
+- `libs.versions.toml`'a beş kütüphane eklendi: `compose-runtime`,
+  `compose-foundation`, `compose-ui` ve `compose-components-resources`
+  `composeMultiplatform` (1.12.1) sürümüyle; `compose-material3` ayrı
+  `composeMaterial3` = 1.9.0 ile. Material3 CMP'den ayrı sürümlenir; eski
+  erişimci de 1.9.0'a çözülüyordu.
+- `composeApp/build.gradle.kts` bunları `libs.compose.*` ile kullanıyor.
+  `compose.desktop.currentOs` kaldı: işletim sistemine göre seçilen artifact
+  ve kullanımdan kalkmadı.
+
+**Doğrulama.**
+
+- Çözülmüş bağımlılıklar değişiklikten önce ve sonra karşılaştırıldı:
+  masaüstünde (`desktopRuntimeClasspath`) 198, Android'de (`androidApp`
+  `debugRuntimeClasspath`) 255 kütüphane, **fark yok**. Paketlenen uygulama
+  aynı kalıyor.
+- Uyarılar açık derlemede erişimci uyarısı artık çıkmıyor.
+- **863 masaüstü testi** yeşil, `:androidApp:assembleDebug` temiz. Telefon
+  bağlı değildi; paket aynı olduğu için cihaz denemesi gerekmedi.
+
+**Temizlik.** Bitmiş görevlerin üç worktree'si (#63, #64, #67 dalları,
+hepsi main'de) `git worktree remove` ile kaldırıldı. Klasörler Windows'un
+uzun yol sınırına takıldığı için uzun yol önekiyle silindi.
+`goofy-herschel-4bee88` boş olarak kaldı; o görevin oturumu açıkken klasörü
+tutuyor.

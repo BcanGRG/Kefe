@@ -6,6 +6,10 @@
 agp = "9.4.1"
 kotlin = "2.4.20"
 composeMultiplatform = "1.12.1"
+# Material3 CMP'den AYRI surumlenir. 1.9.0 kararli (Jetpack Material3 1.4);
+# CMP 1.12'nin kendi esledigi 1.12.0-alpha03 alfa. Eski `compose.material3`
+# erisimcisi de 1.9.0'a cozuluyordu - gecis davranisi degistirmez.
+composeMaterial3 = "1.9.0"
 coreSplashscreen = "1.2.0"
 androidxBiometric = "1.1.0"
 coroutines = "1.11.0"
@@ -41,6 +45,15 @@ appVersionName = "1.0.0"
 appVersionCode = "1"
 
 [libraries]
+# Compose Multiplatform. `compose.runtime` / `compose.material3` gibi Gradle
+# erisimcileri CMP 1.12'de kullanimdan kalkti ("Specify dependency directly");
+# surumleri artik burada, digerleri gibi.
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
+compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "composeMaterial3" }
+
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
