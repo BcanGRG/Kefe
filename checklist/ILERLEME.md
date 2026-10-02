@@ -2765,3 +2765,88 @@ kullanabildiğimiz yeni özellikleri de koda almak istedi.
   - Özet, Varlıklar, Hedefler ve Plan açıldı, çökme kaydı yok.
   - Hedef detayından ve işlem ekleme sayfasından geri tuşu doğru yere döndü
     (navigationevent 1.1.0).
+
+## 55 · Android uygulaması ayrı modülde; AGP 9 geçiş bayrakları kalktı ✅
+
+**Neydi.** AGP 9.4.1, `android.builtInKotlin=false` ve `android.newDsl=false`
+için "kullanımdan kalktı" uyarısı veriyordu. KMP eklentisi de
+`com.android.application` ile aynı modülde kullanılmasını uyarıyla
+işaretliyordu (`kotlin:kgp:misconfiguration:non-kmp-agp-is-deprecated`).
+İkisi de AGP 10'da kalkıyor; bayraklar olmadan tek modüllü yapı derlenmez.
+54'te bilerek ertelenmişti.
+
+**Ne yapıldı.**
+
+- **`composeApp` artık kütüphane.** `com.android.application` yerine
+  `com.android.kotlin.multiplatform.library`, `androidTarget {}` yerine
+  `kotlin { android { … } }`. Namespace `com.kefe.app.shared`: uygulamanınkiyle
+  (`com.kefe.app`) çakışmasın. Ortak kod, masaüstü uygulaması
+  (`jvm("desktop")`, `compose.desktop`), iOS çerçevesi, SQLDelight ve üretilen
+  `SupabaseConfig` yerinde kaldı.
+- **Yeni `androidApp` modülü** yalnız giriş noktası:
+  - `MainActivity`, `AndroidManifest.xml`, ikonlar, açılış teması,
+    `file_paths.xml`;
+  - `applicationId = "com.kefe.app"`, versionName/versionCode.
+  - Kotlin'i AGP'nin gömülü Kotlin'i derliyor (`kotlin.android` eklentisi
+    yok). Compose derleyici eklentisi `setContent { App() }` için.
+  - Android Studio'da çalıştırma yapılandırması artık `androidApp`.
+- Platform köprüleri (`DatabaseDriverFactory`, `BiometricGate`,
+  `SecureStore`, `FileTransfer`/`AndroidFileBridge`, `KefeClock`) expect/actual
+  oldukları için `composeApp/androidMain`'de kaldı. Taşınan dosyalar `git mv`
+  ile taşındı, içerikleri değişmedi.
+- **Sürüm tek yerde:** `appVersionName` / `appVersionCode` artık
+  `libs.versions.toml`'da. `androidApp` paket sürümünü, `composeApp` de
+  `SupabaseConfig.AppVersion`'ı ("Kefe 1.0.0") oradan okuyor.
+- **Fragment açıkça eklendi (1.8.9).** `MainActivity` bir `FragmentActivity`;
+  biometric 1.1.0 geçişli olarak fragment 1.2.5 getiriyor. Tek modülde diğer
+  kütüphaneler derleme yolunu da 1.8.9'a çekiyordu. Ayrı modülde derleme yolu
+  1.2.5'i gördü ve release lint'i (`InvalidFragmentVersionForActivityResult`)
+  derlemeyi durdurdu. Çalışma zamanında zaten 1.8.9 vardı, APK değişmedi.
+- `withHostTest {}`: commonTest Android tarafında da koşabiliyor (eski
+  `testDebugUnitTest`'in karşılığı). Yoksa AGP her derlemede uyarı veriyordu.
+- `gradle.properties`'ten iki bayrak ve açıklaması silindi. README'de Android
+  komutu `:androidApp:assembleDebug`.
+
+**Değişmeyenler (bilerek, telefondaki veri kaybolmasın diye).**
+
+- `applicationId` `com.kefe.app`; `MainActivity`'nin paketi ve adı aynı (ana
+  ekrandaki simge bileşen adına bağlı).
+- İmza: `signingConfigs` yok, debug paketi yine `~/.android/debug.keystore`
+  ile imzalanıyor.
+- Veritabanı: `kefe.db`, `/data/data/com.kefe.app/databases/`. Keystore'daki
+  oturum anahtarı (`kefe_session_key`) aynı uygulama kimliğinde.
+
+**Doğrulama.**
+
+- **863 masaüstü testi**, hepsi yeşil (önbellekten değil, gerçekten koştu).
+  commonTest'in Android tarafı: 588 test, yeşil.
+- `:androidApp:assembleDebug`, `assembleRelease` ve `lintDebug` temiz (0
+  hata). AGP'nin bayrak uyarıları ve KMP'nin `non-kmp-agp-is-deprecated`
+  uyarısı artık çıkmıyor.
+- Eski yapının debug APK'sıyla karşılaştırma:
+  - birleştirilmiş manifest birebir aynı;
+  - `aapt2 dump badging` aynı (`com.kefe.app`, versionCode 1, 1.0.0);
+  - imza sertifikası aynı (SHA-256 `c5ff510f…`);
+  - dex'teki 25.365 sınıf ve dex dışındaki bütün dosyalar aynı. Tek fark
+    dex'lerin bölünüşü (bir dex dosyası fazla).
+- **Cihazda**, 1 Ekim 2026, R58N81SAZ1Y:
+  - `installDebug` yerinde güncelledi: `firstInstallTime` 30 Temmuz 2026
+    olarak kaldı, `userId` aynı, `kefe.db` yerinde;
+  - Özet veriyle açıldı, "Eşitlendi" (Supabase yapılandırması yerinde);
+    Ayarlar'da "Kefe 1.0.0";
+  - "CSV olarak indir" paylaşım sayfasını
+    `content://com.kefe.app.fileprovider/…` ile açtı (taşınan manifest ve
+    `file_paths.xml`);
+  - açılış kilidi anahtarı biyometrik istemi açtı (`FragmentActivity` +
+    `BiometricPrompt`). Test sırasında kilit açıldı, hemen geri kapatıldı;
+    ayarlar eski halinde.
+
+**Kalan uyarılar (bu işin dışında).**
+
+- `compose.runtime`, `compose.foundation`, `compose.material3`, `compose.ui`
+  ve `compose.components.resources` erişimcileri CMP 1.12'de kullanımdan
+  kalktı ("Specify dependency directly"). Doğrudan koordinatlara geçmek ayrı
+  bir iş.
+- Lint: `mipmap-anydpi-v26` klasörü minSdk 26'da gereksiz, Activity'deki
+  `android:label` fazlalık. İkisi de taşınan kaynaklarda önceden vardı; APK
+  aynı kalsın diye dokunulmadı.

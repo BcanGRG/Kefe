@@ -15,6 +15,11 @@ navigation3 = "1.1.2"
 # ayni gonderici ustunde bulusmayan iki kopya olusabilir.
 navigationevent = "1.1.0"
 activityCompose = "1.13.0"
+# MainActivity bir FragmentActivity. biometric 1.1.0 gecisli olarak fragment 1.2.5
+# getiriyor; registerForActivityResult 1.3.0+ ister (lint: InvalidFragmentVersion-
+# ForActivityResult). Calisma zamaninda diger kutuphaneler yuzunden zaten 1.8.9'a
+# cozuluyordu - androidApp'in derleme yolu da ayni surumu gorsun diye acikca yazilir.
+fragment = "1.8.9"
 ktor = "3.6.0"
 koin = "4.2.2"
 serialization = "1.11.0"
@@ -28,6 +33,12 @@ sqldelight = "2.4.0"
 androidCompileSdk = "37"
 androidMinSdk = "26"
 androidTargetSdk = "37"
+
+# Uygulama surumu TEK YERDE. Android paketi (androidApp: versionName/versionCode)
+# ve uretilen SupabaseConfig.AppVersion (composeApp, Ayarlar'daki "Kefe 1.0.0")
+# ikisi de buradan okur; iki modulde ayri yazilirsa yine birbirinden kayar.
+appVersionName = "1.0.0"
+appVersionCode = "1"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -51,6 +62,7 @@ navigationevent-compose = { module = "org.jetbrains.androidx.navigationevent:nav
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "androidxBiometric" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
 
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
@@ -81,4 +93,7 @@ composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMul
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 androidApplication = { id = "com.android.application", version.ref = "agp" }
+# composeApp'in Android hedefi. AGP 9'dan beri KMP eklentisi com.android.application
+# ile ayni modulde kullanilamiyor; uygulama androidApp'te, ortak kod composeApp'te.
+androidKotlinMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
