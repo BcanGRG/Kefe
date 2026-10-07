@@ -52,6 +52,9 @@ import com.kefe.app.navigation.MarketKey
 import com.kefe.app.navigation.OnboardingKey
 import com.kefe.app.navigation.OpenSettingsStep
 import com.kefe.app.navigation.PlanKey
+import com.kefe.app.navigation.KefeLaunch
+import com.kefe.app.navigation.LaunchTarget
+import com.kefe.app.domain.KefeClock
 import com.kefe.app.navigation.ProfileSetupKey
 import com.kefe.app.navigation.SettingsKey
 import com.kefe.app.navigation.ProfilesKey
@@ -522,6 +525,25 @@ private fun KefeApp(
     fun openPlanThisMonth() {
         planVm.onIntent(PlanIntent.ThisMonth)
         selectTab(PlanKey)
+    }
+
+    // Ana ekran widget'indan "Harcamalar": uygulama ICERIDEYKEN (kilit acik,
+    // kurulum bitmis) bu ayin Harcamalar sayfasi acilir. Kilitliyse istek bekler;
+    // kok kilitten Ozet'e donunce burasi yeniden calisir.
+    val launchTarget by KefeLaunch.pending.collectAsState()
+    val launchClock = koinInject<KefeClock>()
+    val rootKey = backStack.firstOrNull()
+    LaunchedEffect(launchTarget, rootKey) {
+        val target = launchTarget ?: return@LaunchedEffect
+        if (rootKey !is KefeKey || rootKey.isAccountFlow()) return@LaunchedEffect
+        if (!KefeLaunch.consume(target)) return@LaunchedEffect
+        when (target) {
+            LaunchTarget.Expenses -> {
+                val month = YearMonth.of(launchClock.today())
+                openPlanThisMonth()
+                goTo(PlanExpensesKey(month.year, month.month, null))
+            }
+        }
     }
 
     CollectEffects(planVm.effects) { effect ->

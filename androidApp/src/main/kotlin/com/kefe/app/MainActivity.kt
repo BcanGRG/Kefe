@@ -1,5 +1,6 @@
 package com.kefe.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
@@ -9,6 +10,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.kefe.app.data.backup.AndroidFileBridge
 import com.kefe.app.data.db.DatabaseDriverFactory
 import com.kefe.app.di.KefePlatform
+import com.kefe.app.navigation.KefeLaunch
+import com.kefe.app.navigation.LaunchTarget
 
 class MainActivity : FragmentActivity() {
 
@@ -58,7 +61,23 @@ class MainActivity : FragmentActivity() {
         // dondugunde Activity yeniden yaratilinca sorun cikmaz.
         KefePlatform.install(DatabaseDriverFactory(applicationContext))
         AndroidFileBridge.attach(this, openBackup)
+        // Yalniz ilk acilista: ekran donunce ayni niyet yeniden islenmesin.
+        if (savedInstanceState == null) handleOpen(intent)
         setContent { App(onReady = { ready = true }) }
+    }
+
+    /** Uygulama arkada aciksa widget'in "Harcamalar"i buraya gelir (CLEAR_TOP | SINGLE_TOP). */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleOpen(intent)
+    }
+
+    /** Ana ekrandan gelen "su sayfada ac" istegi; kabuk uygulama iceridiyken tuketir (App.kt). */
+    private fun handleOpen(intent: Intent?) {
+        when (intent?.getStringExtra(ExtraOpen)) {
+            OpenExpenses -> KefeLaunch.request(LaunchTarget.Expenses)
+        }
     }
 
     /**
@@ -66,6 +85,11 @@ class MainActivity : FragmentActivity() {
      * oynayan animasyona gecis. Uzatmak soguk acilisi gozle gorulur geciktirir.
      */
     private val SplashHandoffMillis = 260L
+
+    companion object {
+        const val ExtraOpen = "com.kefe.app.OPEN"
+        const val OpenExpenses = "expenses"
+    }
 
     override fun onDestroy() {
         // Activity referansi birakilir; tutulursa ekran her dondugunde bir

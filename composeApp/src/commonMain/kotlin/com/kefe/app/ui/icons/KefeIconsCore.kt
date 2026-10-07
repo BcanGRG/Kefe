@@ -128,6 +128,19 @@ internal object KefeIconsCore {
             moveTo(18f, 6f); lineTo(6f, 18f)
         }.also { _close = it }
 
+    /** Tus takiminda geri silme: sola bakan etiket icinde carpi. */
+    private var _backspace: ImageVector? = null
+    val Backspace: ImageVector
+        get() = _backspace ?: kefeIcon("KefeBackspace") {
+            moveTo(9f, 5.5f); lineTo(20f, 5.5f)
+            arcTo(1.5f, 1.5f, 0f, false, true, 21.5f, 7f)
+            lineTo(21.5f, 17f)
+            arcTo(1.5f, 1.5f, 0f, false, true, 20f, 18.5f)
+            lineTo(9f, 18.5f); lineTo(2.5f, 12f); close()
+            moveTo(11.5f, 9.5f); lineTo(16.5f, 14.5f)
+            moveTo(16.5f, 9.5f); lineTo(11.5f, 14.5f)
+        }.also { _backspace = it }
+
     // --- Aksiyon ---
 
     private var _check: ImageVector? = null

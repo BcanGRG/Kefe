@@ -22,6 +22,7 @@ object KefeIcons {
     val ChevronUp: ImageVector get() = KefeIconsCore.ChevronUp
     val ArrowBack: ImageVector get() = KefeIconsCore.ArrowBack
     val Close: ImageVector get() = KefeIconsCore.Close
+    val Backspace: ImageVector get() = KefeIconsCore.Backspace
     val Check: ImageVector get() = KefeIconsCore.Check
     val Pencil: ImageVector get() = KefeIconsCore.Pencil
     val Trash: ImageVector get() = KefeIconsCore.Trash

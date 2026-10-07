@@ -4,4 +4,20 @@
     <color name="window_background">#15120E</color>
     <color name="splash_background">#15120E</color>
     <color name="brand_mark">#D9AE5F</color>
+
+    <color name="widget_surface">#1E1A15</color>
+    <color name="widget_outline">#302A23</color>
+    <color name="widget_sunken">#29241D</color>
+    <color name="widget_base">#15120E</color>
+    <color name="widget_on_surface">#F3EEE5</color>
+    <color name="widget_muted">#A39B8E</color>
+    <color name="widget_accent">#D9AE5F</color>
+    <color name="widget_on_accent">#1B160E</color>
+    <color name="widget_negative">#DC6A61</color>
+    <color name="widget_cat_gold">#D9B45A</color>
+    <color name="widget_cat_fx">#6FA694</color>
+    <color name="widget_cat_fund">#8E92CB</color>
+    <color name="widget_cat_stock">#CE8DA6</color>
+    <color name="widget_cat_cash">#C9917C</color>
+    <color name="widget_cat_silver">#A3B4C2</color>
 </resources>

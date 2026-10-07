@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <application
+        android:name=".KefeApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -24,6 +25,47 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            Hizli harcama penceresi (widget, kisayol, hizli ayar). Kendi gorevinde:
+            uygulama arkada aciksa onun ustunde degil ana ekranin ustunde acilir,
+            son kullanilanlarda gorunmez.
+        -->
+        <activity
+            android:name=".quick.QuickExpenseActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:label="@string/tile_label"
+            android:theme="@style/Theme.Kefe.Quick"
+            android:windowSoftInputMode="adjustResize" />
+
+        <receiver
+            android:name=".widget.ExpenseWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/expense_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".quick.QuickExpenseTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_add"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+        </service>
 
         <!--
             Yedek dosyasini baska bir uygulamaya (Drive, Dosyalar, WhatsApp)
