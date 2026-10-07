@@ -3034,3 +3034,101 @@ kullanıcı onayladı.
     ₺1.050", "11:49 · Su · ₺120", "5 EKİM PAZARTESİ ₺953,57" altında üç satır.
   - Tümü'nde yeni kart tasarımdaki rakamlarla.
   - Hiçbir şey kaydedilmedi.
+
+## 59 · Ana ekrandan harcama: widget, hızlı giriş, kısayollar ✅
+
+**Neydi.** Kullanıcı harcamasını her gün anında giriyor. Uygulamayı açıp
+Plan'a gidip formu açmak yavaştı. İstek: "harcama girme widget'ı, detaylı
+olabilir; tasarımı güzel, UX'i çok kullanışlı olsun."
+
+**Araştırma.** Android widget'ında metin girişi yok (Glance da RemoteViews
+üstünde çalışıyor). Önerilen yol: widget'tan hafif bir giriş penceresi açmak.
+Glance 1.2.0 kararlı. Android 11'de widget köşeleri yuvarlatılmıyor; köşeler ve
+renkler çizilebilir kaynaklardan geliyor.
+
+**Tasarım.** Ayrı Claude Design tuvali
+([Kefe Harcama Widget'ı](https://claude.ai/artifact/WV4oZsEbpd16u2RXAK8Ef6)):
+
+- ana ekranda 4×2;
+- dört boy;
+- dokunulabilir hızlı giriş;
+- kısayollar ve Hızlı Ayarlar.
+
+Kullanıcı onayladı.
+
+**Kararlar.** Hepsi önerilen seçenek:
+
+- Tasarım olduğu gibi: widget, hızlı giriş, kısayollar, Hızlı Ayarlar kutucuğu.
+- Hızlı giriş kilit **sormaz**. Pencere yalnız harcama ekler ve seçili kalemin
+  kalanını gösterir. Telefonun kilidi yeter.
+- Widget tutarları gösterir.
+- Dört kalem son 30 günde en çok girilenlerdir (şu an Kredi Kartı Limit,
+  Market, Faturalar, Diğer).
+
+**Ne yapıldı.**
+
+- **Widget** (`androidApp/widget/ExpenseWidget.kt`, Glance):
+  - 4×1 ince şerit, 2×2, 4×2 (varsayılan) ve 4×4.
+  - Bugünün toplamı; günlük pay (Tümü'ndeki "GÜNDE" ile aynı).
+  - Ayın çubuğu: aylık giderlere göre harcanan ve bugün çizgisi ("%19 · ayın
+    %23'ü"; iyelik eki okunuşa göre).
+  - Dört kalem kutusu ve büyük + düğmesi. 4×4'te son girilen üç harcama.
+  - Bugüne ya da "Harcamalar"a dokununca uygulama bu ayın Harcamalar
+    sayfasında açılır (`KefeLaunch`). Kilit açıksa önce kilit sorulur.
+- **Hızlı giriş penceresi** (`QuickExpenseActivity` ve composeApp'te
+  `ui/screens/quick`):
+  - Ana ekranın üstünde açılır, kendi görevinde çalışır.
+  - Kendi tuş takımı var; ⌫'ye basılı tutunca tutar silinir. Bugün/Dün seçilir.
+  - Kalem çipleri widget'taki sırayla.
+  - "Kalan ₺7.575,46 → ₺7.455,46" satırı: sınır aşılacaksa turuncu, aşıldıysa
+    kırmızı, kalemin aylık gideri yoksa "plan dışı".
+  - Sık girilen not çipleri (son 60 gün): not ve son tutar tek dokunuşla dolar.
+  - Kaydedince "₺120 eklendi", **Geri al** ve **Bir tane daha**. Pencere 3
+    saniyede kendiliğinden kapanır.
+  - Kayıt hesaba bağlıysa eşitlemeyle gider.
+- **Kısayollar ve Hızlı Ayarlar:** Kefe simgesine basılı tutunca "Harcama
+  ekle", en sık iki kalem ve "Harcamalar". Hızlı Ayarlar'da "Harcama ekle"
+  kutucuğu.
+- **Süreç başı** (`KefeApplication`): veritabanı ve Koin burada kurulur;
+  uygulama açılınca Compose aynı grafiği kullanır (`KefeKoin`).
+  `HomeScreenSync` deftere bakar: her yazmada ve gece yarısı widget'ı yeniden
+  çizer, kısayolları tazeler.
+
+**Cihazda bulunan ve düzeltilen.**
+
+- Glance oturumu açıkken gelen tazeleme oturumu yeniden başlatmıyor, aynı
+  bestelemeyi yeniden çiziyor. Bir kez okunan defter eski kalıyordu: Geri
+  al'dan sonra widget silinen harcamayı göstermeye devam etti. Widget artık
+  defter akışını bestelemenin içinde topluyor.
+- MIUI'de pencerenin arkası siyah görünüyor. Başlatıcı arkada açık kalsa da
+  üstüne kendi "-1 ekranı" katmanını koyuyor; `windowShowWallpaper` da duvar
+  kâğıdını öne almadı (denendi, geri alındı). Pencere koyu tasarlandığı için
+  sorun değil.
+
+**Doğrulama.**
+
+- **890 masaüstü testi**, hepsi yeşil (9 yeni).
+  - `QuickExpenseTest`, kullanıcının gerçek Ekim defteriyle (artık ortak
+    `RealOctober`):
+    - widget: ₺270, "2 harcama · günlük pay ≈ ₺2.927", "Ekim · ₺16.734 /
+      ₺87.000", "%19 · ayın %23'ü";
+    - kalemler K/M/F/D ve renkleri; son girilenler "11:49 / 08:43 / dün";
+    - kalem sırası, not önerileri (Su ₺120, Dondurma ₺130, Merve çiçek ₺680,
+      Merve yüz krem ₺623,57);
+    - kalan, aşım ve plan dışı satırları; tuş takımı kuralları; iyelik eki.
+  - `QuickExpenseViewModelTest`, gerçek veritabanıyla:
+    - widget'taki kalemle açılır, öneriyle dolar, düne kaydeder (profil, not,
+      tarih);
+    - Geri al siler, form değerleri kalır;
+    - kalemsiz açılınca en sık kalem seçili; kayıttan sonra pencere kapanır.
+- **Cihazda**, 7 Ekim 2026, Redmi Note 8 Pro (Android 11), gerçek veriyle:
+  - widget 4×2 tasarımdaki rakamlarla;
+  - Kredi Kartı Limit kutusu → pencere o kalemle açıldı;
+  - "Su ₺120" çipi → "Kalan ₺7.575,46 → ₺7.455,46";
+  - Kaydet → "₺120 eklendi · Kredi Kartı Limit · Su · bugün";
+  - Geri al → kayıt silindi (veritabanında deletedAt dolu, 30 harcama), widget
+    ₺270'e döndü;
+  - + düğmesi → en sık kalem seçili; ₺5 kaydet/geri al;
+  - dört kısayol yayımlandı;
+  - bugüne dokununca kilidin ardından Harcamalar · Ekim 2026 açıldı.
+  - Denemelerin hepsi geri alındı; kullanıcının verisi değişmedi.
