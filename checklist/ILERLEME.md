@@ -2884,3 +2884,84 @@ hepsi main'de) `git worktree remove` ile kaldırıldı. Klasörler Windows'un
 uzun yol sınırına takıldığı için uzun yol önekiyle silindi.
 `goofy-herschel-4bee88` boş olarak kaldı; o görevin oturumu açıkken klasörü
 tutuyor.
+
+## 57 · Harcamalar sayfası: kalemden ayrıntıya ✅
+
+**Neydi.** Plan sekmesindeki Harcamalar kartı en yeni 10 kaydı karışık
+gösteriyordu. "Kredi Kartı Limit"e dokununca hiçbir şey olmuyordu. Eylül'de
+Ekim'e girilen "31 Eki" kayıtları da ay boyunca listenin başında duruyordu.
+Kullanıcı bir kalemin harcamalarını sırasıyla ve notlarıyla görmek, sayfada da
+ayrıntı istedi; tasarımın tasarım tarafıyla birlikte çıkarılmasını istedi.
+
+**Tasarım.**
+
+- Claude Design tuvalinde, Kefe'nin koyu temasıyla ve kullanıcının gerçek Ekim
+  verisiyle üç ekran çizildi: [Kefe Harcamalar Sayfası](https://claude.ai/artifact/EpchdbPRUUXPJ2r1gsHMJh).
+- Kullanıcı onayladı.
+- Kalemin altında açılan liste yerine ayrı sayfa seçildi: 14 harcama ve özet
+  Plan sekmesini çok uzatırdı.
+
+**Kararlar** (ikisi de önerilen seçenek): tasarım olduğu gibi kodlansın;
+gelecek aya girilen harcama ayın SON değil İLK günü olsun.
+
+**Ne yapıldı.**
+
+- **Yeni sayfa** (`PlanExpensesScreen`, `PlanExpensesKey`, `PlanExpensesViewModel`;
+  hesap `ExpensesPage.kt`'de, saf):
+  - Üstte kalem çipleri: Tümü, harcaması olan aylık gider kalemleri, "Plan
+    dışı". Çip sayfayı yerinde süzer.
+  - **Tümü:** ay toplamı ve renkli dağılım çubuğu. Dağılımın satırına dokunmak
+    o kaleme süzer.
+  - **Aylık gider kalemi:**
+    - sınıra karşı çubuk ve üstünde "bugün" çizgisi;
+    - harcanan pay ayın geçen kısmını 15 puan aşınca "Hızlı gidiyor" uyarısı;
+      aşımda kırmızı "₺X aşıldı";
+    - Kalan, Günde (kalan gün için, aşağı yuvarlanmış), Ortalama, En büyük;
+    - 31 günlük grafik; bugün ve ileri tarihli günler ayrı renkte.
+  - **Plan dışı ve aylık gideri olmayan kalem:** toplam ve kalemlere göre satırlar.
+  - **Liste:**
+    - Gün gün ("7 Ekim Çarşamba", "bugün" / "ileri tarihli"), gün toplamıyla.
+      En yeni gün ve en son giriş üstte.
+    - Satırda not başlıkta.
+    - Alt satır: tek kalemde giriş saati ("11:49") ya da "29 Eylül'de
+      girildi"; tümünde kalemin adı.
+    - "Tarih / Tutar" sıralaması.
+    - Satıra dokunmak harcamayı düzenler.
+  - Altta sabit "Harcama ekle" / "Bu kaleme harcama ekle". Form kabuktaki Plan
+    sayfası olarak açılır, kalem seçili gelir (`PlanIntent.AddExpenseIn`).
+- **Plan sekmesi:**
+  - Aylık gider satırlarının hepsi dokunulabilir; harcaması olanlar "14
+    harcama" sayacı ve `›` taşıyor.
+  - Harcamalar kartı "Son girilenler"i giriş anına göre 4 satır gösteriyor.
+    Satırda not başlıkta, kalem ve gün altta.
+  - Kartın altında "Tümünü gör · 30 harcama" düğmesi var.
+- **Yeni harcamanın tarihi:** bu ayda bugün, geçmiş ayda ayın son günü,
+  gelecek ayda artık ayın 1'i. Mevcut 31 Ekim kayıtlarına dokunulmadı.
+- Giriş saati Türkiye saatiyle yazılıyor (UTC+3, `SystemKefeClock` ile
+  aynı gerekçe).
+
+**Doğrulama.**
+
+- **879 masaüstü testi**, hepsi yeşil. Yeniler:
+  - `ExpensesPageTest`, kullanıcının gerçek Ekim defteriyle (30 harcama, 10
+    aylık gider):
+    - ₺17.754,24 ve dağılım;
+    - Kredi Kartı Limit ₺7.424,54 / ₺15.000, "Hızlı gidiyor: harcanan %49,
+      ayın geçen kısmı %23.", "≈ ₺315", "Merve mont · 2 Eki";
+    - gün sırası ve saatler, "27–30 Eylül'de girildi";
+    - günlük grafik;
+    - tutara göre sıra;
+    - plan dışı süzgeci;
+    - geçmiş ayda aşım;
+    - boş kalem;
+    - haftanın günü.
+  - `PlanExpensesViewModelTest` (gerçek veritabanı): kaleme süzülü açılış, çip
+    ve sıralama, formdan kaydedilen harcamanın kendiliğinden gelmesi.
+  - `PlanViewModelTest`:
+    - gelecek ayda ayın 1'i;
+    - "Bu kaleme harcama ekle" formu kalemle ve o ayla açıyor.
+  - `PlanDeriveTest`:
+    - son girilenler 4 satır, giriş anına göre;
+    - önceden girilen kayıt başa geçmiyor;
+    - kalem sayacı.
+- **Cihazda**, 7 Ekim 2026, Redmi Note 8 Pro (q4wgbeeanjfqnbuc): kuruldu.

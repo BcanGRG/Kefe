@@ -577,16 +577,47 @@ class PlanDeriveTest {
     }
 
     @Test
-    fun `son girisler en yeni on`() {
+    fun `son girilenler dort tane, giris anina gore, not basta`() {
         val book = MonthBook(
             oct,
             expenses = (1..12).map { day -> expense("e$day", day, 100.0 * day, note = if (day == 12) "market" else null) },
         )
-        val recent = assertNotNull(planContent(inputs(books = listOf(book))).expenses).recent
-        assertEquals((12 downTo 3).map { "e$it" }, recent.map { it.id })
-        assertEquals("12 Eki · market", recent.first().subtitle)
-        assertEquals("Market", recent.first().title)
-        assertEquals("11 Eki", recent[1].subtitle)
+        val card = assertNotNull(planContent(inputs(books = listOf(book))).expenses)
+        // Giris ani bilinmiyorsa gunune gore; tamami "Tümünü gör"de.
+        assertEquals((12 downTo 9).map { "e$it" }, card.recent.map { it.id })
+        assertEquals(12, card.expenseCount)
+        // Notlu satir notu yazar, kalem alt satira iner.
+        assertEquals("market", card.recent.first().title)
+        assertEquals("Market · 12 Eki", card.recent.first().subtitle)
+        assertEquals("Market", card.recent[1].title)
+        assertEquals("11 Eki", card.recent[1].subtitle)
+    }
+
+    @Test
+    fun `onceden girilen ay sonu kaydi son girilenlerin basina gecmez`() {
+        // Eylul'de Ekim'e girilen "31 Eki" gune gore hep ustte dururdu; giris anina gore en altta.
+        val book = MonthBook(
+            oct,
+            expenses = listOf(
+                expense("eski", 31, 1_050.0, note = "Avokado").copy(createdAt = 1_000L),
+                expense("dun", 6, 680.0).copy(createdAt = 3_000L),
+                expense("bugun", 7, 120.0, note = "Su").copy(createdAt = 4_000L),
+            ),
+        )
+        val card = assertNotNull(planContent(inputs(books = listOf(book))).expenses)
+        assertEquals(listOf("bugun", "dun", "eski"), card.recent.map { it.id })
+        assertEquals(oct, card.month)
+    }
+
+    @Test
+    fun `aylik gider kalemi harcama sayisini yazar`() {
+        val book = MonthBook(
+            oct,
+            budgets = listOf(ExpenseBudget("b1", oct, ExpenseCategory.Groceries, 7_000.0)),
+            expenses = listOf(expense("e1", 1, 100.0), expense("e2", 2, 50.0)),
+        )
+        val row = assertNotNull(planContent(inputs(books = listOf(book))).expenses).categories.single()
+        assertEquals("2 harcama", row.countText)
     }
 
     // --- Yardimcilar ---------------------------------------------------------

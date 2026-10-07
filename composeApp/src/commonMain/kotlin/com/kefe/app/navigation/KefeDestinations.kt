@@ -31,6 +31,12 @@ data class AssetDetailKey(val positionId: String) : KefeKey
 
 data class GoalDetailKey(val goalId: String) : KefeKey
 
+/**
+ * Harcamalar sayfasi: bir ayin harcamalari, tumu ya da tek kalem.
+ * [filter] ExpenseFilter.key() bicimi - null = tumu.
+ */
+data class PlanExpensesKey(val year: Int, val month: Int, val filter: String?) : KefeKey
+
 data object MarketKey : KefeKey
 
 data object ActivityKey : KefeKey

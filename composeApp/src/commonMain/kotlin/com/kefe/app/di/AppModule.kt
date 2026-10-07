@@ -58,6 +58,9 @@ import com.kefe.app.ui.screens.transaction.AddTransactionViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
+import com.kefe.app.domain.model.YearMonth
+import com.kefe.app.ui.screens.plan.ExpenseFilter
+import com.kefe.app.ui.screens.plan.PlanExpensesViewModel
 
 /**
  * Ornek portfoyu (13 pozisyon, 21 islem) veritabanina tohumlar - GELISTIRME BAYRAGI.
@@ -158,6 +161,7 @@ val appModule = module {
     // Detay ekranlari hedef/pozisyon kimligini calisma aninda alir.
     viewModel { (positionId: String) -> AssetDetailViewModel(get(), get(), get(), positionId) }
     viewModel { (goalId: String) -> GoalDetailViewModel(get(), get(), goalId, get(), get()) }
+    viewModel { (month: YearMonth, filter: ExpenseFilter) -> PlanExpensesViewModel(get(), get(), month, filter) }
 }
 
 /**

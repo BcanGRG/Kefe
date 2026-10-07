@@ -68,6 +68,10 @@ import com.kefe.app.ui.theme.KefeTheme
 import com.kefe.app.ui.theme.Sizes
 import com.kefe.app.ui.theme.Space
 import com.kefe.app.ui.theme.tabular
+import com.kefe.app.domain.model.YearMonth
+import com.kefe.app.domain.model.ExpenseCategory
+import com.kefe.app.ui.format.trUpper
+import androidx.compose.ui.text.font.FontWeight
 
 /**
  * Plan sekmesi: ayin yatirim plani, para akisi, giderleri ve serisi - tek kolon.
@@ -82,6 +86,8 @@ fun PlanScreen(
     onIntent: (PlanIntent) -> Unit,
     onOpenGoal: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Aylik gider kalemi ya da "Tümünü gör": Harcamalar sayfasi (bkz. PlanExpensesScreen). */
+    onOpenExpenses: (YearMonth, ExpenseFilter) -> Unit = { _, _ -> },
 ) {
     Column(modifier.fillMaxSize()) {
         PlanHeaderBar(
@@ -92,7 +98,7 @@ fun PlanScreen(
         )
         when (state.stage) {
             PlanStage.Loading -> PlanSkeleton()
-            PlanStage.Ready -> PlanBody(state.content, onIntent, onOpenGoal, Modifier.weight(1f))
+            PlanStage.Ready -> PlanBody(state.content, onIntent, onOpenGoal, onOpenExpenses, Modifier.weight(1f))
         }
     }
 }
@@ -102,6 +108,7 @@ private fun PlanBody(
     content: PlanContent,
     onIntent: (PlanIntent) -> Unit,
     onOpenGoal: (String) -> Unit,
+    onOpenExpenses: (YearMonth, ExpenseFilter) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -118,7 +125,7 @@ private fun PlanBody(
             GoalContributionCard(content.goalContributions, onOpenGoal)
         }
         content.flow?.let { MoneyFlowCardView(it, onIntent) }
-        content.expenses?.let { ExpensesCardView(it, onIntent) }
+        content.expenses?.let { ExpensesCardView(it, onIntent, onOpenExpenses) }
         content.streak?.let { StreakCardView(it) }
     }
 }
@@ -690,10 +697,14 @@ private fun IncomeRow(row: IncomeRowUi, onIntent: (PlanIntent) -> Unit) {
  * aşıldı"); kirmizi yalniz eslik eder.
  */
 @Composable
-private fun ExpensesCardView(card: ExpensesCard, onIntent: (PlanIntent) -> Unit) {
+private fun ExpensesCardView(
+    card: ExpensesCard,
+    onIntent: (PlanIntent) -> Unit,
+    onOpenExpenses: (YearMonth, ExpenseFilter) -> Unit,
+) {
     // Iki ayri kart; aradaki bosluk sayfa sutununun kendi araligindan gelir.
-    MonthlyCostsCard(card, onIntent)
-    SpendingCard(card, onIntent)
+    MonthlyCostsCard(card, onIntent) { onOpenExpenses(card.month, ExpenseFilter.Category(it)) }
+    SpendingCard(card, onIntent) { onOpenExpenses(card.month, ExpenseFilter.All) }
 }
 
 /**
@@ -701,7 +712,7 @@ private fun ExpensesCardView(card: ExpensesCard, onIntent: (PlanIntent) -> Unit)
  * girilen kalemde "₺372 / ₺7.000" ve cubuk; girilmeyende yalniz ayrilan tutar.
  */
 @Composable
-private fun MonthlyCostsCard(card: ExpensesCard, onIntent: (PlanIntent) -> Unit) {
+private fun MonthlyCostsCard(card: ExpensesCard, onIntent: (PlanIntent) -> Unit, onOpenCategory: (ExpenseCategory) -> Unit) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
@@ -730,9 +741,9 @@ private fun MonthlyCostsCard(card: ExpensesCard, onIntent: (PlanIntent) -> Unit)
                 card.plannedLine?.let { line ->
                     Text(line, style = t.caption.tabular(), color = c.onSurfaceMuted)
                 }
+                Spacer(Modifier.height(Space.x4))
                 card.categories.forEach { row ->
-                    Spacer(Modifier.height(Space.x12))
-                    CategoryRow(row)
+                    CategoryRow(row) { onOpenCategory(row.category) }
                 }
             }
         }
@@ -745,7 +756,7 @@ private fun MonthlyCostsCard(card: ExpensesCard, onIntent: (PlanIntent) -> Unit)
  * isaretlenir - gelirden ayrica dusen yalniz odur.
  */
 @Composable
-private fun SpendingCard(card: ExpensesCard, onIntent: (PlanIntent) -> Unit) {
+private fun SpendingCard(card: ExpensesCard, onIntent: (PlanIntent) -> Unit, onOpenAll: () -> Unit) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
 
@@ -780,7 +791,14 @@ private fun SpendingCard(card: ExpensesCard, onIntent: (PlanIntent) -> Unit) {
         }
 
         if (card.recent.isNotEmpty()) {
-            Spacer(Modifier.height(Space.x8))
+            Spacer(Modifier.height(Space.x12))
+            Text(
+                "Son girilenler".trUpper(),
+                style = t.micro.copy(fontWeight = FontWeight.SemiBold),
+                color = c.onSurfaceMuted,
+                modifier = Modifier.padding(horizontal = Space.x12),
+            )
+            Spacer(Modifier.height(Space.x4))
             card.recent.forEach { row ->
                 KefeListRow(
                     title = row.title,
@@ -802,28 +820,62 @@ private fun SpendingCard(card: ExpensesCard, onIntent: (PlanIntent) -> Unit) {
                     },
                 )
             }
+            // Ayin tamami - gun gun, notlariyla (Harcamalar sayfasi).
+            Spacer(Modifier.height(Space.x8))
+            Row(
+                Modifier
+                    .padding(horizontal = Space.x12)
+                    .fillMaxWidth()
+                    .height(Sizes.touchTarget)
+                    .clip(KefeShapes.button)
+                    .background(c.surfaceSunken)
+                    .clickable(role = Role.Button, onClick = onOpenAll),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Tümünü gör · ${card.expenseCount} harcama",
+                    style = t.bodyStrong,
+                    color = c.accent,
+                )
+                Spacer(Modifier.width(Space.x4))
+                KefeIcon(KefeIcons.ChevronRight, null, size = IconSize.small, tint = c.accent)
+            }
         }
     }
 }
 
 @Composable
-private fun CategoryRow(row: CategoryRowUi) {
+private fun CategoryRow(row: CategoryRowUi, onOpen: () -> Unit) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
     val over = row.overText != null
 
-    Column(Modifier.fillMaxWidth()) {
+    // Kaleme dokununca o kalemin harcamalari (Harcamalar sayfasi, kaleme suzulu).
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = Sizes.touchTarget)
+            .clip(KefeShapes.button)
+            .clickable(onClickLabel = "Harcamalarını göster", role = Role.Button, onClick = onOpen)
+            .padding(vertical = Space.x8),
+        verticalArrangement = Arrangement.Center,
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = row.label,
-                style = t.body,
-                color = c.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = row.label,
+                    style = t.body,
+                    color = c.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                row.countText?.let { Text(it, style = t.micro, color = c.onSurfaceMuted) }
+            }
             Spacer(Modifier.width(Space.x8))
-            Text(row.amounts, style = t.caption.tabular(), color = c.onSurfaceMuted)
+            Text(row.amounts, style = t.caption.tabular(), color = if (row.ratio != null) c.onSurface else c.onSurfaceMuted)
+            Spacer(Modifier.width(Space.x4))
+            KefeIcon(KefeIcons.ChevronRight, null, size = IconSize.small, tint = c.onSurfaceMuted)
         }
         row.ratio?.let { ratio ->
             Spacer(Modifier.height(6.dp))

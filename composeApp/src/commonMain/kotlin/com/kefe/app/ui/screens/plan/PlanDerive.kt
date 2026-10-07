@@ -590,6 +590,7 @@ internal fun expensesCard(book: MonthBook): ExpensesCard {
     val flow = monthFlow(book, emptyList(), plannedInvest = null)
     val spentBy = flow.expensesByCategory
     val budgetBy = flow.budgetByCategory
+    val countBy = book.expenses.groupingBy { it.category }.eachCount()
 
     // Aylik giderler ayrilana gore - en buyuk kalem ustte.
     val categories = budgetBy.entries.sortedByDescending { it.value }.map { (category, planned) ->
@@ -601,6 +602,7 @@ internal fun expensesCard(book: MonthBook): ExpensesCard {
             amounts = if (spent > 0.0) "${Money.tlExact(spent)} / ${Money.tlExact(planned)}" else Money.tlExact(planned),
             ratio = if (spent > 0.0) spentRatio(spent, planned) else null,
             overText = overText(spent, planned),
+            countText = countBy[category]?.let { "$it harcama" },
         )
     }
     val plannedLine = flow.budgetTotal?.let {
@@ -612,24 +614,29 @@ internal fun expensesCard(book: MonthBook): ExpensesCard {
     }
 
     return ExpensesCard(
+        month = book.month,
         plannedTotal = flow.budgetTotal?.let { Money.tlExact(it) },
         plannedLine = plannedLine,
         categories = categories,
         totalLine = if (book.expenses.isEmpty()) "Harcama girilmedi." else Money.tlExact(flow.expenses),
         unplannedLine = flow.unplannedSpent.takeIf { it > 0.0 }?.let { "Plan dışı ${Money.tlExact(it)}" },
+        // GIRIS sirasiyla: kullanici her gun girdigini en ustte gorur. Gune gore
+        // siralayinca Eylul'de Ekim'e girilen "31 Eki" kayitlari hep ustte duruyordu.
         recent = book.expenses
-            .sortedWith(NewestFirst)
+            .sortedWith(LastEnteredFirst)
             .take(RecentExpenseCount)
             .map { e ->
-                val note = e.note?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+                val note = e.note?.trim()?.takeIf { it.isNotEmpty() }
+                val day = "${e.date.day} ${e.date.monthLabel()}"
                 ExpenseRowUi(
                     id = e.id,
-                    title = e.category.label(),
-                    subtitle = "${e.date.day} ${e.date.monthLabel()}$note",
+                    title = note ?: e.category.label(),
+                    subtitle = if (note != null) "${e.category.label()} · $day" else day,
                     amount = Money.tlExact(e.amount),
                     unplanned = e.category !in budgetBy,
                 )
             },
+        expenseCount = book.expenses.size,
     )
 }
 
@@ -643,15 +650,15 @@ private fun spentRatio(spent: Double, budget: Double): Float? =
 private fun overText(spent: Double, budget: Double?): String? =
     if (budget != null && spent > budget) "${Money.tlExact(spent - budget)} aşıldı" else null
 
-/** En yeni once: tarih, ayni gunde giris ani. */
-private val NewestFirst: Comparator<ExpenseEntry> =
-    compareByDescending<ExpenseEntry> { it.date.year }
+/** Son girilen once; giris ani bilinmeyen eski kayitlar gunune gore. */
+private val LastEnteredFirst: Comparator<ExpenseEntry> =
+    compareByDescending<ExpenseEntry> { it.createdAt }
+        .thenByDescending { it.date.year }
         .thenByDescending { it.date.month }
         .thenByDescending { it.date.day }
-        .thenByDescending { it.createdAt }
 
-/** "Son girişler"de gosterilen en fazla giris. */
-private const val RecentExpenseCount = 10
+/** Karttaki "Son girilenler"; tamami Harcamalar sayfasinda. */
+private const val RecentExpenseCount = 4
 
 /** Plan disi satirinin notunda adi gecen kalem sayisi. */
 private const val UnplannedNameCount = 3
@@ -684,17 +691,31 @@ private fun MonthBook.incomeOf(memberId: String, kind: IncomeKind): Double? =
  * bugun, baska ayda o ayin son gunu (onayli kural). Ekleyen: bu cihazin profili,
  * yoksa ilk uye (ekleme sayfasiyla ayni kural).
  */
-internal fun newExpenseEditor(inputs: PlanInputs, id: String): ExpenseEditor = ExpenseEditor(
-    month = inputs.month,
+/**
+ * Yeni harcama formu. Tarih: bu ayda bugun, gecmis ayda ayin son gunu, GELECEK
+ * ayda ayin ILK gunu (kullanici karari, Ekim 2026: Eylul'de Ekim'e girilenler
+ * "31 Eki" oluyor ve ay boyunca listenin basinda duruyordu).
+ */
+internal fun newExpenseEditor(
+    inputs: PlanInputs,
+    id: String,
+    month: YearMonth = inputs.month,
+    category: ExpenseCategory? = null,
+): ExpenseEditor = ExpenseEditor(
+    month = month,
     id = id,
     isNew = true,
-    category = null,
+    category = category,
     amountText = "",
     note = "",
-    date = if (inputs.month == inputs.current) inputs.today else inputs.month.lastDay(),
+    date = when {
+        month == inputs.current -> inputs.today
+        month < inputs.current -> month.lastDay()
+        else -> month.firstDay()
+    },
     addedByMemberId = inputs.activeMemberId ?: inputs.members.firstOrNull()?.id,
     customCategories = customCategoriesOf(inputs.books),
-    plannedCategories = plannedCategoriesOf(inputs.book),
+    plannedCategories = plannedCategoriesOf(inputs.books.firstOrNull { it.month == month } ?: MonthBook(month)),
 )
 
 /** Ayin aylik gideri olan kalemler, ayrilana gore - harcama ciplerinin basi. */
