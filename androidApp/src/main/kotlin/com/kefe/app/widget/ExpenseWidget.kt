@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.TextUnit
@@ -73,12 +76,22 @@ class ExpenseWidget : GlanceAppWidget() {
 
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /**
+     * Icerik defter AKISINDAN cizilir, bir kez okunan degerden degil. NEYDI:
+     * Glance oturumu acikken gelen tazeleme (updateAll) oturumu yeniden
+     * baslatmiyor, ayni bestelemeyi yeniden ciziyor; tek seferlik okunan defter
+     * eski kaliyordu - "Geri al"dan sonra widget silinen harcamayi gostermeye
+     * devam etti. Ilk deger yine once okunur: widget bos bir kareyle acilmasin.
+     */
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val ui = withContext(Dispatchers.IO) {
-            val koin = KefeKoin.koin()
-            expenseWidget(koin.get<PlanRepository>().observeAllBooks().first(), koin.get<KefeClock>().today())
+        val koin = KefeKoin.koin()
+        val plan = koin.get<PlanRepository>()
+        val clock = koin.get<KefeClock>()
+        val first = withContext(Dispatchers.IO) { plan.observeAllBooks().first() }
+        provideContent {
+            val books by remember { plan.observeAllBooks() }.collectAsState(first)
+            WidgetBody(context, expenseWidget(books, clock.today()))
         }
-        provideContent { WidgetBody(context, ui) }
     }
 }
 

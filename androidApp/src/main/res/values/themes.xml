@@ -29,6 +29,11 @@
     <!--
         Hizli harcama penceresi: ana ekranin ustunde, yari saydam. Karartmayi ve
         alt sayfayi Compose cizer; pencerenin kendisi saydam kalir.
+
+        MIUI'de arka siyah gorunur: baslatici arkada acik kalsa da ustune kendi
+        "-1 ekrani" katmanini koyuyor; windowShowWallpaper da duvar kagidini one
+        almiyor (denendi, Redmi Note 8 Pro, Ekim 2026). Pencere koyu tasarlandigi
+        icin sorun degil; Pixel gibi baslaticilarda ana ekran karartilmis gorunur.
     -->
     <style name="Theme.Kefe.Quick" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
