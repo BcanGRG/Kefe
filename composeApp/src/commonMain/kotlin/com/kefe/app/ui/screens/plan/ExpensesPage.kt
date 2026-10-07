@@ -4,6 +4,7 @@ import com.kefe.app.domain.model.ExpenseCategory
 import com.kefe.app.domain.model.ExpenseEntry
 import com.kefe.app.domain.model.KefeDate
 import com.kefe.app.domain.model.MonthBook
+import com.kefe.app.domain.model.MonthFlow
 import com.kefe.app.domain.model.YearMonth
 import com.kefe.app.domain.model.daysInMonth
 import com.kefe.app.domain.model.kefeDateOfEpochDay
@@ -81,8 +82,16 @@ data class ExpenseChipUi(
 )
 
 sealed interface ExpensesSummaryUi {
-    /** Tumu: ay toplami ve kalemlere gore dagilim. */
-    data class Overview(val total: String, val line: String, val split: List<SplitRowUi>) : ExpensesSummaryUi
+    /**
+     * Tumu: ustte aylik giderlere gore durum ([budget], aylik gider yoksa null),
+     * altta ay toplami ve kalemlere gore dagilim.
+     */
+    data class Overview(
+        val budget: Budgeted?,
+        val total: String,
+        val line: String,
+        val split: List<SplitRowUi>,
+    ) : ExpensesSummaryUi
 
     /** Aylik gideri olan kalem: sinira karsi. */
     data class Budgeted(
@@ -120,10 +129,14 @@ data class SplitRowUi(
     val filter: ExpenseFilter,
 )
 
-/** "Hızlı gidiyor ..." uyari, ya da asim. */
-data class PaceUi(val text: String, val over: Boolean)
+/** Sinira gore gidis: asim, "Hızlı gidiyor" ya da "Plana uygun". */
+data class PaceUi(val text: String, val tone: PaceTone) {
+    val over: Boolean get() = tone == PaceTone.Over
+}
 
-data class StatUi(val label: String, val value: String, val note: String)
+enum class PaceTone { Over, Fast, OnTrack }
+
+data class StatUi(val label: String, val value: String, val note: String, val negative: Boolean = false)
 
 data class DailySpendUi(val bars: List<DayBarUi>, val peak: String, val axis: List<String>)
 
@@ -147,7 +160,14 @@ data class ExpenseLineUi(
     /** Not; not yoksa kalemin adi (tumu) ya da "Not girilmedi" (tek kalem). */
     val title: String,
     val titleMuted: Boolean,
-    /** Tumu: kalem; tek kalem: giris saati ("11:49") ya da "29 Eylül'de girildi". */
+    /**
+     * Tek kalemde gun gun: sol sutun - giris saati ("11:49"), baska gun girildiyse
+     * o gun ("29 Eyl"). Satir tek satira iner. Diger gorunumlerde null.
+     */
+    val lead: String? = null,
+    /** [lead] harcama gununden ONCE girilen bir gun: altin renkli yazilir. */
+    val leadEarly: Boolean = false,
+    /** Tumu: kalem (notsuzsa giris ani); tutar sirasinda gun. Tek kalemde gun gun bos. */
     val sub: String,
     val amount: String,
     val unplanned: Boolean,
@@ -211,10 +231,14 @@ internal fun expensesPage(
 
     val summary = when (filter) {
         ExpenseFilter.All -> ExpensesSummaryUi.Overview(
+            // Kullanici karari (Ekim 2026): BUTUN aylik giderlere karsi - kira gibi
+            // harcamasi henuz girilmemis kalemler de dahil.
+            budget = flow.budgetTotal?.takeIf { it > 0.0 }?.let { limit ->
+                overallBudget(flow.spentInPlan, limit, flow, all, month, today, relation)
+            },
             total = Money.tlExact(flow.expenses),
             line = listOfNotNull(
                 "${all.size} harcama",
-                flow.spentInPlan.takeIf { it > 0.0 }?.let { "aylık giderlerden ${Money.tlExact(it)}" },
                 flow.unplannedSpent.takeIf { it > 0.0 }?.let { "plan dışı ${Money.tlExact(it)}" },
             ).joinToString(" · "),
             split = buildList {
@@ -336,32 +360,14 @@ private fun budgetedSummary(
     val days = daysInMonth(month.year, month.month)
     val todayRatio = if (relation == Relation.Current) today.day.toDouble() / days else null
     val over = spent > limit + Tolerance
-    val pace = when {
-        over -> PaceUi("${Money.tlExact(spent - limit)} aşıldı", over = true)
-        // Ayin gecen kismindan belirgin hizli: kullanici gunun birinde siniri asmadan gorsun.
-        todayRatio != null && spent > 0.0 && ratio - todayRatio >= PaceMargin ->
-            PaceUi("Hızlı gidiyor: harcanan ${percent(ratio)}, ayın geçen kısmı ${percent(todayRatio)}.", over = false)
-        else -> null
-    }
+    val pace = paceOf(spent, limit, ratio, todayRatio)
     val stats = buildList {
         if (over) {
-            add(StatUi("AŞIM", Money.tlExact(spent - limit), "sınırın üstünde"))
+            add(StatUi("AŞIM", Money.tlExact(spent - limit), "sınırın üstünde", negative = true))
         } else {
             add(StatUi("KALAN", Money.tlExact(limit - spent), "sınıra kadar"))
         }
-        val left = limit - spent
-        when (relation) {
-            Relation.Current -> if (left > Tolerance) {
-                val daysLeft = days - today.day
-                if (daysLeft > 0) {
-                    add(StatUi("GÜNDE", "≈ ${Money.tlExact(floor(left / daysLeft))}", "kalan $daysLeft gün için"))
-                } else {
-                    add(StatUi("BUGÜN", Money.tlExact(left), "ayın son günü"))
-                }
-            }
-            Relation.Future -> add(StatUi("GÜNDE", "≈ ${Money.tlExact(floor(limit / days))}", "ay boyunca"))
-            Relation.Past -> Unit
-        }
+        perDayStat(limit - spent, limit, days, today, relation)?.let(::add)
         addAll(spendStats(entries, showCategory = false))
     }
     return ExpensesSummaryUi.Budgeted(
@@ -375,6 +381,83 @@ private fun budgetedSummary(
         pace = pace,
         stats = stats,
     )
+}
+
+/**
+ * Tumunde ust kart: ayin harcamasi BUTUN aylik giderlere karsi. Kalan ve gunluk pay
+ * aylik giderlerin kalanindan; asim kalem kalem toplanir (bir kalemin asimini
+ * digerinin artani kapatmaz).
+ */
+private fun overallBudget(
+    spent: Double,
+    limit: Double,
+    flow: MonthFlow,
+    all: List<ExpenseEntry>,
+    month: YearMonth,
+    today: KefeDate,
+    relation: Relation,
+): ExpensesSummaryUi.Budgeted {
+    val ratio = spent / limit
+    val days = daysInMonth(month.year, month.month)
+    val todayRatio = if (relation == Relation.Current) today.day.toDouble() / days else null
+    val left = limit - spent
+    val overCategories = flow.budgetByCategory.entries
+        .filter { (category, budget) -> (flow.expensesByCategory[category] ?: 0.0) > budget + Tolerance }
+        .map { it.key.label() }
+    val stats = buildList {
+        if (left >= 0.0) {
+            add(StatUi("KALAN", Money.tlExact(left), "aylık giderlerden"))
+        } else {
+            add(StatUi("AŞIM", Money.tlExact(-left), "aylık giderlerin üstünde", negative = true))
+        }
+        perDayStat(left, limit, days, today, relation)?.let(::add)
+        if (flow.overPlan > Tolerance) {
+            add(StatUi("AŞILAN", Money.tlExact(flow.overPlan), overCategories.joinToString(", "), negative = true))
+        }
+        if (flow.unplannedSpent > 0.0) {
+            add(StatUi("PLAN DIŞI", Money.tlExact(flow.unplannedSpent), "${all.count { it.category !in flow.budgetByCategory }} harcama"))
+        }
+    }
+    return ExpensesSummaryUi.Budgeted(
+        spent = Money.tlExact(spent),
+        limit = Money.tlExact(limit),
+        ratio = ratio.coerceIn(0.0, 1.0).toFloat(),
+        over = spent > limit + Tolerance,
+        spentText = "${percent(ratio)} harcandı",
+        todayRatio = todayRatio?.toFloat(),
+        todayText = todayRatio?.let { "bugün · ${percent(it)}" },
+        pace = paceOf(spent, limit, ratio, todayRatio),
+        stats = stats,
+    )
+}
+
+/**
+ * Sinira gore gidis. Asim her ayda yazilir; hiz yalniz bu ayda, harcama varken:
+ * harcanan pay ayin gecen kismini [PaceMargin] asarsa "Hızlı gidiyor", degilse
+ * "Plana uygun".
+ */
+private fun paceOf(spent: Double, limit: Double, ratio: Double, todayRatio: Double?): PaceUi? = when {
+    spent > limit + Tolerance -> PaceUi("${Money.tlExact(spent - limit)} aşıldı", PaceTone.Over)
+    todayRatio == null || spent <= 0.0 -> null
+    ratio - todayRatio >= PaceMargin ->
+        PaceUi("Hızlı gidiyor: harcanan ${percent(ratio)}, ayın geçen kısmı ${percent(todayRatio)}.", PaceTone.Fast)
+    else -> PaceUi("Plana uygun: harcanan ${percent(ratio)}, ayın geçen kısmı ${percent(todayRatio)}.", PaceTone.OnTrack)
+}
+
+/** Kalan paranin gune dusen kismi: bu ayda kalan gunlere, gelecek ayda butun aya. */
+private fun perDayStat(left: Double, limit: Double, days: Int, today: KefeDate, relation: Relation): StatUi? = when (relation) {
+    Relation.Current -> if (left > Tolerance) {
+        val daysLeft = days - today.day
+        if (daysLeft > 0) {
+            StatUi("GÜNDE", "≈ ${Money.tlExact(floor(left / daysLeft))}", "kalan $daysLeft gün için")
+        } else {
+            StatUi("BUGÜN", Money.tlExact(left), "ayın son günü")
+        }
+    } else {
+        null
+    }
+    Relation.Future -> StatUi("GÜNDE", "≈ ${Money.tlExact(floor(limit / days))}", "ay boyunca")
+    Relation.Past -> null
 }
 
 /** Ortalama ve en buyuk harcama; harcama yoksa bos. */
@@ -431,16 +514,21 @@ private fun line(
 ): ExpenseLineUi {
     val note = e.noteOrNull()
     val shortDate = "${e.date.day} ${e.date.monthLabel()}"
+    val compact = single && sort == ExpenseSort.Date
     val sub = when {
         sort == ExpenseSort.Amount -> if (!single && note != null) "$shortDate · ${e.category.label()}" else shortDate
-        single -> entryMoment(e).orEmpty()
+        // Tek kalemde gun gun: saat sol sutunda, satir tek satir.
+        compact -> ""
         note != null -> e.category.label()
         else -> entryMoment(e).orEmpty()
     }
+    val entered = enteredDay(e)
     return ExpenseLineUi(
         id = e.id,
         title = note ?: if (single) "Not girilmedi" else e.category.label(),
         titleMuted = note == null && single,
+        lead = if (compact) entryLead(e) else null,
+        leadEarly = compact && entered != null && entered.toEpochDay() < e.date.toEpochDay(),
         sub = sub,
         amount = Money.tlExact(e.amount),
         unplanned = !single && e.category !in budgets,
@@ -467,6 +555,18 @@ internal fun entryMoment(e: ExpenseEntry): String? {
         return "${pad2(minutes / 60)}:${pad2(minutes % 60)}"
     }
     return "${day.day} ${trMonthLocative(day.month)} girildi"
+}
+
+/** Giris gunu (Turkiye saatiyle); damga yoksa null. */
+private fun enteredDay(e: ExpenseEntry): KefeDate? =
+    if (e.createdAt <= 0L) null else kefeDateOfEpochDay(floorDiv(e.createdAt + IstanbulOffsetMillis, DayMillis))
+
+/** Sol sutun: harcama gunu girildiyse saat ("11:49"), baska gun girildiyse kisa gun ("29 Eyl"). */
+internal fun entryLead(e: ExpenseEntry): String? {
+    val day = enteredDay(e) ?: return null
+    if (day != e.date) return "${day.day} ${day.monthLabel()}"
+    val minutes = floorMod(e.createdAt + IstanbulOffsetMillis, DayMillis) / MinuteMillis
+    return "${pad2(minutes / 60)}:${pad2(minutes % 60)}"
 }
 
 /** Gunden ONCE girilen harcamalar: "27–30 Eylül'de girildi" / "29 Eylül'de girildi". */

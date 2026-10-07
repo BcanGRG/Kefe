@@ -1,6 +1,7 @@
 package com.kefe.app.ui.screens.plan
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,7 +39,6 @@ import com.kefe.app.ui.components.KefeBadge
 import com.kefe.app.ui.components.KefeCard
 import com.kefe.app.ui.components.KefeChip
 import com.kefe.app.ui.components.KefeHairline
-import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.components.KefeIconButton
 import com.kefe.app.ui.components.KefePrimaryButton
 import com.kefe.app.ui.components.KefeProgressBarThin
@@ -46,6 +46,7 @@ import com.kefe.app.ui.components.KefeSegmentedControl
 import com.kefe.app.ui.components.KefeSkeletonBlock
 import com.kefe.app.ui.components.KefeTextButton
 import com.kefe.app.ui.format.trUpper
+import com.kefe.app.ui.icons.KefeIcon
 import com.kefe.app.ui.icons.KefeIcons
 import com.kefe.app.ui.theme.KefeShapes
 import com.kefe.app.ui.theme.KefeTheme
@@ -57,6 +58,10 @@ import com.kefe.app.ui.theme.tabular
  * "Harcamalar" sayfasi (bkz. ExpensesPage.kt): ustte kalem cipleri, ozet, tek
  * kalemde gunluk grafik, altta gun gun liste. Satira dokunmak harcamayi, alttaki
  * dugme yeni harcamayi acar - ikisi de kabuktaki Plan sheet'i.
+ *
+ * Liste KOMPAKT (Ekim 2026): gun basligi kucuk, soluk bir etiket; o gunun
+ * harcamalari altinda AYRI bir kartta. Once baslik ve satirlar ayni boyda, ayni
+ * hizadaydi ve kullaniciya "ic ice" gorunuyordu.
  */
 @Composable
 fun PlanExpensesScreen(
@@ -167,7 +172,7 @@ private fun PageBody(
                 Modifier.padding(horizontal = Space.x16),
                 verticalArrangement = Arrangement.spacedBy(Space.x12),
             ) {
-                SummaryCard(page.summary, select, onEditBudget)
+                SummaryCards(page.summary, select, onEditBudget)
                 page.daily?.let { DailyCard(it) }
             }
         }
@@ -207,22 +212,42 @@ private fun PageBody(
             }
         }
 
-        page.groups.forEach { group ->
-            item(key = "g-${group.title}") { DayHeader(group) }
-            items(group.items, key = { it.id }) { line -> LineRow(line, onEdit) }
+        // Her gun: kucuk etiket + o gunun harcamalari tek kartta.
+        items(page.groups, key = { "g-${it.title}" }) { group ->
+            Column(Modifier.padding(horizontal = Space.x16)) {
+                DayHeader(group)
+                LinesCard(group.items, onEdit)
+            }
         }
-        items(page.ranked, key = { it.id }) { line -> LineRow(line, onEdit) }
+        if (page.ranked.isNotEmpty()) {
+            item(key = "ranked") {
+                Column(Modifier.padding(start = Space.x16, end = Space.x16, top = Space.x12)) {
+                    LinesCard(page.ranked, onEdit)
+                }
+            }
+        }
     }
 }
 
 // --- Ozet ------------------------------------------------------------------------
 
 @Composable
-private fun SummaryCard(summary: ExpensesSummaryUi, select: (ExpenseFilter) -> Unit, onEditBudget: () -> Unit) {
-    KefeCard(Modifier.fillMaxWidth()) {
-        when (summary) {
-            is ExpensesSummaryUi.Overview -> {
-                Headline(summary.total, summary.line)
+private fun SummaryCards(summary: ExpensesSummaryUi, select: (ExpenseFilter) -> Unit, onEditBudget: () -> Unit) {
+    when (summary) {
+        is ExpensesSummaryUi.Overview -> Column(verticalArrangement = Arrangement.spacedBy(Space.x12)) {
+            summary.budget?.let { budget ->
+                KefeCard(Modifier.fillMaxWidth()) {
+                    SectionLabel("Aylık giderlere göre")
+                    Spacer(Modifier.height(Space.x8))
+                    BudgetedSummary(budget, editLabel = null, onEditBudget = onEditBudget)
+                }
+            }
+            KefeCard(Modifier.fillMaxWidth()) {
+                if (summary.budget != null) {
+                    SectionLabel("Kalemlere göre")
+                    Spacer(Modifier.height(Space.x8))
+                }
+                Headline(summary.total, summary.line, large = summary.budget == null)
                 if (summary.split.isNotEmpty()) {
                     Spacer(Modifier.height(Space.x12))
                     SplitBar(summary.split)
@@ -230,26 +255,37 @@ private fun SummaryCard(summary: ExpensesSummaryUi, select: (ExpenseFilter) -> U
                     summary.split.forEach { SplitLegendRow(it, select) }
                 }
             }
+        }
 
-            is ExpensesSummaryUi.Unbudgeted -> {
-                Headline(summary.total, summary.line)
-                if (summary.split.size > 1) {
-                    Spacer(Modifier.height(Space.x8))
-                    summary.split.forEach { SplitLegendRow(it, select) }
-                }
-                StatsGrid(summary.stats)
+        is ExpensesSummaryUi.Unbudgeted -> KefeCard(Modifier.fillMaxWidth()) {
+            Headline(summary.total, summary.line, large = true)
+            if (summary.split.size > 1) {
+                Spacer(Modifier.height(Space.x8))
+                summary.split.forEach { SplitLegendRow(it, select) }
             }
+            StatsGrid(summary.stats)
+        }
 
-            is ExpensesSummaryUi.Budgeted -> BudgetedSummary(summary, onEditBudget)
+        is ExpensesSummaryUi.Budgeted -> KefeCard(Modifier.fillMaxWidth()) {
+            BudgetedSummary(summary, editLabel = "Sınırı düzenle", onEditBudget = onEditBudget)
         }
     }
 }
 
 @Composable
-private fun Headline(total: String, line: String) {
+private fun SectionLabel(text: String) {
+    Text(
+        text.trUpper(),
+        style = KefeTheme.type.micro.copy(fontWeight = FontWeight.SemiBold),
+        color = KefeTheme.colors.onSurfaceMuted,
+    )
+}
+
+@Composable
+private fun Headline(total: String, line: String, large: Boolean) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
-    Text(total, style = t.h1.tabular(), color = c.onSurface)
+    Text(total, style = (if (large) t.h1 else t.h2).tabular(), color = c.onSurface)
     Text(line, style = t.caption.tabular(), color = c.onSurfaceMuted)
 }
 
@@ -290,15 +326,16 @@ private fun SplitLegendRow(row: SplitRowUi, select: (ExpenseFilter) -> Unit) {
     }
 }
 
+/** Sinira karsi durum: tek kalemde "Sınırı düzenle"li, tumunde aylik giderlere gore. */
 @Composable
-private fun BudgetedSummary(s: ExpensesSummaryUi.Budgeted, onEditBudget: () -> Unit) {
+private fun BudgetedSummary(s: ExpensesSummaryUi.Budgeted, editLabel: String?, onEditBudget: () -> Unit) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
     Row(verticalAlignment = Alignment.Bottom) {
         Text(s.spent, style = t.h1.tabular(), color = c.onSurface)
         Spacer(Modifier.width(Space.x8))
         Text("/ ${s.limit}", style = t.body.tabular(), color = c.onSurfaceMuted, modifier = Modifier.padding(bottom = 4.dp).weight(1f))
-        KefeTextButton(text = "Sınırı düzenle", onClick = onEditBudget)
+        editLabel?.let { KefeTextButton(text = it, onClick = onEditBudget) }
     }
     Spacer(Modifier.height(Space.x8))
     // Cubuk ve ustunde "bugun" cizgisi: ayin ne kadari gectiyse orada.
@@ -327,9 +364,19 @@ private fun BudgetedSummary(s: ExpensesSummaryUi.Budgeted, onEditBudget: () -> U
     }
     s.pace?.let { pace ->
         Spacer(Modifier.height(Space.x10))
-        val color = if (pace.over) c.negative else c.warning
+        val color = when (pace.tone) {
+            PaceTone.Over -> c.negative
+            PaceTone.Fast -> c.warning
+            PaceTone.OnTrack -> c.positive
+        }
         Row(verticalAlignment = Alignment.Top) {
-            KefeIcon(KefeIcons.Info, null, size = 16.dp, tint = color, modifier = Modifier.padding(top = 1.dp))
+            KefeIcon(
+                if (pace.tone == PaceTone.OnTrack) KefeIcons.Check else KefeIcons.Info,
+                null,
+                size = 16.dp,
+                tint = color,
+                modifier = Modifier.padding(top = 1.dp),
+            )
             Spacer(Modifier.width(Space.x8))
             Text(pace.text, style = t.caption, color = color)
         }
@@ -355,7 +402,12 @@ private fun StatsGrid(stats: List<StatUi>) {
                             .padding(horizontal = Space.x12, vertical = Space.x10),
                     ) {
                         Text(stat.label, style = t.micro.copy(fontWeight = FontWeight.SemiBold), color = c.onSurfaceMuted)
-                        Text(stat.value, style = t.bodyStrong.tabular(), color = c.onSurface, maxLines = 1)
+                        Text(
+                            stat.value,
+                            style = t.bodyStrong.tabular(),
+                            color = if (stat.negative) c.negative else c.onSurface,
+                            maxLines = 1,
+                        )
                         Text(stat.note, style = t.micro, color = c.onSurfaceMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -402,28 +454,85 @@ private fun DailyCard(daily: DailySpendUi) {
 
 // --- Liste -----------------------------------------------------------------------
 
+/** "5 EKİM PAZARTESİ  [bugün]  ₺953,57" - kartin USTUNDE kucuk etiket, satirlardan ayri. */
 @Composable
 private fun DayHeader(group: ExpenseDayGroupUi) {
     val c = KefeTheme.colors
     val t = KefeTheme.type
-    Column(Modifier.fillMaxWidth().padding(start = Space.x16, end = Space.x16, top = Space.x14)) {
+    Column(Modifier.fillMaxWidth().padding(start = Space.x4, end = Space.x4, top = Space.x16, bottom = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(group.title, style = t.bodyStrong, color = c.onSurface)
+            Text(
+                group.title.trUpper(),
+                style = t.micro.copy(fontWeight = FontWeight.SemiBold),
+                color = c.onSurfaceMuted,
+                maxLines = 1,
+            )
             group.tag?.let { tag ->
                 Spacer(Modifier.width(Space.x8))
                 KefeBadge(text = tag, background = c.accentMuted, contentColor = c.accent, uppercase = false)
             }
             Spacer(Modifier.weight(1f))
-            Text(group.total, style = t.caption.tabular(), color = c.onSurfaceMuted)
+            Text(group.total, style = t.micro.tabular(), color = c.onSurfaceMuted)
         }
-        Spacer(Modifier.height(Space.x4))
-        KefeHairline()
         group.hint?.let { hint ->
-            Text(hint, style = t.micro, color = c.onSurfaceMuted, modifier = Modifier.padding(top = 6.dp))
+            Text(hint, style = t.micro, color = c.onSurfaceMuted, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
 
+/** Bir gunun (ya da tutar sirasinin) satirlari tek kartta, aralarinda ince cizgi. */
+@Composable
+private fun LinesCard(lines: List<ExpenseLineUi>, onEdit: (String) -> Unit) {
+    val c = KefeTheme.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(KefeShapes.boxMedium)
+            .background(c.surfaceElevated)
+            .border(1.dp, c.outline, KefeShapes.boxMedium),
+    ) {
+        lines.forEachIndexed { index, line ->
+            if (index > 0) KefeHairline()
+            if (line.lead != null) CompactRow(line, onEdit) else LineRow(line, onEdit)
+        }
+    }
+}
+
+/** Tek kalem, gun gun: "17:32  Dondurma  ₺130" - tek satir. */
+@Composable
+private fun CompactRow(line: ExpenseLineUi, onEdit: (String) -> Unit) {
+    val c = KefeTheme.colors
+    val t = KefeTheme.type
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = Sizes.touchTarget)
+            .clickable(onClickLabel = "Düzenle", role = Role.Button) { onEdit(line.id) }
+            .padding(horizontal = Space.x14),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            line.lead.orEmpty(),
+            style = t.micro.tabular(),
+            color = if (line.leadEarly) c.accent else c.onSurfaceMuted,
+            maxLines = 1,
+            modifier = Modifier.width(LeadWidth),
+        )
+        Spacer(Modifier.width(Space.x8))
+        Text(
+            line.title,
+            style = t.body,
+            color = if (line.titleMuted) c.onSurfaceMuted else c.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(Space.x8))
+        Text(line.amount, style = t.body.tabular(), color = c.onSurface)
+    }
+}
+
+/** Tumu ya da tutar sirasi: harf kutusu, not ve kalem, tutar. */
 @Composable
 private fun LineRow(line: ExpenseLineUi, onEdit: (String) -> Unit) {
     val c = KefeTheme.colors
@@ -431,19 +540,19 @@ private fun LineRow(line: ExpenseLineUi, onEdit: (String) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = 52.dp)
             .clickable(onClickLabel = "Düzenle", role = Role.Button) { onEdit(line.id) }
-            .padding(horizontal = Space.x16, vertical = Space.x8),
+            .padding(horizontal = Space.x12, vertical = Space.x8),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         line.initial?.let { initial ->
             Box(
-                Modifier.size(36.dp).clip(KefeShapes.boxSmall).background(c.surfaceSunken),
+                Modifier.size(30.dp).clip(KefeShapes.boxSmall).background(c.surfaceSunken),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(initial, style = t.bodyStrong, color = categoryColor(line.colorIndex))
+                Text(initial, style = t.caption.copy(fontWeight = FontWeight.SemiBold), color = categoryColor(line.colorIndex))
             }
-            Spacer(Modifier.width(Space.x12))
+            Spacer(Modifier.width(Space.x10))
         }
         Column(Modifier.weight(1f)) {
             Text(
@@ -454,7 +563,7 @@ private fun LineRow(line: ExpenseLineUi, onEdit: (String) -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             if (line.sub.isNotEmpty()) {
-                Text(line.sub, style = t.caption, color = c.onSurfaceMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(line.sub, style = t.micro, color = c.onSurfaceMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (line.unplanned) {
@@ -479,3 +588,4 @@ private val BottomBarSpace = 96.dp
 private val SortWidth = 148.dp
 private val SplitBarHeight = 10.dp
 private val DailyChartHeight = 64.dp
+private val LeadWidth = 44.dp
