@@ -2976,3 +2976,61 @@ gelecek aya girilen harcama ayın SON değil İLK günü olsun.
   - Tümü: ₺17.754,24, dağılım (%42 Kredi Kartı Limit … %6 Plan dışı),
     "27–30 Eylül'de girildi".
   - Hiçbir şey kaydedilmedi.
+
+## 58 · Harcamalar: kompakt liste ve aylık giderlere göre gidiş ✅
+
+**Neydi.**
+
+- Kredi Kartı Limit sayfasının gün gün listesinde gün başlığı ("5 Ekim
+  Pazartesi") ile harcama satırları ("Dondurma") aynı boyda ve aynı hizadaydı,
+  aralarında yalnız ince bir çizgi vardı. Kullanıcıya "iç içe" ve karışık
+  göründü; daha kompakt bir tasarım istedi.
+- Tümü'ne de kalem sayfasındaki gibi bir gidiş görünümü istedi: aylık
+  giderlerin yüzde kaçı harcandı, ayın yüzde kaçı geçti, günde ne kadar
+  harcanabilir. "Buraya eklenen her şey tasarımla birlikte."
+
+**Tasarım.** Claude Design tuvali güncellendi ([Kefe Harcamalar Sayfası](https://claude.ai/artifact/EpchdbPRUUXPJ2r1gsHMJh));
+kullanıcı onayladı.
+
+**Kararlar.**
+
+- Tasarım olduğu gibi kodlansın (önerilen seçenek).
+- Tümü'nün yüzdesi ve günlük payı BÜTÜN aylık giderlere (₺87.000) göre
+  hesaplansın. Alternatif yalnız harcaması olan kalemlerin sınırlarıydı
+  (₺32.000; %52, günde ≈ ₺636).
+
+**Ne yapıldı.**
+
+- **Kompakt liste:**
+  - Gün başlığı küçük, soluk, büyük harfli bir etiket ("5 EKİM PAZARTESİ",
+    sağda gün toplamı).
+  - O günün harcamaları altında ayrı bir kartta, aralarında ince çizgi.
+  - Tek kalemde satır tek satıra indi: solda giriş saati (`11:49`); günden
+    önce girildiyse altın renkli giriş günü (`29 Eyl`). Ortada not, sağda tutar.
+  - Tümü ve tutar sırası iki satırlı kalıyor (not ve kalem), ama aynı kartlarda.
+- **Tümü'nde "Aylık giderlere göre" kartı:**
+  - ₺16.734,24 / ₺87.000, çubuk ve bugün çizgisi;
+  - "%19 harcandı · bugün %23";
+  - gidiş satırı;
+  - Kalan, Günde, Aşılan, Plan dışı.
+
+  Aşım kalem kalem toplanır: bir kalemin aşımını diğerinin artanı kapatmaz.
+  Kalemlere göre dağılım altta ayrı kart ("Kalemlere göre").
+- **Gidiş satırı üç durumlu** (`PaceTone`): aşıldı (kırmızı), "Hızlı gidiyor"
+  (turuncu), "Plana uygun" (yeşil, onay işaretiyle). Kalem sayfasında da aynı
+  kural geçerli: "Plana uygun" artık orada da yazıyor.
+
+**Doğrulama.**
+
+- **881 masaüstü testi**, hepsi yeşil. `ExpensesPageTest` gerçek Ekim
+  defteriyle:
+  - Tümü'ndeki kart: %19, plana uygun, Kalan ₺70.265,76, Günde ≈ ₺2.927,
+    Aşılan ₺58,32 · Faturalar, Plan dışı ₺1.020; aylık gider yoksa kart yok.
+  - Dışarıda yemek "Plana uygun: harcanan %24…".
+  - Sol sütun: `17:32`, `29 Eyl` altın renkli.
+  - Aşım tonu.
+- **Cihazda**, 7 Ekim 2026, Redmi Note 8 Pro, kullanıcının gerçek verisiyle:
+  - Kredi Kartı Limit listesi kompakt kartlarla: "29 Eyl · Avokado ·
+    ₺1.050", "11:49 · Su · ₺120", "5 EKİM PAZARTESİ ₺953,57" altında üç satır.
+  - Tümü'nde yeni kart tasarımdaki rakamlarla.
+  - Hiçbir şey kaydedilmedi.

@@ -87,7 +87,7 @@ class ExpensesPageTest {
         assertEquals("Ekim 2026 · 24 gün kaldı", page.subtitle)
         val summary = assertIs<ExpensesSummaryUi.Overview>(page.summary)
         assertEquals("₺17.754,24", summary.total)
-        assertEquals("30 harcama · aylık giderlerden ₺16.734,24 · plan dışı ₺1.020", summary.line)
+        assertEquals("30 harcama · plan dışı ₺1.020", summary.line)
         val first = summary.split.first()
         assertEquals("Kredi Kartı Limit", first.label)
         assertEquals("₺7.424,54", first.amount)
@@ -101,6 +101,39 @@ class ExpensesPageTest {
         assertEquals("30 harcama", page.countLabel)
         assertEquals("Harcama ekle", page.addLabel)
         assertNull(page.addCategory)
+    }
+
+    @Test
+    fun `tumu butun aylik giderlere gore gidisi yazar`() {
+        // Kullanici karari: BUTUN aylik giderler (₺87.000), kira gibi harcamasi girilmemisler dahil.
+        val budget = assertNotNull(assertIs<ExpensesSummaryUi.Overview>(expensesPage(book, today, ExpenseFilter.All, ExpenseSort.Date).summary).budget)
+        assertEquals("₺16.734,24", budget.spent)
+        assertEquals("₺87.000", budget.limit)
+        assertEquals("%19 harcandı", budget.spentText)
+        assertEquals("bugün · %23", budget.todayText)
+        assertEquals(PaceUi("Plana uygun: harcanan %19, ayın geçen kısmı %23.", PaceTone.OnTrack), budget.pace)
+        assertEquals(
+            listOf(
+                StatUi("KALAN", "₺70.265,76", "aylık giderlerden"),
+                // 70.265,76 / 24 = 2.927,74 -> asagi.
+                StatUi("GÜNDE", "≈ ₺2.927", "kalan 24 gün için"),
+                // Kalem kalem: Faturalar'in asimini digerlerinin artani kapatmaz.
+                StatUi("AŞILAN", "₺58,32", "Faturalar", negative = true),
+                StatUi("PLAN DIŞI", "₺1.020", "3 harcama"),
+            ),
+            budget.stats,
+        )
+        // Aylik gider girilmemis ayda kart yok.
+        val bare = expensesPage(book.copy(budgets = emptyList()), today, ExpenseFilter.All, ExpenseSort.Date)
+        assertNull(assertIs<ExpensesSummaryUi.Overview>(bare.summary).budget)
+    }
+
+    @Test
+    fun `sinirin altinda giden kalem plana uygun der`() {
+        // Dışarıda yemek ₺1.175 / ₺5.000 = %24, ayin %23'u gecti.
+        val s = assertIs<ExpensesSummaryUi.Budgeted>(expensesPage(book, today, ExpenseFilter.Category(yemek), ExpenseSort.Date).summary)
+        assertEquals(PaceTone.OnTrack, s.pace?.tone)
+        assertEquals("Plana uygun: harcanan %24, ayın geçen kısmı %23.", s.pace?.text)
     }
 
     @Test
@@ -124,7 +157,7 @@ class ExpensesPageTest {
         assertEquals("bugün · %23", s.todayText)
         assertEquals(7f / 31f, assertNotNull(s.todayRatio), 1e-6f)
         assertEquals("Hızlı gidiyor: harcanan %49, ayın geçen kısmı %23.", s.pace?.text)
-        assertEquals(false, s.pace?.over)
+        assertEquals(PaceTone.Fast, s.pace?.tone)
         assertEquals(
             listOf(
                 StatUi("KALAN", "₺7.575,46", "sınıra kadar"),
@@ -140,7 +173,7 @@ class ExpensesPageTest {
     }
 
     @Test
-    fun `kalem listesi gun gun, en yeni gun ve en son giris ustte, saatiyle`() {
+    fun `kalem listesi gun gun, en yeni gun ve en son giris ustte, saat sol sutunda`() {
         val page = expensesPage(book, today, ExpenseFilter.Category(kk), ExpenseSort.Date)
         assertEquals(
             listOf(
@@ -153,9 +186,13 @@ class ExpensesPageTest {
         val fifth = page.groups.single { it.title == "5 Ekim Pazartesi" }
         assertEquals("₺953,57", fifth.total)
         assertEquals(listOf("Dondurma", "Merve yüz krem", "Su"), fifth.items.map { it.title })
-        assertEquals(listOf("17:32", "17:04", "09:08"), fifth.items.map { it.sub })
-        // Gununden once girilen: saat yerine giris gunu.
-        assertEquals("29 Eylül'de girildi", page.groups.first().items.single().sub)
+        // Kompakt: saat sol sutunda, satir tek satir (alt satir yok).
+        assertEquals(listOf("17:32", "17:04", "09:08"), fifth.items.map { it.lead })
+        assertTrue(fifth.items.all { it.sub.isEmpty() && !it.leadEarly })
+        // Gununden once girilen: saat yerine giris gunu, altin renkli.
+        val avokado = page.groups.first().items.single()
+        assertEquals("29 Eyl", avokado.lead)
+        assertTrue(avokado.leadEarly)
         // Tek kalemde ust yazi tekrar olurdu.
         assertNull(page.groups.first().hint)
         val noNote = page.groups.single { it.title == "4 Ekim Pazar" }.items.single()
@@ -173,6 +210,7 @@ class ExpensesPageTest {
         assertEquals("27–30 Eylül'de girildi", ahead.hint)
         val avokado = ahead.items.single { it.title == "Avokado" }
         assertEquals("Kredi Kartı Limit", avokado.sub)
+        assertNull(avokado.lead, "tumunde sol sutun yok, kalem alt satirda")
         assertEquals("K", avokado.initial)
         assertEquals(0, avokado.colorIndex, "en cok harcanan kalem ilk renk")
         val halisahaLine = ahead.items.single { it.title == "Halisaha" }
@@ -201,6 +239,7 @@ class ExpensesPageTest {
         assertTrue(kkPage.groups.isEmpty())
         assertEquals("Merve mont", kkPage.ranked.first().title)
         assertEquals("2 Eki", kkPage.ranked.first().sub)
+        assertNull(kkPage.ranked.first().lead)
         val all = expensesPage(book, today, ExpenseFilter.All, ExpenseSort.Amount)
         assertEquals("Merve Pilates", all.ranked.first().title)
         assertEquals("Kredi Kartı Limit", all.ranked[2].sub.substringAfter(" · "))
@@ -224,7 +263,8 @@ class ExpensesPageTest {
         assertNull(s.todayRatio)
         assertEquals("₺58,32 aşıldı", s.pace?.text)
         assertEquals(true, s.over)
-        assertEquals(StatUi("AŞIM", "₺58,32", "sınırın üstünde"), s.stats.first())
+        assertEquals(PaceTone.Over, s.pace?.tone)
+        assertEquals(StatUi("AŞIM", "₺58,32", "sınırın üstünde", negative = true), s.stats.first())
         assertTrue(s.stats.none { it.label == "GÜNDE" })
         assertEquals("Ekim 2026", expensesPage(book, KefeDate(2026, 11, 3), ExpenseFilter.All, ExpenseSort.Date).subtitle)
     }
