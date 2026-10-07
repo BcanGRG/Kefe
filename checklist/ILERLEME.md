@@ -2964,4 +2964,15 @@ gelecek aya girilen harcama ayın SON değil İLK günü olsun.
     - son girilenler 4 satır, giriş anına göre;
     - önceden girilen kayıt başa geçmiyor;
     - kalem sayacı.
-- **Cihazda**, 7 Ekim 2026, Redmi Note 8 Pro (q4wgbeeanjfqnbuc): kuruldu.
+- **Cihazda**, 7 Ekim 2026, Redmi Note 8 Pro (q4wgbeeanjfqnbuc), kullanıcının
+  gerçek verisiyle:
+  - Plan sekmesinde kalemlerde "14 harcama" ve `›` göründü.
+  - Kredi Kartı Limit açıldı: ₺7.424,54 / ₺15.000, bugün çizgisi, "Hızlı
+    gidiyor: harcanan %49, ayın geçen kısmı %23.", Kalan ₺7.575,46,
+    Günde ≈ ₺315, Ortalama ₺530, En büyük ₺1.800 · Merve mont · 2 Eki,
+    günlük grafik.
+  - Liste: "31 Ekim Cumartesi · ileri tarihli · Avokado · 29 Eylül'de
+    girildi", "7 Ekim Çarşamba · bugün · Su · 11:49".
+  - Tümü: ₺17.754,24, dağılım (%42 Kredi Kartı Limit … %6 Plan dışı),
+    "27–30 Eylül'de girildi".
+  - Hiçbir şey kaydedilmedi.
