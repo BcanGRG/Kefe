@@ -184,6 +184,9 @@ class PlanViewModel(
             PlanIntent.AddExpense -> latest?.let { inputs ->
                 reduce { copy(sheet = PlanSheet.Expense(newExpenseEditor(inputs, newId()))) }
             }
+            is PlanIntent.AddExpenseIn -> latest?.let { inputs ->
+                reduce { copy(sheet = PlanSheet.Expense(newExpenseEditor(inputs, newId(), intent.month, intent.category))) }
+            }
             is PlanIntent.EditExpense -> latest?.let { inputs ->
                 val entry = inputs.books.firstNotNullOfOrNull { book -> book.expenses.firstOrNull { it.id == intent.id } }
                     ?: return

@@ -146,6 +146,11 @@ import org.koin.dsl.koinConfiguration
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import com.kefe.app.navigation.PlanExpensesKey
+import com.kefe.app.domain.model.YearMonth
+import com.kefe.app.ui.screens.plan.ExpenseFilter
+import com.kefe.app.ui.screens.plan.PlanExpensesScreen
+import com.kefe.app.ui.screens.plan.PlanExpensesViewModel
 
 /**
  * Karsiligi henuz olmayan satirlarin ortak yaniti.
@@ -983,6 +988,29 @@ private fun KefeApp(
                                     state = planState,
                                     onIntent = planVm::onIntent,
                                     onOpenGoal = { goTo(GoalDetailKey(it)) },
+                                    onOpenExpenses = { month, filter ->
+                                        goTo(PlanExpensesKey(month.year, month.month, filter.key()))
+                                    },
+                                )
+                            }
+                        }
+
+                        entry<PlanExpensesKey> { key ->
+                            // Her ay/suzgec AYRI VM: ayni ture Koin ilk VM'i geri verirdi.
+                            val month = YearMonth(key.year, key.month)
+                            val vm = koinViewModel<PlanExpensesViewModel>(key = key.toString()) {
+                                parametersOf(month, ExpenseFilter.of(key.filter))
+                            }
+                            val state by vm.state.collectAsState()
+                            ContentWidth {
+                                // Ekleme ve duzenleme Plan VM'inin sheet'leri - kabukta, bu sayfanin ustunde.
+                                PlanExpensesScreen(
+                                    state = state,
+                                    onIntent = vm::onIntent,
+                                    onBack = { goBack() },
+                                    onAdd = { planVm.onIntent(PlanIntent.AddExpenseIn(month, it)) },
+                                    onEdit = { planVm.onIntent(PlanIntent.EditExpense(it)) },
+                                    onEditBudget = { planVm.onIntent(PlanIntent.EditBudget) },
                                 )
                             }
                         }

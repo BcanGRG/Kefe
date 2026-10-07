@@ -273,6 +273,8 @@ data class IncomeRowUi(
  * yaziyor, anlik harcamanin nereye sayildigini goremiyordu.
  */
 data class ExpensesCard(
+    /** Kartin ayi - kaleme ya da "Tümünü gör"e dokununca Harcamalar sayfasi bu ayla acilir. */
+    val month: YearMonth,
     // --- Aylik giderler ---
     /** "₺89.500"; ayin aylik gideri yoksa null (kart bos durum notunu yazar). */
     val plannedTotal: String?,
@@ -285,8 +287,10 @@ data class ExpensesCard(
     val totalLine: String,
     /** "Plan dışı ₺370" - aylik gideri olmayan kalemlerdeki harcamalar; yoksa null. */
     val unplannedLine: String?,
-    /** En yeni girisler. */
+    /** Son GIRILEN harcamalar (giris anina gore) - harcama gunune gore degil. */
     val recent: List<ExpenseRowUi>,
+    /** "Tümünü gör · 30 harcama"daki sayi; harcama yoksa 0. */
+    val expenseCount: Int = 0,
 ) {
     /** Ayda hic harcama yok: [totalLine] bir TUTAR degil, bir not (h2 ile cizilmez). */
     val noSpending: Boolean get() = recent.isEmpty()
@@ -300,12 +304,15 @@ data class CategoryRowUi(
     /** Harcanan / ayrilan; harcama yoksa null (cubuk cizilmez - kira bir sinir degil). */
     val ratio: Float?,
     val overText: String?,
+    /** "14 harcama"; kalemde harcama yoksa null. */
+    val countText: String? = null,
 )
 
 data class ExpenseRowUi(
     val id: String,
+    /** Not; not yoksa kalemin adi. */
     val title: String,
-    /** "14 Eki · market" - gun, kisa ay ve varsa not. */
+    /** "Kredi Kartı Limit · 7 Eki" (notlu) | "7 Eki" (notsuz). */
     val subtitle: String,
     val amount: String,
     /** Kalemin bu ay aylik gideri yok: harcama ayrica gidere eklenir. */
@@ -544,6 +551,9 @@ sealed interface PlanIntent {
 
     // --- Defter: gider ---
     data object AddExpense : PlanIntent
+
+    /** Harcamalar sayfasindan: o ayin formu, kalem secili ("Bu kaleme harcama ekle"). */
+    data class AddExpenseIn(val month: YearMonth, val category: ExpenseCategory?) : PlanIntent
     data class EditExpense(val id: String) : PlanIntent
     data class ExpenseSelectCategory(val category: ExpenseCategory) : PlanIntent
 

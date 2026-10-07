@@ -800,6 +800,37 @@ class PlanViewModelTest {
         vm.awaitHeader { it.title == "Eylül 2026" }
         vm.onIntent(PlanIntent.AddExpense)
         assertEquals(KefeDate(2026, 9, 30), vm.expenseEditor()?.date)
+        vm.onIntent(PlanIntent.DismissSheet)
+
+        // Gelecek ay ILK gune: son gun olunca Eylul'de Ekim'e girilenler "31 Eki"
+        // olup ay boyunca listenin basinda duruyordu (kullanici karari).
+        vm.onIntent(PlanIntent.ThisMonth)
+        vm.awaitHeader { it.title == "Ekim 2026" }
+        vm.onIntent(PlanIntent.NextMonth)
+        vm.awaitHeader { it.title == "Kasım 2026" }
+        vm.onIntent(PlanIntent.AddExpense)
+        assertEquals(KefeDate(2026, 11, 1), vm.expenseEditor()?.date)
+    }
+
+    @Test
+    fun `harcamalar sayfasindan eklenen harcama o ayin formunu kalem secili acar`() = runTest {
+        val env = Env()
+        val market = ExpenseCategory.Groceries
+        val vm = env.vm()
+        vm.awaitHeader { it.title == "Ekim 2026" }
+
+        vm.onIntent(PlanIntent.AddExpenseIn(October, market))
+        val editor = assertNotNull(vm.expenseEditor())
+        assertEquals(market, editor.category)
+        assertEquals(October, editor.month)
+        assertEquals(KefeDate(2026, 10, 22), editor.date)
+        vm.onIntent(PlanIntent.DismissSheet)
+
+        // Sayfa baska bir aydan acildiysa form o ayindir; Plan'da gosterilen aydan degil.
+        vm.onIntent(PlanIntent.AddExpenseIn(September, null))
+        assertEquals(September, vm.expenseEditor()?.month)
+        assertEquals(KefeDate(2026, 9, 30), vm.expenseEditor()?.date)
+        assertNull(vm.expenseEditor()?.category)
     }
 
     @Test
