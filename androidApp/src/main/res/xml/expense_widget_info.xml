@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Harcama widget'i. Varsayilan 4x2 (minWidth/minHeight Android 11 ve oncesinde
+    yerlesim boyunu belirler), 4x1'e kadar kucultulur, 4x4'e buyutulur.
+    Yarim saatte bir tazelenir: surec gece yarisi yasamiyorsa "bugun" sifirlansin.
+    previewImage: widget seciciye cihazdaki gercek 4x2 widget'in goruntusu
+    (Redmi Note 8 Pro, 7 Ekim 2026); yoksa secici yalniz uygulama simgesini gosterir.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:previewImage="@drawable/widget_preview"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="40dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

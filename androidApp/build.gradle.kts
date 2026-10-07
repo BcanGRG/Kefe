@@ -1,10 +1,11 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 /**
- * Android uygulamasi: yalniz giris noktasi. Ekranlarin, verinin ve platform
+ * Android uygulamasi: giris noktalari. Ekranlarin, verinin ve platform
  * koprulerinin (veritabani surucusu, biyometrik kilit, dosya paylasimi,
- * Keystore) hepsi composeApp'te; burada MainActivity, manifest, ikon ve acilis
- * temasi durur.
+ * Keystore) hepsi composeApp'te; burada MainActivity, manifest, ikon, acilis
+ * temasi ve ana ekran yuzeyleri (harcama widget'i, hizli giris penceresi,
+ * kisayollar, hizli ayar kutucugu) durur.
  *
  * Kotlin'i AGP'nin gomulu Kotlin destegi derler - org.jetbrains.kotlin.android
  * UYGULANMAZ, AGP 9 ikisini birlikte reddeder. Surum, kok build dosyasindaki
@@ -57,4 +58,8 @@ dependencies {
     // MainActivity bir FragmentActivity: BiometricPrompt (composeApp'teki
     // BiometricGate) ComponentActivity ile kurulamaz. Surum notu: libs.versions.toml.
     implementation(libs.androidx.fragment)
+    // Ana ekran widget'i (Glance). Hizli giris penceresi composeApp'teki ekrani cizer.
+    implementation(libs.androidx.glance.appwidget)
+    // Widget ve hizli ayar Koin grafigine Compose disindan erisir (bkz. KefeKoin).
+    implementation(libs.koin.core)
 }

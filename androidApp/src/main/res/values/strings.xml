@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Kefe</string>
+    <string name="widget_label">Kefe · Harcama</string>
+    <string name="widget_description">Bugünkü harcama, ayın gidişi ve tek dokunuşla harcama ekleme</string>
+    <string name="tile_label">Harcama ekle</string>
 </resources>

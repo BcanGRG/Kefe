@@ -565,6 +565,12 @@ private fun enteredDay(e: ExpenseEntry): KefeDate? =
 internal fun entryLead(e: ExpenseEntry): String? {
     val day = enteredDay(e) ?: return null
     if (day != e.date) return "${day.day} ${day.monthLabel()}"
+    return entryClock(e)
+}
+
+/** Giris saati ("11:49") - yalniz harcama kendi gununde girildiyse; degilse null. */
+internal fun entryClock(e: ExpenseEntry): String? {
+    if (enteredDay(e) != e.date) return null
     val minutes = floorMod(e.createdAt + IstanbulOffsetMillis, DayMillis) / MinuteMillis
     return "${pad2(minutes / 60)}:${pad2(minutes % 60)}"
 }
@@ -586,7 +592,7 @@ private fun advanceHint(date: KefeDate, items: List<ExpenseEntry>): String? {
 }
 
 /** "%42"; sifirdan buyuk pay "%0" yazilmaz, eksik pay "%100" yazilmaz (Plan'daki kural). */
-private fun percent(fraction: Double): String {
+internal fun percent(fraction: Double): String {
     val value = round(fraction * 100.0)
     return when {
         fraction > 0.0 && value < 1.0 -> "%<1"

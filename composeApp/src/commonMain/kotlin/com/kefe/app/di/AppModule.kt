@@ -61,6 +61,8 @@ import org.koin.dsl.module
 import com.kefe.app.domain.model.YearMonth
 import com.kefe.app.ui.screens.plan.ExpenseFilter
 import com.kefe.app.ui.screens.plan.PlanExpensesViewModel
+import com.kefe.app.domain.model.ExpenseCategory
+import com.kefe.app.ui.screens.quick.QuickExpenseViewModel
 
 /**
  * Ornek portfoyu (13 pozisyon, 21 islem) veritabanina tohumlar - GELISTIRME BAYRAGI.
@@ -162,6 +164,10 @@ val appModule = module {
     viewModel { (positionId: String) -> AssetDetailViewModel(get(), get(), get(), positionId) }
     viewModel { (goalId: String) -> GoalDetailViewModel(get(), get(), goalId, get(), get()) }
     viewModel { (month: YearMonth, filter: ExpenseFilter) -> PlanExpensesViewModel(get(), get(), month, filter) }
+    // Ana ekrandan hizli harcama (widget, kisayol): bos ad = kalem secilmeden acildi.
+    viewModel { (category: String) ->
+        QuickExpenseViewModel(get(), get(), get(), get(), category.takeIf { it.isNotEmpty() }?.let(ExpenseCategory::fromName))
+    }
 }
 
 /**
