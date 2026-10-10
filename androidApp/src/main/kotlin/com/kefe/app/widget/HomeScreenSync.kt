@@ -10,8 +10,6 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.IconCompat
-import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.updateAll
 import com.kefe.app.R
 import com.kefe.app.di.KefeKoin
 import com.kefe.app.domain.KefeClock
@@ -77,11 +75,7 @@ object HomeScreenSync {
     }
 
     private suspend fun refreshWidgets(context: Context) {
-        runCatching {
-            if (GlanceAppWidgetManager(context).getGlanceIds(ExpenseWidget::class.java).isNotEmpty()) {
-                ExpenseWidget().updateAll(context)
-            }
-        }
+        ExpenseWidgetRenderer.updateAll(context)
     }
 
     /**

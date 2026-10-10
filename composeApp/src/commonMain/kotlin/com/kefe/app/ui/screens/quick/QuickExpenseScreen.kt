@@ -1,6 +1,7 @@
 package com.kefe.app.ui.screens.quick
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -8,7 +9,9 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -49,6 +52,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -126,25 +131,46 @@ fun QuickExpenseApp(initialCategory: String?, onClose: () -> Unit) {
                     parametersOf(initialCategory.orEmpty())
                 }
                 val state by vm.state.collectAsState()
+                // Kapat: once alt sayfa asagi kayar, pencere kayma bitince kapanir.
+                var closing by remember { mutableStateOf(false) }
                 CollectEffects(vm.effects) { effect ->
                     when (effect) {
-                        QuickExpenseEffect.Close -> onClose()
+                        QuickExpenseEffect.Close -> closing = true
                     }
                 }
-                QuickExpenseScreen(state = state, onIntent = vm::onIntent)
+                QuickExpenseScreen(state = state, onIntent = vm::onIntent, closing = closing, onHidden = onClose)
             }
         }
     }
 }
 
+/**
+ * Alt sayfa icerik HAZIR olunca kayarak gelir. NEYDI: kayma pencere acilir
+ * acilmaz, defter gelmeden bos bir yer tutucuyla basliyordu; icerik kayma
+ * bittikten sonra bir anda beliriyor, sayfa "birden aciliyor" gibi duruyordu.
+ * [closing] kapanis kaymasini baslatir, bitince [onHidden].
+ */
 @Composable
-fun QuickExpenseScreen(state: QuickExpenseUiState, onIntent: (QuickExpenseIntent) -> Unit) {
+fun QuickExpenseScreen(
+    state: QuickExpenseUiState,
+    onIntent: (QuickExpenseIntent) -> Unit,
+    closing: Boolean = false,
+    onHidden: () -> Unit = {},
+) {
     val c = KefeTheme.colors
-    val shown = remember { MutableTransitionState(false) }.apply { targetState = true }
+    val shown = remember { MutableTransitionState(false) }
+    shown.targetState = !state.loading && !closing
+    if (closing && shown.isIdle && !shown.currentState) {
+        LaunchedEffect(Unit) { onHidden() }
+    }
     val scrimInteraction = remember { MutableInteractionSource() }
 
     Box(Modifier.fillMaxSize()) {
-        AnimatedVisibility(visibleState = shown, enter = fadeIn(tween(EnterMillis))) {
+        AnimatedVisibility(
+            visibleState = shown,
+            enter = fadeIn(tween(EnterMillis)),
+            exit = fadeOut(tween(ExitMillis)),
+        ) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -157,7 +183,10 @@ fun QuickExpenseScreen(state: QuickExpenseUiState, onIntent: (QuickExpenseIntent
         AnimatedVisibility(
             visibleState = shown,
             modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(tween(EnterMillis)) { it } + fadeIn(tween(EnterMillis)),
+            enter = slideInVertically(tween(EnterMillis, easing = EnterEasing)) { it } +
+                fadeIn(tween(EnterMillis / 2)),
+            exit = slideOutVertically(tween(ExitMillis, easing = ExitEasing)) { it } +
+                fadeOut(tween(ExitMillis, delayMillis = ExitMillis / 2)),
         ) {
             Column(
                 modifier = Modifier
@@ -589,7 +618,14 @@ private fun quickCategoryColor(index: Int): Color {
     return palette[index % palette.size]
 }
 
-private const val EnterMillis = 220
+private const val EnterMillis = 320
+private const val ExitMillis = 200
+
+/** Hizli baslar, yumusak oturur (Material 3 "emphasized decelerate"). */
+private val EnterEasing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+
+/** Yavas kalkar, hizla cikar (Material 3 "emphasized accelerate"). */
+private val ExitEasing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
 private const val CaretMillis = 530
 private val SheetMaxWidth = 560.dp
 private val KeyHeight = 52.dp
