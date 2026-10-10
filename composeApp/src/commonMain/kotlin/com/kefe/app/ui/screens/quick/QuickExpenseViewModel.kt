@@ -130,11 +130,15 @@ class QuickExpenseViewModel(
         val order = quickCategories(books, today)
         // Sira widget'takiyle ayni kalir; gelen kalem listede yoksa (eski bir ozel kalem) one eklenir.
         val categories = if (initialCategory != null && initialCategory !in order) listOf(initialCategory) + order else order
+        val selected = initialCategory ?: categories.firstOrNull()
+        // Oneriler ve satir AYNI adimda: pencere hazir gorundugunde (kayma basladiginda) eksik olmasin.
         setState {
             copy(
                 loading = false,
                 categories = quickCategoryUis(books, today, categories),
-                selected = initialCategory ?: categories.firstOrNull(),
+                selected = selected,
+                suggestions = selected?.let { noteSuggestions(books, it, today) }.orEmpty(),
+                line = selected?.let { quickLine(bookOf(dateOf(day)), it, amount ?: 0.0) },
             )
         }
     }

@@ -3,27 +3,29 @@ package com.kefe.app.widget
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
+import android.os.Build
+import android.os.Bundle
+import android.util.Log
+import android.util.SizeF
+import android.widget.RemoteViews
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
-import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
+import androidx.glance.appwidget.GlanceRemoteViews
 import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -55,8 +57,13 @@ import com.kefe.app.ui.screens.quick.QuickCategoryUi
 import com.kefe.app.ui.screens.quick.QuickRecentUi
 import com.kefe.app.ui.screens.quick.WidgetMonthUi
 import com.kefe.app.ui.screens.quick.expenseWidget
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -71,32 +78,89 @@ import kotlinx.coroutines.withContext
  * Kose ve renkler cizilebilir kaynaklardan (res/drawable/widget_*): Android 11
  * widget'larda kose yuvarlatmayi desteklemiyor, tema da sistemin acik/koyu
  * secimine resource niteleyiciyle (values-night) uyar.
+ *
+ * Glance'in oturumlu yolu (GlanceAppWidget) KULLANILMAZ; Glance yalniz
+ * cizim icin.
+ * NEYDI (Ekim 2026): widget 10 Ekim 11:26'da takildi; sonraki harcamalar ve gun
+ * donumu yansimadi. Her tazeleme Glance'in WorkManager'daki oturum isine
+ * gidiyordu; is "calisiyor" gorunurken widget'a yeni goruntu gondermiyordu
+ * (AppWidgetService'teki goruntu gunlerce ayni kaldi). Artik goruntu her
+ * tazelemede bu surecte cizilir ve dogrudan AppWidgetManager'a verilir
+ * ([ExpenseWidgetRenderer]); arada takilacak bir is yok. Widget'ta yalniz
+ * Activity acan dokunuslar var, onlar oturum istemez.
  */
-class ExpenseWidget : GlanceAppWidget() {
+class ExpenseWidgetReceiver : AppWidgetProvider() {
 
-    override val sizeMode: SizeMode = SizeMode.Exact
+    override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) = refresh(context)
 
-    /**
-     * Icerik defter AKISINDAN cizilir, bir kez okunan degerden degil. NEYDI:
-     * Glance oturumu acikken gelen tazeleme (updateAll) oturumu yeniden
-     * baslatmiyor, ayni bestelemeyi yeniden ciziyor; tek seferlik okunan defter
-     * eski kaliyordu - "Geri al"dan sonra widget silinen harcamayi gostermeye
-     * devam etti. Ilk deger yine once okunur: widget bos bir kareyle acilmasin.
-     */
-    override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val koin = KefeKoin.koin()
-        val plan = koin.get<PlanRepository>()
-        val clock = koin.get<KefeClock>()
-        val first = withContext(Dispatchers.IO) { plan.observeAllBooks().first() }
-        provideContent {
-            val books by remember { plan.observeAllBooks() }.collectAsState(first)
-            WidgetBody(context, expenseWidget(books, clock.today()))
+    /** Boyut degisti (buyutme, kucultme): o boyun cizimi gerekir. */
+    override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, newOptions: Bundle) =
+        refresh(context)
+
+    private fun refresh(context: Context) {
+        val pending = goAsync()
+        ExpenseWidgetRenderer.scope.launch {
+            try {
+                ExpenseWidgetRenderer.updateAll(context.applicationContext)
+            } finally {
+                pending.finish()
+            }
         }
     }
 }
 
-class ExpenseWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = ExpenseWidget()
+/**
+ * Widget'i cizip ana ekrana veren tek yer: alici (sistem tazelemesi, boyut),
+ * HomeScreenSync (her yazma, gece yarisi) buraya gelir.
+ */
+@OptIn(ExperimentalGlanceRemoteViewsApi::class)
+object ExpenseWidgetRenderer {
+
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Ust uste gelen iki tazeleme sirayla calisir; eski veri yeniyi ezmez. */
+    private val lock = Mutex()
+
+    suspend fun updateAll(context: Context) = lock.withLock {
+        runCatching {
+            val manager = AppWidgetManager.getInstance(context)
+            val ids = manager.getAppWidgetIds(ComponentName(context, ExpenseWidgetReceiver::class.java))
+            if (ids.isEmpty()) return@runCatching
+            val koin = KefeKoin.koin()
+            val books = withContext(Dispatchers.IO) { koin.get<PlanRepository>().observeAllBooks().first() }
+            val ui = expenseWidget(books, koin.get<KefeClock>().today())
+            ids.forEach { id -> manager.updateAppWidget(id, render(context, manager.getAppWidgetOptions(id), ui)) }
+        }.onFailure { Log.w(LogTag, "Widget cizilemedi", it) }
+    }
+
+    /**
+     * Android 12+: baslaticinin bildirdigi her boy icin ayri cizim, sistem yerine
+     * gore secer. Oncesi: dikey (en dar en, en uzun boy) ve yatay iki cizim.
+     */
+    private suspend fun render(context: Context, options: Bundle, ui: ExpenseWidgetUi): RemoteViews {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            @Suppress("DEPRECATION")
+            val sizes = options.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES).orEmpty()
+            if (sizes.isNotEmpty()) {
+                return RemoteViews(sizes.associateWith { compose(context, DpSize(it.width.dp, it.height.dp), options, ui) })
+            }
+        }
+        val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+        val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+        val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+        val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+        if (minWidth <= 0 || maxHeight <= 0) return compose(context, DefaultSize, options, ui)
+        val portrait = compose(context, DpSize(minWidth.dp, maxHeight.dp), options, ui)
+        val landscape = compose(context, DpSize(maxWidth.dp, minHeight.dp), options, ui)
+        return RemoteViews(landscape, portrait)
+    }
+
+    private suspend fun compose(context: Context, size: DpSize, options: Bundle, ui: ExpenseWidgetUi): RemoteViews =
+        GlanceRemoteViews().compose(context, size, appWidgetOptions = options) { WidgetBody(context, ui) }.remoteViews
+
+    /** Baslatici boy bildirmezse: varsayilan 4×2. */
+    private val DefaultSize = DpSize(250.dp, 110.dp)
+    private const val LogTag = "KefeWidget"
 }
 
 @Composable
